@@ -1,19 +1,23 @@
 import type { NextConfig } from "next";
 
-// When building for GitHub Pages (CI sets DEPLOY_TARGET=pages) we emit a fully
-// static export served from /<repo>. Normal `next build` (incl. Vercel) is
-// unaffected and serves from the root with image optimization on.
-const isPages = process.env.DEPLOY_TARGET === "pages";
+// DEPLOY_TARGET selects the build flavor:
+//   "static" -> static export to ./out at the site root (Cloudflare Pages, Netlify, any static host)
+//   "pages"  -> static export under /<repo> (GitHub Pages project sites)
+//   unset    -> normal Next.js build (local dev / Vercel)
+const target = process.env.DEPLOY_TARGET;
 const repo = process.env.PAGES_REPO ?? "CEO-work";
 
-const nextConfig: NextConfig = isPages
-  ? {
-      output: "export",
-      basePath: `/${repo}`,
-      assetPrefix: `/${repo}/`,
-      images: { unoptimized: true },
-      trailingSlash: true,
-    }
-  : {};
+const staticExport: NextConfig = {
+  output: "export",
+  images: { unoptimized: true },
+  trailingSlash: true,
+};
+
+const nextConfig: NextConfig =
+  target === "pages"
+    ? { ...staticExport, basePath: `/${repo}`, assetPrefix: `/${repo}/` }
+    : target === "static"
+      ? staticExport
+      : {};
 
 export default nextConfig;
