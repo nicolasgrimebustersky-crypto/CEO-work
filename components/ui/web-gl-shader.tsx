@@ -35,6 +35,9 @@ export function WebGLShader() {
     `
 
     // Emerald / green-gold streaks tuned to the Grime Bustersky brand palette.
+    // Coordinates are normalized to 0..1 across the canvas (uv) then remapped to
+    // -1..1 on BOTH axes, so the streak field fills the whole element and looks
+    // the same on every aspect ratio / device instead of collapsing on mobile.
     const fragmentShader = `
       precision highp float;
       uniform vec2 resolution;
@@ -44,7 +47,8 @@ export function WebGLShader() {
       uniform float distortion;
 
       void main() {
-        vec2 p = (gl_FragCoord.xy * 2.0 - resolution) / min(resolution.x, resolution.y);
+        vec2 uv = gl_FragCoord.xy / resolution;
+        vec2 p = uv * 2.0 - 1.0;
 
         float d = length(p) * distortion;
 
@@ -67,16 +71,29 @@ export function WebGLShader() {
       }
     `
 
+    // Size the drawing buffer to the canvas's actual rendered size (not the
+    // window) so it stays crisp even when the hero is taller than the viewport.
+    const handleResize = () => {
+      if (!refs.renderer || !refs.uniforms) return
+      const rect = canvas.getBoundingClientRect()
+      const dpr = Math.min(window.devicePixelRatio || 1, 2)
+      const width = Math.max(1, Math.round(rect.width))
+      const height = Math.max(1, Math.round(rect.height))
+      refs.renderer.setPixelRatio(dpr)
+      refs.renderer.setSize(width, height, false)
+      // gl_FragCoord works in physical drawing-buffer pixels
+      refs.uniforms.resolution.value = [width * dpr, height * dpr]
+    }
+
     const initScene = () => {
       refs.scene = new THREE.Scene()
-      refs.renderer = new THREE.WebGLRenderer({ canvas })
-      refs.renderer.setPixelRatio(window.devicePixelRatio)
+      refs.renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
       refs.renderer.setClearColor(new THREE.Color(0x050b08))
 
       refs.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, -1)
 
       refs.uniforms = {
-        resolution: { value: [window.innerWidth, window.innerHeight] },
+        resolution: { value: [1, 1] },
         time: { value: 0.0 },
         xScale: { value: 1.0 },
         yScale: { value: 0.5 },
@@ -117,21 +134,18 @@ export function WebGLShader() {
       refs.animationId = requestAnimationFrame(animate)
     }
 
-    const handleResize = () => {
-      if (!refs.renderer || !refs.uniforms) return
-      const width = window.innerWidth
-      const height = window.innerHeight
-      refs.renderer.setSize(width, height, false)
-      refs.uniforms.resolution.value = [width, height]
-    }
-
     initScene()
     animate()
+
     window.addEventListener("resize", handleResize)
+    // React to container size changes (e.g. mobile address-bar show/hide)
+    const observer = new ResizeObserver(handleResize)
+    observer.observe(canvas)
 
     return () => {
       if (refs.animationId) cancelAnimationFrame(refs.animationId)
       window.removeEventListener("resize", handleResize)
+      observer.disconnect()
       if (refs.mesh) {
         refs.scene?.remove(refs.mesh)
         refs.mesh.geometry.dispose()

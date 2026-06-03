@@ -16,7 +16,7 @@ export function Hero() {
         <WebGLShader />
       </div>
       {/* readability + blend into the section below */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_25%,hsl(var(--background)/0.65)_75%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_30%,hsl(var(--background)/0.55)_80%)]" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-gradient-to-b from-transparent to-background" />
 
       <div className="relative z-10 mx-auto flex max-w-4xl flex-col items-center">
