@@ -13,12 +13,13 @@ export function Services() {
             One crew for a spotless, sharp-looking property
           </h2>
           <p className="mt-4 text-muted-foreground">
-            From a single driveway to a full commercial facility, we bring
-            pro-grade equipment and real pride in the details.
+            From a single driveway to a full commercial facility — plus
+            landscaping and winter snow removal — we bring pro-grade equipment
+            and real pride in the details.
           </p>
         </div>
 
-        <div className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {SERVICES.map((service) => {
             const Icon = service.icon;
             return (

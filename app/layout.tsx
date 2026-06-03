@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     template: "%s | Grime Bustersky",
   },
   description:
-    "Louisville's bold local crew for pressure washing, power washing, and landscaping. Driveways, siding, decks, commercial & industrial cleaning, mulching and more. Free quotes — call (502) 599-6855.",
+    "Louisville & Oldham County's bold local crew for pressure washing, power washing, landscaping, and snow removal. Driveways, siding, decks, commercial & industrial cleaning, mulching and more. Free quotes — call (502) 599-6855.",
   keywords: [
     "pressure washing Louisville",
     "power washing Kentucky",
@@ -31,6 +31,8 @@ export const metadata: Metadata = {
     "house washing",
     "landscaping Louisville",
     "mulching",
+    "snow removal Oldham County",
+    "snow removal Louisville",
     "commercial pressure washing",
     "Grime Bustersky",
   ],

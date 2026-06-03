@@ -35,8 +35,8 @@ export function Hero() {
 
         <p className="mx-auto mt-6 max-w-2xl text-balance text-base text-muted-foreground sm:text-lg">
           {BUSINESS.shortName} is your bold local crew for driveways, siding,
-          decks, commercial &amp; industrial cleaning, plus fresh landscaping and
-          mulching across {BUSINESS.area}.
+          decks, commercial &amp; industrial cleaning, fresh landscaping &amp;
+          mulching, and winter snow removal across {BUSINESS.area}.
         </p>
 
         <div className="mt-9 flex flex-col items-center gap-4 sm:flex-row">

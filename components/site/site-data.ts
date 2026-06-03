@@ -5,6 +5,7 @@ import {
   Trees,
   Droplets,
   Sparkles,
+  Snowflake,
   type LucideIcon,
 } from "lucide-react";
 
@@ -15,7 +16,7 @@ export const BUSINESS = {
   phoneDisplay: "(502) 599-6855",
   phoneHref: "tel:+15025996855",
   hours: "Mon–Sun, 9:00 AM – 7:00 PM",
-  area: "Louisville, KY & surrounding areas",
+  area: "Louisville & Oldham County, KY",
   founders: "Nicolas Timmons & Noah Perkins",
 } as const;
 
@@ -54,6 +55,13 @@ export const SERVICES: Service[] = [
     description:
       "Finish the transformation with fresh mulch and tidy landscaping that makes the whole property pop.",
     points: ["Fresh mulch install", "Bed cleanup & edging", "Seasonal refresh"],
+  },
+  {
+    icon: Snowflake,
+    title: "Snow Removal",
+    description:
+      "When winter hits Louisville & Oldham County, we keep your driveways and walkways clear, safe, and ice-free.",
+    points: ["Driveways & walkways", "Salting & de-icing", "Reliable storm response"],
   },
 ];
 
