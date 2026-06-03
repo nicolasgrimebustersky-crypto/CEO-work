@@ -56,16 +56,21 @@ export function WebGLShader() {
         float gx = p.x;
         float bx = p.x * (1.0 - d);
 
-        float i1 = 0.05 / abs(p.y + sin((rx + time) * xScale) * yScale);
-        float i2 = 0.05 / abs(p.y + sin((gx + time) * xScale) * yScale);
-        float i3 = 0.05 / abs(p.y + sin((bx + time) * xScale) * yScale);
+        // Wide, soft falloff = a broad satin band of light rather than a sharp neon line
+        float i1 = 0.07 / abs(p.y + sin((rx + time) * xScale) * yScale);
+        float i2 = 0.07 / abs(p.y + sin((gx + time) * xScale) * yScale);
+        float i3 = 0.07 / abs(p.y + sin((bx + time) * xScale) * yScale);
 
-        // Map the three streak layers onto an emerald -> mint -> warm-gold ramp
-        vec3 deepEmerald = vec3(0.04, 0.45, 0.26);
-        vec3 brightMint  = vec3(0.12, 0.90, 0.52);
-        vec3 warmGold    = vec3(0.70, 0.85, 0.40);
+        // Muted, desaturated sage -> soft warm sand ramp (no pure bright green)
+        vec3 deepSage = vec3(0.13, 0.27, 0.22);
+        vec3 softSage = vec3(0.44, 0.62, 0.52);
+        vec3 warmSand = vec3(0.62, 0.62, 0.52);
 
-        vec3 col = i1 * deepEmerald + i2 * brightMint + i3 * warmGold;
+        vec3 col = i1 * deepSage + i2 * softSage + i3 * warmSand;
+
+        // Reinhard-style roll-off so highlights settle into satin instead of clipping
+        col = col / (col + vec3(0.7));
+        col *= 0.9;
 
         gl_FragColor = vec4(col, 1.0);
       }
@@ -96,7 +101,7 @@ export function WebGLShader() {
         resolution: { value: [1, 1] },
         time: { value: 0.0 },
         xScale: { value: 1.0 },
-        yScale: { value: 0.5 },
+        yScale: { value: 0.42 },
         distortion: { value: 0.05 },
       }
 
