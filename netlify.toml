@@ -1,0 +1,8 @@
+# Netlify build config — static export of the Next.js site to ./out
+[build]
+  command = "npm run build"
+  publish = "out"
+
+[build.environment]
+  DEPLOY_TARGET = "static"
+  NODE_VERSION = "20"
