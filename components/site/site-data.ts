@@ -114,26 +114,32 @@ export const TESTIMONIALS = [
   },
 ];
 
-export type MediaItem = {
-  type: "image" | "video";
-  src: string;
-  alt: string;
-  poster?: string;
+export type Pair = {
+  before: string;
+  after: string;
+  title: string;
 };
 
-// Auto-sliding "Our Work" gallery — real Grime Busters KY job photos.
-export const GALLERY: MediaItem[] = [
-  { type: "image", src: "/media/g01.jpg", alt: "Freshly cleaned composite deck at sunset" },
-  { type: "image", src: "/media/g02.jpg", alt: "Spotless deck stairs with white railing" },
-  { type: "image", src: "/media/g03.jpg", alt: "Pressure-washed brick paver walkway" },
-  { type: "image", src: "/media/g04.jpg", alt: "Clean concrete driveway" },
-  { type: "image", src: "/media/g05.jpg", alt: "Brick retaining wall and railing, cleaned" },
-  { type: "image", src: "/media/g06.jpg", alt: "Aggregate stone steps after washing" },
-  { type: "image", src: "/media/g07.jpg", alt: "Bright, clean entry steps and column" },
-  { type: "image", src: "/media/g08.jpg", alt: "Tidy stone path and fresh landscaping" },
-  { type: "image", src: "/media/g09.jpg", alt: "Fresh mulch bed and trimmed landscaping" },
-  { type: "image", src: "/media/g10.jpg", alt: "Clean landscaped yard with fresh mulch" },
-  { type: "image", src: "/media/g11.jpg", alt: "Manicured yard with new mulch beds" },
-  { type: "image", src: "/media/g12.jpg", alt: "Grime Bustersky truck loaded with pro gear" },
-  { type: "image", src: "/media/g13.jpg", alt: "Pressure washer nozzle in action" },
+// Real, correctly-matched before/after job pairs (customer-provided photos).
+export const PAIRS: Pair[] = [
+  {
+    before: "/pairs/p1-before.jpg",
+    after: "/pairs/p1-after.jpg",
+    title: "Foundation bed cleared, re-mulched & drainage tidied up",
+  },
+  {
+    before: "/pairs/p2-before.jpg",
+    after: "/pairs/p2-after.jpg",
+    title: "Overgrown bed around the tree, fully refreshed",
+  },
+  {
+    before: "/pairs/p3-before.jpg",
+    after: "/pairs/p3-after.jpg",
+    title: "Weedy slope reborn with stepping stones & fresh mulch",
+  },
+  {
+    before: "/pairs/p4-before.jpg",
+    after: "/pairs/p4-after.jpg",
+    title: "Whole lot cleared, graded, and finished clean",
+  },
 ];
