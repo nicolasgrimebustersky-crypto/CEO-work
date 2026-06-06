@@ -25,7 +25,7 @@ export function Transformations() {
           <div className="relative h-full overflow-hidden rounded-xl">
             <ImagePlaceholder
               src="/photos/before.jpg"
-              alt="Overgrown landscaping bed before Grime Bustersky"
+              alt="Circle garden build in progress — before"
             />
             <span className="absolute left-3 top-3 rounded-full bg-background/80 px-3 py-1 text-xs font-bold tracking-wide text-muted-foreground uppercase backdrop-blur">
               Before
@@ -34,7 +34,7 @@ export function Transformations() {
           <div className="relative h-full overflow-hidden rounded-xl ring-1 ring-primary/40">
             <ImagePlaceholder
               src="/photos/after.jpg"
-              alt="Fresh mulch and tidy landscaping after Grime Bustersky"
+              alt="Finished circle garden — after"
             />
             <span className="absolute left-3 top-3 rounded-full bg-primary px-3 py-1 text-xs font-bold tracking-wide text-primary-foreground uppercase">
               After
