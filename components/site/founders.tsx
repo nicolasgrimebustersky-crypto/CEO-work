@@ -16,8 +16,8 @@ export function Founders() {
         <div className="relative">
           <div className="aspect-4/5 overflow-hidden rounded-3xl border border-border/70 bg-card">
             <ImagePlaceholder
+              src="/photos/founders.jpg"
               alt={`${BUSINESS.founders}, founders of ${BUSINESS.shortName}`}
-              label="Founders photo"
             />
           </div>
           <div className="absolute -bottom-5 -right-4 rounded-2xl border border-primary/30 bg-card/90 px-5 py-4 backdrop-blur">

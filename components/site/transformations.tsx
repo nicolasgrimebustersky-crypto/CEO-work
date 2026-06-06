@@ -13,35 +13,20 @@ export function Transformations() {
               See the difference
             </span>
             <h2 className="mt-3 font-heading text-3xl font-extrabold tracking-tight text-foreground sm:text-5xl">
-              Real Louisville
+              The Grime Bustersky
               <br />
               <span className="bg-gradient-to-b from-primary to-emerald-700 bg-clip-text text-transparent">
-                Before &amp; After Transformations
+                Clean You Can See
               </span>
             </h2>
           </div>
         }
       >
-        <div className="grid h-full w-full grid-cols-1 gap-2 sm:grid-cols-2">
-          <div className="relative overflow-hidden rounded-xl">
-            <ImagePlaceholder
-              alt="Before pressure washing — dirty driveway"
-              label="Before photo"
-            />
-            <span className="absolute left-3 top-3 rounded-full bg-background/80 px-3 py-1 text-xs font-bold tracking-wide text-muted-foreground uppercase backdrop-blur">
-              Before
-            </span>
-          </div>
-          <div className="relative overflow-hidden rounded-xl ring-1 ring-primary/40">
-            <ImagePlaceholder
-              alt="After pressure washing — clean driveway"
-              label="After photo"
-            />
-            <span className="absolute left-3 top-3 rounded-full bg-primary px-3 py-1 text-xs font-bold tracking-wide text-primary-foreground uppercase">
-              After
-            </span>
-          </div>
-        </div>
+        <ImagePlaceholder
+          src="/photos/showcase.jpg"
+          alt="Freshly pressure-washed composite deck at sunset"
+          imgClassName="rounded-xl"
+        />
       </ContainerScroll>
     </section>
   );
