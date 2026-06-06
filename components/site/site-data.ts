@@ -20,6 +20,10 @@ export const BUSINESS = {
   founders: "Nicolas Timmons & Noah Perkins",
 } as const;
 
+// Google Analytics 4 Measurement ID (e.g. "G-XXXXXXXXXX").
+// Leave empty to disable; set it to turn on analytics on the next deploy.
+export const GA_MEASUREMENT_ID = "";
+
 export type Service = {
   icon: LucideIcon;
   title: string;
