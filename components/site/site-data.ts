@@ -24,6 +24,11 @@ export const BUSINESS = {
 // Leave empty to disable; set it to turn on analytics on the next deploy.
 export const GA_MEASUREMENT_ID = "";
 
+// Web3Forms access key for the quote/booking form (https://web3forms.com).
+// Get a free key by entering your email at web3forms.com; paste it here.
+// Submissions are emailed to the address tied to this key. Empty = not wired yet.
+export const WEB3FORMS_ACCESS_KEY = "";
+
 export type Service = {
   icon: LucideIcon;
   title: string;

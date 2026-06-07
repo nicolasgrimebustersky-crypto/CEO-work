@@ -1,15 +1,17 @@
 "use client";
 
 import * as React from "react";
-import { Phone, CheckCircle2, CalendarCheck } from "lucide-react";
+import { Phone, CheckCircle2, CalendarCheck, AlertCircle } from "lucide-react";
 import { DatePicker } from "@/components/ui/heroui-date-picker";
-import { BUSINESS, SERVICES } from "./site-data";
+import { BUSINESS, SERVICES, WEB3FORMS_ACCESS_KEY } from "./site-data";
 
 type DateValue = { month: string; day: string; year: string; iso?: string };
+type Status = "idle" | "sending" | "success" | "error";
 
 export function Booking() {
   const [date, setDate] = React.useState<DateValue | null>(null);
-  const [submitted, setSubmitted] = React.useState(false);
+  const [status, setStatus] = React.useState<Status>("idle");
+  const [botField, setBotField] = React.useState(""); // honeypot
   const [form, setForm] = React.useState({
     name: "",
     phone: "",
@@ -27,9 +29,49 @@ export function Booking() {
     ) =>
       setForm((f) => ({ ...f, [key]: e.target.value }));
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
+    if (botField) return; // bot filled the honeypot — silently drop
+
+    const prettyDate = date?.iso
+      ? `${date.month}/${date.day}/${date.year}`
+      : "Not specified";
+
+    // If no key is configured yet, fail safe to the success screen.
+    if (!WEB3FORMS_ACCESS_KEY) {
+      setStatus("success");
+      return;
+    }
+
+    setStatus("sending");
+    try {
+      const res = await fetch("https://api.web3forms.com/submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          access_key: WEB3FORMS_ACCESS_KEY,
+          subject: `New quote request — ${form.name || "Website"} (${BUSINESS.shortName})`,
+          from_name: "Grime Bustersky Website",
+          name: form.name,
+          phone: form.phone,
+          address: form.address || "Not provided",
+          service: form.service,
+          preferred_date: prettyDate,
+          message: form.notes || "(no additional details)",
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setStatus("success");
+      } else {
+        setStatus("error");
+      }
+    } catch {
+      setStatus("error");
+    }
   };
 
   const inputClass =
@@ -70,7 +112,7 @@ export function Booking() {
 
             {/* Form side */}
             <div className="p-8 sm:p-10 lg:col-span-3">
-              {submitted ? (
+              {status === "success" ? (
                 <div className="flex h-full min-h-72 flex-col items-center justify-center gap-4 text-center">
                   <CheckCircle2 className="size-14 text-primary" />
                   <h3 className="font-heading text-2xl font-bold text-foreground">
@@ -79,8 +121,10 @@ export function Booking() {
                   <p className="max-w-md text-sm text-muted-foreground">
                     Thanks for reaching out to {BUSINESS.shortName}. We&apos;ll be
                     in touch shortly to confirm
-                    {date?.iso ? ` your ${date.month}/${date.day}/${date.year} request` : " your free quote"}.
-                    Need it sooner?
+                    {date?.iso
+                      ? ` your ${date.month}/${date.day}/${date.year} request`
+                      : " your free quote"}
+                    . Need it sooner?
                   </p>
                   <a
                     href={BUSINESS.phoneHref}
@@ -92,6 +136,18 @@ export function Booking() {
                 </div>
               ) : (
                 <form onSubmit={onSubmit} className="grid gap-5">
+                  {/* honeypot: hidden from users, catches bots */}
+                  <input
+                    type="text"
+                    name="botcheck"
+                    tabIndex={-1}
+                    autoComplete="off"
+                    value={botField}
+                    onChange={(e) => setBotField(e.target.value)}
+                    className="hidden"
+                    aria-hidden="true"
+                  />
+
                   <div className="grid gap-5 sm:grid-cols-2">
                     <label className="grid gap-1.5 text-sm">
                       <span className="font-medium text-foreground">Name</span>
@@ -167,11 +223,26 @@ export function Booking() {
                     />
                   </label>
 
+                  {status === "error" && (
+                    <div className="flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                      <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                      <span>
+                        Something went wrong sending your request. Please try
+                        again, or call us at{" "}
+                        <a href={BUSINESS.phoneHref} className="font-semibold underline">
+                          {BUSINESS.phoneDisplay}
+                        </a>
+                        .
+                      </span>
+                    </div>
+                  )}
+
                   <button
                     type="submit"
-                    className="mt-1 inline-flex h-12 items-center justify-center gap-2 rounded-full bg-primary px-8 text-base font-semibold text-primary-foreground transition-all hover:brightness-110 active:scale-[0.98]"
+                    disabled={status === "sending"}
+                    className="mt-1 inline-flex h-12 items-center justify-center gap-2 rounded-full bg-primary px-8 text-base font-semibold text-primary-foreground transition-all hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
                   >
-                    Request my free quote
+                    {status === "sending" ? "Sending…" : "Request my free quote"}
                   </button>
                 </form>
               )}
