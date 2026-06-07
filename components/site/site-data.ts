@@ -27,7 +27,7 @@ export const GA_MEASUREMENT_ID = "";
 // Web3Forms access key for the quote/booking form (https://web3forms.com).
 // Get a free key by entering your email at web3forms.com; paste it here.
 // Submissions are emailed to the address tied to this key. Empty = not wired yet.
-export const WEB3FORMS_ACCESS_KEY = "";
+export const WEB3FORMS_ACCESS_KEY = "3ebdddf5-305e-4020-a742-a6e107ca48e8";
 
 export type Service = {
   icon: LucideIcon;
