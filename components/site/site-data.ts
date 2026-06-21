@@ -29,6 +29,22 @@ export const GA_MEASUREMENT_ID = "";
 // Submissions are emailed to the address tied to this key. Empty = not wired yet.
 export const WEB3FORMS_ACCESS_KEY = "3ebdddf5-305e-4020-a742-a6e107ca48e8";
 
+export type TeamMember = { name: string; role: string; photo?: string };
+
+// Co-owners (featured with the dock photo + story).
+export const OWNERS: TeamMember[] = [
+  { name: "Nicolas Timmons", role: "Co-Owner" },
+  { name: "Noah Perkins", role: "Co-Owner" },
+];
+
+// The crew. Add a `photo` path (e.g. "/team/yael.jpg") to replace the
+// initials avatar with a real headshot.
+export const CREW: TeamMember[] = [
+  { name: "Yael Acuna", role: "Sales & Outreach" },
+  { name: "Ethan Fitzgibbon", role: "Sales & Outreach" },
+  { name: "Elijah Dale", role: "Sales & Outreach" },
+];
+
 export type Service = {
   icon: LucideIcon;
   title: string;
