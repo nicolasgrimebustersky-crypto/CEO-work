@@ -151,24 +151,78 @@ export const STEPS = [
   },
 ];
 
-export const TESTIMONIALS = [
+export type Testimonial = { quote: string; author: string };
+
+// Real Google reviews from customers.
+export const TESTIMONIALS: Testimonial[] = [
   {
     quote:
-      "We were amazed by the exceptional service provided by Grime Busters KY. Our property looks brand new, and we couldn't be happier with the results.",
-    author: "Marian S.",
-    role: "Louisville Homeowner",
+      "Grime Busters did an excellent job pressure washing our driveway and deck. They were very professional and communicated well with us. They were also reasonably priced. I would definitely recommend.",
+    author: "Jacqui Bone",
   },
   {
     quote:
-      "Fast, friendly, and the driveway has never looked this clean. These guys take real pride in their work.",
-    author: "Happy Customer",
-    role: "Residential Client",
+      "Outstanding job pressure washing vinyl siding, brick, and a deck. Prompt, great communication, stress-free experience all around. Thank you!",
+    author: "Rebecca Woo",
   },
   {
     quote:
-      "Booked a commercial wash and they made our storefront shine without slowing down business. Highly recommend.",
-    author: "Local Business",
-    role: "Commercial Client",
+      "I cannot say enough good things about Nicolas and Noah! What a great team and fine young men they are! Their work ethic and communication is above and beyond. They have laid rock/edging all around our house, power washed, cleaned up leaves several times and more. I would HIGHLY recommend! Please give them a call or text. You will not be disappointed.",
+    author: "Kim Nestor",
+  },
+  {
+    quote:
+      "Grime Busters did a good job pressure washing our sidewalk, driveway, deck, and siding. Pricing was reasonable.",
+    author: "Robert Mattingly",
+  },
+  {
+    quote:
+      "Our driveway, patio, porch and sidewalks looked brand new. They even pressure washed our retaining wall and deck boards!",
+    author: "Lance Perkins",
+  },
+  {
+    quote:
+      "They were very communicative, transparent with pricing, and worked diligently to complete the work.",
+    author: "LaDonna Keddedy",
+  },
+  {
+    quote:
+      "Grime Busters did 3 houses for us including gutter cleaning, some concrete foundation, and a retaining wall. They did a great job making things look great. They are very professional when quoting and talking with the customer, and kept me informed about what they were doing and their next steps. I'll also give them a lot of credit — when they originally gave the quote they said they would be out the next day to start. I saw the weather was going to be cold and windy with snow flurries, so I texted that morning to see if they were still coming, and they said they were on the way. Very dedicated company. I would definitely recommend them for any of your pressure washing services. Thank you all for an amazing job.",
+    author: "Donnie Webster",
+  },
+  {
+    quote:
+      "Grime Busters knocked it out of the park. They pressure washed our driveway and sidewalk, making them look brand new. Reasonably priced and detailed. Thanks Grime Busters!",
+    author: "Hayden Shawler",
+  },
+  {
+    quote:
+      "We hired Nicolas and Noah of Grime Busters to remove the annual fall leaves and they did a great job with our entire yard. They had the right equipment and a great attitude to get the job done! I'd recommend you call them soon, before the winter begins!",
+    author: "Jeremy Christ",
+  },
+  {
+    quote: "A responsible, reliable, and professionally run company.",
+    author: "Christine McCloy",
+  },
+  {
+    quote:
+      "The owners communicated well, were careful and detailed. I'd use them again.",
+    author: "Andrew T.",
+  },
+  {
+    quote:
+      "The Grime Busters were amazing — very professional and very skilled at their task. They pressure washed and sealed my driveway and it looks fantastic. I will be having them come again!!",
+    author: "Jack Meade",
+  },
+  {
+    quote:
+      "Grime Busters did a great job on my driveway and patio. Definitely recommend them.",
+    author: "jjandk W.",
+  },
+  {
+    quote:
+      "Nicolas is a hard worker. He shows up on time and does a great job.",
+    author: "Judith Grazette",
   },
 ];
 
