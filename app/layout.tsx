@@ -98,6 +98,21 @@ export const metadata: Metadata = {
     siteName: "Grime Bustersky",
     locale: "en_US",
     type: "website",
+    images: [
+      {
+        url: "/og.png",
+        width: 1200,
+        height: 630,
+        alt: "Grime Busters KY — Pressure Washing & Landscaping, Louisville KY",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Grime Bustersky | Pressure Washing & Landscaping",
+    description:
+      "Louisville & Oldham County's local crew for pressure washing, landscaping & snow removal. Free quotes — (502) 599-6855.",
+    images: ["/og.png"],
   },
 };
 
