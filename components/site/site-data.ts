@@ -151,7 +151,7 @@ export const STEPS = [
   },
 ];
 
-export type Testimonial = { quote: string; author: string };
+export type Testimonial = { quote: string; author: string; rating?: number };
 
 // Real Google reviews from customers.
 export const TESTIMONIALS: Testimonial[] = [
@@ -223,6 +223,7 @@ export const TESTIMONIALS: Testimonial[] = [
     quote:
       "Nicolas is a hard worker. He shows up on time and does a great job.",
     author: "Judith Grazette",
+    rating: 4,
   },
 ];
 
