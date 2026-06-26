@@ -29,6 +29,9 @@ export const GA_MEASUREMENT_ID = "G-YBKBN0SLCW";
 // Submissions are emailed to the address tied to this key. Empty = not wired yet.
 export const WEB3FORMS_ACCESS_KEY = "3ebdddf5-305e-4020-a742-a6e107ca48e8";
 
+// Clean link to the Google Business listing (read + leave reviews).
+export const GOOGLE_REVIEWS_URL = "https://www.google.com/maps?cid=6378439859517805393";
+
 export type TeamMember = { name: string; role: string; photo?: string };
 
 // Co-owners (featured with the dock photo + story).

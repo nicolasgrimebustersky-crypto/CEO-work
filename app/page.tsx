@@ -1,5 +1,6 @@
 import { Navbar } from "@/components/site/navbar";
 import { Hero } from "@/components/site/hero";
+import { TrustStrip } from "@/components/site/trust-strip";
 import { Services } from "@/components/site/services";
 import { Transformations } from "@/components/site/transformations";
 import { Process } from "@/components/site/process";
@@ -16,6 +17,7 @@ export default function Home() {
       <Navbar />
       <main className="flex-1">
         <Hero />
+        <TrustStrip />
         <Services />
         <Transformations />
         <Process />

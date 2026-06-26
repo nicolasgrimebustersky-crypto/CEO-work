@@ -17,6 +17,59 @@ const nunitoSans = Nunito_Sans({
 
 const SITE_URL = "https://grimebusterskyllc.com";
 
+// LocalBusiness structured data so Google understands the business.
+const JSON_LD = {
+  "@context": "https://schema.org",
+  "@type": ["LocalBusiness", "HomeAndConstructionBusiness"],
+  name: "Grime Busters KY",
+  legalName: "Grime Bustersky LLC",
+  description:
+    "Pressure washing, power washing, landscaping, mulching, and snow removal serving Louisville & Oldham County, Kentucky.",
+  url: SITE_URL,
+  telephone: "+1-502-599-6855",
+  image: `${SITE_URL}/logo.png`,
+  logo: `${SITE_URL}/logo.png`,
+  priceRange: "$$",
+  address: {
+    "@type": "PostalAddress",
+    addressLocality: "Louisville",
+    addressRegion: "KY",
+    addressCountry: "US",
+  },
+  areaServed: [
+    { "@type": "City", name: "Louisville" },
+    { "@type": "AdministrativeArea", name: "Oldham County" },
+  ],
+  openingHoursSpecification: [
+    {
+      "@type": "OpeningHoursSpecification",
+      dayOfWeek: [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday",
+      ],
+      opens: "09:00",
+      closes: "19:00",
+    },
+  ],
+  sameAs: [
+    "https://www.instagram.com/grimebustersky",
+    "https://www.facebook.com/profile.php?id=61576382277369",
+    "https://www.tiktok.com/@grimebustersky",
+    "https://www.google.com/maps?cid=6378439859517805393",
+  ],
+  aggregateRating: {
+    "@type": "AggregateRating",
+    ratingValue: "4.9",
+    reviewCount: "14",
+    bestRating: "5",
+  },
+};
+
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
@@ -59,6 +112,10 @@ export default function RootLayout({
       className={`dark ${rubik.variable} ${nunitoSans.variable} h-full scroll-smooth antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
+        />
         {children}
         <GoogleAnalytics />
       </body>

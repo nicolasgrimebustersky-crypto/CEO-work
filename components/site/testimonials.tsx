@@ -1,5 +1,5 @@
 import { Quote, Star } from "lucide-react";
-import { TESTIMONIALS } from "./site-data";
+import { TESTIMONIALS, GOOGLE_REVIEWS_URL } from "./site-data";
 
 function Stars({ rating = 5, className = "size-4" }: { rating?: number; className?: string }) {
   return (
@@ -68,6 +68,26 @@ export function Testimonials() {
               </figcaption>
             </figure>
           ))}
+        </div>
+
+        <div className="mt-12 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <a
+            href={GOOGLE_REVIEWS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground transition-all hover:brightness-110"
+          >
+            <Star className="size-4 fill-current" />
+            Leave us a review on Google
+          </a>
+          <a
+            href={GOOGLE_REVIEWS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-6 py-3 text-sm font-semibold text-primary transition-colors hover:bg-primary/20"
+          >
+            Read all our Google reviews
+          </a>
         </div>
       </div>
     </section>
