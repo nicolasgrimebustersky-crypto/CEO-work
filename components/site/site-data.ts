@@ -22,7 +22,7 @@ export const BUSINESS = {
 
 // Google Analytics 4 Measurement ID (e.g. "G-XXXXXXXXXX").
 // Leave empty to disable; set it to turn on analytics on the next deploy.
-export const GA_MEASUREMENT_ID = "";
+export const GA_MEASUREMENT_ID = "G-YBKBN0SLCW";
 
 // Web3Forms access key for the quote/booking form (https://web3forms.com).
 // Get a free key by entering your email at web3forms.com; paste it here.
