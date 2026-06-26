@@ -8,6 +8,7 @@ import { Faq } from "@/components/site/faq";
 import { Booking } from "@/components/site/booking";
 import { Testimonials } from "@/components/site/testimonials";
 import { Footer } from "@/components/site/footer";
+import { MobileCta } from "@/components/site/mobile-cta";
 
 export default function Home() {
   return (
@@ -24,6 +25,9 @@ export default function Home() {
         <Booking />
       </main>
       <Footer />
+      {/* spacer so the fixed mobile bar never hides footer content */}
+      <div aria-hidden className="h-16 lg:hidden" />
+      <MobileCta />
     </>
   );
 }
