@@ -45,6 +45,39 @@ export const CREW: TeamMember[] = [
   { name: "Elijah Dale", role: "Sales & Outreach" },
 ];
 
+export type Faq = { q: string; a: string };
+
+export const FAQS: Faq[] = [
+  {
+    q: "What areas do you serve?",
+    a: "We're based in Louisville and proudly serve Louisville & Oldham County, KY and the surrounding areas. Not sure if you're in range? Just call or text and ask.",
+  },
+  {
+    q: "What services do you offer?",
+    a: "Residential and commercial pressure washing, industrial cleaning, landscaping & mulching, and seasonal snow removal — from driveways and siding to full property cleanups.",
+  },
+  {
+    q: "How much will my job cost?",
+    a: "Every property is different, so we give free, no-pressure quotes. Tell us what needs cleaning and we'll get you a fast estimate with no obligation.",
+  },
+  {
+    q: "What can you pressure wash?",
+    a: "Driveways, sidewalks, patios, decks, vinyl siding, brick, fences, dumpster pads, storefronts, and more. If it's dirty, we can probably clean it — just ask.",
+  },
+  {
+    q: "How do I get a quote or book?",
+    a: 'Use the "Get your free quote" form on this site, or call/text us at (502) 599-6855. We\'ll confirm your spot and bring the shine.',
+  },
+  {
+    q: "What are your hours?",
+    a: "We're available Monday through Sunday, 9:00 AM – 7:00 PM.",
+  },
+  {
+    q: "Are you local?",
+    a: "100%. Grime Busters KY is locally owned and operated by two Louisville entrepreneurs — when you hire us, you're supporting a local small business.",
+  },
+];
+
 export type Service = {
   icon: LucideIcon;
   title: string;
