@@ -45,7 +45,6 @@ export const OWNERS: TeamMember[] = [
 export const CREW: TeamMember[] = [
   { name: "Yael Acuna", role: "Sales & Outreach" },
   { name: "Ethan Fitzgibbon", role: "Sales & Outreach" },
-  { name: "Elijah Dale", role: "Sales & Outreach" },
 ];
 
 export type Faq = { q: string; a: string };
