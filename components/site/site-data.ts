@@ -12,6 +12,7 @@ import {
 export const BUSINESS = {
   name: "Grime Bustersky",
   shortName: "Grime Busters KY",
+  legalName: "Grime Busters KY LLC",
   tagline: "Louisville's Leading Pressure Washing & Landscaping Crew",
   phoneDisplay: "(502) 599-6855",
   phoneHref: "tel:+15025996855",

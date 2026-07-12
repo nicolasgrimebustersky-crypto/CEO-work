@@ -171,7 +171,7 @@ export function Footer() {
       <div className="border-t border-border/60 py-6">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-2 px-4 text-xs text-muted-foreground sm:flex-row sm:px-6 lg:px-8">
           <p>
-            © {new Date().getFullYear()} {BUSINESS.name} LLC. All rights reserved.
+            © {new Date().getFullYear()} {BUSINESS.legalName}. All rights reserved.
           </p>
           <p>Founded by {BUSINESS.founders} · Louisville, KY</p>
         </div>

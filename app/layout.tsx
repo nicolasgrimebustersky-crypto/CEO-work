@@ -22,7 +22,7 @@ const JSON_LD = {
   "@context": "https://schema.org",
   "@type": ["LocalBusiness", "HomeAndConstructionBusiness"],
   name: "Grime Busters KY",
-  legalName: "Grime Bustersky LLC",
+  legalName: "Grime Busters KY LLC",
   description:
     "Pressure washing, power washing, landscaping, mulching, and snow removal serving Louisville & Oldham County, Kentucky.",
   url: SITE_URL,
