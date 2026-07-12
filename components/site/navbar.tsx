@@ -9,6 +9,7 @@ import { BUSINESS } from "./site-data";
 
 const NAV_LINKS = [
   { href: "#services", label: "Services" },
+  { href: "#instant-quote", label: "Instant Quote" },
   { href: "#work", label: "Our Work" },
   { href: "#process", label: "How It Works" },
   { href: "#team", label: "Team" },

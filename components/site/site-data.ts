@@ -258,3 +258,75 @@ export const PAIRS: Pair[] = [
     title: "Whole lot cleared, graded, and finished clean",
   },
 ];
+
+// ─── Instant AI Quote tool ───────────────────────────────────────────────
+// ⚠️ PLACEHOLDER PRICING — EDIT THESE NUMBERS with Grime Busters' real rates.
+// Prices are per square foot, with a per-job minimum. The tool always shows
+// a range and labels it an estimate to be confirmed on-site.
+export type QuoteService = {
+  id: string;
+  label: string;
+  ratePerSqftLow: number;
+  ratePerSqftHigh: number;
+  minimum: number;
+  /** Manual fallback sizes when the customer doesn't upload a photo. */
+  sizes: { label: string; sqft: number }[];
+};
+
+export const QUOTE_SERVICES: QuoteService[] = [
+  {
+    id: "driveway",
+    label: "Driveway / Concrete",
+    ratePerSqftLow: 0.15,
+    ratePerSqftHigh: 0.25,
+    minimum: 99,
+    sizes: [
+      { label: "1-car driveway", sqft: 300 },
+      { label: "2-car driveway", sqft: 600 },
+      { label: "3-car driveway", sqft: 900 },
+      { label: "Large / long driveway", sqft: 1400 },
+    ],
+  },
+  {
+    id: "deck",
+    label: "Deck / Patio",
+    ratePerSqftLow: 0.2,
+    ratePerSqftHigh: 0.35,
+    minimum: 99,
+    sizes: [
+      { label: "Small (up to 200 sq ft)", sqft: 200 },
+      { label: "Medium (~350 sq ft)", sqft: 350 },
+      { label: "Large (~600 sq ft)", sqft: 600 },
+    ],
+  },
+  {
+    id: "siding",
+    label: "House Siding / Exterior",
+    ratePerSqftLow: 0.15,
+    ratePerSqftHigh: 0.3,
+    minimum: 149,
+    sizes: [
+      { label: "1-story home", sqft: 1200 },
+      { label: "2-story home", sqft: 2200 },
+      { label: "Large 2-story +", sqft: 3000 },
+    ],
+  },
+  {
+    id: "sidewalk",
+    label: "Sidewalk / Walkway",
+    ratePerSqftLow: 0.15,
+    ratePerSqftHigh: 0.25,
+    minimum: 79,
+    sizes: [
+      { label: "Short walkway", sqft: 100 },
+      { label: "Standard walkway", sqft: 200 },
+      { label: "Long / wraparound", sqft: 400 },
+    ],
+  },
+];
+
+export function quotePriceRange(service: QuoteService, sqft: number) {
+  const low = Math.max(service.minimum, Math.round((sqft * service.ratePerSqftLow) / 5) * 5);
+  const high = Math.max(low, Math.round((sqft * service.ratePerSqftHigh) / 5) * 5);
+  return { low, high };
+}

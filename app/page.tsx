@@ -2,6 +2,7 @@ import { Navbar } from "@/components/site/navbar";
 import { Hero } from "@/components/site/hero";
 import { TrustStrip } from "@/components/site/trust-strip";
 import { Services } from "@/components/site/services";
+import { QuoteTool } from "@/components/site/quote-tool";
 import { Transformations } from "@/components/site/transformations";
 import { Process } from "@/components/site/process";
 import { Team } from "@/components/site/team";
@@ -19,6 +20,7 @@ export default function Home() {
         <Hero />
         <TrustStrip />
         <Services />
+        <QuoteTool />
         <Transformations />
         <Process />
         <Team />
