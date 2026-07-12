@@ -260,9 +260,11 @@ export const PAIRS: Pair[] = [
 ];
 
 // ─── Instant AI Quote tool ───────────────────────────────────────────────
-// ⚠️ PLACEHOLDER PRICING — EDIT THESE NUMBERS with Grime Busters' real rates.
-// Prices are per square foot, with a per-job minimum. The tool always shows
-// a range and labels it an estimate to be confirmed on-site.
+// PRESSURE WASHING pricing is Grime Busters' real rate (per Nic, 7/12/26):
+//   $0.20 per square foot, $200 job minimum.
+// LANDSCAPING/MULCHING uses Louisville-area industry rates (researched from
+//   HomeGuide/Angi/GreenPal, 2026: ~$0.35–$0.70/sq ft installed) — adjust anytime.
+// The tool always shows "ballpark, confirmed on-site."
 export type QuoteService = {
   id: string;
   label: string;
@@ -273,13 +275,13 @@ export type QuoteService = {
   sizes: { label: string; sqft: number }[];
 };
 
+const PW = { ratePerSqftLow: 0.2, ratePerSqftHigh: 0.2, minimum: 200 };
+
 export const QUOTE_SERVICES: QuoteService[] = [
   {
     id: "driveway",
     label: "Driveway / Concrete",
-    ratePerSqftLow: 0.15,
-    ratePerSqftHigh: 0.25,
-    minimum: 99,
+    ...PW,
     sizes: [
       { label: "1-car driveway", sqft: 300 },
       { label: "2-car driveway", sqft: 600 },
@@ -290,9 +292,7 @@ export const QUOTE_SERVICES: QuoteService[] = [
   {
     id: "deck",
     label: "Deck / Patio",
-    ratePerSqftLow: 0.2,
-    ratePerSqftHigh: 0.35,
-    minimum: 99,
+    ...PW,
     sizes: [
       { label: "Small (up to 200 sq ft)", sqft: 200 },
       { label: "Medium (~350 sq ft)", sqft: 350 },
@@ -302,9 +302,7 @@ export const QUOTE_SERVICES: QuoteService[] = [
   {
     id: "siding",
     label: "House Siding / Exterior",
-    ratePerSqftLow: 0.15,
-    ratePerSqftHigh: 0.3,
-    minimum: 149,
+    ...PW,
     sizes: [
       { label: "1-story home", sqft: 1200 },
       { label: "2-story home", sqft: 2200 },
@@ -314,19 +312,33 @@ export const QUOTE_SERVICES: QuoteService[] = [
   {
     id: "sidewalk",
     label: "Sidewalk / Walkway",
-    ratePerSqftLow: 0.15,
-    ratePerSqftHigh: 0.25,
-    minimum: 79,
+    ...PW,
     sizes: [
       { label: "Short walkway", sqft: 100 },
       { label: "Standard walkway", sqft: 200 },
       { label: "Long / wraparound", sqft: 400 },
     ],
   },
+  {
+    id: "mulch",
+    label: "Mulching / Bed Refresh",
+    ratePerSqftLow: 0.35,
+    ratePerSqftHigh: 0.7,
+    minimum: 150,
+    sizes: [
+      { label: "Small beds (~150 sq ft)", sqft: 150 },
+      { label: "Front yard beds (~300 sq ft)", sqft: 300 },
+      { label: "Front + back beds (~600 sq ft)", sqft: 600 },
+      { label: "Large property (~1,000 sq ft)", sqft: 1000 },
+    ],
+  },
 ];
 
-export function quotePriceRange(service: QuoteService, sqft: number) {
-  const low = Math.max(service.minimum, Math.round((sqft * service.ratePerSqftLow) / 5) * 5);
-  const high = Math.max(low, Math.round((sqft * service.ratePerSqftHigh) / 5) * 5);
+const round5 = (n: number) => Math.round(n / 5) * 5;
+
+/** Price range from a square-footage range (pass the same value twice for a single size). */
+export function quotePriceRange(service: QuoteService, sqftLow: number, sqftHigh: number) {
+  const low = Math.max(service.minimum, round5(sqftLow * service.ratePerSqftLow));
+  const high = Math.max(low, round5(sqftHigh * service.ratePerSqftHigh));
   return { low, high };
 }

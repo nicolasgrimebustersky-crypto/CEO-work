@@ -9,6 +9,7 @@ import {
   AlertCircle,
   Phone,
   CheckCircle2,
+  Building2,
   RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -30,7 +31,27 @@ type Estimate = {
   notes: string;
 };
 
-type Phase = "pick" | "analyzing" | "result" | "sent";
+type Phase = "pick" | "analyzing" | "details" | "quoted" | "commercial";
+
+/* ── Commercial detection ─────────────────────────────────────────────────
+   Residential jobs get the instant price; anything that looks like a
+   business (email domain, or business words in the name/address) is asked
+   to contact Nic directly instead. */
+const FREE_MAIL = new Set([
+  "gmail.com", "yahoo.com", "ymail.com", "hotmail.com", "outlook.com",
+  "icloud.com", "me.com", "mac.com", "aol.com", "live.com", "msn.com",
+  "protonmail.com", "proton.me", "pm.me", "comcast.net", "att.net",
+  "bellsouth.net", "twc.com", "insightbb.com", "windstream.net",
+]);
+
+const COMMERCIAL_RE =
+  /\b(llc|inc|corp|corporation|company|properties|property management|management|hoa|church|ministries|school|academy|university|daycare|apartments?|apts?\.?|complex|plaza|shopping center|office|offices|suite|ste\.?|unit \d|restaurant|cafe|diner|grill|pizzeria|hotel|motel|clinic|medical|dental|law|realty|warehouse|storage|enterprises?|holdings|salon|barber|gym|fitness|dealership|bank|credit union|store|facility|facilities)\b/i;
+
+function looksCommercial(name: string, email: string, address: string) {
+  const domain = email.split("@")[1]?.toLowerCase().trim();
+  const businessEmail = !!domain && domain.includes(".") && !FREE_MAIL.has(domain);
+  return businessEmail || COMMERCIAL_RE.test(name) || COMMERCIAL_RE.test(address);
+}
 
 /** Downscale + re-encode the chosen photo so uploads are small and consistent. */
 async function compressImage(file: File): Promise<{ base64: string; mediaType: string }> {
@@ -50,19 +71,19 @@ export function QuoteTool() {
   const [service, setService] = React.useState<QuoteService>(QUOTE_SERVICES[0]);
   const [phase, setPhase] = React.useState<Phase>("pick");
   const [error, setError] = React.useState<string | null>(null);
-  const [sqft, setSqft] = React.useState<number | null>(null);
+  const [sqftRange, setSqftRange] = React.useState<[number, number] | null>(null);
   const [estimate, setEstimate] = React.useState<Estimate | null>(null);
   const [sourceLabel, setSourceLabel] = React.useState("");
-  const [contact, setContact] = React.useState({ name: "", phone: "" });
+  const [contact, setContact] = React.useState({ name: "", phone: "", email: "", address: "" });
   const [sending, setSending] = React.useState(false);
   const fileRef = React.useRef<HTMLInputElement>(null);
 
-  const price = sqft !== null ? quotePriceRange(service, sqft) : null;
+  const price = sqftRange ? quotePriceRange(service, sqftRange[0], sqftRange[1]) : null;
 
   const reset = () => {
     setPhase("pick");
     setError(null);
-    setSqft(null);
+    setSqftRange(null);
     setEstimate(null);
     setSourceLabel("");
   };
@@ -72,9 +93,7 @@ export function QuoteTool() {
     setPhase("analyzing");
     try {
       const { base64, mediaType } = await compressImage(file).catch(() => {
-        throw new Error(
-          "We couldn't read that image. Try a JPG/PNG photo or a screenshot of it.",
-        );
+        throw new Error("We couldn't read that image. Try a JPG/PNG photo or a screenshot of it.");
       });
       const res = await fetch("/api/estimate", {
         method: "POST",
@@ -98,9 +117,9 @@ export function QuoteTool() {
         );
       }
       setEstimate(est);
-      setSqft(est.sqft_best);
+      setSqftRange([est.sqft_low, est.sqft_high]);
       setSourceLabel("AI photo estimate");
-      setPhase("result");
+      setPhase("details");
       (window as any).gtag?.("event", "ai_estimate", { service: service.id });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong — try a size below.");
@@ -110,40 +129,55 @@ export function QuoteTool() {
 
   const useSize = (label: string, presetSqft: number) => {
     setEstimate(null);
-    setSqft(presetSqft);
+    setSqftRange([presetSqft, presetSqft]);
     setSourceLabel(label);
     setError(null);
-    setPhase("result");
+    setPhase("details");
   };
 
-  const sendLead = async (e: React.FormEvent) => {
+  const revealQuote = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!price) return;
+    if (!price || !sqftRange) return;
     setSending(true);
+    setError(null);
+    const commercial = looksCommercial(contact.name, contact.email, contact.address);
     try {
       const res = await fetch("https://api.web3forms.com/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({
           access_key: WEB3FORMS_ACCESS_KEY,
-          subject: `Instant quote request — ${contact.name || "Website"} ($${price.low}–$${price.high})`,
+          subject: commercial
+            ? `🏢 COMMERCIAL lead — ${contact.name} (${service.label})`
+            : `Instant quote — ${contact.name} ($${price.low}–$${price.high} ${service.label})`,
           from_name: "Grime Bustersky Instant Quote",
+          lead_type: commercial ? "COMMERCIAL — quoted nothing, told to contact you directly" : "Residential",
           name: contact.name,
           phone: contact.phone,
+          email: contact.email,
+          address: contact.address || "Not provided",
           service: service.label,
-          estimated_area: `${sqft} sq ft (${sourceLabel}${estimate ? `, AI confidence: ${estimate.confidence}` : ""})`,
-          estimated_price: `$${price.low}–$${price.high}`,
+          estimated_area: `${sqftRange[0] === sqftRange[1] ? sqftRange[0] : `${sqftRange[0]}–${sqftRange[1]}`} sq ft (${sourceLabel}${estimate ? `, AI confidence: ${estimate.confidence}` : ""})`,
+          estimated_price: commercial ? "(withheld — commercial)" : `$${price.low}–$${price.high}`,
           notes: estimate?.notes ?? "(manual size selection)",
         }),
       });
       const data = await res.json();
       if (!data.success) throw new Error();
-      setPhase("sent");
+      setPhase(commercial ? "commercial" : "quoted");
+      (window as any).gtag?.("event", commercial ? "quote_commercial" : "quote_revealed", {
+        service: service.id,
+      });
     } catch {
       setError(`Couldn't send — please call us at ${BUSINESS.phoneDisplay}.`);
     } finally {
       setSending(false);
     }
+  };
+
+  const startOver = () => {
+    reset();
+    setContact({ name: "", phone: "", email: "", address: "" });
   };
 
   const inputClass =
@@ -166,15 +200,57 @@ export function QuoteTool() {
         </div>
 
         <div className="mt-10 rounded-3xl border border-border/70 bg-card p-6 sm:p-8">
-          {phase === "sent" ? (
+          {phase === "commercial" ? (
             <div className="flex flex-col items-center gap-3 py-6 text-center">
-              <CheckCircle2 className="size-12 text-primary" />
+              <Building2 className="size-12 text-primary" />
               <h3 className="font-heading text-xl font-bold text-foreground">
-                Estimate sent{contact.name ? `, ${contact.name}` : ""}!
+                Commercial property? Let&apos;s talk directly.
               </h3>
               <p className="max-w-md text-sm text-muted-foreground">
-                We&apos;ll reach out shortly to confirm your{" "}
-                {service.label.toLowerCase()} quote. Need it sooner?
+                Commercial and multi-unit jobs are priced personally so we can
+                give you our best rate. Contact Nicolas directly and we&apos;ll
+                get you a custom quote fast — we&apos;ve got your details and
+                will reach out too.
+              </p>
+              <a
+                href={BUSINESS.phoneHref}
+                className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground transition-all hover:brightness-110"
+              >
+                <Phone className="size-4" /> Call or text {BUSINESS.phoneDisplay}
+              </a>
+              <button
+                type="button"
+                onClick={startOver}
+                className="mt-1 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary"
+              >
+                <RotateCcw className="size-3.5" /> Start over
+              </button>
+            </div>
+          ) : phase === "quoted" && price ? (
+            <div className="flex flex-col items-center gap-2 py-4 text-center">
+              <CheckCircle2 className="size-10 text-primary" />
+              <p className="text-sm text-muted-foreground">
+                {service.label} · ~
+                {sqftRange![0] === sqftRange![1]
+                  ? sqftRange![0].toLocaleString()
+                  : `${sqftRange![0].toLocaleString()}–${sqftRange![1].toLocaleString()}`}{" "}
+                sq ft ({sourceLabel})
+              </p>
+              <p className="font-heading text-5xl font-extrabold text-primary">
+                {price.low === price.high ? `$${price.low}` : `$${price.low}–$${price.high}`}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Ballpark estimate — final price confirmed on-site, no obligation.
+              </p>
+              {estimate && (
+                <p className="mt-1 max-w-md text-sm text-foreground/80">
+                  “{estimate.notes}”{" "}
+                  <span className="text-muted-foreground">(AI confidence: {estimate.confidence})</span>
+                </p>
+              )}
+              <p className="mt-3 max-w-md text-sm text-foreground">
+                We&apos;ve got your request{contact.name ? `, ${contact.name.split(" ")[0]}` : ""} —
+                we&apos;ll reach out shortly to lock in your spot. Want it faster?
               </p>
               <a
                 href={BUSINESS.phoneHref}
@@ -184,78 +260,79 @@ export function QuoteTool() {
               </a>
               <button
                 type="button"
-                onClick={() => {
-                  reset();
-                  setContact({ name: "", phone: "" });
-                }}
+                onClick={startOver}
                 className="mt-1 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary"
               >
                 <RotateCcw className="size-3.5" /> Get another estimate
               </button>
             </div>
-          ) : phase === "result" && price ? (
-            <div>
-              <div className="flex flex-col items-center gap-1 border-b border-border/60 pb-6 text-center">
-                <p className="text-sm text-muted-foreground">
-                  {service.label} · ~{sqft?.toLocaleString()} sq ft ({sourceLabel})
+          ) : phase === "details" ? (
+            <form onSubmit={revealQuote} className="grid gap-4">
+              <div className="text-center">
+                <p className="font-heading text-lg font-bold text-foreground">
+                  ✅ Your {service.label.toLowerCase()} estimate is ready
                 </p>
-                <p className="font-heading text-5xl font-extrabold text-primary">
-                  ${price.low}–${price.high}
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {sourceLabel}
+                  {estimate ? ` · AI confidence: ${estimate.confidence}` : ""} — tell us
+                  where to send it and your price appears instantly.
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  Ballpark estimate — final price confirmed on-site, no obligation.
-                </p>
-                {estimate && (
-                  <p className="mt-2 max-w-md text-sm text-foreground/80">
-                    “{estimate.notes}” <span className="text-muted-foreground">(AI confidence: {estimate.confidence})</span>
-                  </p>
-                )}
               </div>
-
-              <form onSubmit={sendLead} className="mt-6 grid gap-4">
-                <p className="text-center text-sm font-medium text-foreground">
-                  Like that number? Send it to us and we&apos;ll lock in your spot.
+              <div className="grid gap-4 sm:grid-cols-2">
+                <input
+                  required
+                  value={contact.name}
+                  onChange={(e) => setContact((c) => ({ ...c, name: e.target.value }))}
+                  placeholder="Your name"
+                  className={inputClass}
+                />
+                <input
+                  required
+                  type="tel"
+                  value={contact.phone}
+                  onChange={(e) => setContact((c) => ({ ...c, phone: e.target.value }))}
+                  placeholder="Phone — (502) 000-0000"
+                  className={inputClass}
+                />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <input
+                  required
+                  type="email"
+                  value={contact.email}
+                  onChange={(e) => setContact((c) => ({ ...c, email: e.target.value }))}
+                  placeholder="Email"
+                  className={inputClass}
+                />
+                <input
+                  value={contact.address}
+                  onChange={(e) => setContact((c) => ({ ...c, address: e.target.value }))}
+                  placeholder="Property address (optional)"
+                  className={inputClass}
+                />
+              </div>
+              {error && (
+                <p className="flex items-center justify-center gap-2 text-sm text-destructive">
+                  <AlertCircle className="size-4 shrink-0" /> {error}
                 </p>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <input
-                    required
-                    value={contact.name}
-                    onChange={(e) => setContact((c) => ({ ...c, name: e.target.value }))}
-                    placeholder="Your name"
-                    className={inputClass}
-                  />
-                  <input
-                    required
-                    type="tel"
-                    value={contact.phone}
-                    onChange={(e) => setContact((c) => ({ ...c, phone: e.target.value }))}
-                    placeholder="(502) 000-0000"
-                    className={inputClass}
-                  />
-                </div>
-                {error && (
-                  <p className="flex items-center gap-2 text-sm text-destructive">
-                    <AlertCircle className="size-4 shrink-0" /> {error}
-                  </p>
-                )}
-                <div className="flex flex-col items-center gap-3 sm:flex-row">
-                  <button
-                    type="submit"
-                    disabled={sending}
-                    className="inline-flex h-11 w-full items-center justify-center rounded-full bg-primary px-6 text-sm font-semibold text-primary-foreground transition-all hover:brightness-110 disabled:opacity-70 sm:w-auto"
-                  >
-                    {sending ? "Sending…" : "Send my estimate"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={reset}
-                    className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary"
-                  >
-                    <RotateCcw className="size-3.5" /> Start over
-                  </button>
-                </div>
-              </form>
-            </div>
+              )}
+              <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+                <button
+                  type="submit"
+                  disabled={sending}
+                  className="inline-flex h-11 w-full items-center justify-center rounded-full bg-primary px-8 text-sm font-semibold text-primary-foreground transition-all hover:brightness-110 disabled:opacity-70 sm:w-auto"
+                >
+                  {sending ? "One sec…" : "Show my price"}
+                </button>
+                <button
+                  type="button"
+                  onClick={reset}
+                  className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary"
+                >
+                  <RotateCcw className="size-3.5" /> Start over
+                </button>
+              </div>
+            </form>
           ) : (
             <div>
               {/* service picker */}
@@ -348,7 +425,8 @@ export function QuoteTool() {
 
         <p className="mt-4 text-center text-xs text-muted-foreground">
           Estimates are ballpark figures based on the info provided and are always
-          confirmed in person before any work begins.
+          confirmed in person before any work begins. Commercial &amp; multi-unit
+          properties are quoted directly.
         </p>
       </div>
     </section>

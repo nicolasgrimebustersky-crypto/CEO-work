@@ -98,9 +98,9 @@ export default async (req) => {
             },
             {
               type: "text",
-              text: `You estimate cleanable surface area for a pressure-washing company in Louisville, KY. The customer requested a quote for: "${service}".
+              text: `You estimate surface area for a pressure-washing & landscaping company in Louisville, KY. The customer requested a quote for: "${service}".
 
-Estimate the total square footage of the surface relevant to that service that is visible (or reasonably inferable) in the photo. Use visible objects for scale: a car is ~6ft wide x 16ft long, a single garage door ~8ft wide, a double ~16ft, an entry door ~3ft x 6.7ft, one deck board ~5.5in wide, a concrete driveway slab square ~4-5ft. If only part of the surface is visible, extrapolate conservatively and widen the range. For house siding, estimate the washable exterior wall area of the visible sides and extrapolate to the whole house.
+Estimate the total square footage of the surface relevant to that service that is visible (or reasonably inferable) in the photo. Use visible objects for scale: a car is ~6ft wide x 16ft long, a single garage door ~8ft wide, a double ~16ft, an entry door ~3ft x 6.7ft, one deck board ~5.5in wide, a concrete driveway slab square ~4-5ft. If only part of the surface is visible, extrapolate conservatively and widen the range. For house siding, estimate the washable exterior wall area of the visible sides and extrapolate to the whole house. For mulching, estimate the ground area of the landscape beds only (not lawn).
 
 If the photo does not show anything relevant to the requested service (e.g. a selfie, a pet, indoors), set is_relevant_photo to false and explain briefly in notes.`,
             },
