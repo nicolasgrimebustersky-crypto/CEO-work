@@ -53,17 +53,19 @@ function looksCommercial(name: string, email: string, address: string) {
   return businessEmail || COMMERCIAL_RE.test(name) || COMMERCIAL_RE.test(address);
 }
 
-/** Downscale + re-encode the chosen photo so uploads are small and consistent. */
+const MAX_PHOTOS = 10;
+
+/** Downscale + re-encode a photo so uploads are small and consistent. */
 async function compressImage(file: File): Promise<{ base64: string; mediaType: string }> {
   const bitmap = await createImageBitmap(file).catch(() => null);
   if (!bitmap) throw new Error("unreadable");
-  const MAX = 1024;
+  const MAX = 900; // a bit smaller than before since up to 10 may be sent at once
   const scale = Math.min(1, MAX / Math.max(bitmap.width, bitmap.height));
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(bitmap.width * scale);
   canvas.height = Math.round(bitmap.height * scale);
   canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  const dataUrl = canvas.toDataURL("image/jpeg", 0.78);
+  const dataUrl = canvas.toDataURL("image/jpeg", 0.74);
   return { base64: dataUrl.split(",")[1], mediaType: "image/jpeg" };
 }
 
@@ -88,17 +90,26 @@ export function QuoteTool() {
     setSourceLabel("");
   };
 
-  const analyzePhoto = async (file: File) => {
+  const analyzePhotos = async (files: File[]) => {
     setError(null);
     setPhase("analyzing");
+    const trimmed = files.slice(0, MAX_PHOTOS);
+    const truncated = files.length > MAX_PHOTOS;
     try {
-      const { base64, mediaType } = await compressImage(file).catch(() => {
-        throw new Error("We couldn't read that image. Try a JPG/PNG photo or a screenshot of it.");
-      });
+      const compressed = await Promise.all(
+        trimmed.map((f) => compressImage(f).catch(() => null)),
+      );
+      const images = compressed
+        .filter((c): c is { base64: string; mediaType: string } => c !== null)
+        .map((c) => ({ image: c.base64, mediaType: c.mediaType }));
+      if (images.length === 0) {
+        throw new Error("We couldn't read those photos. Try JPG/PNG images or a screenshot.");
+      }
+
       const res = await fetch("/api/estimate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: base64, mediaType, service: service.label }),
+        body: JSON.stringify({ images, service: service.label }),
       });
       const data = await res.json().catch(() => null);
       if (!data?.ok) {
@@ -107,20 +118,25 @@ export function QuoteTool() {
             ? "Photo estimates aren't available right now."
             : data?.error === "busy"
               ? "We're getting a lot of requests — try again in a minute."
-              : "We couldn't analyze that photo.";
+              : "We couldn't analyze those photos.";
         throw new Error(`${reason} You can pick an approximate size below instead.`);
       }
       const est: Estimate = data.estimate;
       if (!est.is_relevant_photo) {
         throw new Error(
-          `That photo doesn't look like a ${service.label.toLowerCase()} — ${est.notes} Try another photo, or pick a size below.`,
+          `Those photos don't look like a ${service.label.toLowerCase()} — ${est.notes} Try different photos, or pick a size below.`,
         );
       }
       setEstimate(est);
       setSqftRange([est.sqft_low, est.sqft_high]);
-      setSourceLabel("AI photo estimate");
+      setSourceLabel(
+        images.length > 1 ? `AI estimate from ${images.length} photos` : "AI photo estimate",
+      );
       setPhase("details");
-      (window as any).gtag?.("event", "ai_estimate", { service: service.id });
+      if (truncated) {
+        setError(`Only the first ${MAX_PHOTOS} photos were used (max ${MAX_PHOTOS} per estimate).`);
+      }
+      (window as any).gtag?.("event", "ai_estimate", { service: service.id, photo_count: images.length });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong — try a size below.");
       setPhase("pick");
@@ -359,10 +375,11 @@ export function QuoteTool() {
                 ref={fileRef}
                 type="file"
                 accept="image/*"
+                multiple
                 className="hidden"
                 onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) analyzePhoto(f);
+                  const files = Array.from(e.target.files ?? []);
+                  if (files.length) analyzePhotos(files);
                   e.target.value = "";
                 }}
               />
@@ -376,20 +393,21 @@ export function QuoteTool() {
                   <>
                     <Loader2 className="size-8 animate-spin text-primary" />
                     <span className="font-heading font-bold text-foreground">
-                      Analyzing your photo…
+                      Analyzing your photos…
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      Our AI is measuring the area (~10 seconds)
+                      Our AI is measuring the area (~10–15 seconds)
                     </span>
                   </>
                 ) : (
                   <>
                     <Camera className="size-8 text-primary" />
                     <span className="font-heading font-bold text-foreground">
-                      Upload a photo of your {service.label.toLowerCase()}
+                      Upload photos of your {service.label.toLowerCase()}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      AI estimates the size — include a car or door for scale if you can
+                      Up to {MAX_PHOTOS} photos — multiple angles give a more accurate
+                      estimate. Include a car or door for scale if you can.
                     </span>
                   </>
                 )}
