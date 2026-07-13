@@ -121,7 +121,10 @@ export default async (req) => {
     return Response.json({ ok: false, error: "bad_request" }, { status: 400 });
   }
 
-  const client = new Anthropic({ apiKey, timeout: 45_000, maxRetries: 0 });
+  // Netlify's synchronous function limit is well under a minute — fail fast and
+  // cleanly (JSON error) rather than let the platform hard-kill the function
+  // and return an HTML 504 the client can't parse.
+  const client = new Anthropic({ apiKey, timeout: 20_000, maxRetries: 0 });
 
   const multi = images.length > 1;
   const multiService = services.length > 1;
@@ -144,7 +147,7 @@ Look carefully at every photo before answering. Identify each requested surface 
 
 Estimate the total square footage of the surface relevant to each service that is visible (or reasonably inferable) across the photo(s). Use visible objects for scale: a car is ~6ft wide x 16ft long, a single garage door ~8ft wide, a double ~16ft, an entry door ~3ft x 6.7ft, one deck board ~5.5in wide, a concrete driveway slab square ~4-5ft, an average adult stride ~2.5ft. Cross-check your estimate against at least two different reference objects when more than one is visible, and note any disagreement in your reasoning. If only part of a surface is visible, extrapolate conservatively and widen that service's range accordingly. For house siding, estimate the washable exterior wall area of the visible sides and extrapolate to the whole house. For mulching, estimate the ground area of the landscape beds only (not lawn).
 
-You have a web_search tool available. Use it sparingly — only when you're genuinely unsure of a standard reference dimension (e.g. typical single-car garage door width, standard concrete slab size) or want to sanity-check a surface-area conversion. Most estimates should not need a search; don't search for anything unrelated to sizing this job.
+You have a web_search tool available, but this is a real-time customer-facing quote and every second of delay matters — do NOT use it as a routine step. Only reach for it in the rare case you're truly stuck on a standard reference dimension you don't already know (you already know the common ones listed above). If you're not confident a search is necessary, skip it and give your best estimate from the photos alone — a fast, slightly-wider range beats a slow, marginally-tighter one.
 
 Return one entry in "estimates" for every requested service above, in the same order, using the exact requested service text in the "service" field. If a requested service's surface is not visible anywhere in the photos (e.g. photos only show a driveway but siding was also requested), still include an entry for it with is_relevant_photo set to false and a brief explanation in notes — do not skip it. If NONE of the photos show anything relevant to any requested service (e.g. a selfie, a pet, indoors), set is_relevant_photo to false on every entry.`,
   });
@@ -152,12 +155,12 @@ Return one entry in "estimates" for every requested service above, in the same o
   try {
     const response = await client.messages.create({
       model: "claude-opus-4-8",
-      max_tokens: 4000,
+      max_tokens: 3000,
       output_config: {
-        effort: "medium",
+        effort: "low", // keep latency inside the serverless function's hard timeout
         format: { type: "json_schema", schema: ESTIMATE_SCHEMA },
       },
-      tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 2 }],
+      tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 1 }],
       messages: [{ role: "user", content }],
     });
 
