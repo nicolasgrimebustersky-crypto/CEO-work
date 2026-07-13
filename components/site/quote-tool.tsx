@@ -208,6 +208,7 @@ export function QuoteTool() {
   const [sourceLabel, setSourceLabel] = React.useState("");
   const [contact, setContact] = React.useState({ name: "", phone: "", email: "", address: "" });
   const [sending, setSending] = React.useState(false);
+  const [botField, setBotField] = React.useState(""); // honeypot
   const [previewUrls, setPreviewUrls] = React.useState<string[]>([]);
   const fileRef = React.useRef<HTMLInputElement>(null);
 
@@ -237,6 +238,7 @@ export function QuoteTool() {
     setError(null);
     setPriced([]);
     setSourceLabel("");
+    setBotField("");
     clearPreviews();
   };
 
@@ -268,8 +270,8 @@ export function QuoteTool() {
         const reason =
           data?.error === "not_configured"
             ? "Photo estimates aren't available right now."
-            : data?.error === "busy"
-              ? "We're getting a lot of requests — try again in a minute."
+            : data?.error === "busy" || data?.error === "rate_limited"
+              ? "We're getting a lot of requests — try again in a few minutes."
               : "We couldn't analyze those photos.";
         throw new Error(`${reason} You can pick an approximate size below instead.`);
       }
@@ -344,6 +346,7 @@ export function QuoteTool() {
   const revealQuote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!priceTotal || priced.length === 0) return;
+    if (botField) return; // bot filled the honeypot — silently drop
     setSending(true);
     setError(null);
     const commercial = looksCommercial(contact.name, contact.email, contact.address);
@@ -502,6 +505,17 @@ export function QuoteTool() {
             </div>
           ) : phase === "details" ? (
             <form onSubmit={revealQuote} className="grid gap-4">
+              {/* honeypot: hidden from users, catches bots */}
+              <input
+                type="text"
+                name="botcheck"
+                tabIndex={-1}
+                autoComplete="off"
+                value={botField}
+                onChange={(e) => setBotField(e.target.value)}
+                className="hidden"
+                aria-hidden="true"
+              />
               <div className="text-center">
                 <p className="font-heading text-lg font-bold text-foreground">
                   ✅ Your {priced.map((p) => p.service.label.toLowerCase()).join(" + ")} estimate is

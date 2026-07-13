@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { getStore } from "@netlify/blobs";
 
 // AI square-footage estimator for the instant quote tool.
 // POST /api/estimate  { images: [{ image: <base64>, mediaType: "image/jpeg" }, ...], services: ["Driveway / Concrete", "Sidewalk / Walkway"] }
@@ -74,9 +75,66 @@ const MAX_SERVICES = 5;
 const MAX_IMAGE_LEN = 2_000_000; // ~1.5MB decoded, per photo
 const MAX_TOTAL_LEN = 10_000_000; // ~7.5MB decoded, combined
 
+// This endpoint calls a paid AI model with no login — it's the single most
+// abusable surface on the site (a scripted loop could rack up real API
+// charges in minutes). Two lightweight guards keep it usable by real
+// customers while blocking that: an Origin allowlist (only our own pages may
+// call it) and a per-IP rate limit backed by Netlify Blobs.
+const ALLOWED_ORIGIN_HOSTS = new Set(["grimebusterskyllc.com", "www.grimebusterskyllc.com"]);
+function isAllowedOrigin(origin) {
+  if (!origin) return false;
+  try {
+    const host = new URL(origin).hostname;
+    return ALLOWED_ORIGIN_HOSTS.has(host) || host.endsWith(".netlify.app");
+  } catch {
+    return false;
+  }
+}
+
+const RATE_LIMIT_MAX = 8; // requests
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // per 15 minutes, per IP
+
+function clientIp(req) {
+  return (
+    req.headers.get("x-nf-client-connection-ip") ||
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    "unknown"
+  );
+}
+
+/** Fails open (allows the request) if Blobs is unavailable — a storage
+ *  hiccup should never take down the whole feature. */
+async function checkRateLimit(ip) {
+  try {
+    const store = getStore("estimate-rate-limit");
+    const key = `ip:${ip}`;
+    const now = Date.now();
+    const record = (await store.get(key, { type: "json" })) || { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
+    if (now > record.resetAt) {
+      record.count = 0;
+      record.resetAt = now + RATE_LIMIT_WINDOW_MS;
+    }
+    record.count += 1;
+    await store.setJSON(key, record);
+    return record.count <= RATE_LIMIT_MAX;
+  } catch (err) {
+    console.error("rate limit check failed, allowing request", err);
+    return true;
+  }
+}
+
 export default async (req) => {
   if (req.method !== "POST") {
     return Response.json({ ok: false, error: "method_not_allowed" }, { status: 405 });
+  }
+
+  if (!isAllowedOrigin(req.headers.get("origin"))) {
+    return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+  }
+
+  const ip = clientIp(req);
+  if (!(await checkRateLimit(ip))) {
+    return Response.json({ ok: false, error: "rate_limited" }, { status: 429 });
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
