@@ -369,9 +369,27 @@ function priceFor(service: QuoteService, sqft: number, ratePerSqft: number) {
   );
 }
 
-/** Price range from a square-footage range (pass the same value twice for a single size). */
+/** Price range from a square-footage range (pass the same value twice for a single size).
+ *  Always returns a real ballpark spread — small/flat jobs that would otherwise collapse
+ *  to one flat number get a minimum spread so the quote never looks like a fixed price. */
 export function quotePriceRange(service: QuoteService, sqftLow: number, sqftHigh: number) {
   const low = priceFor(service, sqftLow, service.ratePerSqftLow);
-  const high = Math.max(low, priceFor(service, sqftHigh, service.ratePerSqftHigh));
+  let high = Math.max(low, priceFor(service, sqftHigh, service.ratePerSqftHigh));
+  if (high <= low) {
+    high = round5(Math.max(low + 25, low * 1.15));
+  }
   return { low, high };
+}
+
+/** Sum priced sqft ranges across one or more services into a single ballpark total. */
+export function quotePriceTotal(
+  entries: { service: QuoteService; sqftLow: number; sqftHigh: number }[],
+) {
+  return entries.reduce(
+    (total, { service, sqftLow, sqftHigh }) => {
+      const { low, high } = quotePriceRange(service, sqftLow, sqftHigh);
+      return { low: total.low + low, high: total.high + high };
+    },
+    { low: 0, high: 0 },
+  );
 }

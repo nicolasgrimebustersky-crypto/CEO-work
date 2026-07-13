@@ -21,11 +21,13 @@ import {
   BUSINESS,
   QUOTE_SERVICES,
   quotePriceRange,
+  quotePriceTotal,
   WEB3FORMS_ACCESS_KEY,
   type QuoteService,
 } from "./site-data";
 
-type Estimate = {
+type ServiceEstimate = {
+  service: string;
   is_relevant_photo: boolean;
   surface_type: string;
   sqft_low: number;
@@ -33,6 +35,14 @@ type Estimate = {
   sqft_best: number;
   confidence: "low" | "medium" | "high";
   notes: string;
+};
+
+/** One priced line item — either AI-estimated (carries `estimate`) or a manual size pick. */
+type PricedService = {
+  service: QuoteService;
+  sqftLow: number;
+  sqftHigh: number;
+  estimate?: ServiceEstimate;
 };
 
 type Phase = "pick" | "analyzing" | "details" | "quoted" | "commercial";
@@ -190,18 +200,29 @@ function AnalyzingPanel({ previewUrls }: { previewUrls: string[] }) {
 }
 
 export function QuoteTool() {
-  const [service, setService] = React.useState<QuoteService>(QUOTE_SERVICES[0]);
+  const [selectedServices, setSelectedServices] = React.useState<QuoteService[]>([
+    QUOTE_SERVICES[0],
+  ]);
   const [phase, setPhase] = React.useState<Phase>("pick");
   const [error, setError] = React.useState<string | null>(null);
-  const [sqftRange, setSqftRange] = React.useState<[number, number] | null>(null);
-  const [estimate, setEstimate] = React.useState<Estimate | null>(null);
+  const [priced, setPriced] = React.useState<PricedService[]>([]);
   const [sourceLabel, setSourceLabel] = React.useState("");
   const [contact, setContact] = React.useState({ name: "", phone: "", email: "", address: "" });
   const [sending, setSending] = React.useState(false);
   const [previewUrls, setPreviewUrls] = React.useState<string[]>([]);
   const fileRef = React.useRef<HTMLInputElement>(null);
 
-  const price = sqftRange ? quotePriceRange(service, sqftRange[0], sqftRange[1]) : null;
+  const priceTotal = priced.length
+    ? quotePriceTotal(priced.map((p) => ({ service: p.service, sqftLow: p.sqftLow, sqftHigh: p.sqftHigh })))
+    : null;
+
+  const toggleService = (s: QuoteService) => {
+    setSelectedServices((sel) => {
+      const already = sel.some((x) => x.id === s.id);
+      if (already) return sel.length > 1 ? sel.filter((x) => x.id !== s.id) : sel;
+      return [...sel, s];
+    });
+  };
 
   const clearPreviews = () => {
     setPreviewUrls((urls) => {
@@ -215,8 +236,7 @@ export function QuoteTool() {
   const reset = () => {
     setPhase("pick");
     setError(null);
-    setSqftRange(null);
-    setEstimate(null);
+    setPriced([]);
     setSourceLabel("");
     clearPreviews();
   };
@@ -242,7 +262,7 @@ export function QuoteTool() {
       const res = await fetch("/api/estimate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ images, service: service.label }),
+        body: JSON.stringify({ images, services: selectedServices.map((s) => s.label) }),
       });
       const data = await res.json().catch(() => null);
       if (!data?.ok) {
@@ -254,22 +274,48 @@ export function QuoteTool() {
               : "We couldn't analyze those photos.";
         throw new Error(`${reason} You can pick an approximate size below instead.`);
       }
-      const est: Estimate = data.estimate;
-      if (!est.is_relevant_photo) {
+      const estimates: ServiceEstimate[] = data.estimates ?? [];
+
+      const matched: PricedService[] = [];
+      const missed: string[] = [];
+      for (const svc of selectedServices) {
+        const est = estimates.find(
+          (e) => e.service.toLowerCase() === svc.label.toLowerCase() && e.is_relevant_photo,
+        );
+        if (est) {
+          matched.push({ service: svc, sqftLow: est.sqft_low, sqftHigh: est.sqft_high, estimate: est });
+        } else {
+          missed.push(svc.label);
+        }
+      }
+
+      if (matched.length === 0) {
+        const firstNote = estimates[0]?.notes;
         throw new Error(
-          `Those photos don't look like a ${service.label.toLowerCase()} — ${est.notes} Try different photos, or pick a size below.`,
+          `Those photos don't look like ${selectedServices.map((s) => s.label.toLowerCase()).join(", ")}${
+            firstNote ? ` — ${firstNote}` : ""
+          } Try different photos, or pick a size below.`,
         );
       }
-      setEstimate(est);
-      setSqftRange([est.sqft_low, est.sqft_high]);
+
+      setPriced(matched);
       setSourceLabel(
         images.length > 1 ? `AI estimate from ${images.length} photos` : "AI photo estimate",
       );
       setPhase("details");
-      if (truncated) {
+      if (missed.length) {
+        setError(
+          `Couldn't confirm ${missed.join(", ")} in your photos — continuing with ${matched
+            .map((m) => m.service.label)
+            .join(", ")} only.`,
+        );
+      } else if (truncated) {
         setError(`Only the first ${MAX_PHOTOS} photos were used (max ${MAX_PHOTOS} per estimate).`);
       }
-      (window as any).gtag?.("event", "ai_estimate", { service: service.id, photo_count: images.length });
+      (window as any).gtag?.("event", "ai_estimate", {
+        services: selectedServices.map((s) => s.id).join(","),
+        photo_count: images.length,
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong — try a size below.");
       setPhase("pick");
@@ -278,8 +324,8 @@ export function QuoteTool() {
   };
 
   const useSize = (label: string, presetSqft: number) => {
-    setEstimate(null);
-    setSqftRange([presetSqft, presetSqft]);
+    const svc = selectedServices[0];
+    setPriced([{ service: svc, sqftLow: presetSqft, sqftHigh: presetSqft }]);
     setSourceLabel(label);
     setError(null);
     setPhase("details");
@@ -287,10 +333,20 @@ export function QuoteTool() {
 
   const revealQuote = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!price || !sqftRange) return;
+    if (!priceTotal || priced.length === 0) return;
     setSending(true);
     setError(null);
     const commercial = looksCommercial(contact.name, contact.email, contact.address);
+    const serviceLabels = priced.map((p) => p.service.label).join(", ");
+    const areaSummary = priced
+      .map((p) => {
+        const range =
+          p.sqftLow === p.sqftHigh
+            ? `${p.sqftLow.toLocaleString()} sq ft`
+            : `${p.sqftLow.toLocaleString()}–${p.sqftHigh.toLocaleString()} sq ft`;
+        return `${p.service.label}: ${range}`;
+      })
+      .join("; ");
     try {
       const res = await fetch("https://api.web3forms.com/submit", {
         method: "POST",
@@ -298,25 +354,25 @@ export function QuoteTool() {
         body: JSON.stringify({
           access_key: WEB3FORMS_ACCESS_KEY,
           subject: commercial
-            ? `🏢 COMMERCIAL lead — ${contact.name} (${service.label})`
-            : `Instant quote — ${contact.name} ($${price.low}–$${price.high} ${service.label})`,
+            ? `🏢 COMMERCIAL lead — ${contact.name} (${serviceLabels})`
+            : `Instant quote — ${contact.name} ($${priceTotal.low}–$${priceTotal.high} ${serviceLabels})`,
           from_name: "Grime Bustersky Instant Quote",
           lead_type: commercial ? "COMMERCIAL — quoted nothing, told to contact you directly" : "Residential",
           name: contact.name,
           phone: contact.phone,
           email: contact.email,
           address: contact.address || "Not provided",
-          service: service.label,
-          estimated_area: `${sqftRange[0] === sqftRange[1] ? sqftRange[0] : `${sqftRange[0]}–${sqftRange[1]}`} sq ft (${sourceLabel}${estimate ? `, AI confidence: ${estimate.confidence}` : ""})`,
-          estimated_price: commercial ? "(withheld — commercial)" : `$${price.low}–$${price.high}`,
-          notes: estimate?.notes ?? "(manual size selection)",
+          service: serviceLabels,
+          estimated_area: `${areaSummary} (${sourceLabel})`,
+          estimated_price: commercial ? "(withheld — commercial)" : `$${priceTotal.low}–$${priceTotal.high}`,
+          notes: priced.map((p) => p.estimate?.notes).filter(Boolean).join(" | ") || "(manual size selection)",
         }),
       });
       const data = await res.json();
       if (!data.success) throw new Error();
       setPhase(commercial ? "commercial" : "quoted");
       (window as any).gtag?.("event", commercial ? "quote_commercial" : "quote_revealed", {
-        service: service.id,
+        services: priced.map((p) => p.service.id).join(","),
       });
     } catch {
       setError(`Couldn't send — please call us at ${BUSINESS.phoneDisplay}.`);
@@ -333,6 +389,8 @@ export function QuoteTool() {
   const inputClass =
     "w-full rounded-xl border border-input bg-background/60 px-4 py-2.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary/60 focus:ring-2 focus:ring-ring/30";
 
+  const selectedLabels = selectedServices.map((s) => s.label.toLowerCase()).join(" + ");
+
   return (
     <section id="instant-quote" className="relative bg-background py-24 sm:py-28">
       <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
@@ -346,6 +404,7 @@ export function QuoteTool() {
           <p className="mt-4 text-muted-foreground">
             Our AI looks at your photo, estimates the square footage, and gives
             you an instant price range — or just pick an approximate size.
+            Need more than one service? Select all that apply.
           </p>
         </div>
 
@@ -378,27 +437,40 @@ export function QuoteTool() {
                 <RotateCcw className="size-3.5" /> Start over
               </button>
             </div>
-          ) : phase === "quoted" && price ? (
+          ) : phase === "quoted" && priceTotal ? (
             <div className="flex flex-col items-center gap-2 py-4 text-center">
               <CheckCircle2 className="size-10 text-primary" />
-              <p className="text-sm text-muted-foreground">
-                {service.label} · ~
-                {sqftRange![0] === sqftRange![1]
-                  ? sqftRange![0].toLocaleString()
-                  : `${sqftRange![0].toLocaleString()}–${sqftRange![1].toLocaleString()}`}{" "}
-                sq ft ({sourceLabel})
-              </p>
+              <div className="text-sm text-muted-foreground">
+                {priced.map((p) => (
+                  <p key={p.service.id}>
+                    {p.service.label} · ~
+                    {p.sqftLow === p.sqftHigh
+                      ? p.sqftLow.toLocaleString()
+                      : `${p.sqftLow.toLocaleString()}–${p.sqftHigh.toLocaleString()}`}{" "}
+                    sq ft
+                  </p>
+                ))}
+                <p className="mt-1">({sourceLabel})</p>
+              </div>
               <p className="font-heading text-5xl font-extrabold text-primary">
-                {price.low === price.high ? `$${price.low}` : `$${price.low}–$${price.high}`}
+                ${priceTotal.low}–${priceTotal.high}
               </p>
               <p className="text-xs text-muted-foreground">
                 Ballpark estimate — final price confirmed on-site, no obligation.
               </p>
-              {estimate && (
-                <p className="mt-1 max-w-md text-sm text-foreground/80">
-                  “{estimate.notes}”{" "}
-                  <span className="text-muted-foreground">(AI confidence: {estimate.confidence})</span>
-                </p>
+              {priced.some((p) => p.estimate) && (
+                <div className="mt-1 max-w-md space-y-1 text-sm text-foreground/80">
+                  {priced
+                    .filter((p) => p.estimate)
+                    .map((p) => (
+                      <p key={p.service.id}>
+                        “{p.estimate!.notes}”{" "}
+                        <span className="text-muted-foreground">
+                          (AI confidence: {p.estimate!.confidence})
+                        </span>
+                      </p>
+                    ))}
+                </div>
               )}
               <p className="mt-3 max-w-md text-sm text-foreground">
                 We&apos;ve got your request{contact.name ? `, ${contact.name.split(" ")[0]}` : ""} —
@@ -422,12 +494,11 @@ export function QuoteTool() {
             <form onSubmit={revealQuote} className="grid gap-4">
               <div className="text-center">
                 <p className="font-heading text-lg font-bold text-foreground">
-                  ✅ Your {service.label.toLowerCase()} estimate is ready
+                  ✅ Your {priced.map((p) => p.service.label.toLowerCase()).join(" + ")} estimate is
+                  ready
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {sourceLabel}
-                  {estimate ? ` · AI confidence: ${estimate.confidence}` : ""} — tell us
-                  where to send it and your price appears instantly.
+                  {sourceLabel} — tell us where to send it and your price appears instantly.
                 </p>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -487,23 +558,31 @@ export function QuoteTool() {
             </form>
           ) : (
             <div>
-              {/* service picker */}
+              {/* service picker — select one or more */}
+              <p className="mb-2 text-center text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                Select all services that apply
+              </p>
               <div className="flex flex-wrap justify-center gap-2">
-                {QUOTE_SERVICES.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => setService(s)}
-                    className={cn(
-                      "rounded-full border px-4 py-2 text-sm font-medium transition-colors",
-                      s.id === service.id
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border/70 bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground",
-                    )}
-                  >
-                    {s.label}
-                  </button>
-                ))}
+                {QUOTE_SERVICES.map((s) => {
+                  const isSelected = selectedServices.some((x) => x.id === s.id);
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => toggleService(s)}
+                      aria-pressed={isSelected}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-medium transition-colors",
+                        isSelected
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border/70 bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground",
+                      )}
+                    >
+                      {isSelected && <CheckCircle2 className="size-3.5" />}
+                      {s.label}
+                    </button>
+                  );
+                })}
               </div>
 
               {/* photo upload */}
@@ -526,7 +605,7 @@ export function QuoteTool() {
               >
                 <Camera className="size-8 text-primary" />
                 <span className="font-heading font-bold text-foreground">
-                  Upload photos of your {service.label.toLowerCase()}
+                  Upload photos of your {selectedLabels}
                 </span>
                 <span className="text-xs text-muted-foreground">
                   Up to {MAX_PHOTOS} photos — multiple angles give a more accurate
@@ -540,24 +619,32 @@ export function QuoteTool() {
                 </p>
               )}
 
-              {/* manual fallback */}
-              <div className="mt-6">
-                <p className="flex items-center justify-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                  <Ruler className="size-3.5" /> No photo? Pick a size
-                </p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {service.sizes.map((s) => (
-                    <button
-                      key={s.label}
-                      type="button"
-                      onClick={() => useSize(s.label, s.sqft)}
-                      className="rounded-xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground/85 transition-colors hover:border-primary/50 hover:text-foreground"
-                    >
-                      {s.label}
-                    </button>
-                  ))}
+              {/* manual fallback — only offered when exactly one service is selected */}
+              {selectedServices.length === 1 && (
+                <div className="mt-6">
+                  <p className="flex items-center justify-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                    <Ruler className="size-3.5" /> No photo? Pick a size
+                  </p>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {selectedServices[0].sizes.map((s) => (
+                      <button
+                        key={s.label}
+                        type="button"
+                        onClick={() => useSize(s.label, s.sqft)}
+                        className="rounded-xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground/85 transition-colors hover:border-primary/50 hover:text-foreground"
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
+              {selectedServices.length > 1 && (
+                <p className="mt-6 text-center text-xs text-muted-foreground">
+                  Multiple services selected — upload photos above, or select just
+                  one service to pick an approximate size instead.
+                </p>
+              )}
             </div>
           )}
         </div>
