@@ -1,16 +1,17 @@
 "use client";
 
 import * as React from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   Camera,
   Sparkles,
   Ruler,
-  Loader2,
   AlertCircle,
   Phone,
   CheckCircle2,
   Building2,
   RotateCcw,
+  ScanLine,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -69,6 +70,141 @@ async function compressImage(file: File): Promise<{ base64: string; mediaType: s
   return { base64: dataUrl.split(",")[1], mediaType: "image/jpeg" };
 }
 
+const ANALYZING_STEPS = [
+  "Detecting surfaces…",
+  "Measuring scale objects…",
+  "Cross-referencing photos…",
+  "Calculating square footage…",
+  "Almost there…",
+];
+
+/** Animated gradient light that traces the perimeter of its parent (21st.dev-style border beam). */
+function BorderBeam() {
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
+      <motion.div
+        aria-hidden
+        className="absolute size-24 rounded-full bg-primary/70 blur-2xl"
+        style={{ translateX: "-50%", translateY: "-50%" }}
+        animate={{
+          left: ["0%", "100%", "100%", "0%", "0%"],
+          top: ["0%", "0%", "100%", "100%", "0%"],
+        }}
+        transition={{ duration: 5, repeat: Infinity, ease: "linear" }}
+      />
+    </div>
+  );
+}
+
+/** Full-panel "AI is working" state — replaces the static spinner with a
+ *  scanning-photo + orbiting-core animation while the estimate call is in flight. */
+function AnalyzingPanel({ previewUrls }: { previewUrls: string[] }) {
+  const [statusIdx, setStatusIdx] = React.useState(0);
+
+  React.useEffect(() => {
+    setStatusIdx(0);
+    const id = setInterval(() => {
+      setStatusIdx((i) => (i + 1 < ANALYZING_STEPS.length ? i + 1 : i));
+    }, 1800);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div className="relative mt-6 overflow-hidden rounded-2xl border border-primary/30 bg-gradient-to-b from-primary/10 via-background to-background px-6 py-10">
+      <BorderBeam />
+
+      {/* AI core */}
+      <div className="relative mx-auto grid size-24 place-items-center">
+        <motion.div
+          aria-hidden
+          className="absolute inset-0 rounded-full bg-primary/40 blur-xl"
+          animate={{ scale: [0.85, 1.15, 0.85], opacity: [0.5, 0.9, 0.5] }}
+          transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <motion.div
+          aria-hidden
+          className="absolute inset-0 rounded-full border-2 border-dashed border-primary/60"
+          animate={{ rotate: 360 }}
+          transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
+        />
+        <motion.div
+          aria-hidden
+          className="absolute inset-2 rounded-full border border-primary/30"
+          animate={{ rotate: -360 }}
+          transition={{ duration: 9, repeat: Infinity, ease: "linear" }}
+        >
+          <span className="absolute -top-1 left-1/2 size-2 -translate-x-1/2 rounded-full bg-primary shadow-[0_0_8px_2px_hsl(var(--primary)/0.8)]" />
+        </motion.div>
+        <motion.div
+          animate={{ scale: [1, 1.08, 1] }}
+          transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+          className="relative grid size-12 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/40"
+        >
+          <Sparkles className="size-6" />
+        </motion.div>
+      </div>
+
+      {/* status text */}
+      <div className="relative mt-6 h-5 text-center">
+        <AnimatePresence mode="wait">
+          <motion.p
+            key={statusIdx}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.3 }}
+            className="font-heading text-sm font-bold text-foreground"
+          >
+            {ANALYZING_STEPS[statusIdx]}
+          </motion.p>
+        </AnimatePresence>
+      </div>
+
+      {/* shimmer progress bar */}
+      <div className="relative mx-auto mt-4 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-primary/15">
+        <motion.div
+          aria-hidden
+          className="h-full w-1/3 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent"
+          animate={{ x: ["-100%", "300%"] }}
+          transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+        />
+      </div>
+
+      <p className="relative mt-3 text-center text-xs text-muted-foreground">
+        Our AI is measuring the area (~10–15 seconds)
+      </p>
+
+      {/* scanning photo thumbnails */}
+      {previewUrls.length > 0 && (
+        <div className="relative mt-6 flex flex-wrap justify-center gap-3">
+          {previewUrls.map((url, i) => (
+            <div
+              key={url}
+              className="relative size-16 overflow-hidden rounded-lg border border-primary/30 bg-background/60"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url} alt="" className="size-full object-cover opacity-80" />
+              <motion.div
+                aria-hidden
+                className="absolute inset-x-0 h-6 bg-gradient-to-b from-transparent via-primary/70 to-transparent"
+                initial={{ y: "-40%" }}
+                animate={{ y: "140%" }}
+                transition={{
+                  duration: 1.6,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                  delay: i * 0.15,
+                }}
+              />
+              <ScanLine className="absolute top-1 right-1 size-3 text-primary/80" />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function QuoteTool() {
   const [service, setService] = React.useState<QuoteService>(QUOTE_SERVICES[0]);
   const [phase, setPhase] = React.useState<Phase>("pick");
@@ -78,9 +214,19 @@ export function QuoteTool() {
   const [sourceLabel, setSourceLabel] = React.useState("");
   const [contact, setContact] = React.useState({ name: "", phone: "", email: "", address: "" });
   const [sending, setSending] = React.useState(false);
+  const [previewUrls, setPreviewUrls] = React.useState<string[]>([]);
   const fileRef = React.useRef<HTMLInputElement>(null);
 
   const price = sqftRange ? quotePriceRange(service, sqftRange[0], sqftRange[1]) : null;
+
+  const clearPreviews = () => {
+    setPreviewUrls((urls) => {
+      urls.forEach((u) => URL.revokeObjectURL(u));
+      return [];
+    });
+  };
+
+  React.useEffect(() => () => clearPreviews(), []);
 
   const reset = () => {
     setPhase("pick");
@@ -88,6 +234,7 @@ export function QuoteTool() {
     setSqftRange(null);
     setEstimate(null);
     setSourceLabel("");
+    clearPreviews();
   };
 
   const analyzePhotos = async (files: File[]) => {
@@ -95,6 +242,8 @@ export function QuoteTool() {
     setPhase("analyzing");
     const trimmed = files.slice(0, MAX_PHOTOS);
     const truncated = files.length > MAX_PHOTOS;
+    clearPreviews();
+    setPreviewUrls(trimmed.map((f) => URL.createObjectURL(f)));
     try {
       const compressed = await Promise.all(
         trimmed.map((f) => compressImage(f).catch(() => null)),
@@ -140,6 +289,7 @@ export function QuoteTool() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong — try a size below.");
       setPhase("pick");
+      clearPreviews();
     }
   };
 
@@ -216,7 +366,9 @@ export function QuoteTool() {
         </div>
 
         <div className="mt-10 rounded-3xl border border-border/70 bg-card p-6 sm:p-8">
-          {phase === "commercial" ? (
+          {phase === "analyzing" ? (
+            <AnalyzingPanel previewUrls={previewUrls} />
+          ) : phase === "commercial" ? (
             <div className="flex flex-col items-center gap-3 py-6 text-center">
               <Building2 className="size-12 text-primary" />
               <h3 className="font-heading text-xl font-bold text-foreground">
@@ -385,32 +537,17 @@ export function QuoteTool() {
               />
               <button
                 type="button"
-                disabled={phase === "analyzing"}
                 onClick={() => fileRef.current?.click()}
-                className="mt-6 flex w-full flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-primary/40 bg-primary/5 px-6 py-8 text-center transition-colors hover:border-primary/70 hover:bg-primary/10 disabled:cursor-wait"
+                className="mt-6 flex w-full flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-primary/40 bg-primary/5 px-6 py-8 text-center transition-colors hover:border-primary/70 hover:bg-primary/10"
               >
-                {phase === "analyzing" ? (
-                  <>
-                    <Loader2 className="size-8 animate-spin text-primary" />
-                    <span className="font-heading font-bold text-foreground">
-                      Analyzing your photos…
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      Our AI is measuring the area (~10–15 seconds)
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Camera className="size-8 text-primary" />
-                    <span className="font-heading font-bold text-foreground">
-                      Upload photos of your {service.label.toLowerCase()}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      Up to {MAX_PHOTOS} photos — multiple angles give a more accurate
-                      estimate. Include a car or door for scale if you can.
-                    </span>
-                  </>
-                )}
+                <Camera className="size-8 text-primary" />
+                <span className="font-heading font-bold text-foreground">
+                  Upload photos of your {service.label.toLowerCase()}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Up to {MAX_PHOTOS} photos — multiple angles give a more accurate
+                  estimate. Include a car or door for scale if you can.
+                </span>
               </button>
 
               {error && (
