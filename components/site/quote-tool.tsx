@@ -14,6 +14,9 @@ import {
   ScanLine,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BorderBeam } from "@/components/ui/border-beam";
+import { OrbitingCircles } from "@/components/ui/orbiting-circles";
+import { AnimatedShinyText } from "@/components/ui/animated-shiny-text";
 import {
   BUSINESS,
   QUOTE_SERVICES,
@@ -78,24 +81,6 @@ const ANALYZING_STEPS = [
   "Almost there…",
 ];
 
-/** Animated gradient light that traces the perimeter of its parent (21st.dev-style border beam). */
-function BorderBeam() {
-  return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
-      <motion.div
-        aria-hidden
-        className="absolute size-24 rounded-full bg-primary/70 blur-2xl"
-        style={{ translateX: "-50%", translateY: "-50%" }}
-        animate={{
-          left: ["0%", "100%", "100%", "0%", "0%"],
-          top: ["0%", "0%", "100%", "100%", "0%"],
-        }}
-        transition={{ duration: 5, repeat: Infinity, ease: "linear" }}
-      />
-    </div>
-  );
-}
-
 /** Full-panel "AI is working" state — replaces the static spinner with a
  *  scanning-photo + orbiting-core animation while the estimate call is in flight. */
 function AnalyzingPanel({ previewUrls }: { previewUrls: string[] }) {
@@ -111,30 +96,28 @@ function AnalyzingPanel({ previewUrls }: { previewUrls: string[] }) {
 
   return (
     <div className="relative mt-6 overflow-hidden rounded-2xl border border-primary/30 bg-gradient-to-b from-primary/10 via-background to-background px-6 py-10">
-      <BorderBeam />
+      <BorderBeam duration={5} size={90} colorFrom="hsl(var(--primary))" colorTo="hsl(var(--sand))" />
 
       {/* AI core */}
-      <div className="relative mx-auto grid size-24 place-items-center">
+      <div className="relative mx-auto grid size-28 place-items-center">
         <motion.div
           aria-hidden
           className="absolute inset-0 rounded-full bg-primary/40 blur-xl"
           animate={{ scale: [0.85, 1.15, 0.85], opacity: [0.5, 0.9, 0.5] }}
           transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
         />
+        <OrbitingCircles radius={44} duration={7} path={false} iconSize={10}>
+          <span className="block size-2.5 rounded-full bg-primary shadow-[0_0_8px_2px_hsl(var(--primary)/0.8)]" />
+        </OrbitingCircles>
+        <OrbitingCircles radius={44} duration={11} reverse path={false} iconSize={6}>
+          <span className="block size-1.5 rounded-full bg-sand shadow-[0_0_6px_1px_hsl(var(--sand)/0.8)]" />
+        </OrbitingCircles>
         <motion.div
           aria-hidden
-          className="absolute inset-0 rounded-full border-2 border-dashed border-primary/60"
+          className="absolute inset-3 rounded-full border-2 border-dashed border-primary/60"
           animate={{ rotate: 360 }}
           transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
         />
-        <motion.div
-          aria-hidden
-          className="absolute inset-2 rounded-full border border-primary/30"
-          animate={{ rotate: -360 }}
-          transition={{ duration: 9, repeat: Infinity, ease: "linear" }}
-        >
-          <span className="absolute -top-1 left-1/2 size-2 -translate-x-1/2 rounded-full bg-primary shadow-[0_0_8px_2px_hsl(var(--primary)/0.8)]" />
-        </motion.div>
         <motion.div
           animate={{ scale: [1, 1.08, 1] }}
           transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
@@ -147,16 +130,17 @@ function AnalyzingPanel({ previewUrls }: { previewUrls: string[] }) {
       {/* status text */}
       <div className="relative mt-6 h-5 text-center">
         <AnimatePresence mode="wait">
-          <motion.p
+          <motion.div
             key={statusIdx}
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.3 }}
-            className="font-heading text-sm font-bold text-foreground"
           >
-            {ANALYZING_STEPS[statusIdx]}
-          </motion.p>
+            <AnimatedShinyText className="font-heading text-sm font-bold">
+              {ANALYZING_STEPS[statusIdx]}
+            </AnimatedShinyText>
+          </motion.div>
         </AnimatePresence>
       </div>
 

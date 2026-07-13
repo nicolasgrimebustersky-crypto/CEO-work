@@ -265,13 +265,27 @@ export const PAIRS: Pair[] = [
 //   $0.20 per square foot, $200 job minimum.
 // LANDSCAPING/MULCHING uses Louisville-area industry rates (researched from
 //   HomeGuide/Angi/GreenPal, 2026: ~$0.35–$0.70/sq ft installed) — adjust anytime.
-// The tool always shows "ballpark, confirmed on-site."
+//
+// LABOR-AWARE FLOOR (per Nic, 7/13/26): the flat $200 minimum used to be the
+// only thing keeping small jobs from underpricing labor — but on bigger,
+// slower-to-wash jobs the $0.20/sqft rate alone can undershoot what a 2-person
+// crew actually costs to run. So the price is the highest of: sqft rate,
+// $200 minimum, or crew labor cost (hours × combined crew pay × margin for
+// gas/equipment/insurance/profit). CREW_HOURLY_COST is what Nic pays the pair,
+// combined, per hour. sqftPerHour is how much ground that crew covers per
+// service type — only driveway (~600 sqft/hr) was given directly; deck,
+// siding, and sidewalk are estimated relative to it and can be tuned below.
+const CREW_HOURLY_COST = 50; // combined pay for a 2-person crew, $/hr
+const LABOR_MARGIN = 3; // job price ≈ 3x raw labor cost to cover gas/equipment/insurance/profit
+
 export type QuoteService = {
   id: string;
   label: string;
   ratePerSqftLow: number;
   ratePerSqftHigh: number;
   minimum: number;
+  /** Combined sq ft/hr the 2-person crew covers for this service — omit to skip the labor floor (e.g. mulch). */
+  sqftPerHour?: number;
   /** Manual fallback sizes when the customer doesn't upload a photo. */
   sizes: { label: string; sqft: number }[];
 };
@@ -283,6 +297,7 @@ export const QUOTE_SERVICES: QuoteService[] = [
     id: "driveway",
     label: "Driveway / Concrete",
     ...PW,
+    sqftPerHour: 600,
     sizes: [
       { label: "1-car driveway", sqft: 300 },
       { label: "2-car driveway", sqft: 600 },
@@ -294,6 +309,7 @@ export const QUOTE_SERVICES: QuoteService[] = [
     id: "deck",
     label: "Deck / Patio",
     ...PW,
+    sqftPerHour: 380, // slower: corners, railings, furniture to work around
     sizes: [
       { label: "Small (up to 200 sq ft)", sqft: 200 },
       { label: "Medium (~350 sq ft)", sqft: 350 },
@@ -304,6 +320,7 @@ export const QUOTE_SERVICES: QuoteService[] = [
     id: "siding",
     label: "House Siding / Exterior",
     ...PW,
+    sqftPerHour: 500, // ladder work + softwash dwell time slows down broad coverage
     sizes: [
       { label: "1-story home", sqft: 1200 },
       { label: "2-story home", sqft: 2200 },
@@ -314,6 +331,7 @@ export const QUOTE_SERVICES: QuoteService[] = [
     id: "sidewalk",
     label: "Sidewalk / Walkway",
     ...PW,
+    sqftPerHour: 700, // narrow, flat, few obstacles — fastest of the four
     sizes: [
       { label: "Short walkway", sqft: 100 },
       { label: "Standard walkway", sqft: 200 },
@@ -337,9 +355,23 @@ export const QUOTE_SERVICES: QuoteService[] = [
 
 const round5 = (n: number) => Math.round(n / 5) * 5;
 
+function laborFloor(service: QuoteService, sqft: number) {
+  if (!service.sqftPerHour) return 0;
+  const hours = sqft / service.sqftPerHour;
+  return hours * CREW_HOURLY_COST * LABOR_MARGIN;
+}
+
+function priceFor(service: QuoteService, sqft: number, ratePerSqft: number) {
+  return Math.max(
+    service.minimum,
+    round5(sqft * ratePerSqft),
+    round5(laborFloor(service, sqft)),
+  );
+}
+
 /** Price range from a square-footage range (pass the same value twice for a single size). */
 export function quotePriceRange(service: QuoteService, sqftLow: number, sqftHigh: number) {
-  const low = Math.max(service.minimum, round5(sqftLow * service.ratePerSqftLow));
-  const high = Math.max(low, round5(sqftHigh * service.ratePerSqftHigh));
+  const low = priceFor(service, sqftLow, service.ratePerSqftLow);
+  const high = Math.max(low, priceFor(service, sqftHigh, service.ratePerSqftHigh));
   return { low, high };
 }
