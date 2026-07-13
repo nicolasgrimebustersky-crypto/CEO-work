@@ -20,7 +20,6 @@ import { AnimatedShinyText } from "@/components/ui/animated-shiny-text";
 import {
   BUSINESS,
   QUOTE_SERVICES,
-  quotePriceRange,
   quotePriceTotal,
   WEB3FORMS_ACCESS_KEY,
   type QuoteService,
@@ -275,19 +274,26 @@ export function QuoteTool() {
         throw new Error(`${reason} You can pick an approximate size below instead.`);
       }
       const estimates: ServiceEstimate[] = data.estimates ?? [];
+      // The API is asked to echo back the exact requested label and keep the
+      // same order/count — match by label first, but fall back to position
+      // when the model paraphrases the label slightly (still reliable since
+      // the array is guaranteed to line up with what we sent).
+      const sameLength = estimates.length === selectedServices.length;
 
       const matched: PricedService[] = [];
       const missed: string[] = [];
-      for (const svc of selectedServices) {
-        const est = estimates.find(
-          (e) => e.service.toLowerCase() === svc.label.toLowerCase() && e.is_relevant_photo,
-        );
-        if (est) {
-          matched.push({ service: svc, sqftLow: est.sqft_low, sqftHigh: est.sqft_high, estimate: est });
+      selectedServices.forEach((svc, i) => {
+        const byLabel = estimates.find((e) => e.service?.toLowerCase().trim() === svc.label.toLowerCase());
+        const est = byLabel ?? (sameLength ? estimates[i] : undefined);
+        if (est?.is_relevant_photo) {
+          // Defend against the model ever swapping low/high.
+          const sqftLow = Math.max(0, Math.min(est.sqft_low, est.sqft_high));
+          const sqftHigh = Math.max(est.sqft_low, est.sqft_high);
+          matched.push({ service: svc, sqftLow, sqftHigh, estimate: est });
         } else {
           missed.push(svc.label);
         }
-      }
+      });
 
       if (matched.length === 0) {
         const firstNote = estimates[0]?.notes;
@@ -303,15 +309,18 @@ export function QuoteTool() {
         images.length > 1 ? `AI estimate from ${images.length} photos` : "AI photo estimate",
       );
       setPhase("details");
+      const notices = [];
       if (missed.length) {
-        setError(
+        notices.push(
           `Couldn't confirm ${missed.join(", ")} in your photos — continuing with ${matched
             .map((m) => m.service.label)
             .join(", ")} only.`,
         );
-      } else if (truncated) {
-        setError(`Only the first ${MAX_PHOTOS} photos were used (max ${MAX_PHOTOS} per estimate).`);
       }
+      if (truncated) {
+        notices.push(`Only the first ${MAX_PHOTOS} photos were used (max ${MAX_PHOTOS} per estimate).`);
+      }
+      if (notices.length) setError(notices.join(" "));
       (window as any).gtag?.("event", "ai_estimate", {
         services: selectedServices.map((s) => s.id).join(","),
         photo_count: images.length,
@@ -329,6 +338,7 @@ export function QuoteTool() {
     setSourceLabel(label);
     setError(null);
     setPhase("details");
+    clearPreviews();
   };
 
   const revealQuote = async (e: React.FormEvent) => {

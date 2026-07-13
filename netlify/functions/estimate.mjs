@@ -168,11 +168,25 @@ Return one entry in "estimates" for every requested service above, in the same o
       return Response.json({ ok: false, error: "refused" }, { status: 200 });
     }
 
-    const text = response.content.find((b) => b.type === "text")?.text;
+    // Use the LAST text block, not the first: when web_search actually fires,
+    // Claude can emit a preamble text block ("let me check...") before the
+    // tool call, followed by the real JSON-schema answer after the search
+    // result. Grabbing the first block would try to JSON.parse the preamble.
+    const textBlocks = response.content.filter((b) => b.type === "text");
+    const text = textBlocks[textBlocks.length - 1]?.text;
     if (!text) {
       return Response.json({ ok: false, error: "empty_response" }, { status: 502 });
     }
-    const parsed = JSON.parse(text);
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      console.error("estimate: non-JSON final text block", text.slice(0, 500));
+      return Response.json({ ok: false, error: "estimate_failed" }, { status: 500 });
+    }
+    if (!Array.isArray(parsed.estimates)) {
+      return Response.json({ ok: false, error: "estimate_failed" }, { status: 500 });
+    }
     return Response.json({ ok: true, estimates: parsed.estimates });
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) {
