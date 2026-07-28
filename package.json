@@ -9,7 +9,10 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "emulators": "firebase emulators:start --only auth,firestore,storage",
-    "test:rules": "firebase emulators:exec --only firestore \"node --test tests/firestore.rules.test.mjs\""
+    "test:rules": "firebase emulators:exec --only firestore,storage \"node --test tests/firestore.rules.test.mjs tests/storage.rules.test.mjs\"",
+    "test:api": "bash scripts/test-api.sh",
+    "seed": "node scripts/seed-test-data.mjs",
+    "test": "npm run typecheck && npm run lint && npm run test:rules"
   },
   "dependencies": {
     "@vis.gl/react-google-maps": "^1.5.6",

@@ -278,11 +278,21 @@ needs a redeploy to take effect.
 ```bash
 npm run dev          # dev server
 npm run build        # production build
+npm test             # typecheck + lint + security rules
 npm run typecheck    # tsc --noEmit, strict mode
 npm run lint         # eslint
 npm run emulators    # Firebase Auth + Firestore + Storage emulators
-npm run test:rules   # security rules tests against the emulator
+npm run seed         # fill the running emulators with two crew + sample data
+npm run test:rules   # firestore.rules and storage.rules, 30 tests
+npm run test:api     # API auth and rate limits, 16 tests (boots its own stack)
 ```
+
+`test:api` is self-contained: it starts its own emulators on dedicated ports,
+seeds two crew accounts, builds and boots the app against them, and uses
+deliberately fake Twilio credentials so the routes are exercised without any
+message being sent. It can run alongside a `npm run emulators` session.
+
+All three suites also run in CI (`.github/workflows/ci.yml`) on every push.
 
 To work against the emulators instead of the live project, set
 `NEXT_PUBLIC_USE_FIREBASE_EMULATORS=true` in `.env.local` and run
@@ -395,22 +405,42 @@ without any of them refetching.
 
 ---
 
+## Security
+
+`SECURITY.md` is the full picture: what the app enforces, what it deliberately
+does not, and the console-side steps that no amount of code in this repo can do
+for you. The short version of that last part, in priority order:
+
+1. **Restrict the Google Maps key** to your domains, restrict it to the three
+   APIs it needs, and set daily quota caps. A browser key is public by design —
+   restrictions are the only thing between it and someone else's bill.
+2. **Turn on Firebase App Check** (set `NEXT_PUBLIC_RECAPTCHA_SITE_KEY`, then
+   enforce it in the console). It is the one control that stops a caller holding
+   a valid token from talking to Firestore outside the app.
+3. **Enable Vercel Deployment Protection** on Preview deployments, or every
+   preview URL is a public copy of the CRM.
+4. **Set a Twilio spending limit.** The app caps sends per user per hour; a
+   billing cap catches everything the app cannot see.
+
 ## What was verified, and how
 
 Three suites were run against the Firebase emulators with two real signed-in
 accounts:
 
-- **Security rules** (10 tests, `npm run test:rules`) — the allowlist, anonymous
-  and non-allowlisted access, self-only profile writes, and the author-stamp
-  rules.
-- **API auth gates** (16 assertions) — missing / bogus / non-crew tokens on both
-  SMS routes, the recipient cap, the cron secret (including that a valid user
-  token is *not* accepted as one), and rejection of unsigned Twilio webhooks.
-- **UI, two browsers side by side** (31 assertions) — realtime propagation in
+- **Security rules** (30 tests, `npm run test:rules`) — the allowlist, anonymous
+  and non-allowlisted access, self-only profile writes, author stamps on
+  customers and jobs, quote reassignment, notification forging, field
+  validation, and the Storage size/content-type/path rules.
+- **API auth and rate limits** (16 tests, `npm run test:api`) — missing / bogus /
+  non-crew tokens on both SMS routes, the recipient cap, the hourly spend
+  ceiling, the cron secret (including that a valid user token is *not* accepted
+  as one), unsigned Twilio webhooks, and the security headers.
+- **UI, two browsers side by side** (37 assertions) — realtime propagation in
   both directions with correct per-user attribution, search and filters, job
   creation and its failure path, cross-device notifications, drag-to-reschedule
-  including horizontal auto-scroll, quotes, dashboard, reports, and the offline
-  banner.
+  including horizontal auto-scroll, quotes, dashboard, reports, the offline
+  banner, editing a past job from a customer record, and customer deletion with
+  its orphan warning. Also confirmed zero CSP violations on every screen.
 
 The map screen's chrome renders and the page does not error, but the tiles,
 pins and GPS dots could not be exercised without a Maps key — that is the first

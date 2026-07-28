@@ -1,5 +1,6 @@
 import { ApiError, errorResponse, requireCrew } from "@/lib/server/auth";
 import { appendNote, getCustomer } from "@/lib/server/customerNotes";
+import { consumeRateLimit, SMS_BLAST_LIMIT } from "@/lib/server/rateLimit";
 import { isTwilioConfigured, sendSms } from "@/lib/server/twilio";
 
 export const runtime = "nodejs";
@@ -53,6 +54,10 @@ export async function POST(request: Request): Promise<Response> {
     if (!isTwilioConfigured) {
       throw new ApiError(503, "Twilio is not configured on this deployment.");
     }
+
+    // A blast is up to 200 messages, so it gets a much tighter hourly ceiling
+    // than one-off texts do.
+    await consumeRateLimit(caller.uid, "sms_blast", SMS_BLAST_LIMIT);
 
     const failed: { customerId: string; name: string; error: string }[] = [];
     let sent = 0;

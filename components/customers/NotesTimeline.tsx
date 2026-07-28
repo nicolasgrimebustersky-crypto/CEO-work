@@ -15,8 +15,8 @@ const KIND_LABEL: Record<NoteKind, string> = {
 };
 
 /**
- * One timeline per customer covering notes, status changes and (from Phase 3)
- * every SMS in and out. Each entry carries the author's name and colour so it's
+ * One timeline per customer covering notes, status changes, quotes and every
+ * SMS in and out. Each entry carries the author's name and colour so it's
  * obvious at a glance who logged what.
  */
 export function NotesTimeline({ notes }: { notes: Note[] }) {

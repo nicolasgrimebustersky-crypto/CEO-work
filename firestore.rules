@@ -12,6 +12,8 @@ rules_version = '2';
 // Replace the two placeholders with the real uids from
 // Firebase console -> Authentication -> Users, then deploy:
 //   npx firebase-tools deploy --only firestore:rules
+//
+// `npm run test:rules` exercises everything below against the emulator.
 // ---------------------------------------------------------------------------
 
 service cloud.firestore {
@@ -51,26 +53,80 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Light shape checks. These are not a schema — they exist to stop a bug in
+    // one client from writing a document the other client cannot render, which
+    // in a two-device app looks like data loss.
+    function validCustomer() {
+      let data = request.resource.data;
+      return data.status in ['lead', 'quoted', 'customer', 'not_interested', 'do_not_knock']
+        && data.lat is number
+        && data.lng is number
+        && data.notes is list;
+    }
+
+    function validJob() {
+      let data = request.resource.data;
+      return data.status in ['scheduled', 'in_progress', 'complete', 'cancelled']
+        && data.serviceType in ['pressure_washing', 'landscaping', 'snow_removal']
+        && data.price is number
+        && data.price >= 0
+        && data.customerId is string
+        && data.assignedTo is list;
+    }
+
+    function validQuote() {
+      let data = request.resource.data;
+      return data.status in ['sent', 'accepted', 'declined', 'no_response']
+        && data.serviceType in ['pressure_washing', 'landscaping', 'snow_removal']
+        && data.amount is number
+        && data.amount >= 0
+        && data.customerId is string;
+    }
+
     match /customers/{customerId} {
       allow read: if isCrew();
-      allow create: if isCrew() && stampedByCaller('createdBy');
-      allow update: if isCrew() && refreshesAuthorStamp();
+      allow create: if isCrew() && stampedByCaller('createdBy') && validCustomer();
+      allow update: if isCrew() && refreshesAuthorStamp() && validCustomer();
       allow delete: if isCrew();
     }
 
-    // Jobs and quotes are shared outright. The author-stamp checks tighten in
-    // Phase 2/3 once the write paths for them exist; the Vercel cron that sends
-    // quote follow-ups runs through the Admin SDK and bypasses these rules.
+    // Jobs carry the same author stamps as customers — the calendar shows who
+    // scheduled and who last touched each block, and that has to be as hard to
+    // forge as the note attributions are.
     match /jobs/{jobId} {
-      allow read, write: if isCrew();
+      allow read: if isCrew();
+      allow create: if isCrew() && stampedByCaller('createdBy') && validJob();
+      allow update: if isCrew() && refreshesAuthorStamp() && validJob();
+      allow delete: if isCrew();
     }
 
+    // Quotes have no updatedBy field — the only client-side update is flipping
+    // the status, and the nightly follow-up cron writes through the Admin SDK
+    // and bypasses these rules entirely. So instead of a refresh check, the
+    // rule pins the original sender: a quote cannot be reassigned to the other
+    // crew member after the fact.
     match /quotes/{quoteId} {
-      allow read, write: if isCrew();
+      allow read: if isCrew();
+      allow create: if isCrew() && stampedByCaller('sentBy') && validQuote();
+      allow update: if isCrew()
+        && validQuote()
+        && request.resource.data.sentBy == resource.data.sentBy
+        && request.resource.data.customerId == resource.data.customerId;
+      allow delete: if isCrew();
     }
 
+    // Notifications are addressed to a person and describe what someone else
+    // did, so both ends are pinned: you may only create one attributed to
+    // yourself, and the only field you may later change is readAt.
     match /notifications/{notificationId} {
-      allow read, write: if isCrew();
+      allow read: if isCrew();
+      allow create: if isCrew()
+        && stampedByCaller('actorUid')
+        && request.resource.data.forUid is string
+        && request.resource.data.readAt == null;
+      allow update: if isCrew()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt']);
+      allow delete: if isCrew();
     }
 
     // Anything not matched above is denied by default. Do not add a

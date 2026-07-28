@@ -1,5 +1,6 @@
 import { appendNote, getCustomer } from "@/lib/server/customerNotes";
 import { errorResponse, requireCrew, ApiError } from "@/lib/server/auth";
+import { consumeRateLimit, SMS_SEND_LIMIT } from "@/lib/server/rateLimit";
 import { isTwilioConfigured, sendSms } from "@/lib/server/twilio";
 
 export const runtime = "nodejs";
@@ -44,6 +45,10 @@ export async function POST(request: Request): Promise<Response> {
     const customer = await getCustomer(customerId);
     if (!customer) throw new ApiError(404, "Customer not found.");
     if (!customer.phone) throw new ApiError(400, "That customer has no phone number.");
+
+    // Charged only once the request is known-good, so a typo doesn't eat the
+    // caller's budget — but before Twilio is touched, which is the point.
+    await consumeRateLimit(caller.uid, "sms_send", SMS_SEND_LIMIT);
 
     const result = await sendSms(customer.phone, body);
 

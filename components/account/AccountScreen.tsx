@@ -13,7 +13,7 @@ import { formatPhone, formatRelative } from "@/lib/format";
 /**
  * Profile plus the team roster. The roster doubles as the legend for every
  * colour in the app — the same colour is this person's map dot, their
- * attribution chips, and their calendar blocks in Phase 2.
+ * attribution chips, and their calendar blocks.
  */
 export function AccountScreen() {
   const { email, signOutNow } = useAuth();

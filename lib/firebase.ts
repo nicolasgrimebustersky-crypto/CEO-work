@@ -52,9 +52,38 @@ let cachedDb: Firestore | null = null;
 let cachedAuth: Auth | null = null;
 let cachedStorage: FirebaseStorage | null = null;
 
+/**
+ * App Check attests that a request came from *this app* on a real device, not
+ * from a script holding a stolen refresh token. It is the one control that
+ * meaningfully protects Firestore and Storage from a caller who has somehow
+ * obtained valid credentials — the security rules can only ask "who are you",
+ * App Check asks "are you the app".
+ *
+ * Optional, because it needs a reCAPTCHA v3 site key and enforcement switched
+ * on in the Firebase console. Set NEXT_PUBLIC_RECAPTCHA_SITE_KEY to enable.
+ */
+function initAppCheck(app: FirebaseApp): void {
+  const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY ?? "";
+  if (!siteKey || typeof window === "undefined" || useEmulators) return;
+
+  void import("firebase/app-check")
+    .then(({ initializeAppCheck, ReCaptchaV3Provider }) => {
+      initializeAppCheck(app, {
+        provider: new ReCaptchaV3Provider(siteKey),
+        isTokenAutoRefreshEnabled: true,
+      });
+    })
+    .catch(() => {
+      // A failure here must not take the app down: without App Check the
+      // security rules still apply, so this degrades rather than breaks.
+    });
+}
+
 export function getFirebaseApp(): FirebaseApp {
   if (cachedApp) return cachedApp;
-  cachedApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
+  const isNew = getApps().length === 0;
+  cachedApp = isNew ? initializeApp(firebaseConfig) : getApp();
+  if (isNew) initAppCheck(cachedApp);
   return cachedApp;
 }
 

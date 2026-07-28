@@ -2,14 +2,16 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { useCustomers } from "@/components/providers/CustomersProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { Button } from "@/components/ui/Button";
 import { Chip, StatusPill, UserChip } from "@/components/ui/Chips";
+import { Sheet } from "@/components/ui/Sheet";
 import { Spinner } from "@/components/ui/Spinner";
-import { addNote, changeStatus } from "@/lib/db/customers";
+import { addNote, changeStatus, deleteCustomer } from "@/lib/db/customers";
 import { completedRevenue, subscribeJobsForCustomer } from "@/lib/db/jobs";
 import { setQuoteStatus, subscribeQuotesForCustomer } from "@/lib/db/quotes";
 import {
@@ -37,6 +39,7 @@ import { SendTextSheet } from "./SendTextSheet";
 export function CustomerDetailScreen({ customerId }: { customerId: string }) {
   const { byId, loading } = useCustomers();
   const { author, colorFor, nameFor } = useTeam();
+  const router = useRouter();
 
   const [jobs, setJobs] = useState<Job[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
@@ -46,6 +49,10 @@ export function CustomerDetailScreen({ customerId }: { customerId: string }) {
   const [schedulingJob, setSchedulingJob] = useState(false);
   const [texting, setTexting] = useState(false);
   const [quoting, setQuoting] = useState(false);
+  const [editingJob, setEditingJob] = useState<Job | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => subscribeJobsForCustomer(customerId, setJobs), [customerId]);
   useEffect(() => subscribeQuotesForCustomer(customerId, setQuotes), [customerId]);
@@ -114,6 +121,21 @@ export function CustomerDetailScreen({ customerId }: { customerId: string }) {
       setNoteText("");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function onDelete() {
+    if (!customer) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteCustomer(customer.id);
+      // The realtime listener will drop the record; leave before it does, or
+      // this screen flashes its "no longer exists" state on the way out.
+      router.replace("/customers");
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Could not delete this pin.");
+      setDeleting(false);
     }
   }
 
@@ -244,33 +266,41 @@ export function CustomerDetailScreen({ customerId }: { customerId: string }) {
           <h2 className="mb-2 text-lg font-bold text-ink">Service history</h2>
           {jobs.length === 0 ? (
             <p className="rounded-xl border border-line bg-surface-2 px-3 py-4 text-base font-semibold text-muted">
-              No jobs yet. Scheduling arrives in Phase 2.
+              No jobs yet. Tap &ldquo;Job&rdquo; above to schedule one.
             </p>
           ) : (
             <ul className="flex flex-col gap-2">
               {jobs.map((job) => (
-                <li
-                  key={job.id}
-                  className="rounded-xl border border-line bg-surface-2 p-3"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="text-base font-bold text-ink">
-                      {SERVICE_LABEL[job.serviceType]}
+                <li key={job.id}>
+                  {/* Tappable: this is where you stand when you need to add the
+                      after photos or mark the visit complete. */}
+                  <button
+                    type="button"
+                    onClick={() => setEditingJob(job)}
+                    className="w-full rounded-xl border border-line bg-surface-2 p-3 text-left active:bg-surface-3"
+                  >
+                    <span className="flex items-start justify-between gap-2">
+                      <span className="text-base font-bold text-ink">
+                        {SERVICE_LABEL[job.serviceType]}
+                      </span>
+                      <span className="text-base font-bold text-accent">
+                        {formatMoney(job.price)}
+                      </span>
                     </span>
-                    <span className="text-base font-bold text-accent">
-                      {formatMoney(job.price)}
+                    <span className="mt-1 block text-sm font-semibold text-muted">
+                      {formatDateOnly(job.scheduledStart)} · {JOB_STATUS_LABEL[job.status]}
+                      {job.beforePhotos.length + job.afterPhotos.length > 0
+                        ? ` · ${job.beforePhotos.length + job.afterPhotos.length} photos`
+                        : ""}
                     </span>
-                  </div>
-                  <p className="mt-1 text-sm font-semibold text-muted">
-                    {formatDateOnly(job.scheduledStart)} · {JOB_STATUS_LABEL[job.status]}
-                  </p>
-                  {job.assignedTo.length > 0 ? (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {job.assignedTo.map((uid) => (
-                        <UserChip key={uid} name={nameFor(uid)} color={colorFor(uid)} />
-                      ))}
-                    </div>
-                  ) : null}
+                    {job.assignedTo.length > 0 ? (
+                      <span className="mt-2 flex flex-wrap gap-1.5">
+                        {job.assignedTo.map((uid) => (
+                          <UserChip key={uid} name={nameFor(uid)} color={colorFor(uid)} />
+                        ))}
+                      </span>
+                    ) : null}
+                  </button>
                 </li>
               ))}
             </ul>
@@ -335,7 +365,7 @@ export function CustomerDetailScreen({ customerId }: { customerId: string }) {
           </h2>
           {photos.length === 0 ? (
             <p className="rounded-xl border border-line bg-surface-2 px-3 py-4 text-base font-semibold text-muted">
-              No job photos yet. Camera capture arrives in Phase 4.
+              No job photos yet. Open a job above to take before and after shots.
             </p>
           ) : (
             <ul className="grid grid-cols-2 gap-2">
@@ -384,6 +414,13 @@ export function CustomerDetailScreen({ customerId }: { customerId: string }) {
           </Button>
           <NotesTimeline notes={customer.notes} />
         </section>
+
+        {/* Last thing on the page on purpose — destructive and rarely wanted. */}
+        <section className="border-t border-line pt-5 pb-6">
+          <Button variant="secondary" full onClick={() => setConfirmDelete(true)}>
+            Delete this pin
+          </Button>
+        </section>
       </div>
 
       <EditCustomerSheet
@@ -406,6 +443,65 @@ export function CustomerDetailScreen({ customerId }: { customerId: string }) {
       />
 
       <QuoteSheet customer={customer} open={quoting} onClose={() => setQuoting(false)} />
+
+      {/* Editing an existing job, opened from the service history above. */}
+      <JobSheet
+        open={editingJob !== null}
+        job={editingJob}
+        onClose={() => setEditingJob(null)}
+      />
+
+      <Sheet
+        open={confirmDelete}
+        title="Delete this pin?"
+        onClose={() => setConfirmDelete(false)}
+        footer={
+          <div className="flex gap-3">
+            <Button
+              variant="secondary"
+              onClick={() => setConfirmDelete(false)}
+              disabled={deleting}
+            >
+              Keep it
+            </Button>
+            <Button
+              variant="danger"
+              full
+              onClick={() => void onDelete()}
+              disabled={deleting}
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </Button>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <p className="text-base font-semibold text-ink">
+            {customerName(customer)} and every note on this record will be removed
+            from both phones. This cannot be undone.
+          </p>
+          {jobs.length > 0 || quotes.length > 0 ? (
+            <p className="rounded-xl border border-warn/70 bg-warn/20 px-3 py-2.5 text-base font-semibold text-ink">
+              {jobs.length > 0 ? `${jobs.length} job${jobs.length === 1 ? "" : "s"}` : ""}
+              {jobs.length > 0 && quotes.length > 0 ? " and " : ""}
+              {quotes.length > 0
+                ? `${quotes.length} quote${quotes.length === 1 ? "" : "s"}`
+                : ""}{" "}
+              will be left without a customer, and will show as
+              &ldquo;Unknown customer&rdquo; on the calendar. Delete or reassign
+              {jobs.length > 0 ? " the jobs" : " them"} first if that matters.
+            </p>
+          ) : null}
+          {deleteError ? (
+            <p
+              role="alert"
+              className="rounded-xl border border-danger/60 bg-danger/15 px-3 py-2.5 text-base font-semibold text-ink"
+            >
+              {deleteError}
+            </p>
+          ) : null}
+        </div>
+      </Sheet>
     </div>
   );
 }

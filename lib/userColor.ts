@@ -2,7 +2,7 @@ import type { AppUser } from "./types";
 
 /**
  * Two accounts, two colours, used everywhere that account appears: map dot,
- * "logged by" chips, note attribution, and Phase 2 calendar blocks.
+ * "logged by" chips, note attribution, and calendar blocks.
  */
 export const USER_COLORS = ["#2f80ff", "#ff4fd8"] as const;
 export const FALLBACK_USER_COLOR = "#00d9ff";

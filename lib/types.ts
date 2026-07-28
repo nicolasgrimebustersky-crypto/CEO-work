@@ -34,7 +34,7 @@ export type QuoteStatus = (typeof QUOTE_STATUSES)[number];
 
 /**
  * Note kinds share one timeline per customer. SMS entries are written by the
- * Phase 3 API routes; everything else is written from the client.
+ * SMS API routes; everything else is written from the client.
  */
 export const NOTE_KINDS = [
   "note",
