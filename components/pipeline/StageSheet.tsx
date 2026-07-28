@@ -72,7 +72,9 @@ export function StageSheet({
         <div className="flex gap-3">
           <Link
             href={routes.customer(customer.id)}
-            className="tap-target inline-flex flex-1 items-center justify-center rounded-xl bg-surface-2 px-4 py-3 text-base font-semibold text-ink"
+            // shrink-0 and nowrap because the advance button next to it is
+            // w-full: without them "Full record" gets squeezed onto two lines.
+            className="tap-target inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-xl bg-surface-2 px-4 py-3 text-base font-semibold text-ink"
           >
             Full record
           </Link>

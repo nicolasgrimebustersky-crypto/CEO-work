@@ -8,6 +8,8 @@ import {
   uploadBytes,
 } from "firebase/storage";
 
+import { isDemoMode } from "@/lib/demo/enabled";
+import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb, getFirebaseStorage } from "@/lib/firebase";
 import type { Author, Photo } from "@/lib/types";
 
@@ -57,6 +59,25 @@ async function downscale(file: File): Promise<Blob> {
   }
 }
 
+/** Where the photo ends up: Storage normally, an object URL in demo mode. */
+async function store(path: string, blob: Blob): Promise<string> {
+  // Object URLs live as long as the tab, which is exactly as long as the demo
+  // data does. Nothing leaves the device.
+  if (isDemoMode) return URL.createObjectURL(blob);
+
+  const storageRef = ref(getFirebaseStorage(), path);
+  await uploadBytes(storageRef, blob, { contentType: "image/jpeg" });
+  return getDownloadURL(storageRef);
+}
+
+async function writeJob(jobId: string, patch: Record<string, unknown>): Promise<void> {
+  if (isDemoMode) {
+    demo.update(COLLECTIONS.jobs, jobId, patch);
+    return;
+  }
+  await updateDoc(doc(getDb(), COLLECTIONS.jobs, jobId), patch);
+}
+
 export async function uploadJobPhoto(
   jobId: string,
   slot: PhotoSlot,
@@ -71,9 +92,7 @@ export async function uploadJobPhoto(
   // Path must match the storage.rules pattern: jobs/{jobId}/{fileName}
   const path = `jobs/${jobId}/${name}`;
 
-  const storageRef = ref(getFirebaseStorage(), path);
-  await uploadBytes(storageRef, blob, { contentType: "image/jpeg" });
-  const url = await getDownloadURL(storageRef);
+  const url = await store(path, blob);
 
   const photo: Photo = {
     url,
@@ -83,7 +102,7 @@ export async function uploadJobPhoto(
     takenAt: Timestamp.now(),
   };
 
-  await updateDoc(doc(getDb(), COLLECTIONS.jobs, jobId), {
+  await writeJob(jobId, {
     [slot]: [...existing, photo],
     updatedAt: serverTimestamp(),
     updatedBy: author.uid,
@@ -100,12 +119,17 @@ export async function removeJobPhoto(
   existing: Photo[],
   author: Author,
 ): Promise<void> {
-  await updateDoc(doc(getDb(), COLLECTIONS.jobs, jobId), {
+  await writeJob(jobId, {
     [slot]: existing.filter((item) => item.path !== photo.path),
     updatedAt: serverTimestamp(),
     updatedBy: author.uid,
     updatedByName: author.displayName,
   });
+
+  if (isDemoMode) {
+    if (photo.url.startsWith("blob:")) URL.revokeObjectURL(photo.url);
+    return;
+  }
 
   // Remove the file second: an orphaned Storage object is cheap, but a job
   // record pointing at a deleted file renders as a broken image.

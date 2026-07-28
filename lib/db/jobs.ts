@@ -15,6 +15,8 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 
+import { isDemoMode } from "@/lib/demo/enabled";
+import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
 import { JOB_STATUSES, SERVICE_TYPES } from "@/lib/types";
 import type { Author, Job, JobStatus, Photo, ServiceType } from "@/lib/types";
@@ -80,6 +82,15 @@ export function subscribeJobsForCustomer(
   onChange: (jobs: Job[]) => void,
   onError?: (error: Error) => void,
 ): () => void {
+  const byRecent = (a: Job, b: Job) =>
+    b.scheduledStart.toMillis() - a.scheduledStart.toMillis();
+
+  if (isDemoMode) {
+    return demo.subscribe<Job>(COLLECTIONS.jobs, (items) =>
+      onChange(items.filter((job) => job.customerId === customerId).sort(byRecent)),
+    );
+  }
+
   const q = query(
     collection(getDb(), COLLECTIONS.jobs),
     where("customerId", "==", customerId),
@@ -87,11 +98,7 @@ export function subscribeJobsForCustomer(
   return onSnapshot(
     q,
     (snap) =>
-      onChange(
-        snap.docs
-          .map(toJob)
-          .sort((a, b) => b.scheduledStart.toMillis() - a.scheduledStart.toMillis()),
-      ),
+      onChange(snap.docs.map(toJob).sort(byRecent)),
     (error) => onError?.(error),
   );
 }
@@ -108,6 +115,17 @@ export function subscribeJobsFrom(
   onChange: (jobs: Job[]) => void,
   onError?: (error: Error) => void,
 ): () => void {
+  if (isDemoMode) {
+    const cutoff = from.getTime();
+    return demo.subscribe<Job>(COLLECTIONS.jobs, (items) =>
+      onChange(
+        items
+          .filter((job) => job.scheduledStart.toMillis() >= cutoff)
+          .sort((a, b) => a.scheduledStart.toMillis() - b.scheduledStart.toMillis()),
+      ),
+    );
+  }
+
   const q = query(
     collection(getDb(), COLLECTIONS.jobs),
     where("scheduledStart", ">=", Timestamp.fromDate(from)),
@@ -122,6 +140,16 @@ export function subscribeJobsFrom(
 
 /** One-shot read for reporting over an arbitrary range. */
 export async function fetchJobsBetween(from: Date, to: Date): Promise<Job[]> {
+  if (isDemoMode) {
+    return demo
+      .rows<Job>(COLLECTIONS.jobs)
+      .filter((job) => {
+        const at = job.scheduledStart.toMillis();
+        return at >= from.getTime() && at <= to.getTime();
+      })
+      .sort((a, b) => a.scheduledStart.toMillis() - b.scheduledStart.toMillis());
+  }
+
   const q = query(
     collection(getDb(), COLLECTIONS.jobs),
     where("scheduledStart", ">=", Timestamp.fromDate(from)),
@@ -150,7 +178,7 @@ export interface NewJobInput {
 }
 
 export async function createJob(input: NewJobInput, author: Author): Promise<string> {
-  const ref = await addDoc(collection(getDb(), COLLECTIONS.jobs), {
+  const payload = {
     customerId: input.customerId,
     serviceType: input.serviceType,
     scheduledStart: Timestamp.fromDate(input.scheduledStart),
@@ -171,8 +199,20 @@ export async function createJob(input: NewJobInput, author: Author): Promise<str
     updatedAt: serverTimestamp(),
     updatedBy: author.uid,
     updatedByName: author.displayName,
-  });
+  };
+
+  if (isDemoMode) return demo.add(COLLECTIONS.jobs, payload);
+  const ref = await addDoc(collection(getDb(), COLLECTIONS.jobs), payload);
   return ref.id;
+}
+
+/** Single persistence point, so demo mode swaps the write and nothing else. */
+async function writeJob(jobId: string, patch: Record<string, unknown>): Promise<void> {
+  if (isDemoMode) {
+    demo.update(COLLECTIONS.jobs, jobId, patch);
+    return;
+  }
+  await updateDoc(doc(getDb(), COLLECTIONS.jobs, jobId), patch);
 }
 
 export type JobPatch = Partial<{
@@ -201,7 +241,7 @@ export async function updateJob(
     payload[key] = value instanceof Date ? Timestamp.fromDate(value) : value;
   }
 
-  await updateDoc(doc(getDb(), COLLECTIONS.jobs, jobId), payload);
+  await writeJob(jobId, payload);
 }
 
 /**
@@ -221,7 +261,7 @@ export async function rescheduleJob(
 }
 
 export async function completeJob(jobId: string, author: Author): Promise<void> {
-  await updateDoc(doc(getDb(), COLLECTIONS.jobs, jobId), {
+  await writeJob(jobId, {
     status: "complete" satisfies JobStatus,
     completedAt: serverTimestamp(),
     completedBy: author.uid,
@@ -233,7 +273,7 @@ export async function completeJob(jobId: string, author: Author): Promise<void> 
 
 /** Records payment. This is what moves a lead out of "awaiting payment". */
 export async function markJobPaid(jobId: string, author: Author): Promise<void> {
-  await updateDoc(doc(getDb(), COLLECTIONS.jobs, jobId), {
+  await writeJob(jobId, {
     paidAt: serverTimestamp(),
     paidBy: author.uid,
     updatedAt: serverTimestamp(),
@@ -243,7 +283,7 @@ export async function markJobPaid(jobId: string, author: Author): Promise<void> 
 }
 
 export async function markJobUnpaid(jobId: string, author: Author): Promise<void> {
-  await updateDoc(doc(getDb(), COLLECTIONS.jobs, jobId), {
+  await writeJob(jobId, {
     paidAt: null,
     paidBy: null,
     updatedAt: serverTimestamp(),
@@ -260,6 +300,10 @@ export function unpaidValue(jobs: Job[]): number {
 }
 
 export async function deleteJob(jobId: string): Promise<void> {
+  if (isDemoMode) {
+    demo.remove(COLLECTIONS.jobs, jobId);
+    return;
+  }
   await deleteDoc(doc(getDb(), COLLECTIONS.jobs, jobId));
 }
 

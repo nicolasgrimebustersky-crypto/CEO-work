@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { isDemoMode } from "@/lib/demo/enabled";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
 import { useAuth } from "./AuthProvider";
 
@@ -54,7 +55,8 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (status !== "signed-in") {
+    // Demo writes land in memory, so there is never a queue to report.
+    if (isDemoMode || status !== "signed-in") {
       setPendingWrites(false);
       return;
     }

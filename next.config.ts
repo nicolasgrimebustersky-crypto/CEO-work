@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import withPWAInit from "next-pwa";
 import type { NextConfig } from "next";
 
@@ -14,6 +16,15 @@ import type { NextConfig } from "next";
  * installs from the browser via Add to Home Screen and uses the default build.
  */
 const isNative = process.env.BUILD_TARGET === "native";
+
+/**
+ * Demo mode ships an invented dataset instead of talking to Firebase. See
+ * lib/demo/enabled.ts. The flag is read here as well so the fixtures can be
+ * aliased away in a normal build — the `isDemoMode` branches are already dead
+ * code there, but the sample customers would otherwise still be sitting in the
+ * bundle, and "not in the file" is a better guarantee than "unreachable".
+ */
+const isDemo = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
 /**
  * Content Security Policy.
@@ -91,6 +102,21 @@ const SECURITY_HEADERS = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+
+  webpack(config, { webpack }) {
+    // resolve.alias loses to the tsconfig-paths resolver Next installs for
+    // "@/…", so the swap is done as a module replacement instead, which acts on
+    // the request before resolution.
+    if (!isDemo) {
+      config.plugins.push(
+        new webpack.NormalModuleReplacementPlugin(
+          /^@\/lib\/demo\/fixtures$/,
+          path.resolve(process.cwd(), "lib/demo/fixtures.empty.ts"),
+        ),
+      );
+    }
+    return config;
+  },
 
   /**
    * API handlers are named `route.api.ts`, not `route.ts`.

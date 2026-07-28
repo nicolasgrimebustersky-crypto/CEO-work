@@ -13,6 +13,8 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 
+import { isDemoMode } from "@/lib/demo/enabled";
+import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
 import { QUOTE_STATUSES, SERVICE_TYPES } from "@/lib/types";
 import type { Author, Quote, QuoteStatus, ServiceType } from "@/lib/types";
@@ -37,11 +39,19 @@ export function toQuote(snap: QueryDocumentSnapshot<DocumentData>): Quote {
   };
 }
 
+const byNewest = (a: Quote, b: Quote) => b.sentAt.toMillis() - a.sentAt.toMillis();
+
 export function subscribeQuotesForCustomer(
   customerId: string,
   onChange: (quotes: Quote[]) => void,
   onError?: (error: Error) => void,
 ): () => void {
+  if (isDemoMode) {
+    return demo.subscribe<Quote>(COLLECTIONS.quotes, (items) =>
+      onChange(items.filter((quote) => quote.customerId === customerId).sort(byNewest)),
+    );
+  }
+
   const q = query(
     collection(getDb(), COLLECTIONS.quotes),
     where("customerId", "==", customerId),
@@ -49,7 +59,7 @@ export function subscribeQuotesForCustomer(
   return onSnapshot(
     q,
     (snap) =>
-      onChange(snap.docs.map(toQuote).sort((a, b) => b.sentAt.toMillis() - a.sentAt.toMillis())),
+      onChange(snap.docs.map(toQuote).sort(byNewest)),
     (error) => onError?.(error),
   );
 }
@@ -58,10 +68,16 @@ export function subscribeAllQuotes(
   onChange: (quotes: Quote[]) => void,
   onError?: (error: Error) => void,
 ): () => void {
+  if (isDemoMode) {
+    return demo.subscribe<Quote>(COLLECTIONS.quotes, (items) =>
+      onChange([...items].sort(byNewest)),
+    );
+  }
+
   return onSnapshot(
     collection(getDb(), COLLECTIONS.quotes),
     (snap) =>
-      onChange(snap.docs.map(toQuote).sort((a, b) => b.sentAt.toMillis() - a.sentAt.toMillis())),
+      onChange(snap.docs.map(toQuote).sort(byNewest)),
     (error) => onError?.(error),
   );
 }
@@ -79,7 +95,7 @@ export async function createQuote(
   },
   author: Author,
 ): Promise<string> {
-  const ref = await addDoc(collection(getDb(), COLLECTIONS.quotes), {
+  const payload = {
     customerId: input.customerId,
     serviceType: input.serviceType,
     amount: input.amount,
@@ -89,7 +105,10 @@ export async function createQuote(
     status: "sent" satisfies QuoteStatus,
     followUpCount: 0,
     lastFollowUpAt: null,
-  });
+  };
+
+  if (isDemoMode) return demo.add(COLLECTIONS.quotes, payload);
+  const ref = await addDoc(collection(getDb(), COLLECTIONS.quotes), payload);
   return ref.id;
 }
 
@@ -97,10 +116,18 @@ export async function setQuoteStatus(
   quoteId: string,
   status: QuoteStatus,
 ): Promise<void> {
+  if (isDemoMode) {
+    demo.update(COLLECTIONS.quotes, quoteId, { status });
+    return;
+  }
   await updateDoc(doc(getDb(), COLLECTIONS.quotes, quoteId), { status });
 }
 
 export async function deleteQuote(quoteId: string): Promise<void> {
+  if (isDemoMode) {
+    demo.remove(COLLECTIONS.quotes, quoteId);
+    return;
+  }
   await deleteDoc(doc(getDb(), COLLECTIONS.quotes, quoteId));
 }
 

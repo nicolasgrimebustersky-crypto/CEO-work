@@ -1,6 +1,7 @@
 "use client";
 
 import { apiUrl } from "@/lib/apiBase";
+import { isDemoMode } from "@/lib/demo/enabled";
 import { getFirebaseAuth } from "@/lib/firebase";
 
 /**
@@ -16,7 +17,23 @@ async function authHeader(): Promise<Record<string, string>> {
   return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 }
 
+/**
+ * Demo mode has no server, no Twilio account and no phone numbers worth
+ * texting. The calls resolve as if they had been sent so the flows can be
+ * walked end to end; the banner across the top says nothing is real.
+ */
+async function fakeSend<T>(path: string, payload: unknown): Promise<T> {
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  if (path.endsWith("/blast")) {
+    const ids = (payload as { customerIds?: string[] }).customerIds ?? [];
+    return { ok: true, attempted: ids.length, sent: ids.length, failed: [] } as T;
+  }
+  return { ok: true, sid: "DEMO", to: "demo" } as T;
+}
+
 async function post<T>(path: string, payload: unknown): Promise<T> {
+  if (isDemoMode) return fakeSend<T>(path, payload);
+
   // apiUrl() is a no-op on the web and points at the deployed backend inside
   // the iOS shell, where the page origin is the app bundle.
   const response = await fetch(apiUrl(path), {

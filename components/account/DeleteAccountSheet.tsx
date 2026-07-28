@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/Field";
 import { Sheet } from "@/components/ui/Sheet";
 import { deleteOwnProfile } from "@/lib/db/users";
+import { isDemoMode } from "@/lib/demo/enabled";
 import { getFirebaseAuth } from "@/lib/firebase";
 
 const CONFIRM_WORD = "DELETE";
@@ -39,7 +40,7 @@ export function DeleteAccountSheet({
   open: boolean;
   onClose: () => void;
 }) {
-  const { email } = useAuth();
+  const { author, email, signOutNow } = useAuth();
   const [password, setPassword] = useState("");
   const [confirmText, setConfirmText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -53,6 +54,16 @@ export function DeleteAccountSheet({
   }, [open]);
 
   async function onDelete() {
+    // There is no Firebase account to delete in the demo, so this does the one
+    // thing it honestly can: removes the profile from the in-memory data and
+    // ends the session. A reload brings the sample crew back.
+    if (isDemoMode) {
+      setBusy(true);
+      if (author) await deleteOwnProfile(author.uid);
+      await signOutNow();
+      return;
+    }
+
     const auth = getFirebaseAuth();
     const user = auth.currentUser;
     if (!user || !user.email) {

@@ -13,6 +13,8 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 
+import { isDemoMode } from "@/lib/demo/enabled";
+import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
 import {
   advanceOnly,
@@ -104,6 +106,11 @@ export function subscribeCustomers(
   onChange: (customers: Customer[]) => void,
   onError?: (error: Error) => void,
 ): () => void {
+  if (isDemoMode) {
+    return demo.subscribe<Customer>(COLLECTIONS.customers, (items) =>
+      onChange([...items].sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())),
+    );
+  }
   const q = query(collection(getDb(), COLLECTIONS.customers), orderBy("createdAt", "desc"));
   return onSnapshot(
     q,
@@ -117,6 +124,7 @@ export function subscribeCustomer(
   onChange: (customer: Customer | null) => void,
   onError?: (error: Error) => void,
 ): () => void {
+  if (isDemoMode) return demo.subscribeDoc<Customer>(COLLECTIONS.customers, id, onChange);
   return onSnapshot(
     doc(getDb(), COLLECTIONS.customers, id),
     (snap) =>
@@ -164,7 +172,7 @@ export async function createCustomer(
   author: Author,
 ): Promise<string> {
   const notes = input.note.trim() ? [makeNote(input.note.trim(), "note", author)] : [];
-  const ref = await addDoc(collection(getDb(), COLLECTIONS.customers), {
+  const payload = {
     firstName: input.firstName.trim(),
     lastName: input.lastName.trim(),
     phone: input.phone.trim(),
@@ -191,8 +199,23 @@ export async function createCustomer(
     updatedAt: serverTimestamp(),
     updatedBy: author.uid,
     updatedByName: author.displayName,
-  });
+  };
+
+  if (isDemoMode) return demo.add(COLLECTIONS.customers, payload);
+  const ref = await addDoc(collection(getDb(), COLLECTIONS.customers), payload);
   return ref.id;
+}
+
+/**
+ * Every write goes through here so demo mode only has to replace the
+ * persistence step, not the logic that decides what to persist.
+ */
+async function writeCustomer(id: string, patch: Record<string, unknown>): Promise<void> {
+  if (isDemoMode) {
+    demo.update(COLLECTIONS.customers, id, patch);
+    return;
+  }
+  await updateDoc(doc(getDb(), COLLECTIONS.customers, id), patch);
 }
 
 /**
@@ -231,7 +254,7 @@ export async function setPipelineStage(
     if (nextStatus) patch.status = nextStatus;
   }
 
-  await updateDoc(doc(getDb(), COLLECTIONS.customers, customer.id), patch);
+  await writeCustomer(customer.id, patch);
 }
 
 /**
@@ -276,7 +299,7 @@ export async function updateCustomer(
   patch: CustomerPatch,
   author: Author,
 ): Promise<void> {
-  await updateDoc(doc(getDb(), COLLECTIONS.customers, id), {
+  await writeCustomer(id, {
     ...patch,
     updatedAt: serverTimestamp(),
     updatedBy: author.uid,
@@ -298,7 +321,7 @@ export async function addNote(
   const trimmed = text.trim();
   if (!trimmed) return;
   const note = makeNote(trimmed, kind, author);
-  await updateDoc(doc(getDb(), COLLECTIONS.customers, customer.id), {
+  await writeCustomer(customer.id, {
     notes: [...customer.notes, note],
     lastContactedAt: serverTimestamp(),
     lastContactedBy: author.uid,
@@ -336,11 +359,11 @@ export async function changeStatus(
     patch.pipelineChangedAt = serverTimestamp();
   }
 
-  await updateDoc(doc(getDb(), COLLECTIONS.customers, customer.id), patch);
+  await writeCustomer(customer.id, patch);
 }
 
 export async function markContacted(customer: Customer, author: Author): Promise<void> {
-  await updateDoc(doc(getDb(), COLLECTIONS.customers, customer.id), {
+  await writeCustomer(customer.id, {
     lastContactedAt: serverTimestamp(),
     lastContactedBy: author.uid,
     lastContactedByName: author.displayName,
@@ -351,5 +374,9 @@ export async function markContacted(customer: Customer, author: Author): Promise
 }
 
 export async function deleteCustomer(id: string): Promise<void> {
+  if (isDemoMode) {
+    demo.remove(COLLECTIONS.customers, id);
+    return;
+  }
   await deleteDoc(doc(getDb(), COLLECTIONS.customers, id));
 }

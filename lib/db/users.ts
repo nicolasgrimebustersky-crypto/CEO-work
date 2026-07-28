@@ -12,6 +12,8 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 
+import { isDemoMode } from "@/lib/demo/enabled";
+import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
 import type { AppUser } from "@/lib/types";
 
@@ -34,6 +36,7 @@ export function subscribeUsers(
   onChange: (users: AppUser[]) => void,
   onError?: (error: Error) => void,
 ): () => void {
+  if (isDemoMode) return demo.subscribe<AppUser>(COLLECTIONS.users, onChange);
   return onSnapshot(
     collection(getDb(), COLLECTIONS.users),
     (snap) => onChange(snap.docs.map(toAppUser)),
@@ -50,6 +53,9 @@ export async function ensureUserDoc(
   uid: string,
   fallbackName: string,
 ): Promise<void> {
+  // The demo crew already exists in the seed data.
+  if (isDemoMode) return;
+
   const ref = doc(getDb(), COLLECTIONS.users, uid);
   const existing = await getDoc(ref);
   if (existing.exists()) return;
@@ -65,12 +71,21 @@ export async function ensureUserDoc(
   });
 }
 
+/** Single persistence point, so demo mode swaps the write and nothing else. */
+async function writeUser(uid: string, patch: Record<string, unknown>): Promise<void> {
+  if (isDemoMode) {
+    demo.update(COLLECTIONS.users, uid, patch);
+    return;
+  }
+  await updateDoc(doc(getDb(), COLLECTIONS.users, uid), patch);
+}
+
 export async function updateUserLocation(
   uid: string,
   lat: number,
   lng: number,
 ): Promise<void> {
-  await updateDoc(doc(getDb(), COLLECTIONS.users, uid), {
+  await writeUser(uid, {
     currentLat: lat,
     currentLng: lng,
     lastLocationUpdate: serverTimestamp(),
@@ -79,7 +94,7 @@ export async function updateUserLocation(
 }
 
 export async function setUserActive(uid: string, isActive: boolean): Promise<void> {
-  await updateDoc(doc(getDb(), COLLECTIONS.users, uid), { isActive });
+  await writeUser(uid, { isActive });
 }
 
 /**
@@ -90,6 +105,10 @@ export async function setUserActive(uid: string, isActive: boolean): Promise<voi
  * rules allow delete on a profile only for its owner.
  */
 export async function deleteOwnProfile(uid: string): Promise<void> {
+  if (isDemoMode) {
+    demo.remove(COLLECTIONS.users, uid);
+    return;
+  }
   await deleteDoc(doc(getDb(), COLLECTIONS.users, uid));
 }
 
@@ -97,5 +116,5 @@ export async function updateUserProfile(
   uid: string,
   patch: { displayName?: string; phone?: string },
 ): Promise<void> {
-  await updateDoc(doc(getDb(), COLLECTIONS.users, uid), patch);
+  await writeUser(uid, patch);
 }

@@ -4,6 +4,7 @@ import { FirebaseError } from "firebase/app";
 import { useState, type FormEvent } from "react";
 
 import { useAuth } from "@/components/providers/AuthProvider";
+import { isDemoMode } from "@/lib/demo/enabled";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/Field";
 
@@ -34,8 +35,8 @@ function messageFor(error: unknown): string {
  */
 export function LoginScreen() {
   const { signIn } = useAuth();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState(isDemoMode ? "nick@grimebusters.demo" : "");
+  const [password, setPassword] = useState(isDemoMode ? "demo" : "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -61,6 +62,12 @@ export function LoginScreen() {
           <p className="mt-1 text-base font-semibold text-muted">
             Door-to-door CRM · Oldham County, KY
           </p>
+          {isDemoMode ? (
+            <p className="mt-4 rounded-xl border border-accent/40 bg-accent/15 px-3 py-2.5 text-sm font-bold text-ink">
+              Demo build. Sign in with anything — it is already filled in. The data
+              behind it is invented and nothing is saved.
+            </p>
+          ) : null}
         </div>
 
         <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
@@ -98,7 +105,9 @@ export function LoginScreen() {
         </form>
 
         <p className="mt-6 text-sm font-semibold text-muted">
-          Accounts are created in the Firebase console. There is no sign-up here.
+          {isDemoMode
+            ? "The real build has no sign-up either — the two accounts are created by hand in the Firebase console."
+            : "Accounts are created in the Firebase console. There is no sign-up here."}
         </p>
       </div>
     </main>

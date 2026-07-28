@@ -4,6 +4,34 @@ The fastest path to a URL you can open on your phone.
 
 ---
 
+## Before you have a Firebase project: demo mode
+
+Set one environment variable and the app runs on an invented dataset instead of
+Firebase — no project, no accounts, no keys:
+
+```
+NEXT_PUBLIC_DEMO_MODE=true
+```
+
+Every screen works: map pins, the pipeline board, the calendar, photos, the
+dashboard and reports. Sign in with any email and password. Edits apply
+everywhere they should but live in the browser tab only, so a reload starts
+over, and a banner across the top says so on every screen. Texts complete as if
+they had sent; no phone is contacted.
+
+Two things to know:
+
+- It is a **build-time** flag. Adding or removing it needs a redeploy.
+- Set it on the **Preview** environment only, or delete it once Firebase is
+  wired up. A production deployment carrying this flag shows made-up customers
+  to anyone who opens it.
+
+With demo mode off — the normal case — the fixtures are not merely unused,
+they are removed from the bundle (`next.config.ts` swaps the module out), so a
+real deployment cannot serve invented data whatever happens at runtime.
+
+---
+
 ## The two-minute version
 
 1. Go to **[vercel.com/new](https://vercel.com/new)** and sign in with GitHub.

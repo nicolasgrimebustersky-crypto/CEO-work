@@ -18,9 +18,14 @@ import {
   type ReactNode,
 } from "react";
 
+import { isDemoMode } from "@/lib/demo/enabled";
+import { DEMO_NICK } from "@/lib/demo/fixtures";
 import { getFirebaseAuth, isFirebaseConfigured } from "@/lib/firebase";
 import { ensureUserDoc } from "@/lib/db/users";
 import type { Author } from "@/lib/types";
+
+const DEMO_AUTHOR: Author = { uid: DEMO_NICK, displayName: "Nick" };
+const DEMO_SESSION_KEY = "gb:demo-session";
 
 export type AuthStatus = "loading" | "unconfigured" | "signed-out" | "signed-in";
 
@@ -47,12 +52,27 @@ function nameFromEmail(email: string | null): string {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>(
-    isFirebaseConfigured ? "loading" : "unconfigured",
+    isDemoMode || isFirebaseConfigured ? "loading" : "unconfigured",
   );
   const [user, setUser] = useState<User | null>(null);
+  const [demoEmail, setDemoEmail] = useState<string | null>(null);
+
+  // The demo session is restored from sessionStorage rather than kept in React
+  // state alone, so a reload — or reopening the installed icon — does not throw
+  // you back to the login screen the way it would with in-memory state only.
+  // Real auth persists across restarts; the demo should not feel worse.
+  useEffect(() => {
+    if (!isDemoMode) return;
+    const stored =
+      typeof window === "undefined" ? null : window.sessionStorage.getItem(DEMO_SESSION_KEY);
+    setDemoEmail(stored);
+    // A fresh tab starts at the login screen on purpose: it is part of what
+    // someone evaluating the app needs to see.
+    setStatus(stored ? "signed-in" : "signed-out");
+  }, []);
 
   useEffect(() => {
-    if (!isFirebaseConfigured) return;
+    if (isDemoMode || !isFirebaseConfigured) return;
 
     const auth = getFirebaseAuth();
     // Keep the session across app restarts — this runs on a phone all day and
@@ -75,15 +95,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
+    if (isDemoMode) {
+      if (!email.trim() || !password) throw new Error("Enter an email and a password.");
+      window.sessionStorage.setItem(DEMO_SESSION_KEY, email.trim());
+      setDemoEmail(email.trim());
+      setStatus("signed-in");
+      return;
+    }
     await signInWithEmailAndPassword(getFirebaseAuth(), email.trim(), password);
   }, []);
 
   const signOutNow = useCallback(async () => {
+    if (isDemoMode) {
+      window.sessionStorage.removeItem(DEMO_SESSION_KEY);
+      setDemoEmail(null);
+      setStatus("signed-out");
+      return;
+    }
     await signOut(getFirebaseAuth());
   }, []);
 
-  const value = useMemo<AuthContextValue>(
-    () => ({
+  const value = useMemo<AuthContextValue>(() => {
+    if (isDemoMode) {
+      return {
+        status,
+        author: status === "signed-in" ? DEMO_AUTHOR : null,
+        email: demoEmail,
+        signIn,
+        signOutNow,
+      };
+    }
+
+    return {
       status,
       author: user
         ? {
@@ -94,9 +137,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: user?.email ?? null,
       signIn,
       signOutNow,
-    }),
-    [status, user, signIn, signOutNow],
-  );
+    };
+  }, [status, user, demoEmail, signIn, signOutNow]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

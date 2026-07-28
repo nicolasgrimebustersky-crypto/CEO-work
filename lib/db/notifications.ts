@@ -15,6 +15,8 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 
+import { isDemoMode } from "@/lib/demo/enabled";
+import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
 import type { Author } from "@/lib/types";
 
@@ -70,6 +72,17 @@ export function subscribeNotifications(
   onChange: (items: AppNotification[]) => void,
   onError?: (error: Error) => void,
 ): () => void {
+  if (isDemoMode) {
+    return demo.subscribe<AppNotification>(COLLECTIONS.notifications, (items) =>
+      onChange(
+        items
+          .filter((item) => item.forUid === uid)
+          .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
+          .slice(0, 50),
+      ),
+    );
+  }
+
   const q = query(
     collection(getDb(), COLLECTIONS.notifications),
     where("forUid", "==", uid),
@@ -100,25 +113,36 @@ export async function notifyOthers(
   },
 ): Promise<void> {
   const recipients = crewUids.filter((uid) => uid !== actor.uid);
+  const rowFor = (forUid: string) => ({
+    forUid,
+    actorUid: actor.uid,
+    actorName: actor.displayName,
+    type: payload.type,
+    title: payload.title,
+    body: payload.body,
+    customerId: payload.customerId ?? null,
+    jobId: payload.jobId ?? null,
+    createdAt: serverTimestamp(),
+    readAt: null,
+  });
+
+  if (isDemoMode) {
+    for (const forUid of recipients) demo.add(COLLECTIONS.notifications, rowFor(forUid));
+    return;
+  }
+
   await Promise.all(
     recipients.map((forUid) =>
-      addDoc(collection(getDb(), COLLECTIONS.notifications), {
-        forUid,
-        actorUid: actor.uid,
-        actorName: actor.displayName,
-        type: payload.type,
-        title: payload.title,
-        body: payload.body,
-        customerId: payload.customerId ?? null,
-        jobId: payload.jobId ?? null,
-        createdAt: serverTimestamp(),
-        readAt: null,
-      }),
+      addDoc(collection(getDb(), COLLECTIONS.notifications), rowFor(forUid)),
     ),
   );
 }
 
 export async function markRead(notificationId: string): Promise<void> {
+  if (isDemoMode) {
+    demo.update(COLLECTIONS.notifications, notificationId, { readAt: Timestamp.now() });
+    return;
+  }
   await updateDoc(doc(getDb(), COLLECTIONS.notifications, notificationId), {
     readAt: serverTimestamp(),
   });
@@ -128,8 +152,16 @@ export async function markAllRead(items: AppNotification[]): Promise<void> {
   const unread = items.filter((item) => item.readAt === null);
   if (unread.length === 0) return;
 
-  const batch = writeBatch(getDb());
   const now = Timestamp.now();
+
+  if (isDemoMode) {
+    for (const item of unread) {
+      demo.update(COLLECTIONS.notifications, item.id, { readAt: now });
+    }
+    return;
+  }
+
+  const batch = writeBatch(getDb());
   for (const item of unread) {
     batch.update(doc(getDb(), COLLECTIONS.notifications, item.id), { readAt: now });
   }
