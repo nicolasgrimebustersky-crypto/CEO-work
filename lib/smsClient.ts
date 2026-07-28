@@ -1,5 +1,6 @@
 "use client";
 
+import { apiUrl } from "@/lib/apiBase";
 import { getFirebaseAuth } from "@/lib/firebase";
 
 /**
@@ -15,8 +16,10 @@ async function authHeader(): Promise<Record<string, string>> {
   return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 }
 
-async function post<T>(url: string, payload: unknown): Promise<T> {
-  const response = await fetch(url, {
+async function post<T>(path: string, payload: unknown): Promise<T> {
+  // apiUrl() is a no-op on the web and points at the deployed backend inside
+  // the iOS shell, where the page origin is the app bundle.
+  const response = await fetch(apiUrl(path), {
     method: "POST",
     headers: await authHeader(),
     body: JSON.stringify(payload),

@@ -1,4 +1,5 @@
 import { ApiError, errorResponse, requireCrew } from "@/lib/server/auth";
+import { preflight, withCors } from "@/lib/server/cors";
 import { appendNote, getCustomer } from "@/lib/server/customerNotes";
 import { consumeRateLimit, SMS_BLAST_LIMIT } from "@/lib/server/rateLimit";
 import { isTwilioConfigured, sendSms } from "@/lib/server/twilio";
@@ -100,13 +101,18 @@ export async function POST(request: Request): Promise<Response> {
       if (index < customerIds.length - 1) await wait(SEND_INTERVAL_MS);
     }
 
-    return Response.json({
+    return withCors(request, {
       ok: true,
       attempted: customerIds.length,
       sent,
       failed,
     });
   } catch (error) {
-    return errorResponse(error);
+    return errorResponse(error, request);
   }
+}
+
+/** Preflight for the iOS shell, which calls this cross-origin. */
+export function OPTIONS(request: Request): Response {
+  return preflight(request);
 }

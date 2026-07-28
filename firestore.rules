@@ -50,7 +50,10 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if isCrew();
       allow create, update: if isCrew() && request.auth.uid == uid;
-      allow delete: if false;
+      // Deleting your own profile is the in-app account deletion App Store
+      // Guideline 5.1.1(v) requires. Still owner-only: one crew member must
+      // not be able to erase the other.
+      allow delete: if isCrew() && request.auth.uid == uid;
     }
 
     // Light shape checks. These are not a schema — they exist to stop a bug in

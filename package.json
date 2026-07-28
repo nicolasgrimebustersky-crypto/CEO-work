@@ -12,9 +12,23 @@
     "test:rules": "firebase emulators:exec --only firestore,storage \"node --test tests/firestore.rules.test.mjs tests/storage.rules.test.mjs\"",
     "test:api": "bash scripts/test-api.sh",
     "seed": "node scripts/seed-test-data.mjs",
-    "test": "npm run typecheck && npm run lint && npm run test:rules"
+    "test": "npm run typecheck && npm run lint && npm run test:rules",
+    "build:native": "BUILD_TARGET=native next build",
+    "ios:build": "bash scripts/build-ios.sh",
+    "ios:open": "bash scripts/build-ios.sh --open"
   },
   "dependencies": {
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/camera": "^8.2.1",
+    "@capacitor/core": "^8.4.2",
+    "@capacitor/geolocation": "^8.2.0",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/ios": "^8.4.2",
+    "@capacitor/network": "^8.0.1",
+    "@capacitor/preferences": "^8.0.1",
+    "@capacitor/push-notifications": "^8.1.2",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3",
     "@vis.gl/react-google-maps": "^1.5.6",
     "date-fns": "^4.1.0",
     "firebase": "^11.10.0",
@@ -27,6 +41,8 @@
     "twilio": "^5.10.2"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.4.2",
     "@firebase/rules-unit-testing": "^4.0.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",

@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useCustomers } from "@/components/providers/CustomersProvider";
+import { useLocationSharing } from "@/components/providers/LocationSharingProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { applyFilters, activeFilterCount, EMPTY_FILTERS } from "@/lib/filters";
 import type { CustomerFilters } from "@/lib/filters";
@@ -59,7 +60,8 @@ function MapCanvas({ mapId }: { mapId: string }) {
   const searchParams = useSearchParams();
   const focusId = searchParams.get("focus");
 
-  const live = useLiveLocation(author?.uid ?? null);
+  const { sharing } = useLocationSharing();
+  const live = useLiveLocation(author?.uid ?? null, sharing);
 
   const [mapTypeId, setMapTypeId] = useState<MapTypeOption>("satellite");
   const [filters, setFilters] = useState<CustomerFilters>(EMPTY_FILTERS);
@@ -141,6 +143,8 @@ function MapCanvas({ mapId }: { mapId: string }) {
 
         {users
           .filter((user) => user.uid !== author?.uid)
+          // isActive is their sharing switch; a stale dot is worse than none.
+          .filter((user) => user.isActive)
           .filter(
             (user): user is typeof user & { currentLat: number; currentLng: number } =>
               typeof user.currentLat === "number" && typeof user.currentLng === "number",

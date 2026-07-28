@@ -15,6 +15,7 @@ import { customerName, formatMoney } from "@/lib/format";
 import { SERVICE_LABEL } from "@/lib/status";
 import type { Quote } from "@/lib/types";
 import { useEffect, useState } from "react";
+import { routes } from "@/lib/routes";
 
 export function DashboardScreen() {
   const { jobs, loading } = useJobs();
@@ -143,7 +144,7 @@ export function DashboardScreen() {
                 return (
                   <li key={job.id}>
                     <Link
-                      href={`/customers/${job.customerId}`}
+                      href={routes.customer(job.customerId)}
                       className="flex items-start justify-between gap-2 rounded-xl border border-line bg-surface-2 p-3"
                     >
                       <span className="min-w-0">

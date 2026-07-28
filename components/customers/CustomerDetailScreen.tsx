@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { useCustomers } from "@/components/providers/CustomersProvider";
@@ -35,8 +35,14 @@ import { EditCustomerSheet } from "./EditCustomerSheet";
 import { NotesTimeline } from "./NotesTimeline";
 import { QuoteSheet } from "./QuoteSheet";
 import { SendTextSheet } from "./SendTextSheet";
+import { routes } from "@/lib/routes";
 
-export function CustomerDetailScreen({ customerId }: { customerId: string }) {
+export function CustomerDetailScreen() {
+  // Read from the query string rather than a path segment so this page can be
+  // statically exported for the iOS build. See lib/routes.ts.
+  const searchParams = useSearchParams();
+  const customerId = searchParams.get("id") ?? "";
+
   const { byId, loading } = useCustomers();
   const { author, colorFor, nameFor } = useTeam();
   const router = useRouter();
@@ -54,8 +60,17 @@ export function CustomerDetailScreen({ customerId }: { customerId: string }) {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  useEffect(() => subscribeJobsForCustomer(customerId, setJobs), [customerId]);
-  useEffect(() => subscribeQuotesForCustomer(customerId, setQuotes), [customerId]);
+  // Guarded: an empty id means the query param is missing, and an unfiltered
+  // listener would stream the whole collection.
+  useEffect(() => {
+    if (!customerId) return;
+    return subscribeJobsForCustomer(customerId, setJobs);
+  }, [customerId]);
+
+  useEffect(() => {
+    if (!customerId) return;
+    return subscribeQuotesForCustomer(customerId, setQuotes);
+  }, [customerId]);
 
   const customer = byId.get(customerId) ?? null;
 
@@ -200,7 +215,7 @@ export function CustomerDetailScreen({ customerId }: { customerId: string }) {
             Job
           </button>
           <Link
-            href={`/map?focus=${customer.id}`}
+            href={routes.mapFocus(customer.id)}
             className="tap-target flex items-center justify-center rounded-xl border border-line bg-surface-2 px-1 py-3 text-sm font-bold text-ink"
           >
             Map

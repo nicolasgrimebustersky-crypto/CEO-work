@@ -1,5 +1,6 @@
 import { appendNote, getCustomer } from "@/lib/server/customerNotes";
 import { errorResponse, requireCrew, ApiError } from "@/lib/server/auth";
+import { preflight, withCors } from "@/lib/server/cors";
 import { consumeRateLimit, SMS_SEND_LIMIT } from "@/lib/server/rateLimit";
 import { isTwilioConfigured, sendSms } from "@/lib/server/twilio";
 
@@ -75,8 +76,13 @@ export async function POST(request: Request): Promise<Response> {
       authorName: caller.displayName,
     });
 
-    return Response.json({ ok: true, sid: result.sid, to: result.to });
+    return withCors(request, { ok: true, sid: result.sid, to: result.to });
   } catch (error) {
-    return errorResponse(error);
+    return errorResponse(error, request);
   }
+}
+
+/** Preflight for the iOS shell, which calls this cross-origin. */
+export function OPTIONS(request: Request): Response {
+  return preflight(request);
 }

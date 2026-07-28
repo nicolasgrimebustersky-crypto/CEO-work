@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { UserChip } from "@/components/ui/Chips";
 import { Sheet } from "@/components/ui/Sheet";
 import { formatRelative } from "@/lib/format";
+import { routes } from "@/lib/routes";
 
 /**
  * When one person creates, edits or completes a job the other gets an entry
@@ -115,7 +116,7 @@ export function NotificationBell() {
                 >
                   {item.customerId ? (
                     <Link
-                      href={`/customers/${item.customerId}`}
+                      href={routes.customer(item.customerId)}
                       onClick={() => {
                         void markOneRead(item.id);
                         setOpen(false);

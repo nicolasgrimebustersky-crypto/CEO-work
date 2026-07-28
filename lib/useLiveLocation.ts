@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { updateUserLocation } from "@/lib/db/users";
+import { setUserActive, updateUserLocation } from "@/lib/db/users";
 import { distanceMeters } from "@/lib/geo";
+import { watchLocation, type LocationWatcher } from "@/lib/native/location";
 import type { LatLng } from "@/lib/types";
 
 /** Don't write more than once every 10s, or for movement under 12m. */
@@ -18,26 +19,19 @@ export interface LiveLocation {
   ready: boolean;
 }
 
-function messageForGeolocationError(error: GeolocationPositionError): string {
-  switch (error.code) {
-    case error.PERMISSION_DENIED:
-      return "Location permission denied. Enable it in your browser settings to share your position.";
-    case error.POSITION_UNAVAILABLE:
-      return "Can't get a GPS fix right now.";
-    case error.TIMEOUT:
-      return "GPS is taking too long to respond.";
-    default:
-      return "Location unavailable.";
-  }
-}
-
 /**
  * Watches GPS and mirrors it to this user's Firestore document so the other
  * phone can draw the dot. Writes are throttled by both time and distance —
  * watchPosition fires several times a second while walking, and every one of
  * those would otherwise be a billed write plus a snapshot on the other device.
+ *
+ * `sharing` is the user's own switch. When it is off nothing is watched and
+ * nothing is written: no background GPS, no position on the other phone. That
+ * is a requirement for shipping background location on the App Store, and it is
+ * the right default behaviour anyway — nobody should have to delete the app to
+ * stop broadcasting where they are on a Sunday.
  */
-export function useLiveLocation(uid: string | null): LiveLocation {
+export function useLiveLocation(uid: string | null, sharing: boolean): LiveLocation {
   const [position, setPosition] = useState<LatLng | null>(null);
   const [accuracy, setAccuracy] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -47,19 +41,23 @@ export function useLiveLocation(uid: string | null): LiveLocation {
   const lastWritten = useRef<LatLng | null>(null);
 
   useEffect(() => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      setError("This device doesn't support location.");
+    if (!sharing) {
+      setPosition(null);
+      setAccuracy(null);
+      setError(null);
+      setReady(true);
+      // Tell the other phone this dot is stale rather than leaving the last
+      // known position sitting on their map looking live.
+      if (uid) void setUserActive(uid, false).catch(() => {});
       return;
     }
 
-    const watchId = navigator.geolocation.watchPosition(
-      (fix) => {
-        const next: LatLng = {
-          lat: fix.coords.latitude,
-          lng: fix.coords.longitude,
-        };
+    let watcher: LocationWatcher | null = null;
+
+    watcher = watchLocation(
+      ({ position: next, accuracy: nextAccuracy }) => {
         setPosition(next);
-        setAccuracy(fix.coords.accuracy);
+        setAccuracy(nextAccuracy);
         setError(null);
         setReady(true);
 
@@ -81,15 +79,14 @@ export function useLiveLocation(uid: string | null): LiveLocation {
           });
         }
       },
-      (err) => {
-        setError(messageForGeolocationError(err));
+      (message) => {
+        setError(message);
         setReady(true);
       },
-      { enableHighAccuracy: true, maximumAge: 5_000, timeout: 20_000 },
     );
 
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, [uid]);
+    return () => watcher?.stop();
+  }, [uid, sharing]);
 
   return { position, accuracy, error, ready };
 }

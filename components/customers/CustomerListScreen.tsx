@@ -19,6 +19,7 @@ import {
 import type { CustomerFilters } from "@/lib/filters";
 import { customerName, formatMoney, formatRelative } from "@/lib/format";
 import type { Customer } from "@/lib/types";
+import { routes } from "@/lib/routes";
 
 const SORTS = [
   { value: "recent", label: "Newest" },
@@ -164,7 +165,7 @@ export function CustomerListScreen() {
           {rows.map((customer) => (
             <li key={customer.id}>
               <Link
-                href={`/customers/${customer.id}`}
+                href={routes.customer(customer.id)}
                 className="flex items-start gap-3 px-3 py-3.5 active:bg-surface-2"
               >
                 <span

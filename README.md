@@ -285,6 +285,8 @@ npm run emulators    # Firebase Auth + Firestore + Storage emulators
 npm run seed         # fill the running emulators with two crew + sample data
 npm run test:rules   # firestore.rules and storage.rules, 30 tests
 npm run test:api     # API auth and rate limits, 16 tests (boots its own stack)
+npm run build:native # static export for the iOS shell
+npm run ios:build    # export + sync into the iOS project
 ```
 
 `test:api` is self-contained: it starts its own emulators on dedicated ports,
@@ -404,6 +406,29 @@ without any of them refetching.
   emulators; see below.
 
 ---
+
+## iOS
+
+The app also builds as a native iOS app via Capacitor. `docs/APP_STORE.md` is
+the full guide, including the honest recommendation about distribution.
+
+```bash
+echo 'NEXT_PUBLIC_API_BASE_URL=https://your-app.vercel.app' >> .env.local
+npm run ios:build       # static bundle, verified free of API artifacts
+npx cap add ios         # first time, on a Mac
+npm run ios:open        # build, sync, open Xcode
+```
+
+Two build targets come out of one codebase. `BUILD_TARGET=native` produces a
+static export with no API routes — those need a Node runtime and hold the Twilio
+and service-account credentials, which must never ship inside a binary anyone
+can unzip. The native bundle calls the same deployed `/api` endpoints the web
+app does, which is why `NEXT_PUBLIC_API_BASE_URL` is required for it.
+
+**Distribution:** for two phones, TestFlight internal testing or Ad Hoc is a
+better fit than the App Store — no review queue, same build. The App Store path
+is documented and supported, but Guideline 4.2 exists to keep private tools like
+this one out, and there is no listing you need.
 
 ## Security
 

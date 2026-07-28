@@ -12,6 +12,7 @@ import { customerName, formatPhone, formatRelative } from "@/lib/format";
 import { STATUS_LABEL } from "@/lib/status";
 import { CUSTOMER_STATUSES } from "@/lib/types";
 import type { Customer } from "@/lib/types";
+import { routes } from "@/lib/routes";
 
 /**
  * What you get when you tap an existing pin: enough to decide whether to knock,
@@ -70,7 +71,7 @@ export function CustomerPreviewSheet({
             </a>
           ) : null}
           <Link
-            href={`/customers/${customer.id}`}
+            href={routes.customer(customer.id)}
             className="tap-target inline-flex flex-1 items-center justify-center rounded-xl bg-accent px-4 py-3 text-base font-semibold text-accent-ink"
           >
             Full record

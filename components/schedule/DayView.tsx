@@ -21,6 +21,7 @@ import { SERVICE_LABEL } from "@/lib/status";
 import type { Job, LatLng } from "@/lib/types";
 import { assigneeStripe } from "./JobBlock";
 import type { DropTarget } from "./useJobDrag";
+import { routes } from "@/lib/routes";
 
 const SLOT_HEIGHT_PX = 44;
 
@@ -161,7 +162,7 @@ export function DayView({
                         ))}
                         {customer ? (
                           <Link
-                            href={`/map?focus=${customer.id}`}
+                            href={routes.mapFocus(customer.id)}
                             className="rounded-full border border-line px-2.5 py-1 text-sm font-bold text-ink"
                           >
                             Map

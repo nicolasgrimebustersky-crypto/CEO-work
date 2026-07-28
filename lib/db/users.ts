@@ -1,4 +1,5 @@
 import {
+  deleteDoc,
   doc,
   getDoc,
   onSnapshot,
@@ -79,6 +80,17 @@ export async function updateUserLocation(
 
 export async function setUserActive(uid: string, isActive: boolean): Promise<void> {
   await updateDoc(doc(getDb(), COLLECTIONS.users, uid), { isActive });
+}
+
+/**
+ * Removes this user's own profile document, for in-app account deletion.
+ *
+ * Must run before the Firebase Auth user is deleted: the rules identify the
+ * caller by uid, and once the auth account is gone the write is refused. The
+ * rules allow delete on a profile only for its owner.
+ */
+export async function deleteOwnProfile(uid: string): Promise<void> {
+  await deleteDoc(doc(getDb(), COLLECTIONS.users, uid));
 }
 
 export async function updateUserProfile(

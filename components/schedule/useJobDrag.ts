@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { impact } from "@/lib/native/shell";
+
 /**
  * Where a dragged job can be dropped. `day` targets change the date and keep
  * the time of day; `slot` targets set both.
@@ -205,9 +207,9 @@ export function useJobDrag(onDrop: (jobId: string, target: DropTarget) => void) 
         } catch {
           // Capture is a nicety; the window listeners still track the pointer.
         }
-        if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-          navigator.vibrate?.(15);
-        }
+        // iOS Safari ignores navigator.vibrate entirely; impact() routes to
+        // the Haptics plugin on device and falls back to vibrate on the web.
+        void impact("light");
         setDrag({
           jobId,
           label,

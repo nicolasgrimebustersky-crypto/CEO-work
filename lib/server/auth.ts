@@ -1,6 +1,7 @@
 import "server-only";
 
 import { adminAuth } from "./admin";
+import { corsHeaders } from "./cors";
 
 /**
  * The server-side half of the two-account allowlist. `firestore.rules` protects
@@ -87,10 +88,22 @@ export function requireCronSecret(request: Request): void {
   }
 }
 
-export function errorResponse(error: unknown): Response {
-  if (error instanceof ApiError) {
-    return Response.json({ error: error.message }, { status: error.status });
-  }
-  const message = error instanceof Error ? error.message : "Unexpected server error.";
-  return Response.json({ error: message }, { status: 500 });
+/**
+ * Error responses carry CORS headers too. Without them the iOS app sees an
+ * opaque network failure instead of "rate limit reached" or "not on the crew
+ * allowlist", which is exactly when a clear message matters most.
+ */
+export function errorResponse(error: unknown, request?: Request): Response {
+  const status = error instanceof ApiError ? error.status : 500;
+  const message =
+    error instanceof ApiError
+      ? error.message
+      : error instanceof Error
+        ? error.message
+        : "Unexpected server error.";
+
+  return Response.json(
+    { error: message },
+    { status, headers: request ? corsHeaders(request) : {} },
+  );
 }

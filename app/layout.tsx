@@ -5,6 +5,7 @@ import { AuthProvider } from "@/components/providers/AuthProvider";
 import { ConnectionProvider } from "@/components/providers/ConnectionProvider";
 import { CustomersProvider } from "@/components/providers/CustomersProvider";
 import { JobsProvider } from "@/components/providers/JobsProvider";
+import { LocationSharingProvider } from "@/components/providers/LocationSharingProvider";
 import { NotificationsProvider } from "@/components/providers/NotificationsProvider";
 import { TeamProvider } from "@/components/providers/TeamProvider";
 import { AppShell } from "@/components/shell/AppShell";
@@ -48,7 +49,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <JobsProvider>
                   <NotificationsProvider>
                     <ConnectionProvider>
-                      <AppShell>{children}</AppShell>
+                      <LocationSharingProvider>
+                        <AppShell>{children}</AppShell>
+                      </LocationSharingProvider>
                     </ConnectionProvider>
                   </NotificationsProvider>
                 </JobsProvider>

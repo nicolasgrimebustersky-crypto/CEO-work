@@ -340,7 +340,11 @@ describe("user profiles", () => {
     await assertFails(updateDoc(doc(alice, "users/bob"), { currentLat: 0 }));
   });
 
-  test("profiles cannot be deleted", async () => {
+  test("an account may delete its own profile but not the other's", async () => {
+    // In-app account deletion (App Store Guideline 5.1.1v) needs the owner to
+    // be able to remove their own profile — but one crew member must never be
+    // able to erase the other on the way out.
     await assertFails(deleteDoc(doc(alice, "users/bob")));
+    await assertSucceeds(deleteDoc(doc(alice, "users/alice")));
   });
 });
