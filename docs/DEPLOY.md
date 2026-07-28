@@ -98,6 +98,37 @@ redeploy to take effect. The server-side ones are read per request.
 
 ---
 
+## Wiring up Firebase
+
+Three things have to be done in the console. A service-account key cannot do
+them — it carries permission to read and write *data*, not to provision
+infrastructure, so these all come back `403 PERMISSION_DENIED` over the API.
+
+1. **Firestore** → create a database named exactly **`(default)`**. Standard
+   edition, any single region (`us-east1` is the closest to Kentucky).
+   The name is not cosmetic: `getFirestore(app)` connects to `(default)` and
+   nothing else. A database with any other name is invisible to the app.
+2. **Authentication** → Get started → enable **Email/Password**, then add the
+   two crew accounts under Users. There is no sign-up screen in the app.
+   (Doing this through the Identity Platform *API* asks for billing. The
+   console does not — Firebase Auth on the free tier is enough here.)
+3. **Storage** → Get started. Optional; only job photos need it. New projects
+   may be asked to move to the Blaze plan for this one.
+
+Then run, from the repo root:
+
+```
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json \
+  node scripts/finish-firebase-setup.mjs
+```
+
+It checks all three, reads the two crew uids out of Auth, writes them into
+`firestore.rules` in place of the placeholders, deploys the rules and indexes,
+and then writes/reads/deletes one document so you know it works rather than
+assuming. `--dry-run` reports the state and changes nothing.
+
+---
+
 ## Two things to do straight after the first deploy
 
 Both cause confusing failures if skipped.
