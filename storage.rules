@@ -1,0 +1,26 @@
+rules_version = '2';
+
+// Job photos (Phase 4). Same two-account allowlist as Firestore — keep the two
+// uid placeholders in sync with firestore.rules.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isCrew() {
+      return request.auth != null
+        && request.auth.uid in [
+             'REPLACE_WITH_FIRST_UID',
+             'REPLACE_WITH_SECOND_UID'
+           ];
+    }
+
+    match /jobs/{jobId}/{fileName} {
+      allow read: if isCrew();
+      // Cap uploads at 15 MB and images only — these come straight off a phone
+      // camera, so anything outside that is a bug or an abuse.
+      allow write: if isCrew()
+        && request.resource.size < 15 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+  }
+}

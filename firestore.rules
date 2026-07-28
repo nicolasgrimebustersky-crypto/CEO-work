@@ -1,0 +1,80 @@
+rules_version = '2';
+
+// ---------------------------------------------------------------------------
+// Grime Busters CRM — Firestore security rules.
+//
+// This is a private two-person app. There are no roles and no permission tiers:
+// either you are one of the two crew accounts and you can read and write
+// everything, or you get nothing. The allowlist below is the entire access
+// model, so keep it accurate — an account that exists in Firebase Auth but is
+// missing from this list can sign in and will then fail every read.
+//
+// Replace the two placeholders with the real uids from
+// Firebase console -> Authentication -> Users, then deploy:
+//   npx firebase-tools deploy --only firestore:rules
+// ---------------------------------------------------------------------------
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isCrew() {
+      return request.auth != null
+        && request.auth.uid in [
+             'REPLACE_WITH_FIRST_UID',
+             'REPLACE_WITH_SECOND_UID'
+           ];
+    }
+
+    // Every write is stamped with its author. Enforcing it here rather than
+    // trusting the client means an attribution can't be forged even if
+    // someone runs modified code with a valid session.
+    function stampedByCaller(field) {
+      return request.resource.data[field] == request.auth.uid;
+    }
+
+    // On an update, `request.resource.data` is the *merged* document, so a
+    // payload that simply omits `updatedBy` would inherit the stored value and
+    // sail through a bare equality check. Requiring `updatedAt` to appear in
+    // the diff forces every update to actually refresh the stamp, which is
+    // what makes the "edited by [name] at [time]" line trustworthy.
+    function refreshesAuthorStamp() {
+      return stampedByCaller('updatedBy')
+        && request.resource.data.diff(resource.data).affectedKeys().hasAll(['updatedAt']);
+    }
+
+    // Profiles are readable by the crew (both phones draw each other's dot)
+    // but each account may only write its own document — that keeps one
+    // person's GPS position from being overwritten by the other's client.
+    match /users/{uid} {
+      allow read: if isCrew();
+      allow create, update: if isCrew() && request.auth.uid == uid;
+      allow delete: if false;
+    }
+
+    match /customers/{customerId} {
+      allow read: if isCrew();
+      allow create: if isCrew() && stampedByCaller('createdBy');
+      allow update: if isCrew() && refreshesAuthorStamp();
+      allow delete: if isCrew();
+    }
+
+    // Jobs and quotes are shared outright. The author-stamp checks tighten in
+    // Phase 2/3 once the write paths for them exist; the Vercel cron that sends
+    // quote follow-ups runs through the Admin SDK and bypasses these rules.
+    match /jobs/{jobId} {
+      allow read, write: if isCrew();
+    }
+
+    match /quotes/{quoteId} {
+      allow read, write: if isCrew();
+    }
+
+    match /notifications/{notificationId} {
+      allow read, write: if isCrew();
+    }
+
+    // Anything not matched above is denied by default. Do not add a
+    // catch-all `match /{document=**}` here: rules are OR'd, so a permissive
+    // catch-all would widen access rather than restrict it.
+  }
+}
