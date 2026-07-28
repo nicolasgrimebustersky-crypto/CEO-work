@@ -6,8 +6,10 @@ import { useMemo, useState } from "react";
 import { FilterSheet } from "@/components/map/FilterSheet";
 import { useCustomers } from "@/components/providers/CustomersProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
+import { NotificationBell } from "@/components/shell/NotificationBell";
 import { StatusPill } from "@/components/ui/Chips";
 import { Spinner } from "@/components/ui/Spinner";
+import { BlastSheet } from "./BlastSheet";
 import {
   activeFilterCount,
   applyFilters,
@@ -60,6 +62,7 @@ export function CustomerListScreen() {
   const [sort, setSort] = useState<SortKey>("recent");
   const [filters, setFilters] = useState<CustomerFilters>(EMPTY_FILTERS);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [blastOpen, setBlastOpen] = useState(false);
 
   const rows = useMemo(
     () => sortCustomers(searchCustomers(applyFilters(customers, filters), term), sort),
@@ -70,6 +73,21 @@ export function CustomerListScreen() {
   return (
     <div className="flex h-full flex-col">
       <header className="pt-safe shrink-0 border-b border-line bg-surface px-3 pb-3">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h1 className="text-2xl font-black tracking-tight text-ink">Customers</h1>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setBlastOpen(true)}
+              disabled={rows.length === 0}
+              className="tap-target rounded-xl border border-line bg-surface-2 px-3 text-sm font-bold text-ink disabled:opacity-50"
+            >
+              Text {rows.length}
+            </button>
+            <NotificationBell />
+          </div>
+        </div>
+
         <div className="flex items-center gap-2">
           <input
             type="search"
@@ -185,6 +203,13 @@ export function CustomerListScreen() {
         matchCount={rows.length}
         onChange={setFilters}
         onClose={() => setFilterOpen(false)}
+      />
+
+      {/* The blast targets exactly what the list is showing right now. */}
+      <BlastSheet
+        recipients={rows}
+        open={blastOpen}
+        onClose={() => setBlastOpen(false)}
       />
     </div>
   );

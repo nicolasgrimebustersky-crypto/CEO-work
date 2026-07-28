@@ -52,3 +52,6 @@ database-debug.log
 ui-debug.log
 pubsub-debug.log
 .firebase/
+
+# next-pwa fallback shim
+/public/fallback-*.js

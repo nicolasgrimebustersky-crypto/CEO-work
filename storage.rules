@@ -16,11 +16,17 @@ service firebase.storage {
 
     match /jobs/{jobId}/{fileName} {
       allow read: if isCrew();
+
       // Cap uploads at 15 MB and images only — these come straight off a phone
       // camera, so anything outside that is a bug or an abuse.
-      allow write: if isCrew()
+      allow create, update: if isCrew()
         && request.resource.size < 15 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
+
+      // Delete is listed separately because `request.resource` is null on a
+      // delete: folding it into the rule above would make every delete fail
+      // the size check and leave orphaned files behind.
+      allow delete: if isCrew();
     }
   }
 }

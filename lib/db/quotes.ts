@@ -1,8 +1,13 @@
 import {
+  addDoc,
   collection,
+  deleteDoc,
+  doc,
   onSnapshot,
   query,
+  serverTimestamp,
   Timestamp,
+  updateDoc,
   where,
   type DocumentData,
   type QueryDocumentSnapshot,
@@ -10,7 +15,7 @@ import {
 
 import { COLLECTIONS, getDb } from "@/lib/firebase";
 import { QUOTE_STATUSES, SERVICE_TYPES } from "@/lib/types";
-import type { Quote, QuoteStatus, ServiceType } from "@/lib/types";
+import type { Author, Quote, QuoteStatus, ServiceType } from "@/lib/types";
 
 export function toQuote(snap: QueryDocumentSnapshot<DocumentData>): Quote {
   const data = snap.data();
@@ -47,4 +52,66 @@ export function subscribeQuotesForCustomer(
       onChange(snap.docs.map(toQuote).sort((a, b) => b.sentAt.toMillis() - a.sentAt.toMillis())),
     (error) => onError?.(error),
   );
+}
+
+export function subscribeAllQuotes(
+  onChange: (quotes: Quote[]) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  return onSnapshot(
+    collection(getDb(), COLLECTIONS.quotes),
+    (snap) =>
+      onChange(snap.docs.map(toQuote).sort((a, b) => b.sentAt.toMillis() - a.sentAt.toMillis())),
+    (error) => onError?.(error),
+  );
+}
+
+/**
+ * A quote starts life as 'sent'. The nightly follow-up cron only chases quotes
+ * that have been flipped to 'no_response', so nothing is chased automatically
+ * until someone marks it as unanswered.
+ */
+export async function createQuote(
+  input: {
+    customerId: string;
+    serviceType: ServiceType;
+    amount: number;
+  },
+  author: Author,
+): Promise<string> {
+  const ref = await addDoc(collection(getDb(), COLLECTIONS.quotes), {
+    customerId: input.customerId,
+    serviceType: input.serviceType,
+    amount: input.amount,
+    sentAt: serverTimestamp(),
+    sentBy: author.uid,
+    sentByName: author.displayName,
+    status: "sent" satisfies QuoteStatus,
+    followUpCount: 0,
+    lastFollowUpAt: null,
+  });
+  return ref.id;
+}
+
+export async function setQuoteStatus(
+  quoteId: string,
+  status: QuoteStatus,
+): Promise<void> {
+  await updateDoc(doc(getDb(), COLLECTIONS.quotes, quoteId), { status });
+}
+
+export async function deleteQuote(quoteId: string): Promise<void> {
+  await deleteDoc(doc(getDb(), COLLECTIONS.quotes, quoteId));
+}
+
+/** Quote-to-close rate for the reporting screen. */
+export function quoteCloseRate(quotes: Quote[]): {
+  accepted: number;
+  decided: number;
+  rate: number;
+} {
+  const accepted = quotes.filter((q) => q.status === "accepted").length;
+  const declined = quotes.filter((q) => q.status === "declined").length;
+  const decided = accepted + declined;
+  return { accepted, decided, rate: decided === 0 ? 0 : accepted / decided };
 }

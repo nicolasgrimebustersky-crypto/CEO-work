@@ -3,47 +3,72 @@
 Door-to-door CRM for **Grime Busters KY LLC** — pressure washing, landscaping and
 snow removal in Oldham County, KY. Built for a two-person crew working a
 neighbourhood on foot: the map is the home screen, both phones see each other
-live, and every note carries the name of whoever wrote it.
+live, and every note, text and job carries the name of whoever did it.
 
 - **Stack:** Next.js 15 (App Router) · TypeScript (strict) · Tailwind CSS 4 ·
-  Firebase (Auth, Firestore, Storage) · `@vis.gl/react-google-maps` · Twilio · date-fns
+  Firebase (Auth, Firestore, Storage) · `@vis.gl/react-google-maps` · Twilio ·
+  `next-pwa` · date-fns
 - **Deploy target:** Vercel
 
 ---
 
-## What works today (Phase 1)
+## What's built
 
-| # | Feature | Status |
-|---|---|---|
-| 1 | Full-screen Google Map, satellite by default, satellite/hybrid/street toggle | Done |
-| 2 | Live GPS via `watchPosition()`, both crew shown as named colour dots in real time | Done |
-| 3 | Tap a house to drop a pin; quick-entry form with reverse-geocoded address | Done |
-| 4 | Colour-coded pins: gray lead, yellow quoted, green customer, red not interested, black do-not-knock | Done |
-| 5 | Pins sync between phones in seconds via Firestore realtime listeners | Done |
-| 6 | Filter by status, service type, last-contacted window, and who logged it | Done |
-| 7 | Searchable, sortable customer list as an alternative to the map | Done |
-| 8 | Customer detail: contact info, service history, job photos, notes timeline, total revenue | Done |
+**Phase 1 — Map and customer database**
 
-Phases 2–4 (scheduling, SMS automation, photos/dashboard/offline) are not built
-yet. The data model, security rules and design system already account for them,
-and the places they plug in are marked in the code.
+| Feature | Notes |
+|---|---|
+| Full-screen Google Map, satellite by default, satellite/hybrid/street toggle | `gestureHandling: greedy` so one finger pans |
+| Live GPS, both crew as named colour dots, updating in real time | Writes throttled to 1 per 10s / 12m of movement |
+| Tap a house to drop a pin, with the address reverse-geocoded | Nothing is written until you hit save |
+| Colour-coded pins: gray lead, yellow quoted, green customer, red not interested, black do-not-knock | White outline keeps them legible on satellite |
+| Pins sync between phones in seconds | Firestore realtime listeners |
+| Filter by status, service, last-contacted window, and who logged it | Same filter code backs the map and the list |
+| Searchable, sortable customer list | |
+| Customer detail: contact, service history, job photos, notes timeline, revenue | |
 
-### Deliberate design choices
+**Phase 2 — Scheduling**
 
-- **The map is the landing route.** `/` redirects to `/map`; there is no menu screen.
-- **Sign-in only.** No registration route exists anywhere in the app. Accounts are
-  created by hand in the Firebase console, and the Firestore rules reject any uid
-  outside the two-account allowlist.
-- **Every write is stamped.** `createdBy` / `updatedBy` / note authorship are
-  enforced by the security rules, not just by the client, so an attribution
-  cannot be forged by running modified code with a valid session.
-- **GPS writes are throttled** to at most one per 10 seconds and only after 12 m
-  of movement. `watchPosition` fires several times a second while walking;
-  writing every fix would burn Firestore quota and spam the other phone.
-- **Offline-tolerant reads and writes.** Firestore is initialised with a
-  persistent IndexedDB cache, so the app keeps working in dead spots between
-  subdivisions and flushes queued writes on reconnect. The full offline queue
-  and conflict UI land in Phase 4.
+| Feature | Notes |
+|---|---|
+| Shared day / week / month calendar | Colour-coded by assignee; two assignees get a split stripe |
+| Drag-and-drop rescheduling | Pointer-events based, so it works on touch |
+| Create a job from any customer record | Service, time window, price, assign to either or both |
+| Dragging a job texts the customer the new time | |
+| Scheduling a job texts a confirmation immediately | |
+| The other user gets an in-app notification on create / edit / complete | Bell with unread badge |
+| Day view in route order with drive time between stops | Filterable to "my jobs" / "all jobs" |
+
+**Phase 3 — SMS and automation**
+
+| Feature | Notes |
+|---|---|
+| `POST /api/sms/send` — one-off text to a customer | |
+| `POST /api/sms/blast` — text the filtered group currently on screen | Skips do-not-knock and missing numbers, capped at 200 |
+| `GET /api/cron/quote-followups` — chases silent quotes | Every 4 days, 3 attempts, then marks declined |
+| `POST /api/sms/inbound` — Twilio webhook for replies | Signature-verified |
+| Every SMS in or out is logged to the customer timeline with the sender's name | |
+
+**Phase 4 — Photos, dashboard, offline**
+
+| Feature | Notes |
+|---|---|
+| Before/after camera capture straight to Firebase Storage | Opens the rear camera; downscaled in-browser before upload |
+| Dashboard: today's jobs split by person, expected revenue, jobs done this week, open quotes, doors knocked | |
+| Reports: revenue by month and by service, quote-to-close rate, best neighbourhoods, per-person breakdown | |
+| PWA with offline support | Installable; queued writes and a visible sync state |
+
+### Design rules the UI follows
+
+- Mobile-first portrait. Primary controls sit in the bottom third, in thumb reach.
+- Minimum 44px tap targets everywhere.
+- Dark UI, one bright accent (`#00d9ff`), high contrast throughout — no thin
+  grey text, because none of it is readable on a phone in direct sun.
+- Each crew member gets one colour used identically for their map dot, calendar
+  blocks, and attribution chips. Colours are assigned by uid sort order so both
+  phones agree without coordination; a `color` field on the user document
+  overrides it.
+- Status colours are fixed by the data model and never reused for anything else.
 
 ---
 
@@ -56,22 +81,21 @@ npm install
 cp .env.example .env.local
 ```
 
-Then fill in `.env.local` using the steps below. Nothing works until the
-Firebase and Google Maps keys are set — until then the app shows a setup screen
-listing exactly which keys are still blank.
+Fill in `.env.local` using the steps below. Until the Firebase keys are set the
+app shows a setup screen listing exactly which ones are still blank.
 
 ### 2. Create the Firebase project
 
-1. Go to the [Firebase console](https://console.firebase.google.com/) → **Add project**.
-   Google Analytics is not needed.
+1. [Firebase console](https://console.firebase.google.com/) → **Add project**.
+   Analytics is not needed.
 2. **Build → Authentication → Get started → Sign-in method → Email/Password → Enable.**
-   Leave "Email link (passwordless sign-in)" off.
-3. **Build → Firestore Database → Create database.** Start in **production mode**
-   (the rules in this repo replace the default). Pick the `us-east1` or
-   `us-central1` region — both are close to Kentucky.
-4. **Build → Storage → Get started.** Same region. Needed for Phase 4 job photos.
-5. **Project settings → General → Your apps → Web (`</>`)**. Register the app,
-   then copy the config values into `.env.local`:
+   Leave passwordless sign-in off.
+3. **Build → Firestore Database → Create database**, in **production mode** (the
+   rules in this repo replace the default). `us-east1` or `us-central1` are
+   closest to Kentucky.
+4. **Build → Storage → Get started.** Same region. Needed for job photos.
+5. **Project settings → General → Your apps → Web (`</>`)**. Register the app and
+   copy the config into `.env.local`:
 
    | Firebase config key | `.env.local` variable |
    |---|---|
@@ -83,140 +107,169 @@ listing exactly which keys are still blank.
    | `appId` | `NEXT_PUBLIC_FIREBASE_APP_ID` |
 
    These are public by design — they identify the project, they do not grant
-   access. Access is controlled entirely by the security rules in step 4.
+   access. Access comes entirely from the rules in step 4.
 
 ### 3. Create the two user accounts by hand
 
-The app has no sign-up screen, so both accounts are created in the console:
+The app has no sign-up screen, so both accounts are made in the console:
 
 1. **Authentication → Users → Add user.** Enter the first crew member's email and
    a password. Repeat for the second.
-2. Copy each **User UID** from the list — you need both for the next step.
+2. Copy both **User UIDs** — you need them in the next two steps.
 
-That is the only way to add an account. Anyone who signs up through some other
-route still gets rejected by the rules, because their uid is not on the allowlist.
-
-The app creates each person's `users/{uid}` profile document automatically on
-first sign-in. Set the display name and phone on the **Account** tab — the
-display name is what appears on the map dot and on every note that person writes.
+The app creates each `users/{uid}` profile document automatically on first
+sign-in. Set the display name and phone on the **Account** tab; the display name
+is what appears on the map dot and on everything that person logs.
 
 ### 4. Deploy the Firestore and Storage rules
 
-Open `firestore.rules` and `storage.rules` and replace the two placeholders in
-**both** files with the uids from step 3:
+Replace the two placeholders in **both** `firestore.rules` and `storage.rules`
+with the uids from step 3:
 
 ```
 'REPLACE_WITH_FIRST_UID',
 'REPLACE_WITH_SECOND_UID'
 ```
 
-Then deploy:
+Then deploy rules and the one composite index the notification feed needs:
 
 ```bash
 npx firebase login
-npx firebase use --add          # select the project you just created
-npx firebase deploy --only firestore:rules,storage:rules
+npx firebase use --add          # pick the project you just created
+npx firebase deploy --only firestore:rules,firestore:indexes,storage:rules
 ```
 
-The allowlist is the entire access model — there are no roles or permission
-tiers. An account that exists in Firebase Auth but is missing from this list can
-sign in and will then fail every read, which shows up in the app as an error
-banner on the Account tab.
+The allowlist is the entire access model — no roles, no permission tiers. An
+account that exists in Firebase Auth but is missing from the list can sign in and
+will then fail every read, which surfaces as an error banner on the Account tab.
 
-Verify the rules do what you think before deploying:
+Check the rules before trusting them:
 
 ```bash
 npm run test:rules
 ```
 
-This boots the Firestore emulator and runs `tests/firestore.rules.test.mjs`,
-which checks that a non-allowlisted account gets nothing, that anonymous callers
-get nothing, that one crew member cannot overwrite the other's GPS position, and
-that no write can be attributed to the wrong person.
+That boots the Firestore emulator and runs `tests/firestore.rules.test.mjs`,
+which asserts a non-allowlisted account gets nothing, anonymous callers get
+nothing, one crew member cannot overwrite the other's GPS position, and no write
+can be attributed to the wrong person.
 
 ### 5. Google Maps API key
 
 1. In the [Google Cloud console](https://console.cloud.google.com/), select the
-   same project Firebase created (or any project with billing enabled — Maps
-   requires a billing account, though the monthly free tier covers a crew this size).
-2. **APIs & Services → Library**, and enable all three:
+   project Firebase created (or any project with billing enabled — Maps needs a
+   billing account, though the free tier covers a crew this size).
+2. **APIs & Services → Library**, enable:
    - **Maps JavaScript API**
-   - **Geocoding API** (reverse-geocodes a dropped pin into a street address)
+   - **Geocoding API** — reverse-geocodes a dropped pin into a street address
    - **Places API**
-3. **APIs & Services → Credentials → Create credentials → API key.**
-4. Restrict the key — an unrestricted Maps key is a billing incident waiting to happen:
-   - **Application restrictions → Websites**, and add:
-     - `http://localhost:3000/*` (local development)
-     - `https://your-app.vercel.app/*`
-     - `https://*.vercel.app/*` if you want preview deploys to work
-     - your custom domain, if you add one
-   - **API restrictions → Restrict key**, and select only the three APIs above.
+   - **Distance Matrix API** — *optional*. With it, the day view shows real road
+     drive times between stops; without it, it falls back to straight-line
+     estimates and labels them "(est.)".
+3. **Credentials → Create credentials → API key.**
+4. Restrict the key. An unrestricted Maps key is a billing incident waiting to
+   happen:
+   - **Application restrictions → Websites**: `http://localhost:3000/*`,
+     `https://your-app.vercel.app/*`, `https://*.vercel.app/*` for previews, plus
+     any custom domain.
+   - **API restrictions → Restrict key**, selecting only the APIs above.
 5. Put the key in `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`.
 
-**Map ID (recommended).** Advanced Markers need one. Go to
-**Google Maps Platform → Map management → Create map ID**, map type **JavaScript**,
-raster or vector both work, and put it in `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID`. If you
-leave it blank the app falls back to Google's `DEMO_MAP_ID`, which renders fine
-but carries a demo watermark.
+**Map ID (recommended).** Advanced Markers need one:
+**Google Maps Platform → Map management → Create map ID**, type **JavaScript**.
+Put it in `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID`. Left blank, the app falls back to
+Google's `DEMO_MAP_ID`, which works but carries a demo watermark.
 
-### 6. Twilio (needed from Phase 3)
+### 6. Service account, crew uids, cron secret
 
-1. Sign up at [twilio.com](https://www.twilio.com/) and verify your own mobile number.
+The SMS routes and the nightly cron run server-side with the Firebase Admin SDK.
+
+1. **Firebase console → Project settings → Service accounts → Generate new
+   private key.** Save the JSON.
+2. Base64-encode it and put the result in `FIREBASE_SERVICE_ACCOUNT_KEY`:
+
+   ```bash
+   base64 -w0 service-account.json      # macOS: base64 -i service-account.json
+   ```
+
+   Base64 because Vercel's env editor mangles multi-line values. Raw JSON also
+   works locally.
+
+3. Set `CREW_UIDS` to both uids, comma-separated. The Admin SDK bypasses
+   Firestore rules, so every API route re-checks the caller against this list.
+   **Keep it in sync with the rules files.** Left empty, every API request is
+   denied — that is deliberate: an SMS endpoint anyone can reach is toll fraud.
+
+4. Set `CRON_SECRET` to a random string; Vercel sends it as a bearer token.
+
+   ```bash
+   openssl rand -hex 32
+   ```
+
+### 7. Twilio
+
+1. Sign up at [twilio.com](https://www.twilio.com/) and verify your own mobile.
 2. **Phone Numbers → Buy a number.** Filter to the **US**, area code **502** so
-   texts come from a local Louisville number, and require the **SMS** capability.
-   Around $1.15/month plus per-message cost.
-3. From the console dashboard copy the **Account SID** and **Auth Token** into
-   `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN`, and the number you bought — in
-   E.164 form, e.g. `+15025550147` — into `TWILIO_PHONE_NUMBER`.
-4. For business texting to US numbers you will also need
-   [A2P 10DLC registration](https://www.twilio.com/docs/messaging/compliance/a2p-10dlc);
-   do it early, approval takes days.
+   texts come from a local Louisville number, and require **SMS**. Roughly
+   $1.15/month plus per-message cost.
+3. Copy **Account SID** and **Auth Token** into `TWILIO_ACCOUNT_SID` and
+   `TWILIO_AUTH_TOKEN`, and the number — E.164, e.g. `+15025550147` — into
+   `TWILIO_PHONE_NUMBER`.
+4. **Wire up replies.** On the number's config page set **A message comes in** to
+   `POST https://your-app.vercel.app/api/sms/inbound`. Replies then land on the
+   customer's timeline. The route verifies Twilio's signature and rejects
+   anything unsigned.
+5. For business texting to US numbers you also need
+   [A2P 10DLC registration](https://www.twilio.com/docs/messaging/compliance/a2p-10dlc).
+   Start it early — approval takes days.
 
-These three variables have **no** `NEXT_PUBLIC_` prefix, and that is deliberate:
-they are only ever read server-side inside `/api/sms/*` route handlers. Never add
-the prefix — it would ship your auth token to every browser that loads the app.
+These three variables have **no** `NEXT_PUBLIC_` prefix, deliberately: they are
+only read server-side inside `/api/*` route handlers. Never add the prefix — it
+would ship your auth token to every browser that loads the app.
 
-### 7. Run it
+### 8. Run it
 
 ```bash
 npm run dev          # http://localhost:3000
 ```
 
-Location and the map both need a secure context. `localhost` counts as secure, so
-this works in a desktop browser. To test GPS on an actual phone you need HTTPS —
-the simplest route is to deploy a Vercel preview and open that on the phone.
+Location and the map both need a secure context. `localhost` counts, so this
+works on a desktop browser. To test GPS on a real phone you need HTTPS — deploy a
+Vercel preview and open that.
 
 ---
 
 ## Deploying to Vercel
 
-1. Push this repo to GitHub, then **Vercel → Add New → Project → Import**.
-   The framework preset is detected automatically; no build settings to change.
-2. **Settings → Environment Variables**, and add every variable from
+1. Push to GitHub, then **Vercel → Add New → Project → Import**. The framework
+   preset is detected; no build settings to change.
+2. **Settings → Environment Variables**, adding every variable from
    `.env.example` for **Production**, **Preview** and **Development**:
 
    | Variable | Exposed to browser |
    |---|---|
    | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | yes |
    | `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID` | yes |
-   | `NEXT_PUBLIC_FIREBASE_API_KEY` | yes |
-   | `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | yes |
-   | `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | yes |
-   | `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | yes |
-   | `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | yes |
-   | `NEXT_PUBLIC_FIREBASE_APP_ID` | yes |
+   | `NEXT_PUBLIC_FIREBASE_*` (six values) | yes |
+   | `FIREBASE_SERVICE_ACCOUNT_KEY` | **no — server only** |
+   | `CREW_UIDS` | **no — server only** |
+   | `CRON_SECRET` | **no — server only** |
    | `TWILIO_ACCOUNT_SID` | **no — server only** |
    | `TWILIO_AUTH_TOKEN` | **no — server only** |
    | `TWILIO_PHONE_NUMBER` | **no — server only** |
 
    Leave `NEXT_PUBLIC_USE_FIREBASE_EMULATORS` unset in every Vercel environment.
 
-3. Deploy, then go back and add the real deployment URL to the Google Maps key's
-   website restrictions (step 5.4) and to **Firebase → Authentication → Settings →
-   Authorised domains**. Sign-in fails with `auth/unauthorized-domain` until you do.
+3. Deploy, then add the deployment URL to the Maps key's website restrictions
+   (step 5.4) and to **Firebase → Authentication → Settings → Authorised
+   domains**. Sign-in fails with `auth/unauthorized-domain` until you do.
+
+4. The quote follow-up cron is declared in `vercel.json` and picks itself up on
+   deploy. It runs daily at **15:00 UTC** — 10am Eastern in winter, 11am in
+   summer. Vercel cron schedules are always UTC; edit `vercel.json` to move it.
 
 `NEXT_PUBLIC_` variables are inlined at build time, so changing one in Vercel
-requires a redeploy to take effect.
+needs a redeploy to take effect.
 
 ---
 
@@ -237,6 +290,9 @@ To work against the emulators instead of the live project, set
 `http://127.0.0.1:4000`. Data is in-memory and disappears on shutdown, which
 makes it a safe place to try rules changes or fake customers.
 
+The service worker is disabled in development — it would intercept HMR and serve
+stale bundles. To exercise offline behaviour, run `npm run build && npm start`.
+
 ---
 
 ## How it is put together
@@ -245,26 +301,37 @@ makes it a safe place to try rules changes or fake customers.
 app/
   layout.tsx              providers + auth gate + shell, applied to every route
   page.tsx                redirects / to /map
-  map/page.tsx            the landing screen
-  customers/page.tsx      list view
-  customers/[id]/page.tsx detail view
-  account/page.tsx        profile, team roster, sign out
+  map/                    the landing screen
+  schedule/               day / week / month calendar
+  customers/              list and detail
+  dashboard/, reports/    today's numbers, and the longer view
+  offline/                served by the service worker when a page isn't cached
+  api/sms/send            one-off text
+  api/sms/blast           filtered group text
+  api/sms/inbound         Twilio reply webhook
+  api/cron/quote-followups  nightly quote chaser
 components/
-  providers/              AuthProvider, TeamProvider, CustomersProvider
+  providers/              Auth, Team, Customers, Jobs, Notifications, Connection
   auth/                   login screen, setup screen, route gate
   map/                    map canvas, pins, teammate dots, sheets, filters
-  customers/              list, detail, notes timeline, edit sheet
+  schedule/               calendar views, drag hook, job sheet, photo capture
+  customers/              list, detail, notes timeline, quote/text/edit sheets
+  dashboard/              today's numbers and reports
+  shell/                  nav, headers, notification bell, connection banner
   ui/                     buttons, fields, bottom sheet, chips
 lib/
   firebase.ts             SDK init, emulator wiring, config checks
   db/                     Firestore reads and writes, one module per collection
-  types.ts                the data model
+  server/                 admin SDK, API auth, Twilio — all `server-only`
+  schedule.ts             calendar maths
+  driveTime.ts            Distance Matrix with a straight-line fallback
   filters.ts              filter + search logic, shared by map and list
   useLiveLocation.ts      watchPosition with throttled Firestore writes
 tests/
   firestore.rules.test.mjs
-firestore.rules           the uid allowlist — the whole access model
+firestore.rules           the uid allowlist — the whole client access model
 storage.rules
+vercel.json               the daily cron
 ```
 
 There is exactly **one** realtime listener per collection, owned by a provider at
@@ -272,36 +339,79 @@ the root, rather than one per screen. That is what makes a pin dropped on one
 phone appear on the other's map, list and detail screens at the same moment
 without any of them refetching.
 
-### Design rules the UI follows
+### Decisions worth knowing about
 
-- Mobile-first portrait. Primary controls sit in the bottom third, in thumb reach.
-- Minimum 44 px tap targets everywhere.
-- Dark UI, single bright accent (`#00d9ff`), high contrast throughout — no thin
-  grey text, because none of it is readable on a phone in direct sun.
-- Each crew member gets one colour, used identically for their map dot, their
-  attribution chips, and (in Phase 2) their calendar blocks. Colours are assigned
-  by uid sort order so both phones agree without any coordination; a `color`
-  field on the user document overrides it.
-- Status colours are fixed by the data model and never reused for anything else.
+- **Every write is stamped, and the rules enforce it.** `createdBy` on create and
+  a *refreshed* `updatedBy`/`updatedAt` on update. On an update
+  `request.resource.data` is the merged document, so a payload that just omits
+  `updatedBy` would inherit the stored value — the rules require `updatedAt` in
+  the write diff specifically to close that.
+- **API routes re-check the caller.** The Admin SDK bypasses Firestore rules
+  entirely, so `requireCrew()` verifies the Firebase ID token (with
+  `checkRevoked`) and confirms the uid is in `CREW_UIDS`. Unset means everything
+  is denied.
+- **Job texts are best-effort.** The job saves first; if Twilio then fails, the
+  sheet stays open with a warning rather than closing as if the customer had been
+  told.
+- **GPS writes are throttled** to one per 10 seconds and 12m of movement.
+  `watchPosition` fires several times a second while walking, and every one of
+  those would be a billed write plus a snapshot on the other phone.
+- **Drag-and-drop is pointer-event based**, not HTML5 drag-and-drop, which does
+  not fire on touch. A 320ms long-press threshold keeps a drag from stealing a
+  scroll, and the calendar auto-scrolls in both axes near the edges — seven day
+  columns do not fit on a phone, so without horizontal auto-scroll you could not
+  drag Monday to Friday.
+- **Revenue is computed from completed jobs**, not read from the stored
+  `lifetimeValue`, so the displayed figure cannot drift.
+- **Offline** is Firestore's persistent IndexedDB cache doing the real work:
+  reads come from cache and writes queue until reconnect. The connection banner
+  reports that state (`hasPendingWrites`) rather than reimplementing it, and the
+  "edited by [name] at [time]" stamp is what makes last-write-wins legible when
+  two offline edits collide.
 
 ---
 
 ## Notes and known gaps
 
-- **`next-pwa` is installed but not enabled.** It is wired up in Phase 4. Turning
-  it on before the offline write queue exists would cache stale customer data
-  with no way to reconcile it. It also pulls in an old Workbox 6 tree, which is
-  where most of `npm audit`'s build-time warnings come from; nothing there ships
-  to the browser today. `@ducanh2912/next-pwa` is the better-maintained drop-in if
-  you would rather switch when Phase 4 starts.
-- **`npm audit` also flags `sharp` and `postcss`** through Next's own dependency
-  tree. Those resolve with a Next patch release, not from this repo.
-- **No composite Firestore indexes are needed yet.** Per-customer job and quote
-  queries sort client-side on purpose, since one customer's history is a handful
-  of documents. Phase 2's calendar queries will need real indexes;
-  `firestore.indexes.json` is in place for them.
-- **The map was verified against real Google Maps behaviour only in code**, not
-  in the build environment — that sandbox has no Maps key and no outbound access
-  to Google's tile servers. Everything else in Phase 1, including two-user
-  realtime sync and the rules allowlist, was verified end-to-end against the
-  Firebase emulators with two signed-in accounts.
+- **Map tiles are not cached offline.** Google's Maps terms of service forbid
+  pre-caching or storing tiles, so the map needs signal. Customer data, the
+  calendar and job photos all work offline; the map does not.
+- **`npm audit` reports build-time advisories.** Most come from `next-pwa`'s old
+  Workbox 6 dependency tree; the rest are `sharp` and `postcss` inside Next's own
+  tree, which resolve with a Next patch release. None of it ships to the browser.
+  `@ducanh2912/next-pwa` is the better-maintained drop-in if you want to switch.
+- **One composite index is required** (`notifications`: `forUid` ASC,
+  `createdAt` DESC), declared in `firestore.indexes.json`. If you skip
+  `--only firestore:indexes`, the notification bell shows a message telling you
+  to deploy it.
+- **Inbound texts match customers by phone number** with a full-collection scan,
+  since numbers are stored however they were typed at the door. That is fine for
+  hundreds of customers; it would need an indexed normalised field at tens of
+  thousands.
+- **The map itself was never exercised at runtime during development** — the
+  build environment has no Maps key and no outbound access to Google's tile
+  servers. Everything else was verified end-to-end against the Firebase
+  emulators; see below.
+
+---
+
+## What was verified, and how
+
+Three suites were run against the Firebase emulators with two real signed-in
+accounts:
+
+- **Security rules** (10 tests, `npm run test:rules`) — the allowlist, anonymous
+  and non-allowlisted access, self-only profile writes, and the author-stamp
+  rules.
+- **API auth gates** (16 assertions) — missing / bogus / non-crew tokens on both
+  SMS routes, the recipient cap, the cron secret (including that a valid user
+  token is *not* accepted as one), and rejection of unsigned Twilio webhooks.
+- **UI, two browsers side by side** (31 assertions) — realtime propagation in
+  both directions with correct per-user attribution, search and filters, job
+  creation and its failure path, cross-device notifications, drag-to-reschedule
+  including horizontal auto-scroll, quotes, dashboard, reports, and the offline
+  banner.
+
+The map screen's chrome renders and the page does not error, but the tiles,
+pins and GPS dots could not be exercised without a Maps key — that is the first
+thing to check once you add one.

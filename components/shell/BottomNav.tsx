@@ -5,7 +5,9 @@ import { usePathname } from "next/navigation";
 
 const TABS = [
   { href: "/map", label: "Map", icon: MapIcon },
+  { href: "/schedule", label: "Schedule", icon: CalendarIcon },
   { href: "/customers", label: "Customers", icon: ListIcon },
+  { href: "/dashboard", label: "Home", icon: ChartIcon },
   { href: "/account", label: "Account", icon: PersonIcon },
 ] as const;
 
@@ -24,7 +26,7 @@ export function BottomNav() {
             key={href}
             href={href}
             aria-current={active ? "page" : undefined}
-            className={`tap-target flex flex-1 flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-xs font-bold ${
+            className={`tap-target flex flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-2 text-[11px] font-bold ${
               active ? "text-accent" : "text-muted"
             }`}
           >
@@ -46,6 +48,42 @@ function MapIcon({ active }: { active: boolean }) {
         stroke="currentColor"
         strokeWidth={active ? 2.4 : 1.9}
         strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function CalendarIcon({ active }: { active: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" className="size-6" aria-hidden="true">
+      <rect
+        x="3.5"
+        y="5"
+        width="17"
+        height="15"
+        rx="2.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={active ? 2.4 : 1.9}
+      />
+      <path
+        d="M3.5 10h17M8 3v4m8-4v4"
+        stroke="currentColor"
+        strokeWidth={active ? 2.4 : 1.9}
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function ChartIcon({ active }: { active: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" className="size-6" aria-hidden="true">
+      <path
+        d="M5 19V11m7 8V5m7 14v-6"
+        stroke="currentColor"
+        strokeWidth={active ? 2.8 : 2.2}
+        strokeLinecap="round"
       />
     </svg>
   );

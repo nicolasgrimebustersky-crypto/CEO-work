@@ -30,9 +30,13 @@ export function Sheet({ open, title, onClose, children, footer }: SheetProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end">
+      {/* Backdrop. Hidden from assistive tech: Escape and the × already offer
+          a reachable way out, and a full-screen button called "Close" just
+          duplicates them in the accessibility tree. */}
       <button
         type="button"
-        aria-label="Close"
+        aria-hidden="true"
+        tabIndex={-1}
         onClick={onClose}
         className="absolute inset-0 bg-black/70"
       />
@@ -45,10 +49,12 @@ export function Sheet({ open, title, onClose, children, footer }: SheetProps) {
       >
         <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
           <h2 className="text-lg font-bold text-ink">{title}</h2>
+          {/* Named after the sheet so it doesn't collide with a footer button
+              that is also called "Close". */}
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={`Dismiss ${title}`}
             className="tap-target -mr-2 flex items-center justify-center rounded-xl px-3 text-2xl leading-none text-muted hover:bg-surface-2 hover:text-ink"
           >
             ×

@@ -2,7 +2,10 @@ import type { Metadata, Viewport } from "next";
 
 import { AuthGate } from "@/components/auth/AuthGate";
 import { AuthProvider } from "@/components/providers/AuthProvider";
+import { ConnectionProvider } from "@/components/providers/ConnectionProvider";
 import { CustomersProvider } from "@/components/providers/CustomersProvider";
+import { JobsProvider } from "@/components/providers/JobsProvider";
+import { NotificationsProvider } from "@/components/providers/NotificationsProvider";
 import { TeamProvider } from "@/components/providers/TeamProvider";
 import { AppShell } from "@/components/shell/AppShell";
 import "./globals.css";
@@ -12,7 +15,16 @@ export const metadata: Metadata = {
   description:
     "Door-to-door CRM for pressure washing, landscaping and snow removal in Oldham County, KY.",
   applicationName: "Grime Busters CRM",
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent" },
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    title: "Grime Busters",
+    statusBarStyle: "black-translucent",
+  },
+  icons: {
+    icon: "/icons/icon-192.png",
+    apple: "/icons/apple-touch-icon.png",
+  },
 };
 
 export const viewport: Viewport = {
@@ -33,7 +45,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <AuthGate>
             <TeamProvider>
               <CustomersProvider>
-                <AppShell>{children}</AppShell>
+                <JobsProvider>
+                  <NotificationsProvider>
+                    <ConnectionProvider>
+                      <AppShell>{children}</AppShell>
+                    </ConnectionProvider>
+                  </NotificationsProvider>
+                </JobsProvider>
               </CustomersProvider>
             </TeamProvider>
           </AuthGate>

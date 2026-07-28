@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 
 import { BottomNav } from "./BottomNav";
+import { ConnectionBanner } from "./ConnectionBanner";
 
 /**
  * `min-h-0` on the main region is what lets the map fill the viewport instead
@@ -12,6 +13,7 @@ import { BottomNav } from "./BottomNav";
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-dvh flex-col">
+      <ConnectionBanner />
       <main className="min-h-0 flex-1">{children}</main>
       <BottomNav />
     </div>

@@ -11,7 +11,7 @@ import { Chip, StatusPill, UserChip } from "@/components/ui/Chips";
 import { Spinner } from "@/components/ui/Spinner";
 import { addNote, changeStatus } from "@/lib/db/customers";
 import { completedRevenue, subscribeJobsForCustomer } from "@/lib/db/jobs";
-import { subscribeQuotesForCustomer } from "@/lib/db/quotes";
+import { setQuoteStatus, subscribeQuotesForCustomer } from "@/lib/db/quotes";
 import {
   customerName,
   formatDateOnly,
@@ -26,10 +26,13 @@ import {
   SERVICE_LABEL,
   STATUS_LABEL,
 } from "@/lib/status";
-import { CUSTOMER_STATUSES } from "@/lib/types";
+import { CUSTOMER_STATUSES, QUOTE_STATUSES } from "@/lib/types";
 import type { Job, Photo, Quote } from "@/lib/types";
+import { JobSheet } from "@/components/schedule/JobSheet";
 import { EditCustomerSheet } from "./EditCustomerSheet";
 import { NotesTimeline } from "./NotesTimeline";
+import { QuoteSheet } from "./QuoteSheet";
+import { SendTextSheet } from "./SendTextSheet";
 
 export function CustomerDetailScreen({ customerId }: { customerId: string }) {
   const { byId, loading } = useCustomers();
@@ -40,6 +43,9 @@ export function CustomerDetailScreen({ customerId }: { customerId: string }) {
   const [noteText, setNoteText] = useState("");
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [schedulingJob, setSchedulingJob] = useState(false);
+  const [texting, setTexting] = useState(false);
+  const [quoting, setQuoting] = useState(false);
 
   useEffect(() => subscribeJobsForCustomer(customerId, setJobs), [customerId]);
   useEffect(() => subscribeQuotesForCustomer(customerId, setQuotes), [customerId]);
@@ -144,28 +150,36 @@ export function CustomerDetailScreen({ customerId }: { customerId: string }) {
       </header>
 
       <div className="flex flex-col gap-6 px-4 py-5">
-        <section className="grid grid-cols-3 gap-2">
+        <section className="grid grid-cols-4 gap-2">
           <a
             href={phoneDigits ? `tel:${phoneDigits}` : undefined}
             aria-disabled={!phoneDigits}
-            className={`tap-target flex flex-col items-center justify-center gap-1 rounded-xl border border-line bg-surface-2 px-2 py-3 text-sm font-bold ${
+            className={`tap-target flex items-center justify-center rounded-xl border border-line bg-surface-2 px-1 py-3 text-sm font-bold ${
               phoneDigits ? "text-ink" : "pointer-events-none text-muted opacity-50"
             }`}
           >
             Call
           </a>
-          <a
-            href={phoneDigits ? `sms:${phoneDigits}` : undefined}
-            aria-disabled={!phoneDigits}
-            className={`tap-target flex flex-col items-center justify-center gap-1 rounded-xl border border-line bg-surface-2 px-2 py-3 text-sm font-bold ${
-              phoneDigits ? "text-ink" : "pointer-events-none text-muted opacity-50"
-            }`}
+          {/* Texts go through Twilio so they land in the timeline, rather than
+              opening the phone's own messaging app where nothing is recorded. */}
+          <button
+            type="button"
+            onClick={() => setTexting(true)}
+            disabled={!phoneDigits}
+            className="tap-target flex items-center justify-center rounded-xl border border-line bg-surface-2 px-1 py-3 text-sm font-bold text-ink disabled:opacity-50"
           >
             Text
-          </a>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSchedulingJob(true)}
+            className="tap-target flex items-center justify-center rounded-xl border border-line bg-surface-2 px-1 py-3 text-sm font-bold text-ink"
+          >
+            Job
+          </button>
           <Link
             href={`/map?focus=${customer.id}`}
-            className="tap-target flex flex-col items-center justify-center gap-1 rounded-xl border border-line bg-surface-2 px-2 py-3 text-sm font-bold text-ink"
+            className="tap-target flex items-center justify-center rounded-xl border border-line bg-surface-2 px-1 py-3 text-sm font-bold text-ink"
           >
             Map
           </Link>
@@ -263,32 +277,57 @@ export function CustomerDetailScreen({ customerId }: { customerId: string }) {
           )}
         </section>
 
-        {quotes.length > 0 ? (
-          <section>
-            <h2 className="mb-2 text-lg font-bold text-ink">Quotes</h2>
+        <section>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 className="text-lg font-bold text-ink">Quotes</h2>
+            <Button variant="secondary" onClick={() => setQuoting(true)}>
+              New quote
+            </Button>
+          </div>
+
+          {quotes.length === 0 ? (
+            <p className="rounded-xl border border-line bg-surface-2 px-3 py-4 text-base font-semibold text-muted">
+              No quotes yet.
+            </p>
+          ) : (
             <ul className="flex flex-col gap-2">
               {quotes.map((quote) => (
-                <li
-                  key={quote.id}
-                  className="flex items-center justify-between gap-2 rounded-xl border border-line bg-surface-2 p-3"
-                >
-                  <span>
-                    <span className="block text-base font-bold text-ink">
-                      {SERVICE_LABEL[quote.serviceType]}
+                <li key={quote.id} className="rounded-xl border border-line bg-surface-2 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <span>
+                      <span className="block text-base font-bold text-ink">
+                        {SERVICE_LABEL[quote.serviceType]}
+                      </span>
+                      <span className="block text-sm font-semibold text-muted">
+                        {formatDateOnly(quote.sentAt)} · sent by {quote.sentByName}
+                        {quote.followUpCount > 0
+                          ? ` · ${quote.followUpCount} follow-up${quote.followUpCount === 1 ? "" : "s"}`
+                          : ""}
+                      </span>
                     </span>
-                    <span className="block text-sm font-semibold text-muted">
-                      {formatDateOnly(quote.sentAt)} · {QUOTE_STATUS_LABEL[quote.status]} ·
-                      sent by {quote.sentByName}
+                    <span className="shrink-0 text-base font-bold text-accent">
+                      {formatMoney(quote.amount)}
                     </span>
-                  </span>
-                  <span className="text-base font-bold text-accent">
-                    {formatMoney(quote.amount)}
-                  </span>
+                  </div>
+
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {QUOTE_STATUSES.map((status) => (
+                      <Chip
+                        key={status}
+                        active={quote.status === status}
+                        onClick={
+                          busy ? undefined : () => void setQuoteStatus(quote.id, status)
+                        }
+                      >
+                        {QUOTE_STATUS_LABEL[status]}
+                      </Chip>
+                    ))}
+                  </div>
                 </li>
               ))}
             </ul>
-          </section>
-        ) : null}
+          )}
+        </section>
 
         <section>
           <h2 className="mb-2 text-lg font-bold text-ink">
@@ -352,6 +391,21 @@ export function CustomerDetailScreen({ customerId }: { customerId: string }) {
         open={editing}
         onClose={() => setEditing(false)}
       />
+
+      <JobSheet
+        open={schedulingJob}
+        job={null}
+        customerId={customer.id}
+        onClose={() => setSchedulingJob(false)}
+      />
+
+      <SendTextSheet
+        customer={customer}
+        open={texting}
+        onClose={() => setTexting(false)}
+      />
+
+      <QuoteSheet customer={customer} open={quoting} onClose={() => setQuoting(false)} />
     </div>
   );
 }
