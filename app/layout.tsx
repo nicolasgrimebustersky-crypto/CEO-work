@@ -21,11 +21,24 @@ export const metadata: Metadata = {
     capable: true,
     title: "Grime Busters",
     statusBarStyle: "black-translucent",
+    // Safari shows a white screen while an installed web app boots unless it
+    // finds a launch image matching the exact device resolution. Without these
+    // every cold start flashes white against a near-black UI.
+    startupImage: [
+      { url: "/splash/iphone15.png", media: "(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)" },
+      { url: "/splash/iphone14plus.png", media: "(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)" },
+      { url: "/splash/iphone13.png", media: "(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)" },
+      { url: "/splash/iphonex.png", media: "(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)" },
+      { url: "/splash/iphone8plus.png", media: "(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3)" },
+      { url: "/splash/iphone8.png", media: "(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)" },
+    ],
   },
   icons: {
     icon: "/icons/icon-192.png",
     apple: "/icons/apple-touch-icon.png",
   },
+  // A private CRM full of customers' addresses has no business being indexed.
+  robots: { index: false, follow: false },
 };
 
 export const viewport: Viewport = {

@@ -13,10 +13,8 @@ import {
 import { setUserActive } from "@/lib/db/users";
 import {
   checkLocationPermission,
-  requestLocationPermission,
   type LocationPermission,
-} from "@/lib/native/location";
-import { isNative } from "@/lib/native/platform";
+} from "@/lib/device/capabilities";
 import { useAuth } from "./AuthProvider";
 
 const STORAGE_KEY = "gb:location-sharing";
@@ -70,9 +68,9 @@ export function LocationSharingProvider({ children }: { children: ReactNode }) {
   );
 
   const requestPermission = useCallback(async () => {
-    const result = isNative()
-      ? await requestLocationPermission()
-      : await checkLocationPermission();
+    // The browser has no "ask now" API — the prompt appears when
+    // watchPosition first runs. This just re-reads the current state.
+    const result = await checkLocationPermission();
     setPermission(result);
     return result;
   }, []);

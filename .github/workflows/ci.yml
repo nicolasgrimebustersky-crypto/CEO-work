@@ -23,6 +23,8 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
+      # Pure unit tests — no emulator, no network.
+      - run: npm run test:meta
       # Builds with blank Firebase keys on purpose: the app has to compile and
       # render its setup screen without credentials, which is the state of a
       # fresh clone.

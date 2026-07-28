@@ -60,6 +60,8 @@ export function toJob(snap: QueryDocumentSnapshot<DocumentData>): Job {
     jobNotes: typeof data.jobNotes === "string" ? data.jobNotes : "",
     completedAt: data.completedAt instanceof Timestamp ? data.completedAt : null,
     completedBy: typeof data.completedBy === "string" ? data.completedBy : null,
+    paidAt: data.paidAt instanceof Timestamp ? data.paidAt : null,
+    paidBy: typeof data.paidBy === "string" ? data.paidBy : null,
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt : Timestamp.now(),
     createdBy: typeof data.createdBy === "string" ? data.createdBy : "",
     createdByName: typeof data.createdByName === "string" ? data.createdByName : "Unknown",
@@ -161,6 +163,8 @@ export async function createJob(input: NewJobInput, author: Author): Promise<str
     jobNotes: input.jobNotes,
     completedAt: null,
     completedBy: null,
+    paidAt: null,
+    paidBy: null,
     createdAt: serverTimestamp(),
     createdBy: author.uid,
     createdByName: author.displayName,
@@ -225,6 +229,34 @@ export async function completeJob(jobId: string, author: Author): Promise<void> 
     updatedBy: author.uid,
     updatedByName: author.displayName,
   });
+}
+
+/** Records payment. This is what moves a lead out of "awaiting payment". */
+export async function markJobPaid(jobId: string, author: Author): Promise<void> {
+  await updateDoc(doc(getDb(), COLLECTIONS.jobs, jobId), {
+    paidAt: serverTimestamp(),
+    paidBy: author.uid,
+    updatedAt: serverTimestamp(),
+    updatedBy: author.uid,
+    updatedByName: author.displayName,
+  });
+}
+
+export async function markJobUnpaid(jobId: string, author: Author): Promise<void> {
+  await updateDoc(doc(getDb(), COLLECTIONS.jobs, jobId), {
+    paidAt: null,
+    paidBy: null,
+    updatedAt: serverTimestamp(),
+    updatedBy: author.uid,
+    updatedByName: author.displayName,
+  });
+}
+
+/** Completed work that has not been settled — the money still owed to you. */
+export function unpaidValue(jobs: Job[]): number {
+  return jobs
+    .filter((job) => job.status === "complete" && job.paidAt === null)
+    .reduce((total, job) => total + job.price, 0);
 }
 
 export async function deleteJob(jobId: string): Promise<void> {

@@ -12,6 +12,8 @@ const KIND_LABEL: Record<NoteKind, string> = {
   sms_in: "Text received",
   quote: "Quote",
   job: "Job",
+  stage_change: "Pipeline",
+  lead_import: "New lead",
 };
 
 /**

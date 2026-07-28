@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const TABS = [
   { href: "/map", label: "Map", icon: MapIcon },
   { href: "/schedule", label: "Schedule", icon: CalendarIcon },
+  { href: "/pipeline", label: "Pipeline", icon: PipelineIcon },
   { href: "/customers", label: "Customers", icon: ListIcon },
   { href: "/dashboard", label: "Home", icon: ChartIcon },
   { href: "/account", label: "Account", icon: PersonIcon },
@@ -72,6 +73,16 @@ function CalendarIcon({ active }: { active: boolean }) {
         strokeWidth={active ? 2.4 : 1.9}
         strokeLinecap="round"
       />
+    </svg>
+  );
+}
+
+function PipelineIcon({ active }: { active: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" className="size-6" aria-hidden="true">
+      <rect x="3" y="4" width="5" height="16" rx="1.5" fill="none" stroke="currentColor" strokeWidth={active ? 2.4 : 1.9} />
+      <rect x="9.5" y="4" width="5" height="11" rx="1.5" fill="none" stroke="currentColor" strokeWidth={active ? 2.4 : 1.9} />
+      <rect x="16" y="4" width="5" height="7" rx="1.5" fill="none" stroke="currentColor" strokeWidth={active ? 2.4 : 1.9} />
     </svg>
   );
 }

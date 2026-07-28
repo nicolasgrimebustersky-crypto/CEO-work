@@ -4,14 +4,14 @@ import type { NextConfig } from "next";
 /**
  * Two build targets from one codebase.
  *
- *   BUILD_TARGET=native  -> a static export bundled inside the iOS shell
- *   (default)            -> the Vercel deployment, server-rendered, with the
- *                           /api routes that the native build calls back into
+ *   (default)            -> the Vercel deployment: server-rendered, with the
+ *                           /api routes for SMS, the Meta webhook and the cron
+ *   BUILD_TARGET=native  -> a UI-only static export
  *
- * The native bundle cannot contain the API routes: they need a Node runtime and
- * they hold the Twilio and service-account credentials, which must never ship
- * inside an app binary that anyone can unzip. So the native build ships the UI
- * only and talks to the same hosted /api endpoints the web app uses.
+ * The static target exists because the API routes hold the Twilio, Meta and
+ * service-account credentials and need a Node runtime, so any UI-only bundle
+ * has to exclude them and call the deployed endpoints instead. The app itself
+ * installs from the browser via Add to Home Screen and uses the default build.
  */
 const isNative = process.env.BUILD_TARGET === "native";
 

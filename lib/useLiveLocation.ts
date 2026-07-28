@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { setUserActive, updateUserLocation } from "@/lib/db/users";
 import { distanceMeters } from "@/lib/geo";
-import { watchLocation, type LocationWatcher } from "@/lib/native/location";
+import { watchLocation, type LocationWatcher } from "@/lib/device/capabilities";
 import type { LatLng } from "@/lib/types";
 
 /** Don't write more than once every 10s, or for movement under 12m. */

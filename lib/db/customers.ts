@@ -14,11 +14,20 @@ import {
 } from "firebase/firestore";
 
 import { COLLECTIONS, getDb } from "@/lib/firebase";
-import { CUSTOMER_STATUSES, SERVICE_TYPES } from "@/lib/types";
+import {
+  advanceOnly,
+  isPipelineStage,
+  PIPELINE_LABEL,
+  stageForStatus,
+  syncStatusToStage,
+  type PipelineStage,
+} from "@/lib/pipeline";
+import { CUSTOMER_STATUSES, LEAD_SOURCES, SERVICE_TYPES } from "@/lib/types";
 import type {
   Author,
   Customer,
   CustomerStatus,
+  LeadSource,
   Note,
   NoteKind,
   ServiceType,
@@ -76,6 +85,15 @@ export function toCustomer(snap: QueryDocumentSnapshot<DocumentData>): Customer 
     lastContactedByName:
       typeof data.lastContactedByName === "string" ? data.lastContactedByName : null,
     lifetimeValue: typeof data.lifetimeValue === "number" ? data.lifetimeValue : 0,
+    // Records created before the pipeline existed default to the first stage.
+    pipelineStage: isPipelineStage(data.pipelineStage) ? data.pipelineStage : "new_lead",
+    pipelineChangedAt:
+      data.pipelineChangedAt instanceof Timestamp ? data.pipelineChangedAt : null,
+    pipelineValue: typeof data.pipelineValue === "number" ? data.pipelineValue : 0,
+    source: LEAD_SOURCES.includes(data.source as LeadSource)
+      ? (data.source as LeadSource)
+      : "door_knock",
+    sourceLeadId: typeof data.sourceLeadId === "string" ? data.sourceLeadId : null,
     updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt : null,
     updatedBy: typeof data.updatedBy === "string" ? data.updatedBy : null,
     updatedByName: typeof data.updatedByName === "string" ? data.updatedByName : null,
@@ -137,6 +155,8 @@ export interface NewCustomerInput {
   serviceTypes: ServiceType[];
   tags: string[];
   note: string;
+  source?: LeadSource;
+  sourceLeadId?: string | null;
 }
 
 export async function createCustomer(
@@ -163,11 +183,70 @@ export async function createCustomer(
     lastContactedBy: author.uid,
     lastContactedByName: author.displayName,
     lifetimeValue: 0,
+    pipelineStage: "new_lead" satisfies PipelineStage,
+    pipelineChangedAt: serverTimestamp(),
+    pipelineValue: 0,
+    source: input.source ?? "door_knock",
+    sourceLeadId: input.sourceLeadId ?? null,
     updatedAt: serverTimestamp(),
     updatedBy: author.uid,
     updatedByName: author.displayName,
   });
   return ref.id;
+}
+
+/**
+ * Moves a lead to a stage, records it on the timeline, and keeps the map pin in
+ * step. This is the only way the stage should ever change — writing the field
+ * directly skips the note and the pin sync.
+ */
+export async function setPipelineStage(
+  customer: Customer,
+  stage: PipelineStage,
+  author: Author,
+  options: { value?: number; reason?: string } = {},
+): Promise<void> {
+  if (customer.pipelineStage === stage && options.value === undefined) return;
+
+  const patch: Record<string, unknown> = {
+    pipelineStage: stage,
+    pipelineChangedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    updatedBy: author.uid,
+    updatedByName: author.displayName,
+  };
+
+  if (options.value !== undefined) patch.pipelineValue = options.value;
+
+  if (customer.pipelineStage !== stage) {
+    const note = makeNote(
+      options.reason ??
+        `Moved from ${PIPELINE_LABEL[customer.pipelineStage]} to ${PIPELINE_LABEL[stage]}`,
+      "stage_change",
+      author,
+    );
+    patch.notes = [...customer.notes, note];
+
+    const nextStatus = syncStatusToStage(stage, customer.status);
+    if (nextStatus) patch.status = nextStatus;
+  }
+
+  await updateDoc(doc(getDb(), COLLECTIONS.customers, customer.id), patch);
+}
+
+/**
+ * Advances a lead in response to something that happened — a quote going out,
+ * a job being booked. Never drags it backwards; see advanceOnly().
+ */
+export async function advancePipeline(
+  customer: Customer,
+  candidate: PipelineStage,
+  author: Author,
+  options: { value?: number; reason?: string } = {},
+): Promise<void> {
+  const target = advanceOnly(customer.pipelineStage, candidate);
+  if (target === customer.pipelineStage && options.value === undefined) return;
+  await setPipelineStage(customer, target, author, options);
 }
 
 export type CustomerPatch = Partial<
@@ -241,13 +320,23 @@ export async function changeStatus(
     "status_change",
     author,
   );
-  await updateDoc(doc(getDb(), COLLECTIONS.customers, customer.id), {
+  const patch: Record<string, unknown> = {
     status,
     notes: [...customer.notes, note],
     updatedAt: serverTimestamp(),
     updatedBy: author.uid,
     updatedByName: author.displayName,
-  });
+  };
+
+  // Marking a pin "not interested" or "do not knock" closes the deal too —
+  // otherwise it sits in an open column forever asking to be chased.
+  const closedStage = stageForStatus(status);
+  if (closedStage && customer.pipelineStage !== closedStage) {
+    patch.pipelineStage = closedStage;
+    patch.pipelineChangedAt = serverTimestamp();
+  }
+
+  await updateDoc(doc(getDb(), COLLECTIONS.customers, customer.id), patch);
 }
 
 export async function markContacted(customer: Customer, author: Author): Promise<void> {

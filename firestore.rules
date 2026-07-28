@@ -62,6 +62,10 @@ service cloud.firestore {
     function validCustomer() {
       let data = request.resource.data;
       return data.status in ['lead', 'quoted', 'customer', 'not_interested', 'do_not_knock']
+        && data.pipelineStage in [
+             'new_lead', 'estimate_sent', 'estimate_accepted', 'job_scheduled',
+             'awaiting_payment', 'paid', 'lost'
+           ]
         && data.lat is number
         && data.lng is number
         && data.notes is list;

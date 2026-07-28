@@ -6,7 +6,6 @@ import { useRef, useState } from "react";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { formatDateOnly } from "@/lib/format";
 import { removeJobPhoto, uploadJobPhoto, type PhotoSlot } from "@/lib/db/photos";
-import { canUseNativeCamera, capturePhoto, requestCameraPermission } from "@/lib/native/camera";
 import type { Job, Photo } from "@/lib/types";
 
 /**
@@ -29,30 +28,6 @@ function PhotoGroup({
   const [error, setError] = useState<string | null>(null);
 
   const photos = job[slot];
-
-  /**
-   * On device this opens the real camera rather than the file picker: fewer
-   * taps, and the plugin hands back an already-compressed JPEG instead of a
-   * multi-megabyte HEIC the browser would have to decode on the main thread.
-   */
-  async function onNativeCapture() {
-    if (!author) return;
-    setBusy(true);
-    setError(null);
-    try {
-      if (!(await requestCameraPermission())) {
-        setError("Camera access is off for this app. Turn it on in Settings.");
-        return;
-      }
-      const file = await capturePhoto();
-      if (!file) return;
-      await uploadJobPhoto(job.id, slot, file, job[slot], author);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not take that photo.");
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function onPick(files: FileList | null) {
     if (!files || files.length === 0 || !author) return;
@@ -94,9 +69,7 @@ function PhotoGroup({
         </h4>
         <button
           type="button"
-          onClick={() =>
-            canUseNativeCamera() ? void onNativeCapture() : inputRef.current?.click()
-          }
+          onClick={() => inputRef.current?.click()}
           disabled={busy}
           className="tap-target rounded-xl border border-line bg-surface-2 px-3 text-sm font-bold text-ink disabled:opacity-50"
         >

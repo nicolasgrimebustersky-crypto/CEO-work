@@ -47,6 +47,7 @@ function customerDoc(uid, overrides = {}) {
     firstName: "Test",
     lastName: "House",
     status: "lead",
+    pipelineStage: "new_lead",
     lat: 38.4,
     lng: -85.4,
     notes: [],
@@ -196,6 +197,12 @@ describe("customer author stamps", () => {
     await assertFails(updateDoc(doc(alice, "customers/c1"), { status: "customer" }));
     await assertFails(
       updateDoc(doc(alice, "customers/c1"), { status: "customer", updatedBy: "alice" }),
+    );
+  });
+
+  test("a customer with a bogus pipeline stage is rejected", async () => {
+    await assertFails(
+      addDoc(collection(alice, "customers"), customerDoc("alice", { pipelineStage: "won" })),
     );
   });
 

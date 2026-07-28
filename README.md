@@ -285,8 +285,8 @@ npm run emulators    # Firebase Auth + Firestore + Storage emulators
 npm run seed         # fill the running emulators with two crew + sample data
 npm run test:rules   # firestore.rules and storage.rules, 30 tests
 npm run test:api     # API auth and rate limits, 16 tests (boots its own stack)
-npm run build:native # static export for the iOS shell
-npm run ios:build    # export + sync into the iOS project
+npm run test:meta    # Meta webhook signature + field mapping, 17 tests
+npm run build:native # UI-only static export (no API routes)
 ```
 
 `test:api` is self-contained: it starts its own emulators on dedicated ports,
@@ -407,28 +407,45 @@ without any of them refetching.
 
 ---
 
-## iOS
+## Install it on a phone
 
-The app also builds as a native iOS app via Capacitor. `docs/APP_STORE.md` is
-the full guide, including the honest recommendation about distribution.
+The app installs from the browser — no app store, no review queue. Open it in
+**Safari** on iPhone, tap **Share → Add to Home Screen**. On Android, Chrome
+offers an install button. The app prompts you the first time and explains the
+iOS steps, since Safari has no install button of its own.
 
-```bash
-echo 'NEXT_PUBLIC_API_BASE_URL=https://your-app.vercel.app' >> .env.local
-npm run ios:build       # static bundle, verified free of API artifacts
-npx cap add ios         # first time, on a Mac
-npm run ios:open        # build, sync, open Xcode
-```
+Installed, it runs full screen, keeps its own launch image instead of flashing
+white, and survives being backgrounded far better than a browser tab — which
+matters when you reopen it at every third house.
 
-Two build targets come out of one codebase. `BUILD_TARGET=native` produces a
-static export with no API routes — those need a Node runtime and hold the Twilio
-and service-account credentials, which must never ship inside a binary anyone
-can unzip. The native bundle calls the same deployed `/api` endpoints the web
-app does, which is why `NEXT_PUBLIC_API_BASE_URL` is required for it.
+One honest limitation: iOS suspends a web app's geolocation when it is
+backgrounded, so a teammate's dot stops updating while their phone is locked.
+It resumes as soon as they open the app. Genuine background tracking would need
+a native build; that is in git history at `6661bdf` if it ever becomes worth it.
 
-**Distribution:** for two phones, TestFlight internal testing or Ad Hoc is a
-better fit than the App Store — no review queue, same build. The App Store path
-is documented and supported, but Guideline 4.2 exists to keep private tools like
-this one out, and there is no listing you need.
+## Lead pipeline
+
+Every customer sits at a stage: **New lead → Estimate sent → Accepted →
+Scheduled → Awaiting payment → Paid**, plus **Lost**. The board is at
+`/pipeline` — columns scroll horizontally, each showing its count and the money
+in it, and a lead that has sat untouched for a week is flagged.
+
+Stages move themselves off things you already do: sending a quote, accepting
+one, booking a job, marking it complete, recording payment. Automation only ever
+moves a lead *forward* — those events arrive out of order in real life (someone
+schedules from a phone call, then records the quote afterwards) and dragging a
+scheduled job back to "estimate sent" would be worse than not moving it. Going
+backwards is a deliberate manual choice.
+
+`pipelineStage` is separate from `customer.status` on purpose: one answers "what
+does this lead need next", the other decides the map pin colour. They are kept
+in step automatically, so marking a pin *not interested* also closes the deal.
+
+## Facebook / Instagram leads
+
+Lead form submissions land in the pipeline automatically, notify both phones,
+and get an acknowledgement text. Setup — including the long-lived Page token
+that everyone gets wrong — is in `docs/META_LEADS.md`.
 
 ## Security
 

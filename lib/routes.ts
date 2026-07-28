@@ -15,6 +15,7 @@ export const routes = {
   map: "/map",
   mapFocus: (customerId: string) => `/map?focus=${encodeURIComponent(customerId)}`,
   customers: "/customers",
+  pipeline: "/pipeline",
   customer: (customerId: string) => `/customers/detail?id=${encodeURIComponent(customerId)}`,
   schedule: "/schedule",
   dashboard: "/dashboard",

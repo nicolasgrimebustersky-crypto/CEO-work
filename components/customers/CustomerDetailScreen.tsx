@@ -11,7 +11,13 @@ import { Button } from "@/components/ui/Button";
 import { Chip, StatusPill, UserChip } from "@/components/ui/Chips";
 import { Sheet } from "@/components/ui/Sheet";
 import { Spinner } from "@/components/ui/Spinner";
-import { addNote, changeStatus, deleteCustomer } from "@/lib/db/customers";
+import {
+  addNote,
+  advancePipeline,
+  changeStatus,
+  deleteCustomer,
+  setPipelineStage,
+} from "@/lib/db/customers";
 import { completedRevenue, subscribeJobsForCustomer } from "@/lib/db/jobs";
 import { setQuoteStatus, subscribeQuotesForCustomer } from "@/lib/db/quotes";
 import {
@@ -134,6 +140,32 @@ export function CustomerDetailScreen() {
     try {
       await addNote(customer, noteText, "note", author);
       setNoteText("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Quote outcomes move the pipeline: accepting is the moment a lead becomes
+   * work, declining closes it. Recorded here rather than in setQuoteStatus so
+   * the stage note lands on the customer, where the timeline lives.
+   */
+  async function onQuoteStatus(quoteId: string, status: (typeof QUOTE_STATUSES)[number]) {
+    if (!customer || !author) return;
+    setBusy(true);
+    try {
+      await setQuoteStatus(quoteId, status);
+      const quote = quotes.find((q) => q.id === quoteId);
+      if (status === "accepted") {
+        await advancePipeline(customer, "estimate_accepted", author, {
+          value: quote?.amount,
+          reason: "Estimate accepted",
+        });
+      } else if (status === "declined") {
+        await setPipelineStage(customer, "lost", author, {
+          reason: "Estimate declined",
+        });
+      }
     } finally {
       setBusy(false);
     }
@@ -361,7 +393,7 @@ export function CustomerDetailScreen() {
                         key={status}
                         active={quote.status === status}
                         onClick={
-                          busy ? undefined : () => void setQuoteStatus(quote.id, status)
+                          busy ? undefined : () => void onQuoteStatus(quote.id, status)
                         }
                       >
                         {QUOTE_STATUS_LABEL[status]}

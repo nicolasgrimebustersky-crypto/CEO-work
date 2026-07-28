@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { isPublicRoute } from "@/lib/publicRoutes";
 import { BottomNav } from "./BottomNav";
 import { ConnectionBanner } from "./ConnectionBanner";
+import { InstallPrompt } from "./InstallPrompt";
 
 /**
  * `min-h-0` on the main region is what lets the map fill the viewport instead
@@ -23,6 +24,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex h-dvh flex-col">
+      <InstallPrompt />
       <ConnectionBanner />
       <main className="min-h-0 flex-1">{children}</main>
       <BottomNav />

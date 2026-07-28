@@ -1,5 +1,7 @@
 import type { Timestamp } from "firebase/firestore";
 
+import type { PipelineStage } from "./pipeline";
+
 export const CUSTOMER_STATUSES = [
   "lead",
   "quoted",
@@ -43,6 +45,8 @@ export const NOTE_KINDS = [
   "sms_in",
   "quote",
   "job",
+  "stage_change",
+  "lead_import",
 ] as const;
 export type NoteKind = (typeof NOTE_KINDS)[number];
 
@@ -89,6 +93,16 @@ export interface Customer {
   lastContactedBy: string | null;
   lastContactedByName: string | null;
   lifetimeValue: number;
+  /** Where this lead sits in the pipeline. See lib/pipeline.ts. */
+  pipelineStage: PipelineStage;
+  /** When it last moved, for the "sitting untouched" warning on the board. */
+  pipelineChangedAt: Timestamp | null;
+  /** Value of the open opportunity — the latest quote, until a job prices it. */
+  pipelineValue: number;
+  /** Set when the lead came from a Meta Lead Ad rather than a door knock. */
+  source: LeadSource;
+  /** Meta's leadgen id, kept so the same lead can never be imported twice. */
+  sourceLeadId: string | null;
   /** Last-write-wins conflict stamp, surfaced in the UI. */
   updatedAt: Timestamp | null;
   updatedBy: string | null;
@@ -118,6 +132,9 @@ export interface Job {
   jobNotes: string;
   completedAt: Timestamp | null;
   completedBy: string | null;
+  /** Null until the money actually lands. Drives the awaiting-payment stage. */
+  paidAt: Timestamp | null;
+  paidBy: string | null;
   createdAt: Timestamp;
   createdBy: string;
   createdByName: string;
@@ -138,6 +155,16 @@ export interface Quote {
   followUpCount: number;
   lastFollowUpAt: Timestamp | null;
 }
+
+export const LEAD_SOURCES = ["door_knock", "meta_lead_ad", "referral", "manual"] as const;
+export type LeadSource = (typeof LEAD_SOURCES)[number];
+
+export const LEAD_SOURCE_LABEL: Record<LeadSource, string> = {
+  door_knock: "Door knock",
+  meta_lead_ad: "Facebook / Instagram",
+  referral: "Referral",
+  manual: "Added by hand",
+};
 
 export interface LatLng {
   lat: number;

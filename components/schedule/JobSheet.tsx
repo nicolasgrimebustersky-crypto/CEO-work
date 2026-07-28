@@ -10,14 +10,17 @@ import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chips";
 import { SelectField, TextAreaField, TextField } from "@/components/ui/Field";
 import { Sheet } from "@/components/ui/Sheet";
+import { advancePipeline } from "@/lib/db/customers";
 import {
   completeJob,
   createJob,
   deleteJob,
+  markJobPaid,
+  markJobUnpaid,
   updateJob,
 } from "@/lib/db/jobs";
 import { notifyOthers } from "@/lib/db/notifications";
-import { customerName } from "@/lib/format";
+import { customerName, formatDateOnly, formatMoney } from "@/lib/format";
 import { DEFAULT_JOB_MINUTES } from "@/lib/schedule";
 import { jobConfirmationText, jobRescheduledText } from "@/lib/messages";
 import { SERVICE_LABEL } from "@/lib/status";
@@ -189,6 +192,14 @@ export function JobSheet({
           jobId: newId,
         });
 
+        // Booking the work is the moment the lead becomes a scheduled job.
+        if (customer) {
+          await advancePipeline(customer, "job_scheduled", author, {
+            value: priceValue,
+            reason: `Job scheduled for ${format(startDate, "EEE MMM d, h:mm a")}`,
+          });
+        }
+
         smsProblem = await trySendSms(
           selectedCustomer,
           jobConfirmationText(SERVICE_LABEL[serviceType], startDate),
@@ -215,6 +226,13 @@ export function JobSheet({
     setSaving(true);
     try {
       await completeJob(job.id, author);
+      // Work done but not settled — the lead sits in "awaiting payment" until
+      // someone records the money arriving.
+      if (customer) {
+        await advancePipeline(customer, "awaiting_payment", author, {
+          reason: "Work completed, payment outstanding",
+        });
+      }
       await notifyOthers(crewUids, author, {
         type: "job_completed",
         title: "Job completed",
@@ -225,6 +243,32 @@ export function JobSheet({
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not complete this job.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /**
+   * Recording payment closes the deal. This is the only thing that moves a lead
+   * out of "awaiting payment", which is what makes that column a real list of
+   * money owed rather than a stale pile.
+   */
+  async function togglePaid() {
+    if (!job || !author) return;
+    setSaving(true);
+    try {
+      if (job.paidAt) {
+        await markJobUnpaid(job.id, author);
+      } else {
+        await markJobPaid(job.id, author);
+        if (customer) {
+          await advancePipeline(customer, "paid", author, {
+            reason: `Payment received — ${formatMoney(job.price)}`,
+          });
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update payment.");
     } finally {
       setSaving(false);
     }
@@ -398,7 +442,18 @@ export function JobSheet({
               <Button variant="secondary" full onClick={() => void markComplete()} disabled={saving}>
                 Mark complete
               </Button>
-            ) : null}
+            ) : (
+              <Button
+                variant={job.paidAt ? "secondary" : "primary"}
+                full
+                onClick={() => void togglePaid()}
+                disabled={saving}
+              >
+                {job.paidAt
+                  ? `Paid ${formatDateOnly(job.paidAt)} — undo`
+                  : `Mark paid (${formatMoney(job.price)})`}
+              </Button>
+            )}
             {job.status !== "cancelled" ? (
               <Button variant="secondary" full onClick={() => void cancelJob()} disabled={saving}>
                 Cancel job

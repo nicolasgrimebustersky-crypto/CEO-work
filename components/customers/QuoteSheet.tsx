@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chips";
 import { TextField } from "@/components/ui/Field";
 import { Sheet } from "@/components/ui/Sheet";
-import { addNote, changeStatus } from "@/lib/db/customers";
+import { addNote, advancePipeline } from "@/lib/db/customers";
 import { createQuote } from "@/lib/db/quotes";
 import { formatMoney } from "@/lib/format";
 import { SERVICE_LABEL } from "@/lib/status";
@@ -66,9 +66,12 @@ export function QuoteSheet({
         author,
       );
 
-      if (customer.status === "lead") {
-        await changeStatus(customer, "quoted", author);
-      }
+      // Advancing also flips the map pin to "quoted" via syncStatusToStage,
+      // so the two never disagree about whether this house has been quoted.
+      await advancePipeline(customer, "estimate_sent", author, {
+        value,
+        reason: `Estimate for ${formatMoney(value)} sent`,
+      });
 
       if (alsoText && customer.phone) {
         smsProblem = await trySendSms(
