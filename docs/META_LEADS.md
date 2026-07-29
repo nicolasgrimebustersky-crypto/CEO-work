@@ -143,7 +143,7 @@ lead follow-up, and keep the STOP line in the message; it is what stops the
 whole number getting flagged.
 
 To change the wording, edit `acknowledge()` in
-`app/api/meta/leads/route.api.ts`. To turn it off entirely, delete that call —
+`app/api/meta/leads/route.ts`. To turn it off entirely, delete that call —
 the notification to both phones is separate and will still fire.
 
 ---

@@ -4,20 +4,6 @@ import withPWAInit from "next-pwa";
 import type { NextConfig } from "next";
 
 /**
- * Two build targets from one codebase.
- *
- *   (default)            -> the Vercel deployment: server-rendered, with the
- *                           /api routes for SMS, the Meta webhook and the cron
- *   BUILD_TARGET=native  -> a UI-only static export
- *
- * The static target exists because the API routes hold the Twilio, Meta and
- * service-account credentials and need a Node runtime, so any UI-only bundle
- * has to exclude them and call the deployed endpoints instead. The app itself
- * installs from the browser via Add to Home Screen and uses the default build.
- */
-const isNative = process.env.BUILD_TARGET === "native";
-
-/**
  * Demo mode ships an invented dataset instead of talking to Firebase. See
  * lib/demo/enabled.ts. The flag is read here as well so the fixtures can be
  * aliased away in a normal build — the `isDemoMode` branches are already dead
@@ -118,60 +104,30 @@ const nextConfig: NextConfig = {
     return config;
   },
 
-  /**
-   * API handlers are named `route.api.ts`, not `route.ts`.
-   *
-   * `output: 'export'` refuses to build any route that needs a server, so the
-   * native bundle must not contain them at all. Listing "api.ts" as a page
-   * extension only for the web build makes those files routes there and inert
-   * files everywhere else — no moving source around mid-build, and no way to
-   * accidentally ship the Twilio credentials inside the app binary.
-   */
-  pageExtensions: isNative
-    ? ["tsx", "ts", "jsx", "js"]
-    : ["api.ts", "tsx", "ts", "jsx", "js"],
   // Don't advertise the framework and version to scanners.
   poweredByHeader: false,
 
-  // A static export has no server to set response headers, and Next ignores
-  // headers() entirely under `output: 'export'`. The native shell gets its
-  // policy from the CSP meta tag in app/layout.tsx instead.
-  ...(isNative
-    ? {
-        output: "export" as const,
-        // No image optimiser in a static export.
-        images: { unoptimized: true },
-        // Capacitor serves from the filesystem, where /customers/detail has to
-        // resolve to a real file.
-        trailingSlash: true,
-      }
-    : {
-        async headers() {
-          return [
-            { source: "/:path*", headers: SECURITY_HEADERS },
-            {
-              // API responses must never be cached by a proxy or the worker.
-              source: "/api/:path*",
-              headers: [
-                { key: "Cache-Control", value: "no-store, max-age=0" },
-                { key: "X-Robots-Tag", value: "noindex, nofollow" },
-              ],
-            },
-          ];
-        },
-      }),
-  ...(isNative
-    ? {}
-    : {
-        images: {
-          // Job photos live in Firebase Storage; download URLs come back on
-          // these hosts with an access token in the query string.
-          remotePatterns: [
-            { protocol: "https", hostname: "firebasestorage.googleapis.com" },
-            { protocol: "https", hostname: "storage.googleapis.com" },
-          ],
-        },
-      }),
+  async headers() {
+    return [
+      { source: "/:path*", headers: SECURITY_HEADERS },
+      {
+        // API responses must never be cached by a proxy or the worker.
+        source: "/api/:path*",
+        headers: [
+          { key: "Cache-Control", value: "no-store, max-age=0" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+        ],
+      },
+    ];
+  },
+  images: {
+    // Job photos live in Firebase Storage; download URLs come back on these
+    // hosts with an access token in the query string.
+    remotePatterns: [
+      { protocol: "https", hostname: "firebasestorage.googleapis.com" },
+      { protocol: "https", hostname: "storage.googleapis.com" },
+    ],
+  },
 };
 
 const withPWA = withPWAInit({
@@ -179,10 +135,7 @@ const withPWA = withPWAInit({
   register: true,
   skipWaiting: true,
   // A service worker in dev intercepts HMR and serves stale bundles.
-  // Off in development (it intercepts HMR) and off in the native build, where
-  // the bundle is already on disk and a worker caching it against itself just
-  // makes app updates unpredictable.
-  disable: process.env.NODE_ENV === "development" || isNative,
+  disable: process.env.NODE_ENV === "development",
   reloadOnOnline: false,
   cacheOnFrontEndNav: true,
   fallbacks: { document: "/offline" },
