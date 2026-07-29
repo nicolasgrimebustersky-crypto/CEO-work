@@ -1,0 +1,125 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Grime Busters CRM design tokens.
+
+   Constraints this palette is built around: the app is used one-handed, in
+   portrait, outdoors, in direct sun. So every foreground colour is checked for
+   contrast against the surface it sits on, and there is no thin grey body text
+   anywhere — `--color-muted` is the lightest text tone allowed and it is still
+   ~7:1 on the base background.
+--------------------------------------------------------------------------- */
+
+@theme {
+  --color-base: #0b0f14;
+  --color-surface: #151b23;
+  --color-surface-2: #1f2831;
+  --color-surface-3: #2b3745;
+  --color-line: #35424f;
+
+  --color-ink: #f4f8fb;
+  --color-muted: #b3c2d0;
+
+  --color-accent: #00d9ff;
+  --color-accent-ink: #00232b;
+
+  /* Customer pin colours — fixed by the status model, do not repurpose. */
+  --color-status-lead: #9aa7b4;
+  --color-status-quoted: #facc15;
+  --color-status-customer: #22c55e;
+  --color-status-not-interested: #ef4444;
+  --color-status-do-not-knock: #0d0d0d;
+
+  /* Per-user identity colours. Assigned in lib/users.ts, used identically for
+     map dots, attribution stamps and calendar blocks. */
+  --color-user-1: #2f80ff;
+  --color-user-2: #ff4fd8;
+
+  --color-danger: #ef4444;
+  --color-warn: #facc15;
+  --color-ok: #22c55e;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--color-base);
+  color: var(--color-ink);
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Stop rubber-band scroll fighting the map drag gesture. */
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Never let iOS zoom the page when a field is focused — it breaks the map. */
+input,
+select,
+textarea,
+button {
+  font-size: 16px;
+}
+
+@utility tap-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Bottom-anchored chrome has to clear the home indicator. */
+@utility pb-safe {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
+@utility pt-safe {
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+}
+
+/* Google's map UI injects its own focus rings; keep ours consistent. */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* The map fills the viewport; nothing outside a scroll container scrolls. */
+.gm-style button:focus {
+  outline: none;
+}
+
+@keyframes gb-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  70% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+@keyframes gb-sheet-in {
+  from {
+    transform: translateY(12%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
