@@ -13,7 +13,6 @@
     "test:api": "bash scripts/test-api.sh",
     "seed": "node scripts/seed-test-data.mjs",
     "test": "npm run typecheck && npm run lint && npm run test:meta && npm run test:rules",
-    "build:native": "BUILD_TARGET=native next build",
     "test:meta": "node --experimental-strip-types --test tests/meta.parse.test.mjs"
   },
   "dependencies": {
