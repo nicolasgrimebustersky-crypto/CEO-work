@@ -5,9 +5,11 @@
  *   GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json \
  *     node scripts/import-legacy-invoices.mjs --file /path/to/invoices.csv [--dry-run]
  *
- * This is the invoice history from the system used *before* Flyra —
- * September 2025 to July 2026, so it both predates and overlaps the Flyra
- * export that scripts/import-flyra.mjs already brought in.
+ * This is the Invoice Fly history, September 2025 to July 2026. The business
+ * ran Invoice Fly for everything through a stretch when Flyra was not in use,
+ * and both were live around the changeover — so this file predates the Flyra
+ * export, overlaps it, and is the authoritative record for the window in
+ * between.
  *
  * It carries the outstanding money. Flyra reported $1,399.20 owed; this file
  * has roughly ten times that, almost all commercial. Those debts were
@@ -136,6 +138,19 @@ const ALIASES = new Map(
  * human decides rather than this script.
  */
 const FLAG_FOR_REVIEW = new Set([norm("Christine's Mom"), norm("Jackie Boon")]);
+
+/**
+ * Same-client, same-amount invoices issued the same day. The pattern that
+ * turned out to be a duplicate on Kim Nestor's Flyra record, so it is worth
+ * surfacing rather than trusting — but not worth halving a total over, since
+ * two houses at one price is equally possible.
+ */
+const DUPLICATE_SUSPECTS = {
+  [norm("Carry Hearn")]:
+    "Two $795.00 invoices (8895 and 8897) were both issued 4/8/2026 and both marked " +
+    "paid, on 4/18 and 4/21. If that is one job billed twice, the lifetime value here " +
+    "is double the real figure — check against deposits before treating $1,590 as earned.",
+};
 const REVIEW_HINT = {
   [norm("Christine's Mom")]:
     "Legacy invoice named \"Christine's Mom\" — possibly related to Christine Mccloy. " +
@@ -235,13 +250,15 @@ for (const [, g] of groups) {
       ? `\n\n${overlap.length} of these already counted from the Flyra import and were not added again.`
       : "");
 
+  const suspect = DUPLICATE_SUSPECTS[norm(g.client)];
+
   if (match) {
     const alreadyRun = (match.notes ?? []).some((n) => String(n.text).startsWith(LEGACY_MARKER));
     if (alreadyRun && !FORCE) {
       console.log(`  skipped ${match.firstName} ${match.lastName} — already has a legacy import note`);
       continue;
     }
-    updates.push({ customer: match, addPaid: paid, owed: g.owed, email, lastPaid, summary });
+    updates.push({ customer: match, addPaid: paid, owed: g.owed, email, lastPaid, summary, suspect });
   } else {
     const [first, ...rest] = g.client.trim().split(/\s+/);
     creations.push({
@@ -305,6 +322,7 @@ const batch = db.batch();
 
 for (const u of updates) {
   const notes = [...(u.customer.notes ?? []), note(u.summary, "lead_import")];
+  if (u.suspect) notes.push(note(u.suspect, "note"));
   const patch = {
     notes,
     lifetimeValue: (u.customer.lifetimeValue ?? 0) + u.addPaid,
