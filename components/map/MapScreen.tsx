@@ -34,12 +34,18 @@ export function MapScreen() {
         <div className="max-w-sm">
           <h2 className="text-xl font-black text-ink">Map key missing</h2>
           <p className="mt-2 text-base font-semibold text-muted">
-            Set <code className="rounded bg-surface-2 px-1.5 py-0.5 text-ink">
+            <code className="rounded bg-surface-2 px-1.5 py-0.5 text-ink">
               NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
             </code>{" "}
-            in <code className="rounded bg-surface-2 px-1.5 py-0.5 text-ink">.env.local</code>{" "}
-            and restart. The key needs Maps JavaScript API, Geocoding API and Places API
-            enabled.
+            is not set in this build. On Vercel, add it under Settings →
+            Environment Variables and <strong>redeploy</strong> — it is read at build
+            time, so an existing deployment will not pick it up. Running locally, put
+            it in{" "}
+            <code className="rounded bg-surface-2 px-1.5 py-0.5 text-ink">.env.local</code>{" "}
+            and restart.
+          </p>
+          <p className="mt-3 text-base font-semibold text-muted">
+            The key needs Maps JavaScript API, Geocoding API and Routes API enabled.
           </p>
         </div>
       </div>
@@ -47,7 +53,7 @@ export function MapScreen() {
   }
 
   return (
-    <APIProvider apiKey={apiKey} libraries={["marker", "geocoding", "places"]}>
+    <APIProvider apiKey={apiKey} libraries={["marker", "geocoding"]}>
       <MapCanvas mapId={mapId} />
     </APIProvider>
   );
