@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useCustomers } from "@/components/providers/CustomersProvider";
 import { useLocationSharing } from "@/components/providers/LocationSharingProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
+import { GeocodeBackfill } from "./GeocodeBackfill";
 import { applyFilters, activeFilterCount, EMPTY_FILTERS } from "@/lib/filters";
 import type { CustomerFilters } from "@/lib/filters";
 import { DEFAULT_ZOOM, OLDHAM_COUNTY_CENTER } from "@/lib/geo";
@@ -115,6 +116,7 @@ function MapCanvas({ mapId }: { mapId: string }) {
 
   return (
     <div className="relative h-full w-full">
+      <GeocodeBackfill customers={customers} />
       <Map
         mapId={mapId}
         defaultCenter={OLDHAM_COUNTY_CENTER}
