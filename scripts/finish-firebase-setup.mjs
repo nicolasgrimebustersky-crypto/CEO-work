@@ -44,7 +44,10 @@ import { getStorage } from "firebase-admin/storage";
 import { GoogleAuth } from "google-auth-library";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const RULES_PATH = path.join(ROOT, "firestore.rules");
+// Both rules files carry the same uid allowlist and both must be patched.
+// Missing the Storage one leaves photo upload denied while everything else
+// works, which is a confusing way to fail.
+const RULES_FILES = ["firestore.rules", "storage.rules"];
 const PLACEHOLDERS = ["REPLACE_WITH_FIRST_UID", "REPLACE_WITH_SECOND_UID"];
 const DRY_RUN = process.argv.includes("--dry-run");
 const RULES_ONLY = process.argv.includes("--rules-only");
@@ -132,33 +135,40 @@ console.log(`  ${second.uid}  ${second.email ?? ""}`);
 }
 
 // ---------------------------------------------------------------- allowlist
-let rules = readFileSync(RULES_PATH, "utf8");
-const stillPlaceheld = PLACEHOLDERS.some((p) => rules.includes(p));
+console.log("");
+for (const file of RULES_FILES) {
+  const fullPath = path.join(ROOT, file);
+  const rules = readFileSync(fullPath, "utf8");
+  const placeheld = PLACEHOLDERS.some((placeholder) => rules.includes(placeholder));
 
-if (RULES_ONLY) {
-  console.log(
-    stillPlaceheld
-      ? "\nRules still hold the uid placeholders, so they deny every caller. " +
-          "That is the safe state until the crew accounts exist."
-      : "\nRules already carry real uids.",
-  );
-} else if (stillPlaceheld) {
-  rules = rules
-    .replaceAll(PLACEHOLDERS[0], first.uid)
-    .replaceAll(PLACEHOLDERS[1], second.uid);
-  if (DRY_RUN) {
-    console.log("\nWould write both uids into firestore.rules.");
-  } else {
-    writeFileSync(RULES_PATH, rules);
-    console.log("\nWrote both uids into firestore.rules.");
+  if (RULES_ONLY) {
+    console.log(
+      placeheld
+        ? `${file}: placeholders still in, so it denies every caller — ` +
+            `the safe state until the crew accounts exist.`
+        : `${file}: already carries real uids.`,
+    );
+    continue;
   }
-} else if (rules.includes(first.uid) && rules.includes(second.uid)) {
-  console.log("\nfirestore.rules already lists both uids.");
-} else {
-  console.log(
-    "\nfirestore.rules has no placeholders but does not list these uids. " +
-      "Left untouched — check it by hand before deploying.",
-  );
+
+  if (placeheld) {
+    const patched = rules
+      .replaceAll(PLACEHOLDERS[0], first.uid)
+      .replaceAll(PLACEHOLDERS[1], second.uid);
+    if (DRY_RUN) {
+      console.log(`${file}: would write both uids.`);
+    } else {
+      writeFileSync(fullPath, patched);
+      console.log(`${file}: wrote both uids.`);
+    }
+  } else if (rules.includes(first.uid) && rules.includes(second.uid)) {
+    console.log(`${file}: already lists both uids.`);
+  } else {
+    console.log(
+      `${file}: no placeholders, but these uids are not in it. ` +
+        `Left untouched — check it by hand before deploying.`,
+    );
+  }
 }
 
 if (DRY_RUN) {
@@ -207,13 +217,19 @@ async function deployRules(sourcePath, releaseId, label) {
   if (!created.ok) throw new Error(`${label}: ruleset rejected — ${created.text.slice(0, 300)}`);
 
   const rulesetName = JSON.parse(created.text).name;
+  // The Storage release id contains a literal slash ("firebase.storage/<bucket>").
+  // It stays unescaped inside the request body, but has to be escaped when it
+  // forms part of a URL path.
   const releaseName = `projects/${projectId}/releases/${releaseId}`;
+  const releaseUrlPath =
+    `projects/${projectId}/releases/` +
+    releaseId.split("/").map(encodeURIComponent).join("/");
 
   // A release is created the first time and updated every time after, so try
   // the update first and fall back to create.
   let released = await api(
     "PATCH",
-    `https://firebaserules.googleapis.com/v1/${releaseName}`,
+    `https://firebaserules.googleapis.com/v1/${releaseUrlPath}`,
     { release: { name: releaseName, rulesetName } },
   );
   if (!released.ok) {
@@ -277,7 +293,7 @@ try {
   if (storageReady) {
     await deployRules(
       "storage.rules",
-      `firebase.storage%2F${projectId}.firebasestorage.app`,
+      `firebase.storage/${projectId}.firebasestorage.app`,
       "Storage rules",
     );
   } else {

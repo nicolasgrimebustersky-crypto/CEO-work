@@ -10,10 +10,11 @@
  * access beyond the two crew accounts.
  */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { test, before, after, beforeEach, describe } from "node:test";
+
+import { rulesWithTestCrew } from "./rulesSource.mjs";
 
 import {
   assertFails,
@@ -107,9 +108,7 @@ function stampedUpdate(uid, fields) {
 }
 
 before(async () => {
-  const rules = readFileSync(join(repoRoot, "firestore.rules"), "utf8")
-    .replace("REPLACE_WITH_FIRST_UID", "alice")
-    .replace("REPLACE_WITH_SECOND_UID", "bob");
+  const rules = rulesWithTestCrew(join(repoRoot, "firestore.rules"));
 
   testEnv = await initializeTestEnvironment({
     projectId: "gb-rules-test",

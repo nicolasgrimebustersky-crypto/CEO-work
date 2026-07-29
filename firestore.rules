@@ -22,8 +22,8 @@ service cloud.firestore {
     function isCrew() {
       return request.auth != null
         && request.auth.uid in [
-             'REPLACE_WITH_FIRST_UID',
-             'REPLACE_WITH_SECOND_UID'
+             'Bzo7rclax4SdT7PaAua1monNxXG3',
+             'QLMsTAHbbceHBAWBXPqtScGdGon2'
            ];
     }
 

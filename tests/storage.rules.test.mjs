@@ -8,10 +8,11 @@
  * allowlist that guards Firestore has to guard these, and the size and
  * content-type caps have to actually hold.
  */
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { test, before, after, describe } from "node:test";
+
+import { rulesWithTestCrew } from "./rulesSource.mjs";
 
 import {
   assertFails,
@@ -33,9 +34,7 @@ let mallory;
 let anon;
 
 before(async () => {
-  const rules = readFileSync(join(repoRoot, "storage.rules"), "utf8")
-    .replace("REPLACE_WITH_FIRST_UID", "alice")
-    .replace("REPLACE_WITH_SECOND_UID", "bob");
+  const rules = rulesWithTestCrew(join(repoRoot, "storage.rules"));
 
   testEnv = await initializeTestEnvironment({
     projectId: "gb-rules-test",
