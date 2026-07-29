@@ -115,8 +115,9 @@ function MapCanvas({ mapId }: { mapId: string }) {
   const now = Date.now();
 
   return (
-    <div className="relative h-full w-full">
+    <div className="flex h-full w-full flex-col">
       <GeocodeBackfill customers={customers} />
+      <div className="relative min-h-0 flex-1">
       <Map
         mapId={mapId}
         defaultCenter={OLDHAM_COUNTY_CENTER}
@@ -265,7 +266,8 @@ function MapCanvas({ mapId }: { mapId: string }) {
         onClose={() => setFilterOpen(false)}
       />
 
-      <CustomerPreviewSheet customer={selected} onClose={() => setSelectedId(null)} />
+        <CustomerPreviewSheet customer={selected} onClose={() => setSelectedId(null)} />
+      </div>
     </div>
   );
 }

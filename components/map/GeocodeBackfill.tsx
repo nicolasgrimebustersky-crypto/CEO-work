@@ -50,7 +50,14 @@ export function GeocodeBackfill({ customers }: { customers: Customer[] }) {
 
   async function run() {
     if (!geocodingLib || !author) return;
-    const geocoder = new geocodingLib.Geocoder();
+
+    let geocoder: google.maps.Geocoder;
+    try {
+      geocoder = new geocodingLib.Geocoder();
+    } catch {
+      setProgress({ done: 0, total: 0, placed: 0, failed: ["Google Maps did not load"] });
+      return;
+    }
     const state: Progress = { done: 0, total: unplaced.length, placed: 0, failed: [] };
     setProgress({ ...state });
 
@@ -75,7 +82,7 @@ export function GeocodeBackfill({ customers }: { customers: Customer[] }) {
   }
 
   return (
-    <div className="absolute inset-x-0 top-0 z-10 border-b border-line bg-surface-1/95 px-3 py-2.5 backdrop-blur">
+    <div className="pt-safe shrink-0 border-b border-line bg-surface-1 px-3 pb-2.5">
       {progress === null ? (
         <div className="flex items-center gap-3">
           <p className="min-w-0 flex-1 text-sm font-bold text-ink">
@@ -116,7 +123,10 @@ export function GeocodeBackfill({ customers }: { customers: Customer[] }) {
           {finished ? (
             <div className="mt-2 flex items-start gap-3">
               <p className="min-w-0 flex-1 text-sm font-semibold text-muted">
-                {progress.failed.length === 0
+                {progress.total === 0
+                  ? "Google Maps did not load, so nothing could be placed. Check the " +
+                    "Maps API key's website restrictions in Google Cloud."
+                  : progress.failed.length === 0
                   ? "Every address was matched."
                   : `${progress.failed.length} could not be matched — the address is partial or ` +
                     `Google only found the town. Open the record and drop the pin by hand: ` +
