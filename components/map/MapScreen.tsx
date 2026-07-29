@@ -8,6 +8,7 @@ import { useCustomers } from "@/components/providers/CustomersProvider";
 import { useLocationSharing } from "@/components/providers/LocationSharingProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { GeocodeBackfill } from "./GeocodeBackfill";
+import { MapBoundary, MapUnavailable } from "./MapBoundary";
 import { applyFilters, activeFilterCount, EMPTY_FILTERS } from "@/lib/filters";
 import type { CustomerFilters } from "@/lib/filters";
 import { DEFAULT_ZOOM, OLDHAM_COUNTY_CENTER } from "@/lib/geo";
@@ -117,7 +118,8 @@ function MapCanvas({ mapId }: { mapId: string }) {
   return (
     <div className="flex h-full w-full flex-col">
       <GeocodeBackfill customers={customers} />
-      <div className="relative min-h-0 flex-1">
+      <MapBoundary fallback={(error) => <MapUnavailable error={error} />}>
+        <div className="relative min-h-0 flex-1">
       <Map
         mapId={mapId}
         defaultCenter={OLDHAM_COUNTY_CENTER}
@@ -266,8 +268,9 @@ function MapCanvas({ mapId }: { mapId: string }) {
         onClose={() => setFilterOpen(false)}
       />
 
-        <CustomerPreviewSheet customer={selected} onClose={() => setSelectedId(null)} />
-      </div>
+          <CustomerPreviewSheet customer={selected} onClose={() => setSelectedId(null)} />
+        </div>
+      </MapBoundary>
     </div>
   );
 }
