@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "flyra": {
+      "type": "http",
+      "url": "https://mcp.flyra.io/mcp",
+      "headers": {
+        "Authorization": "Bearer ${FLYRA_API_KEY}"
+      }
+    }
+  }
+}
