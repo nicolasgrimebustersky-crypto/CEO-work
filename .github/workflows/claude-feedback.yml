@@ -36,11 +36,10 @@ jobs:
       - uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          prompt: >-
-            Address every actionable request in the triggering @claude review
-            comment. Read CLAUDE.md and AGENTS.md first. Make the smallest safe
-            changes, run the relevant verification commands, commit only the
-            fixes to the pull-request branch, and reply with the files changed
-            and commands run. Never merge, change branch-protection settings,
-            expose secrets, or bypass CI.
-          claude_args: '--max-turns 20'
+          claude_args: >-
+            --system-prompt "Read CLAUDE.md and AGENTS.md first. Address every
+            actionable request in the triggering review comment with the
+            smallest safe change. Run relevant verification, commit only the
+            fixes to the pull-request branch, and reply with files changed and
+            commands run. Never merge, change branch-protection settings,
+            expose secrets, or bypass CI." --max-turns 20
