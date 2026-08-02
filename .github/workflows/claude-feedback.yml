@@ -1,0 +1,46 @@
+name: Claude review feedback
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+# A workflow token may only modify the pull request that received an authorized
+# review request. Repository maintainers must set ANTHROPIC_API_KEY as an Actions
+# secret before this workflow can run.
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  address-review:
+    # Limit Claude commands to people trusted to modify this repository, and
+    # only run on pull-request conversations that explicitly mention Claude.
+    if: >-
+      contains(github.event.comment.body, '@claude') &&
+      (
+        github.actor == 'github-actions[bot]' ||
+        github.event.comment.author_association == 'OWNER' ||
+        github.event.comment.author_association == 'MEMBER' ||
+        github.event.comment.author_association == 'COLLABORATOR'
+      ) &&
+      (
+        github.event_name == 'pull_request_review_comment' ||
+        github.event.issue.pull_request != null
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: >-
+            --system-prompt "Read CLAUDE.md and AGENTS.md first. Address every
+            actionable request in the triggering review comment with the
+            smallest safe change. Run relevant verification, commit only the
+            fixes to the pull-request branch, and reply with files changed and
+            commands run. Never merge, change branch-protection settings,
+            expose secrets, or bypass CI." --max-turns 20
