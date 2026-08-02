@@ -8,8 +8,8 @@ This repository uses pull requests as the only path to protected branches.
   task. Flag missed requirements, incorrect behavior, security or privacy
   regressions, untested changes, and unnecessary scope.
 - Reviews must be specific: identify the file and behavior, explain the impact,
-  and state the expected correction. Use `@claude` for feedback that Claude Code
-  should implement on the existing pull-request branch.
+  and state the expected correction. The automated Codex workflow sends
+  `@claude` feedback for Claude-authored pull requests.
 - Do not approve a pull request merely because it builds. Relevant tests,
   linting, type checks, security-rule tests, and build verification must be
   considered for the change.
@@ -24,10 +24,11 @@ This repository uses pull requests as the only path to protected branches.
 
 ## Required human configuration
 
-- Protect `main` in GitHub: require pull requests, passing CI, and at least one
-  approving review; disable direct pushes and force pushes.
+- Protect `main` in GitHub: require pull requests and passing CI; disable direct
+  pushes and force pushes. The `Codex review gate` must pass before a
+  Claude-authored pull request is eligible for auto-merge.
 - Configure the Claude GitHub Action with the `ANTHROPIC_API_KEY` repository
   secret and install the Claude GitHub App with access only to this repository.
-- A Codex review still needs to be requested on each pull request through the
-  connected GitHub integration; the `@claude` comment is the handoff back to
-  Claude after review feedback is posted.
+- Claude-authored pull requests are reviewed automatically. Codex posts
+  `@claude` feedback when corrections are needed; after Claude fixes it, a clean
+  review enables squash auto-merge.

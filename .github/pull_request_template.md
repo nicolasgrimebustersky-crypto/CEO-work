@@ -8,7 +8,7 @@
 
 ## AI review loop
 
-- [ ] I requested a Codex review before merge.
+- [ ] Claude-authored PRs wait for the automatic Codex review gate before merge.
 - [ ] All actionable `@claude` review comments are resolved or explicitly
       explained in the pull request.
 - [ ] This pull request does not expose secrets or weaken security controls.
