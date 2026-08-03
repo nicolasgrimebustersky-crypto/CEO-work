@@ -4,6 +4,7 @@ import { AuthGate } from "@/components/auth/AuthGate";
 import { AuthProvider } from "@/components/providers/AuthProvider";
 import { ConnectionProvider } from "@/components/providers/ConnectionProvider";
 import { CustomersProvider } from "@/components/providers/CustomersProvider";
+import { DocumentsProvider } from "@/components/providers/DocumentsProvider";
 import { JobsProvider } from "@/components/providers/JobsProvider";
 import { LocationSharingProvider } from "@/components/providers/LocationSharingProvider";
 import { NotificationsProvider } from "@/components/providers/NotificationsProvider";
@@ -60,13 +61,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <TeamProvider>
               <CustomersProvider>
                 <JobsProvider>
-                  <NotificationsProvider>
-                    <ConnectionProvider>
-                      <LocationSharingProvider>
-                        <AppShell>{children}</AppShell>
-                      </LocationSharingProvider>
-                    </ConnectionProvider>
-                  </NotificationsProvider>
+                  <DocumentsProvider>
+                    <NotificationsProvider>
+                      <ConnectionProvider>
+                        <LocationSharingProvider>
+                          <AppShell>{children}</AppShell>
+                        </LocationSharingProvider>
+                      </ConnectionProvider>
+                    </NotificationsProvider>
+                  </DocumentsProvider>
                 </JobsProvider>
               </CustomersProvider>
             </TeamProvider>

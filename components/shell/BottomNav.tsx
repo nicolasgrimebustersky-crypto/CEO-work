@@ -3,13 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+/**
+ * Seven tabs is the ceiling for a 390px phone — the labels are already at
+ * eleven pixels. Anything else that needs a home goes behind one of these
+ * rather than getting its own tab.
+ */
 const TABS = [
   { href: "/map", label: "Map", icon: MapIcon },
-  { href: "/schedule", label: "Schedule", icon: CalendarIcon },
-  { href: "/pipeline", label: "Pipeline", icon: PipelineIcon },
-  { href: "/customers", label: "Customers", icon: ListIcon },
+  { href: "/schedule", label: "Jobs", icon: CalendarIcon },
+  { href: "/invoices", label: "Money", icon: InvoiceIcon },
+  { href: "/pipeline", label: "Leads", icon: PipelineIcon },
+  { href: "/customers", label: "People", icon: ListIcon },
   { href: "/dashboard", label: "Home", icon: ChartIcon },
-  { href: "/account", label: "Account", icon: PersonIcon },
+  { href: "/account", label: "You", icon: PersonIcon },
 ] as const;
 
 export function BottomNav() {
@@ -69,6 +75,26 @@ function CalendarIcon({ active }: { active: boolean }) {
       />
       <path
         d="M3.5 10h17M8 3v4m8-4v4"
+        stroke="currentColor"
+        strokeWidth={active ? 2.4 : 1.9}
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function InvoiceIcon({ active }: { active: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" className="size-6" aria-hidden="true">
+      <path
+        d="M6 3h12v18l-3-1.6-3 1.6-3-1.6L6 21V3Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={active ? 2.4 : 1.9}
+        strokeLinejoin="round"
+      />
+      <path
+        d="M9.5 8h5M9.5 12h5"
         stroke="currentColor"
         strokeWidth={active ? 2.4 : 1.9}
         strokeLinecap="round"

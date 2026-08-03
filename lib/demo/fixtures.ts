@@ -1,6 +1,16 @@
 import { Timestamp } from "firebase/firestore";
 
 import type { AppNotification } from "@/lib/db/notifications";
+import {
+  computeTotals,
+  DEFAULT_TAX_RATE_PCT,
+  sumPayments,
+  type BusinessDocument,
+  type DocumentKind,
+  type DocumentStatus,
+  type LineItem,
+  type Payment,
+} from "@/lib/documents";
 import type { PipelineStage } from "@/lib/pipeline";
 import type { AppUser, Customer, Job, Note, Quote } from "@/lib/types";
 
@@ -517,6 +527,183 @@ export const demoQuotes: Quote[] = [
     followUpCount: 2,
     lastFollowUpAt: ago(9),
   },
+];
+
+/**
+ * Estimates and invoices for the demo.
+ *
+ * Numbers continue from where Invoice Fly left off, same as the real books, so
+ * the sequence in the preview looks like the sequence in production. The spread
+ * is deliberate: one draft being written, one estimate sitting with a customer,
+ * one invoice half paid and one settled — every state the screen can show.
+ */
+function line(
+  id: string,
+  description: string,
+  quantity: number,
+  unitPrice: number,
+  taxable = true,
+): LineItem {
+  return { id, description, quantity, unitPrice, taxable };
+}
+
+function demoDoc(
+  id: string,
+  number: string,
+  kind: DocumentKind,
+  status: DocumentStatus,
+  customerId: string,
+  customerName: string,
+  serviceType: Customer["serviceTypes"][number],
+  lineItems: LineItem[],
+  options: {
+    discount?: number;
+    issuedDaysAgo: number;
+    dueInDays?: number;
+    payments?: Payment[];
+    notes?: string;
+    convertedFromId?: string;
+  },
+): BusinessDocument {
+  const discount = options.discount ?? 0;
+  const totals = computeTotals(lineItems, discount, DEFAULT_TAX_RATE_PCT);
+  const payments = options.payments ?? [];
+  const amountPaid = sumPayments(payments);
+
+  return {
+    id,
+    number,
+    kind,
+    status,
+    customerId,
+    customerName,
+    serviceType,
+    lineItems,
+    discount: totals.discount,
+    taxRatePct: DEFAULT_TAX_RATE_PCT,
+    subtotal: totals.subtotal,
+    taxAmount: totals.taxAmount,
+    total: totals.total,
+    payments,
+    amountPaid,
+    balanceDue: Number((totals.total - amountPaid).toFixed(2)),
+    notes: options.notes ?? "",
+    issuedAt: ago(options.issuedDaysAgo),
+    dueAt:
+      options.dueInDays === undefined
+        ? null
+        : ago(options.issuedDaysAgo - options.dueInDays),
+    sentAt: status === "draft" ? null : ago(options.issuedDaysAgo),
+    settledAt: status === "paid" || status === "accepted" ? ago(1) : null,
+    convertedFromId: options.convertedFromId ?? null,
+    createdAt: ago(options.issuedDaysAgo),
+    createdBy: DEMO_NICK,
+    createdByName: "Nick",
+    updatedAt: ago(options.issuedDaysAgo),
+    updatedBy: DEMO_NICK,
+    updatedByName: "Nick",
+  };
+}
+
+export const demoDocuments: BusinessDocument[] = [
+  demoDoc(
+    "dd-1",
+    "8904",
+    "estimate",
+    "sent",
+    "d-whitfield",
+    "Ray Whitfield",
+    "landscaping",
+    [
+      line("dd-1-a", "Full bed cleanout and re-edge", 1, 340),
+      line("dd-1-b", "Hardwood mulch, installed", 6, 42),
+      line("dd-1-c", "Haul away debris", 1, 60, false),
+    ],
+    {
+      issuedDaysAgo: 5,
+      dueInDays: 30,
+      notes: "Price holds for 30 days. We'd need the side gate open on the day.",
+    },
+  ),
+  demoDoc(
+    "dd-2",
+    "8905",
+    "invoice",
+    "paid",
+    "d-brennan",
+    "Alice Brennan",
+    "pressure_washing",
+    [
+      line("dd-2-a", "House wash, two storey", 1, 380),
+      line("dd-2-b", "Driveway and walk", 1, 165),
+    ],
+    {
+      issuedDaysAgo: 9,
+      dueInDays: 14,
+      payments: [
+        {
+          id: "dd-2-p1",
+          amount: 577.7,
+          receivedAt: ago(7),
+          method: "Card",
+          recordedBy: DEMO_NICK,
+          recordedByName: "Nick",
+        },
+      ],
+    },
+  ),
+  demoDoc(
+    "dd-3",
+    "8906",
+    "invoice",
+    "partial",
+    "d-oakley",
+    "Marta Oakley",
+    "pressure_washing",
+    [
+      line("dd-3-a", "House wash", 1, 450),
+      line("dd-3-b", "Gutter brightening", 1, 120),
+      line("dd-3-c", "Back patio and steps", 1, 180),
+    ],
+    {
+      discount: 50,
+      issuedDaysAgo: 12,
+      dueInDays: 14,
+      payments: [
+        {
+          id: "dd-3-p1",
+          amount: 400,
+          receivedAt: ago(6),
+          method: "Check 2214",
+          recordedBy: DEMO_DANA,
+          recordedByName: "Dana",
+        },
+      ],
+      notes: "$50 off for booking the driveway at the same time.",
+    },
+  ),
+  demoDoc(
+    "dd-4",
+    "8907",
+    "invoice",
+    "sent",
+    "d-nolan",
+    "Priya Nolan",
+    "snow_removal",
+    [line("dd-4-a", "Driveway and walk clearing, per visit", 3, 95)],
+    { issuedDaysAgo: 3, dueInDays: 14 },
+  ),
+  demoDoc(
+    "dd-5",
+    "8908",
+    "estimate",
+    "draft",
+    "d-castellano",
+    "Dev Castellano",
+    "landscaping",
+    [line("dd-5-a", "Spring cleanup", 1, 420)],
+    { issuedDaysAgo: 0, notes: "Still measuring the back border." },
+  ),
 ];
 
 export const demoNotifications: AppNotification[] = [

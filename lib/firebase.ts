@@ -146,4 +146,5 @@ export const COLLECTIONS = {
   jobs: "jobs",
   quotes: "quotes",
   notifications: "notifications",
+  documents: "documents",
 } as const;

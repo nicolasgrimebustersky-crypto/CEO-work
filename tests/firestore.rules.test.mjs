@@ -87,6 +87,32 @@ function quoteDoc(uid, overrides = {}) {
   };
 }
 
+function businessDoc(uid, overrides = {}) {
+  return {
+    number: "8904",
+    kind: "estimate",
+    status: "draft",
+    customerId: "c1",
+    customerName: "Test House",
+    serviceType: "pressure_washing",
+    lineItems: [
+      { id: "li-1", description: "House wash", quantity: 1, unitPrice: 450, taxable: true },
+    ],
+    payments: [],
+    discount: 0,
+    taxRatePct: 6,
+    subtotal: 450,
+    taxAmount: 27,
+    total: 477,
+    amountPaid: 0,
+    balanceDue: 477,
+    notes: "",
+    createdBy: uid,
+    updatedBy: uid,
+    ...overrides,
+  };
+}
+
 function notificationDoc(actorUid, forUid, overrides = {}) {
   return {
     forUid,
@@ -134,6 +160,7 @@ beforeEach(async () => {
     await setDoc(doc(db, "jobs/j1"), jobDoc("alice"));
     await setDoc(doc(db, "quotes/q1"), quoteDoc("alice"));
     await setDoc(doc(db, "notifications/n1"), notificationDoc("alice", "bob"));
+    await setDoc(doc(db, "documents/d1"), businessDoc("alice"));
     await setDoc(doc(db, "users/alice"), { displayName: "Alice" });
     await setDoc(doc(db, "users/bob"), { displayName: "Bob" });
   });
@@ -160,6 +187,8 @@ describe("the two-account allowlist", () => {
     await assertFails(getDocs(collection(mallory, "quotes")));
     await assertFails(addDoc(collection(mallory, "quotes"), quoteDoc("mallory")));
     await assertFails(getDocs(collection(mallory, "notifications")));
+    await assertFails(getDocs(collection(mallory, "documents")));
+    await assertFails(addDoc(collection(mallory, "documents"), businessDoc("mallory")));
   });
 
   test("an unauthenticated caller gets nothing", async () => {
@@ -293,6 +322,75 @@ describe("quotes", () => {
     );
     await assertFails(
       addDoc(collection(alice, "quotes"), quoteDoc("alice", { amount: -1 })),
+    );
+  });
+});
+
+/* ------------------------------------------------- estimates and invoices */
+
+describe("estimates and invoices", () => {
+  test("a crew member can raise a document, edit it and delete it", async () => {
+    const ref = await assertSucceeds(
+      addDoc(collection(alice, "documents"), businessDoc("alice")),
+    );
+    await assertSucceeds(
+      updateDoc(
+        doc(bob, `documents/${ref.id}`),
+        stampedUpdate("bob", { subtotal: 500, total: 530, balanceDue: 530 }),
+      ),
+    );
+    await assertSucceeds(deleteDoc(doc(alice, `documents/${ref.id}`)));
+  });
+
+  test("a document cannot be created under someone else's name", async () => {
+    await assertFails(addDoc(collection(alice, "documents"), businessDoc("bob")));
+  });
+
+  test("editing a document must refresh the author stamp", async () => {
+    await assertFails(updateDoc(doc(bob, "documents/d1"), { status: "sent" }));
+    await assertFails(
+      updateDoc(doc(bob, "documents/d1"), stampedUpdate("alice", { status: "sent" })),
+    );
+  });
+
+  test("an invoice cannot be renumbered or moved to another customer", async () => {
+    // Both would rewrite the financial record without leaving a trace of what
+    // it used to say, which is why the rules pin them rather than the client.
+    await assertFails(
+      updateDoc(doc(alice, "documents/d1"), stampedUpdate("alice", { number: "1" })),
+    );
+    await assertFails(
+      updateDoc(doc(alice, "documents/d1"), stampedUpdate("alice", { customerId: "c2" })),
+    );
+  });
+
+  test("a document with a bogus kind, status or service is rejected", async () => {
+    await assertFails(
+      addDoc(collection(alice, "documents"), businessDoc("alice", { kind: "receipt" })),
+    );
+    await assertFails(
+      addDoc(collection(alice, "documents"), businessDoc("alice", { status: "overdue" })),
+    );
+    await assertFails(
+      addDoc(collection(alice, "documents"), businessDoc("alice", { serviceType: "gutters" })),
+    );
+  });
+
+  test("a document with money in the wrong shape is rejected", async () => {
+    await assertFails(
+      addDoc(collection(alice, "documents"), businessDoc("alice", { total: "477" })),
+    );
+    await assertFails(
+      addDoc(collection(alice, "documents"), businessDoc("alice", { total: -1 })),
+    );
+    await assertFails(
+      addDoc(collection(alice, "documents"), businessDoc("alice", { discount: -25 })),
+    );
+    await assertFails(
+      addDoc(collection(alice, "documents"), businessDoc("alice", { lineItems: "House wash" })),
+    );
+    await assertFails(
+      addDoc(collection(alice, "documents"), businessDoc("alice", { number: 8904 })),
     );
   });
 });

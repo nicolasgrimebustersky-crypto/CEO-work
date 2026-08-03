@@ -60,7 +60,7 @@ export function MonthView({
               data-drop-day={key}
               onClick={() => onOpenDay(day)}
               className={`min-h-0 overflow-hidden border-r border-b border-line p-1 ${
-                outside ? "bg-base/60" : "bg-base"
+                outside ? "bg-canvas/60" : "bg-canvas"
               } ${isDropTarget ? "outline outline-2 -outline-offset-2 outline-accent" : ""}`}
             >
               <div

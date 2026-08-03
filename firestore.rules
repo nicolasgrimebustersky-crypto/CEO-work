@@ -81,6 +81,30 @@ service cloud.firestore {
         && data.assignedTo is list;
     }
 
+    // Estimates and invoices share one shape and one collection, so one check
+    // covers both. `number` is pinned separately below: two documents carrying
+    // the same number is the one error that makes the books unreadable.
+    function validDocument() {
+      let data = request.resource.data;
+      return data.kind in ['estimate', 'invoice']
+        && data.status in ['draft', 'sent', 'accepted', 'declined', 'partial', 'paid', 'void']
+        && data.serviceType in ['pressure_washing', 'landscaping', 'snow_removal']
+        && data.customerId is string
+        && data.number is string
+        && data.lineItems is list
+        && data.payments is list
+        && data.discount is number
+        && data.discount >= 0
+        && data.taxRatePct is number
+        && data.taxRatePct >= 0
+        && data.subtotal is number
+        && data.total is number
+        && data.total >= 0
+        && data.amountPaid is number
+        && data.amountPaid >= 0
+        && data.balanceDue is number;
+    }
+
     function validQuote() {
       let data = request.resource.data;
       return data.status in ['sent', 'accepted', 'declined', 'no_response']
@@ -118,6 +142,22 @@ service cloud.firestore {
       allow update: if isCrew()
         && validQuote()
         && request.resource.data.sentBy == resource.data.sentBy
+        && request.resource.data.customerId == resource.data.customerId;
+      allow delete: if isCrew();
+    }
+
+    // Estimates and invoices. These are the financial record, so two things are
+    // frozen once the document exists: its number and the customer it belongs
+    // to. Renumbering an invoice after it has been sent, or moving it to
+    // another customer, would silently rewrite history — and unlike a wrong
+    // price, neither leaves any trace of what it used to say.
+    match /documents/{documentId} {
+      allow read: if isCrew();
+      allow create: if isCrew() && stampedByCaller('createdBy') && validDocument();
+      allow update: if isCrew()
+        && refreshesAuthorStamp()
+        && validDocument()
+        && request.resource.data.number == resource.data.number
         && request.resource.data.customerId == resource.data.customerId;
       allow delete: if isCrew();
     }

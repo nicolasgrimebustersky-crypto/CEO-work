@@ -5,6 +5,7 @@ import { FieldValue, Timestamp } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/firebase";
 import {
   demoCustomers,
+  demoDocuments,
   demoJobs,
   demoNotifications,
   demoQuotes,
@@ -60,6 +61,7 @@ function seed(): void {
   seedTable(COLLECTIONS.jobs, demoJobs as unknown as DemoRow[]);
   seedTable(COLLECTIONS.quotes, demoQuotes as unknown as DemoRow[]);
   seedTable(COLLECTIONS.notifications, demoNotifications as unknown as DemoRow[]);
+  seedTable(COLLECTIONS.documents, demoDocuments as unknown as DemoRow[]);
 }
 
 function emit(name: string): void {

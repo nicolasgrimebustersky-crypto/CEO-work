@@ -17,6 +17,10 @@ export const routes = {
   customers: "/customers",
   pipeline: "/pipeline",
   customer: (customerId: string) => `/customers/detail?id=${encodeURIComponent(customerId)}`,
+  invoices: "/invoices",
+  document: (documentId: string) => `/invoices/detail?id=${encodeURIComponent(documentId)}`,
+  newDocument: (kind: "estimate" | "invoice", customerId?: string) =>
+    `/invoices/detail?new=${kind}${customerId ? `&customer=${encodeURIComponent(customerId)}` : ""}`,
   schedule: "/schedule",
   dashboard: "/dashboard",
   reports: "/reports",

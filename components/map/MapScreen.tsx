@@ -190,7 +190,7 @@ function MapCanvas({ mapId }: { mapId: string }) {
       {/* Top overlay: what you're looking at, and how it's rendered. */}
       <div className="pt-safe pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 px-3">
         <div className="pointer-events-auto flex flex-col items-start gap-2">
-          <span className="rounded-xl border border-line bg-base/85 px-3 py-2 text-sm font-bold text-ink backdrop-blur-sm">
+          <span className="rounded-xl border border-line bg-canvas/85 px-3 py-2 text-sm font-bold text-ink backdrop-blur-sm">
             {loading
               ? "Loading pins…"
               : `${visible.length} of ${customers.length} ${
@@ -246,7 +246,7 @@ function MapCanvas({ mapId }: { mapId: string }) {
 
       {/* Hint only while the map is empty — it stops being useful after that. */}
       {!loading && customers.length === 0 ? (
-        <p className="pointer-events-none absolute inset-x-0 bottom-24 mx-auto w-fit rounded-xl border border-line bg-base/90 px-4 py-2.5 text-base font-bold text-ink backdrop-blur-sm">
+        <p className="pointer-events-none absolute inset-x-0 bottom-24 mx-auto w-fit rounded-xl border border-line bg-canvas/90 px-4 py-2.5 text-base font-bold text-ink backdrop-blur-sm">
           Tap a house to drop your first pin
         </p>
       ) : null}
