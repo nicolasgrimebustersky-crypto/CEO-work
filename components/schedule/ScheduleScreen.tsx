@@ -193,7 +193,7 @@ function Schedule() {
             type="button"
             onClick={() => shift(-1)}
             aria-label="Previous"
-            className="tap-target flex size-11 items-center justify-center rounded-xl border border-line bg-surface-2 text-xl font-black text-ink"
+            className="tap-target flex size-11 items-center justify-center rounded-xl border border-line bg-surface-2 text-xl font-extrabold text-ink"
           >
             ‹
           </button>
@@ -208,7 +208,7 @@ function Schedule() {
             type="button"
             onClick={() => shift(1)}
             aria-label="Next"
-            className="tap-target flex size-11 items-center justify-center rounded-xl border border-line bg-surface-2 text-xl font-black text-ink"
+            className="tap-target flex size-11 items-center justify-center rounded-xl border border-line bg-surface-2 text-xl font-extrabold text-ink"
           >
             ›
           </button>
@@ -333,7 +333,7 @@ function Schedule() {
             setSheetOpen(true);
           }}
           aria-label="New job"
-          className="tap-target pointer-events-auto flex size-14 items-center justify-center rounded-full bg-accent text-3xl font-black text-accent-ink shadow-lg"
+          className="tap-target pointer-events-auto flex size-14 items-center justify-center rounded-full bg-accent text-3xl font-extrabold text-accent-ink shadow-lg"
         >
           +
         </button>

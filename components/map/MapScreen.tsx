@@ -14,6 +14,8 @@ import type { CustomerFilters } from "@/lib/filters";
 import { DEFAULT_ZOOM, OLDHAM_COUNTY_CENTER } from "@/lib/geo";
 import { useLiveLocation } from "@/lib/useLiveLocation";
 import type { Customer, LatLng } from "@/lib/types";
+import { useOpenMenu } from "@/components/shell/menu";
+import { MenuIcon } from "@/components/shell/navIcons";
 import { CustomerPin, DraftPin } from "./CustomerPin";
 import { CustomerPreviewSheet } from "./CustomerPreviewSheet";
 import { FilterSheet } from "./FilterSheet";
@@ -34,7 +36,7 @@ export function MapScreen() {
     return (
       <div className="flex h-full items-center justify-center p-6">
         <div className="max-w-sm">
-          <h2 className="text-xl font-black text-ink">Map key missing</h2>
+          <h2 className="text-xl font-extrabold text-ink">Map key missing</h2>
           <p className="mt-2 text-base font-semibold text-muted">
             <code className="rounded bg-surface-2 px-1.5 py-0.5 text-ink">
               NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
@@ -71,6 +73,7 @@ function MapCanvas({ mapId }: { mapId: string }) {
   const { sharing } = useLocationSharing();
   const live = useLiveLocation(author?.uid ?? null, sharing);
 
+  const openMenu = useOpenMenu();
   const [mapTypeId, setMapTypeId] = useState<MapTypeOption>("satellite");
   const [filters, setFilters] = useState<CustomerFilters>(EMPTY_FILTERS);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -190,6 +193,18 @@ function MapCanvas({ mapId }: { mapId: string }) {
       {/* Top overlay: what you're looking at, and how it's rendered. */}
       <div className="pt-safe pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 px-3">
         <div className="pointer-events-auto flex flex-col items-start gap-2">
+          {/* The map has no ScreenHeader, so it carries its own way into the
+              menu — a floating circle, like the other controls out here. */}
+          {openMenu ? (
+            <button
+              type="button"
+              onClick={openMenu}
+              aria-label="Open menu"
+              className="tap-target flex size-11 items-center justify-center rounded-full border border-line bg-canvas/85 text-ink backdrop-blur-sm"
+            >
+              <MenuIcon />
+            </button>
+          ) : null}
           <span className="rounded-xl border border-line bg-canvas/85 px-3 py-2 text-sm font-bold text-ink backdrop-blur-sm">
             {loading
               ? "Loading pins…"
@@ -227,7 +242,7 @@ function MapCanvas({ mapId }: { mapId: string }) {
         >
           <FilterIcon />
           {filterCount > 0 ? (
-            <span className="absolute -top-1 -right-1 flex size-6 items-center justify-center rounded-full bg-accent text-xs font-black text-accent-ink">
+            <span className="absolute -top-1 -right-1 flex size-6 items-center justify-center rounded-full bg-accent text-xs font-extrabold text-accent-ink">
               {filterCount}
             </span>
           ) : null}

@@ -82,7 +82,7 @@ export function InstallPrompt() {
         <button
           type="button"
           onClick={() => void install()}
-          className="tap-target shrink-0 rounded-xl bg-accent px-3 text-sm font-black text-accent-ink"
+          className="tap-target shrink-0 rounded-xl bg-accent px-3 text-sm font-extrabold text-accent-ink"
         >
           {ios ? "How" : "Install"}
         </button>
@@ -157,7 +157,7 @@ export function InstallPrompt() {
 function Step({ n, children }: { n: number; children: React.ReactNode }) {
   return (
     <li className="flex gap-3">
-      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-black text-accent-ink">
+      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-extrabold text-accent-ink">
         {n}
       </span>
       <span className="text-base leading-relaxed text-muted">{children}</span>

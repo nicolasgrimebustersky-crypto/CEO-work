@@ -94,7 +94,7 @@ export function LineItemsEditor({
                   />
                 </label>
 
-                <span className="ml-auto pb-2.5 text-lg font-black text-ink tabular-nums">
+                <span className="ml-auto pb-2.5 text-lg font-extrabold text-ink tabular-nums">
                   {formatMoneyExact(lineTotal)}
                 </span>
               </div>
@@ -165,8 +165,8 @@ export function LineItemsEditor({
         </div>
 
         <div className="mt-3 flex items-baseline justify-between gap-3 border-t border-line pt-3">
-          <span className="text-lg font-black text-ink">Total</span>
-          <span className="text-2xl font-black text-accent tabular-nums">
+          <span className="text-lg font-extrabold text-ink">Total</span>
+          <span className="text-2xl font-extrabold text-money tabular-nums">
             {formatMoneyExact(totals.total)}
           </span>
         </div>

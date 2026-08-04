@@ -268,7 +268,7 @@ export function DocumentScreen() {
           </Link>
 
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-black tracking-tight text-ink">
+            <h1 className="text-2xl font-extrabold tracking-tight text-ink">
               {document
                 ? `${kindLabel} ${document.number}`
                 : `New ${kindLabel.toLowerCase()}`}
@@ -483,8 +483,8 @@ export function DocumentScreen() {
                   value={document.taxAmount}
                 />
                 <div className="mt-2 flex items-baseline justify-between gap-3 border-t border-line pt-2">
-                  <span className="text-lg font-black text-ink">Total</span>
-                  <span className="text-2xl font-black text-accent tabular-nums">
+                  <span className="text-lg font-extrabold text-ink">Total</span>
+                  <span className="text-2xl font-extrabold text-money tabular-nums">
                     {formatMoneyExact(document.total)}
                   </span>
                 </div>
@@ -494,10 +494,10 @@ export function DocumentScreen() {
                       <Money label="Paid" value={-document.amountPaid} />
                     </div>
                     <div className="flex items-baseline justify-between gap-3">
-                      <span className="text-base font-black text-ink">
+                      <span className="text-base font-extrabold text-ink">
                         Balance due
                       </span>
-                      <span className="text-lg font-black text-ink tabular-nums">
+                      <span className="text-lg font-extrabold text-ink tabular-nums">
                         {formatMoneyExact(document.balanceDue)}
                       </span>
                     </div>

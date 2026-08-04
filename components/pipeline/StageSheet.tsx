@@ -89,7 +89,7 @@ export function StageSheet({
       <div className="flex flex-col gap-5">
         <div className="flex flex-wrap items-center gap-2">
           <span
-            className="rounded-full px-2.5 py-1 text-sm font-black text-black"
+            className="rounded-full px-2.5 py-1 text-sm font-extrabold text-black"
             style={{ backgroundColor: PIPELINE_COLOR[customer.pipelineStage] }}
           >
             {PIPELINE_LABEL[customer.pipelineStage]}
@@ -119,7 +119,7 @@ export function StageSheet({
             {customer.phone ? (
               <a
                 href={`tel:${customer.phone.replace(/\D/g, "")}`}
-                className="mt-1 block text-base font-bold text-accent"
+                className="mt-1 block text-base font-bold text-money tabular-nums"
               >
                 {formatPhone(customer.phone)}
               </a>

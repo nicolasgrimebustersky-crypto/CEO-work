@@ -126,10 +126,10 @@ export function PipelineScreen() {
                     style={{ borderTopColor: PIPELINE_COLOR[stage] }}
                   >
                     <div className="flex items-baseline justify-between gap-2">
-                      <h2 className="text-base font-black text-ink">
+                      <h2 className="text-base font-extrabold text-ink">
                         {PIPELINE_LABEL[stage]}
                       </h2>
-                      <span className="text-sm font-black text-muted">
+                      <span className="text-sm font-extrabold text-muted">
                         {items.length}
                       </span>
                     </div>
@@ -194,7 +194,7 @@ function LeadCard({
           {customerName(customer)}
         </span>
         {customer.pipelineValue > 0 ? (
-          <span className="shrink-0 text-sm font-black text-accent">
+          <span className="shrink-0 text-sm font-extrabold text-money tabular-nums">
             {formatMoney(customer.pipelineValue)}
           </span>
         ) : null}

@@ -46,7 +46,7 @@ export function MapUnavailable({ error }: { error: Error }) {
   return (
     <div className="flex h-full items-center justify-center overflow-y-auto p-6">
       <div className="max-w-sm">
-        <h2 className="text-xl font-black text-ink">The map didn&apos;t load</h2>
+        <h2 className="text-xl font-extrabold text-ink">The map didn&apos;t load</h2>
         <p className="mt-2 text-base font-semibold text-muted">
           Everything else still works — customers, pipeline, schedule and the
           dashboard don&apos;t need it.

@@ -216,7 +216,7 @@ export function CustomerDetailScreen() {
           ← Customers
         </Link>
 
-        <h1 className="mt-2 text-2xl font-black tracking-tight text-ink">
+        <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-ink">
           {customerName(customer)}
         </h1>
 
@@ -312,7 +312,7 @@ export function CustomerDetailScreen() {
             {owed > 0 ? (
               <div className="col-span-2 rounded-xl border border-warn/70 bg-warn/20 px-3 py-3">
                 <p className="text-sm font-bold text-ink">Still owes</p>
-                <p className="mt-0.5 text-2xl font-black text-ink">
+                <p className="mt-0.5 text-2xl font-extrabold text-ink">
                   {formatMoneyExact(owed)}
                 </p>
               </div>
@@ -356,7 +356,7 @@ export function CustomerDetailScreen() {
                       <span className="text-base font-bold text-ink">
                         {SERVICE_LABEL[job.serviceType]}
                       </span>
-                      <span className="text-base font-bold text-accent">
+                      <span className="text-base font-bold text-money tabular-nums">
                         {formatMoney(job.price)}
                       </span>
                     </span>
@@ -415,7 +415,7 @@ export function CustomerDetailScreen() {
                         </span>
                       </span>
                       <span className="shrink-0 text-right">
-                        <span className="block text-base font-bold text-accent tabular-nums">
+                        <span className="block text-base font-bold text-money tabular-nums">
                           {formatMoneyExact(document.total)}
                         </span>
                         {document.balanceDue > 0 && document.amountPaid > 0 ? (
@@ -467,7 +467,7 @@ export function CustomerDetailScreen() {
                           : ""}
                       </span>
                     </span>
-                    <span className="shrink-0 text-base font-bold text-accent">
+                    <span className="shrink-0 text-base font-bold text-money tabular-nums">
                       {formatMoney(quote.amount)}
                     </span>
                   </div>
@@ -514,7 +514,7 @@ export function CustomerDetailScreen() {
                       sizes="(max-width: 640px) 50vw, 240px"
                       className="object-cover"
                     />
-                    <span className="absolute top-1.5 left-1.5 rounded-full bg-canvas/85 px-2 py-0.5 text-xs font-black text-ink">
+                    <span className="absolute top-1.5 left-1.5 rounded-full bg-canvas/85 px-2 py-0.5 text-xs font-extrabold text-ink">
                       {label}
                     </span>
                   </div>
@@ -651,7 +651,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-line bg-surface-2 px-3 py-3">
       <p className="text-sm font-bold text-muted">{label}</p>
-      <p className="mt-0.5 text-2xl font-black text-ink">{value}</p>
+      <p className="mt-0.5 text-2xl font-extrabold text-ink">{value}</p>
     </div>
   );
 }

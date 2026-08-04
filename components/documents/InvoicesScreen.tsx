@@ -57,7 +57,7 @@ export function InvoicesScreen() {
     <div className="flex h-full flex-col">
       <ScreenHeader title="Invoices" subtitle="Estimates, invoices and what's owed">
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <Stat label="Owed to you" value={formatMoney(outstanding)} accent />
+          <Stat label="Owed to you" value={formatMoney(outstanding)} tone="money" />
           <Stat label="Out for quote" value={formatMoney(openEstimates)} />
         </div>
 
@@ -127,7 +127,7 @@ export function InvoicesScreen() {
                         </span>
                       </span>
                       <span className="shrink-0 text-right">
-                        <span className="block text-base font-black text-ink tabular-nums">
+                        <span className="block text-base font-extrabold text-ink tabular-nums">
                           {formatMoneyExact(document.total)}
                         </span>
                         {document.balanceDue > 0 && document.amountPaid > 0 ? (
@@ -164,16 +164,22 @@ export function InvoicesScreen() {
 function Stat({
   label,
   value,
-  accent = false,
+  tone = "ink",
 }: {
   label: string;
   value: string;
-  accent?: boolean;
+  tone?: "ink" | "money";
 }) {
   return (
-    <div className="rounded-xl border border-line bg-surface-2 px-3 py-2.5">
+    <div className="rounded-2xl border border-line bg-surface-2 px-3 py-2.5">
       <p className="text-sm font-bold text-muted">{label}</p>
-      <p className={`text-xl font-black ${accent ? "text-accent" : "text-ink"}`}>{value}</p>
+      <p
+        className={`text-xl font-extrabold tabular-nums ${
+          tone === "money" ? "text-money" : "text-ink"
+        }`}
+      >
+        {value}
+      </p>
     </div>
   );
 }

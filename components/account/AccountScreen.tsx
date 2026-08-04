@@ -13,6 +13,8 @@ import { updateUserProfile } from "@/lib/db/users";
 import { formatPhone, formatRelative } from "@/lib/format";
 import { routes } from "@/lib/routes";
 import { DeleteAccountSheet } from "./DeleteAccountSheet";
+import { useOpenMenu } from "@/components/shell/menu";
+import { MenuIcon } from "@/components/shell/navIcons";
 
 /**
  * Profile plus the team roster. The roster doubles as the legend for every
@@ -20,6 +22,7 @@ import { DeleteAccountSheet } from "./DeleteAccountSheet";
  * attribution chips, and their calendar blocks.
  */
 export function AccountScreen() {
+  const openMenu = useOpenMenu();
   const { email, signOutNow } = useAuth();
   const { me, users, author, colorFor, error } = useTeam();
   const { sharing, setSharing, permission } = useLocationSharing();
@@ -55,7 +58,19 @@ export function AccountScreen() {
   return (
     <div className="h-full overflow-y-auto">
       <header className="pt-safe border-b border-line bg-surface px-4 pb-4">
-        <h1 className="text-2xl font-black tracking-tight text-ink">Account</h1>
+        <div className="flex items-center gap-2">
+          {openMenu ? (
+            <button
+              type="button"
+              onClick={openMenu}
+              aria-label="Open menu"
+              className="tap-target -ml-2 flex shrink-0 items-center justify-center rounded-2xl px-2 text-muted hover:bg-surface-2 hover:text-ink"
+            >
+              <MenuIcon />
+            </button>
+          ) : null}
+          <h1 className="text-2xl font-extrabold tracking-tight text-ink">Account</h1>
+        </div>
         {email ? (
           <p className="mt-1 text-base font-semibold text-muted">{email}</p>
         ) : null}

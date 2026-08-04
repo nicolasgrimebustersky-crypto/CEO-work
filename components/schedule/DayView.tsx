@@ -94,10 +94,10 @@ export function DayView({
       {/* Route summary first: on a work day this is the part you actually read. */}
       <section className="border-b border-line bg-surface px-3 py-3">
         <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-          <span className="text-base font-black text-ink">
+          <span className="text-base font-extrabold text-ink">
             {route.length} {route.length === 1 ? "stop" : "stops"}
           </span>
-          <span className="text-base font-bold text-accent">{formatMoney(dayRevenue)}</span>
+          <span className="text-base font-bold text-money tabular-nums">{formatMoney(dayRevenue)}</span>
           {legs.length > 0 ? (
             <span className="text-base font-semibold text-muted">
               {formatDriveMinutes(totalDriveMinutes)} driving
@@ -141,7 +141,7 @@ export function DayView({
                         <span className="truncate text-base font-bold text-ink">
                           {index + 1}. {customer ? customerName(customer) : "Unknown"}
                         </span>
-                        <span className="shrink-0 text-sm font-black text-accent">
+                        <span className="shrink-0 text-sm font-extrabold text-money tabular-nums">
                           {formatMoney(job.price)}
                         </span>
                       </div>

@@ -81,6 +81,8 @@ describe("design tokens", () => {
       "muted",
       "accent",
       "accent-ink",
+      "money",
+      "money-ink",
       "danger",
       "warn",
       "ok",
