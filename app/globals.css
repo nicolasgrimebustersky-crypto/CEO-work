@@ -179,43 +179,6 @@ button {
   }
 }
 
-/*
- * Printing an estimate or invoice.
- *
- * The app is a dark, viewport-locked flex column — printed as-is it produces
- * one clipped black page. So the printable document is rendered into a portal
- * at the top of <body>, and printing hides everything else outright. That is
- * also how "share as PDF" works on a phone: iOS and Android both turn the
- * browser's print output into a PDF the customer can be sent.
- */
-.gb-print-root {
-  display: none;
-}
-
-@media print {
-  /* The app's canvas is near-black. Left alone it prints as a full-bleed
-     black page with the document floating on it. */
-  html,
-  body {
-    background: #fff !important;
-    height: auto !important;
-  }
-
-  body > * {
-    display: none !important;
-  }
-
-  body > .gb-print-root {
-    display: block !important;
-    background: #fff;
-    color: #000;
-  }
-
-  @page {
-    margin: 14mm;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

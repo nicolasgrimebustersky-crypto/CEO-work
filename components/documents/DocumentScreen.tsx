@@ -37,11 +37,12 @@ import {
 } from "@/lib/format";
 import { rememberServices } from "@/lib/db/services";
 import { documentText } from "@/lib/messages";
+import { downloadPdf } from "@/lib/pdf/share";
 import { routes } from "@/lib/routes";
 import { SERVICE_LABEL } from "@/lib/status";
 import { SERVICE_TYPES, type ServiceType } from "@/lib/types";
 import { CustomerPickerSheet } from "./CustomerPickerSheet";
-import { DocumentPrintView } from "./DocumentPrintView";
+import { DocumentPreview } from "./DocumentPreview";
 import { LineItemsEditor } from "./LineItemsEditor";
 import { PaymentSheet } from "./PaymentSheet";
 import { StatusPill } from "./StatusPill";
@@ -89,6 +90,7 @@ export function DocumentScreen() {
   const [picking, setPicking] = useState(false);
   const [paying, setPaying] = useState(false);
   const [texting, setTexting] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   // A new document starts as local state and is not written until Save, so
@@ -604,15 +606,24 @@ export function DocumentScreen() {
             </section>
 
             <section className="grid grid-cols-2 gap-2">
-              <Button variant="secondary" onClick={() => window.print()}>
-                Print / PDF
+              {/* Opening the preview is the way out of this screen: it shows
+                  the customer's copy and carries Download and Send with it, so
+                  you always look at the thing before it goes. */}
+              <Button className="col-span-2" onClick={() => setPreviewing(true)}>
+                View &amp; send
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => downloadPdf(document, customer)}
+              >
+                Download PDF
               </Button>
               <Button
                 variant="secondary"
                 onClick={() => setTexting(true)}
                 disabled={!customer?.phone}
               >
-                Text it over
+                Text a message
               </Button>
               {document.kind === "estimate" ? (
                 <Button
@@ -654,7 +665,12 @@ export function DocumentScreen() {
             open={paying}
             onClose={() => setPaying(false)}
           />
-          <DocumentPrintView document={document} customer={customer} />
+          <DocumentPreview
+            document={document}
+            customer={customer}
+            open={previewing}
+            onClose={() => setPreviewing(false)}
+          />
         </>
       ) : null}
 
