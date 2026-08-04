@@ -133,7 +133,85 @@ await shoot(192, 192, 0.06, join(PUBLIC, "icons", "icon-192.png"));
 await shoot(512, 512, 0.06, join(PUBLIC, "icons", "icon-512.png"));
 await shoot(180, 180, 0.08, join(PUBLIC, "icons", "apple-touch-icon.png"));
 
-/* -------------------------------------------------- the in-app derivative */
+/* ------------------------------------------------ the in-app derivatives */
+
+/**
+ * The lockup with its black field removed, so it sits on a panel instead of
+ * inside a box.
+ *
+ * The artwork is already artwork composited over black, which means the black
+ * can be undone rather than cut out: if a pixel reads `C`, and the background
+ * it was laid on is 0, then `C = colour x alpha`. Taking alpha as the pixel's
+ * brightest channel and dividing the channels back up recovers straight alpha
+ * — so the glow around the letters stays a glow instead of turning into a
+ * halo with a hard edge, which is what any threshold-based key would give.
+ *
+ * Drawn at 2x the largest place it appears, which is 168px in the drawer.
+ */
+async function transparentLogo(width, out) {
+  const height = Math.round((width * artH) / artW);
+  const page = await browser.newPage({ viewport: { width, height } });
+  await page.setContent(pageHtml(width, height, 0));
+  await page.waitForTimeout(200);
+
+  const dataUrl = await page.evaluate(
+    async ({ w, h, src, box }) => {
+      const img = new Image();
+      img.src = src;
+      await img.decode();
+
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      // Draw only the artwork's bounding box, scaled to fill.
+      ctx.drawImage(
+        img,
+        box.minX,
+        box.minY,
+        box.maxX - box.minX + 1,
+        box.maxY - box.minY + 1,
+        0,
+        0,
+        w,
+        h,
+      );
+
+      const frame = ctx.getImageData(0, 0, w, h);
+      const { data } = frame;
+      for (let i = 0; i < data.length; i += 4) {
+        const alpha = Math.max(data[i], data[i + 1], data[i + 2]);
+        if (alpha === 0) {
+          data[i + 3] = 0;
+          continue;
+        }
+        // Unpremultiply: recover the colour at full strength and let alpha
+        // carry the falloff.
+        const scale = 255 / alpha;
+        data[i] = Math.min(255, Math.round(data[i] * scale));
+        data[i + 1] = Math.min(255, Math.round(data[i + 1] * scale));
+        data[i + 2] = Math.min(255, Math.round(data[i + 2] * scale));
+        data[i + 3] = alpha;
+      }
+      ctx.putImageData(frame, 0, 0);
+      return canvas.toDataURL("image/png");
+    },
+    { w: width, h: height, src: sourceUrl, box },
+  );
+
+  const bytes = Buffer.from(dataUrl.split(",")[1], "base64");
+  writeFileSync(out, bytes);
+  await page.close();
+  console.log(
+    `${out.slice(ROOT.length + 1)}  ${width}x${height}  ${Math.round(bytes.length / 1024)}KB  (alpha)`,
+  );
+}
+
+// What the app itself shows: drawer, document preview. Transparent, so it
+// belongs to whatever surface it lands on.
+await transparentLogo(420, join(PUBLIC, "logo.png"));
+
+/* ------------------------------------------------------ the PDF's version */
 
 /**
  * What the drawer, the preview header and the PDF all use.

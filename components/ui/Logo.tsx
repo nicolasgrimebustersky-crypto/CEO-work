@@ -3,19 +3,19 @@ import Image from "next/image";
 /**
  * The Grime Busters lockup.
  *
- * One derivative for the whole app — public/logo.jpg, written by
- * scripts/generate-icons.mjs from the artwork in assets/. The source is a
- * 1.1MB print-resolution render and has no business being fetched by a phone
- * to fill forty pixels.
+ * public/logo.png, written by scripts/generate-icons.mjs from the artwork in
+ * assets/. The source is a 1.1MB print-resolution render and has no business
+ * being fetched by a phone to fill a drawer header.
  *
- * JPEG rather than PNG on purpose: the mark is a soft-shaded render on solid
- * black, which is the case PNG handles worst, and it sits on the app's own
- * near-black canvas so the missing alpha channel costs nothing.
+ * This copy has the black field keyed out to alpha, so the mark belongs to
+ * whatever surface it lands on rather than sitting in a black rectangle a few
+ * shades off the panel behind it. The opaque JPEG next to it is the PDF's —
+ * that one goes on a black band, and PDF can carry JPEG bytes verbatim.
  */
 
-/** Intrinsic size of public/logo.jpg, so Next can reserve the right box. */
-export const LOGO_WIDTH = 640;
-export const LOGO_HEIGHT = 473;
+/** Intrinsic size of public/logo.png, so Next can reserve the right box. */
+export const LOGO_WIDTH = 420;
+export const LOGO_HEIGHT = 310;
 export const LOGO_ASPECT = LOGO_WIDTH / LOGO_HEIGHT;
 
 export function Logo({
@@ -30,7 +30,7 @@ export function Logo({
 }) {
   return (
     <Image
-      src="/logo.jpg"
+      src="/logo.png"
       alt="Grime Busters KY — pressure washing"
       width={LOGO_WIDTH}
       height={LOGO_HEIGHT}
