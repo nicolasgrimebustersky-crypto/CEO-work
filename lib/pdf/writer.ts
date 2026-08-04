@@ -144,9 +144,41 @@ function pathOps(path: PathSegment[]): string {
  * how a document is laid out in the head; the flip to PDF's bottom-left origin
  * happens here, once, rather than at every call site.
  */
+export interface JpegImage {
+  /** The file's bytes, unmodified. */
+  data: Uint8Array;
+  width: number;
+  height: number;
+}
+
 export class Doc {
   private ops: string[] = [];
   private fontsUsed = new Set<FontName>(["Helvetica"]);
+  private image: JpegImage | null = null;
+
+  /**
+   * Places a JPEG.
+   *
+   * PDF carries JPEG data verbatim through /DCTDecode, so the file's bytes go
+   * in untouched — no decoding, no re-encoding, no pixel buffer. That is the
+   * whole reason the logo derivative is a JPEG: a PNG would have to be
+   * inflated, un-filtered and re-deflated here, which is a decoder this file
+   * has no business containing.
+   *
+   * One image per document is all an estimate needs, so there is one slot
+   * rather than a resource dictionary to manage.
+   */
+  drawImage(image: JpegImage, x: number, y: number, width: number, height: number): void {
+    this.image = image;
+    // Images are drawn into a unit square, so the matrix does the placing:
+    // scale to the box, then translate to the bottom-left corner of it.
+    this.ops.push(
+      "q",
+      `${round(width)} 0 0 ${round(height)} ${round(x)} ${round(PAGE_HEIGHT - y - height)} cm`,
+      "/Im1 Do",
+      "Q",
+    );
+  }
 
   fill(color: RGB): void {
     this.ops.push(`${round(color.r)} ${round(color.g)} ${round(color.b)} rg`);
@@ -246,39 +278,80 @@ export class Doc {
   /** The assembled PDF, ready to be handed to a Blob. */
   build(): Uint8Array {
     const content = this.ops.join("\n");
-    const objects = [
+    const image = this.image;
+    const xobject = image ? " /XObject << /Im1 7 0 R >>" : "";
+
+    const objects: string[] = [
       "<< /Type /Catalog /Pages 2 0 R >>",
       "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
       `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${round(PAGE_WIDTH)} ${round(PAGE_HEIGHT)}] ` +
-        `/Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 4 0 R >>`,
+        `/Resources << /Font << /F1 5 0 R /F2 6 0 R >>${xobject} >> /Contents 4 0 R >>`,
       `<< /Length ${byteLength(content)} >>\nstream\n${content}\nendstream`,
       "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
       "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
     ];
+    if (image) {
+      objects.push(
+        `<< /Type /XObject /Subtype /Image /Width ${image.width} /Height ${image.height} ` +
+          `/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode ` +
+          `/Length ${image.data.length} >>\nstream\n IMAGE \nendstream`,
+      );
+    }
 
-    let pdf = "%PDF-1.4\n";
-    // The cross-reference table records the byte offset of every object, so
-    // they have to be counted as they are written, not afterwards.
+    // Assembled as bytes rather than as a string, because the JPEG payload is
+    // arbitrary binary: putting it through a string would corrupt it, and the
+    // xref table's offsets have to count real bytes either way.
+    const chunks: Uint8Array[] = [];
+    let length = 0;
+    const push = (part: Uint8Array | string) => {
+      const bytes = typeof part === "string" ? latin1(part) : part;
+      chunks.push(bytes);
+      length += bytes.length;
+    };
+
+    push("%PDF-1.4\n");
     const offsets: number[] = [];
     objects.forEach((body, index) => {
-      offsets.push(byteLength(pdf));
-      pdf += `${index + 1} 0 obj\n${body}\nendobj\n`;
+      offsets.push(length);
+      // The image object's stream is spliced in around its placeholder, so the
+      // binary never has to survive a round trip through a JS string.
+      const marker = body.indexOf(" IMAGE ");
+      if (marker === -1 || !image) {
+        push(`${index + 1} 0 obj\n${body}\nendobj\n`);
+        return;
+      }
+      push(`${index + 1} 0 obj\n${body.slice(0, marker)}`);
+      push(image.data);
+      push(`${body.slice(marker + 7)}\nendobj\n`);
     });
 
-    const xrefStart = byteLength(pdf);
-    pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+    const xrefStart = length;
+    let tail = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
     for (const offset of offsets) {
-      pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+      tail += `${String(offset).padStart(10, "0")} 00000 n \n`;
     }
-    pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF\n`;
+    tail += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF\n`;
+    push(tail);
 
-    // Latin-1, not UTF-8: every byte written above is already in that range
-    // after toWinAnsi, and a multi-byte encoding would shift every offset in
-    // the xref table and make the file unreadable.
-    const bytes = new Uint8Array(pdf.length);
-    for (let i = 0; i < pdf.length; i += 1) bytes[i] = pdf.charCodeAt(i) & 0xff;
-    return bytes;
+    const out = new Uint8Array(length);
+    let at = 0;
+    for (const chunk of chunks) {
+      out.set(chunk, at);
+      at += chunk.length;
+    }
+    return out;
   }
+}
+
+/**
+ * Latin-1, not UTF-8: everything written above is already in that range after
+ * toWinAnsi, and a multi-byte encoding would shift every offset in the xref
+ * table and make the file unreadable.
+ */
+function latin1(value: string): Uint8Array {
+  const bytes = new Uint8Array(value.length);
+  for (let i = 0; i < value.length; i += 1) bytes[i] = value.charCodeAt(i) & 0xff;
+  return bytes;
 }
 
 /** Byte length under Latin-1, which is what build() writes. */

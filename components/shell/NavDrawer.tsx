@@ -67,12 +67,11 @@ export function NavDrawer({ open, onClose }: { open: boolean; onClose: () => voi
             style={{ animation: "gb-drawer-in 180ms ease-out" }}
           >
             <div className="flex items-center justify-between gap-3 pt-2 pb-5">
-              <div className="flex min-w-0 items-center gap-3">
-                <Logo className="size-11 shrink-0" />
-                <div className="min-w-0">
-                  <p className="truncate text-lg font-extrabold text-ink">{BUSINESS.name}</p>
-                  <p className="text-sm font-semibold text-muted">{BUSINESS.address}</p>
-                </div>
+              <div className="min-w-0">
+                {/* The lockup carries the business name, so printing it again
+                    underneath would just be the same words twice. */}
+                <Logo width={168} priority />
+                <p className="mt-1 text-sm font-semibold text-muted">{BUSINESS.address}</p>
               </div>
               <button
                 type="button"

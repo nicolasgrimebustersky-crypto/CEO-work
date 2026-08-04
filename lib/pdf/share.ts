@@ -1,4 +1,5 @@
 import { buildDocumentPdf, documentFileName } from "@/lib/pdf/documentPdf";
+import { loadLogoImage } from "@/lib/pdf/logoImage";
 import type { BusinessDocument } from "@/lib/documents";
 import type { Customer } from "@/lib/types";
 
@@ -12,15 +13,18 @@ import type { Customer } from "@/lib/types";
  * download.
  */
 
-function toBlob(document: BusinessDocument, customer: Customer | null): Blob {
-  const bytes = buildDocumentPdf(document, customer);
+async function toBlob(document: BusinessDocument, customer: Customer | null): Promise<Blob> {
+  const bytes = buildDocumentPdf(document, customer, await loadLogoImage());
   // Copy into a fresh buffer: the typed array's underlying ArrayBuffer is what
   // Blob wants, and slicing guarantees it is exactly this document's bytes.
   return new Blob([bytes.slice().buffer as ArrayBuffer], { type: "application/pdf" });
 }
 
-export function downloadPdf(document: BusinessDocument, customer: Customer | null): void {
-  const url = URL.createObjectURL(toBlob(document, customer));
+export async function downloadPdf(
+  document: BusinessDocument,
+  customer: Customer | null,
+): Promise<void> {
+  const url = URL.createObjectURL(await toBlob(document, customer));
   const link = window.document.createElement("a");
   link.href = url;
   link.download = documentFileName(document);
@@ -51,11 +55,11 @@ export async function sharePdf(
   message: string,
 ): Promise<ShareOutcome> {
   if (!canShareFiles()) {
-    downloadPdf(document, customer);
+    await downloadPdf(document, customer);
     return "downloaded";
   }
 
-  const file = new File([toBlob(document, customer)], documentFileName(document), {
+  const file = new File([await toBlob(document, customer)], documentFileName(document), {
     type: "application/pdf",
   });
 
@@ -70,7 +74,7 @@ export async function sharePdf(
     // Dismissing the sheet rejects with AbortError. That is not a failure and
     // must not surface as one — the customer simply changed their mind.
     if (error instanceof DOMException && error.name === "AbortError") return "cancelled";
-    downloadPdf(document, customer);
+    await downloadPdf(document, customer);
     return "downloaded";
   }
 }

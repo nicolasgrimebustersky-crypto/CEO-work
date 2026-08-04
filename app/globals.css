@@ -15,6 +15,11 @@
      cyan  — what you TAP. Buttons, links, the active nav tab, focus rings.
      green — what you EARN. Revenue, collected, paid, a sale at the door.
 
+   The green is the logo's own, sampled from the artwork. Cyan is not in the
+   lockup; it is there because it is the one hue that stays legible in direct
+   sun without competing with the green, and because a button and a dollar
+   figure must never be the same colour.
+
    Keeping them separate is what stops the UI turning into confetti: if every
    number were accent-coloured, none of them would stand out. Money is the
    thing this business opens the app to see, so money gets its own hue.
@@ -39,10 +44,16 @@
   --color-accent: #00d9ff;
   --color-accent-ink: #00181f;
 
-  /* Money. Same green as the `customer` pin and the `ok` state, deliberately —
-     a paid invoice, a won customer and a green pin are the same good news. */
-  --color-money: #22c55e;
-  --color-money-ink: #00220e;
+  /* Money, and the brand green — sampled from the logo artwork rather than
+     picked, so a figure on screen is the same green as the sign on the truck.
+     6:1 on the canvas, which clears AA for the figures it renders. */
+  --color-money: #06a143;
+  --color-money-ink: #f1e3cd;
+
+  /* The logo's banner text and its outline. Used sparingly, where the UI
+     touches the lockup — the drawer header, the document band. */
+  --color-cream: #f1e3cd;
+  --color-gold: #a37d39;
 
   /* Customer pin colours — fixed by the status model, do not repurpose. */
   --color-status-lead: #9aa7b4;

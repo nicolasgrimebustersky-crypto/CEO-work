@@ -3,7 +3,7 @@ import { lineLabel, lineTotal, type BusinessDocument } from "@/lib/documents";
 import { formatDateOnly, formatMoneyExact, formatPhone } from "@/lib/format";
 import { SERVICE_LABEL } from "@/lib/status";
 import type { Customer } from "@/lib/types";
-import { Doc, hexToRgb, PAGE_WIDTH, PT_PER_INCH, type PathSegment } from "./writer";
+import { Doc, hexToRgb, PAGE_WIDTH, PT_PER_INCH, type JpegImage } from "./writer";
 
 /**
  * An estimate or invoice as a PDF.
@@ -30,68 +30,12 @@ const BODY = hexToRgb("#111111");
 const MUTED = hexToRgb("#4b5563");
 const FAINT = hexToRgb("#9aa3ad");
 const HAIRLINE = hexToRgb("#e6e8ea");
-/** The unwashed half of the mark. */
-const LOGO_GRIME = hexToRgb("#20262e");
 
 /** Right edge of each column, so figures line up on their last digit. */
 const COL_AMOUNT = MARGIN + CONTENT_WIDTH;
 const COL_PRICE = COL_AMOUNT - 96;
 const COL_QTY = COL_PRICE - 86;
 const DESCRIPTION_WIDTH = COL_QTY - MARGIN - 68;
-
-/**
- * The logo, as PDF path operators.
- *
- * The same droplet as public/logo.svg, redrawn rather than referenced: PDF has
- * no arc operator, so the belly of the drop is four cubic curves. 0.5523 is the
- * constant that makes a Bézier match a circular quadrant to within a rounding
- * error — the standard circle approximation.
- *
- * Two flat colours instead of the app's gradients. A PDF gradient needs a
- * shading dictionary and a function object, which is a lot of file for a mark
- * printed at 40 points.
- */
-function drawLogo(pdf: Doc, x: number, y: number, size: number): void {
-  const at = (u: number, v: number): [number, number] => [x + u * size, y + v * size];
-  const cx = 0.5;
-  const cy = 0.63;
-  const r = 0.3;
-  const k = 0.5523 * r;
-
-  const droplet: PathSegment[] = [
-    { move: at(cx, 0.03) },
-    // Right shoulder, apex down to the circle's right tangent.
-    { curve: [...at(0.82, 0.34), ...at(cx + r, cy - 0.14), ...at(cx + r, cy)] },
-    // Belly: right → bottom → left, as two quadrants.
-    { curve: [...at(cx + r, cy + k), ...at(cx + k, cy + r), ...at(cx, cy + r)] },
-    { curve: [...at(cx - k, cy + r), ...at(cx - r, cy + k), ...at(cx - r, cy)] },
-    // Left shoulder back to the apex.
-    { curve: [...at(cx - r, cy - 0.14), ...at(0.18, 0.34), ...at(cx, 0.03)] },
-  ];
-
-  pdf.shape(droplet, ACCENT, () => {
-    // Clipped to the droplet: the half that has not been cleaned yet, and the
-    // lit edge where the water is working.
-    pdf.shape(
-      [
-        { move: at(-0.1, 0.62) },
-        { line: at(1.1, 0.53) },
-        { line: at(1.1, 1.2) },
-        { line: at(-0.1, 1.2) },
-      ],
-      LOGO_GRIME,
-    );
-    pdf.shape(
-      [
-        { move: at(-0.1, 0.62) },
-        { line: at(1.1, 0.53) },
-        { line: at(1.1, 0.585) },
-        { line: at(-0.1, 0.675) },
-      ],
-      MONEY,
-    );
-  });
-}
 
 export function documentFileName(document: BusinessDocument): string {
   const kind = document.kind === "invoice" ? "Invoice" : "Estimate";
@@ -102,24 +46,39 @@ export function documentFileName(document: BusinessDocument): string {
 export function buildDocumentPdf(
   document: BusinessDocument,
   customer: Customer | null,
+  /** The lockup. Null when it could not be fetched — see lib/pdf/logoImage.ts. */
+  logo: JpegImage | null = null,
 ): Uint8Array {
   const pdf = new Doc();
   const isInvoice = document.kind === "invoice";
 
   /* ------------------------------------------------------------- header */
 
-  const bandHeight = 92;
+  const bandHeight = logo ? 104 : 92;
   pdf.rect(MARGIN, MARGIN, CONTENT_WIDTH, bandHeight, INK);
 
-  drawLogo(pdf, MARGIN + 18, MARGIN + 22, 40);
-
-  const textLeft = MARGIN + 70;
-  pdf.text(BUSINESS.name, textLeft, MARGIN + 18, {
-    size: 17,
-    font: "Helvetica-Bold",
-    color: WHITE,
-  });
-  pdf.text(BUSINESS.tagline, textLeft, MARGIN + 42, { size: 9, color: ACCENT });
+  // The lockup already reads as the business name, so when it is present the
+  // name is not set again beside it — that would be the same words twice.
+  let textLeft = MARGIN + 18;
+  if (logo) {
+    const logoHeight = 64;
+    pdf.drawImage(
+      logo,
+      MARGIN + 14,
+      MARGIN + (bandHeight - logoHeight) / 2,
+      (logoHeight * logo.width) / logo.height,
+      logoHeight,
+    );
+    textLeft = MARGIN + 14 + (logoHeight * logo.width) / logo.height + 16;
+    pdf.text(BUSINESS.tagline, textLeft, MARGIN + 36, { size: 9, color: ACCENT });
+  } else {
+    pdf.text(BUSINESS.name, textLeft, MARGIN + 18, {
+      size: 17,
+      font: "Helvetica-Bold",
+      color: WHITE,
+    });
+    pdf.text(BUSINESS.tagline, textLeft, MARGIN + 42, { size: 9, color: ACCENT });
+  }
 
   const contact = [
     BUSINESS.address,
@@ -128,7 +87,7 @@ export function buildDocumentPdf(
   ]
     .filter(Boolean)
     .join("  ·  ");
-  pdf.text(contact, textLeft, MARGIN + 62, { size: 9, color: FAINT });
+  pdf.text(contact, textLeft, logo ? MARGIN + 54 : MARGIN + 62, { size: 9, color: FAINT });
 
   const right = MARGIN + CONTENT_WIDTH - 18;
   pdf.text(isInvoice ? "INVOICE" : "ESTIMATE", right, MARGIN + 17, {

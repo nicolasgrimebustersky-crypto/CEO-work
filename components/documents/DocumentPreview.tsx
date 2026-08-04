@@ -146,13 +146,10 @@ export function DocumentPreview({
               gap: "18px",
             }}
           >
-            <div style={{ display: "flex", gap: "12px", alignItems: "flex-start", minWidth: 0 }}>
-              <span style={{ display: "block", width: "40px", flexShrink: 0 }}>
-                <Logo className="" />
-              </span>
-              <div style={{ minWidth: 0 }}>
-                <p style={{ fontSize: "17px", fontWeight: 800, margin: 0 }}>{BUSINESS.name}</p>
-                <p style={{ fontSize: "10px", margin: "3px 0 0", color: BRAND.accent }}>
+            <div style={{ minWidth: 0 }}>
+              <Logo width={150} />
+              <div style={{ minWidth: 0, marginTop: "6px" }}>
+                <p style={{ fontSize: "10px", margin: 0, color: BRAND.accent }}>
                   {BUSINESS.tagline}
                 </p>
                 <p style={{ fontSize: "10px", margin: "7px 0 0", color: "#c9ced4" }}>
@@ -325,7 +322,7 @@ export function DocumentPreview({
         <div className="mx-auto flex max-w-3xl gap-3">
           <button
             type="button"
-            onClick={() => downloadPdf(businessDocument, customer)}
+            onClick={() => void downloadPdf(businessDocument, customer)}
             className="tap-target flex-1 rounded-full border border-line bg-surface-2 px-5 py-3 text-base font-semibold text-ink"
           >
             Download PDF

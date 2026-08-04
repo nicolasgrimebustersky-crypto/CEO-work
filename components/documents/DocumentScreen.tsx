@@ -614,7 +614,7 @@ export function DocumentScreen() {
               </Button>
               <Button
                 variant="secondary"
-                onClick={() => downloadPdf(document, customer)}
+                onClick={() => void downloadPdf(document, customer)}
               >
                 Download PDF
               </Button>
