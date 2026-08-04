@@ -1,13 +1,22 @@
 "use client";
 
+import { useState } from "react";
+
+import type { SavedService } from "@/lib/db/services";
 import { formatMoneyExact } from "@/lib/format";
+import { ServicePickerSheet } from "./ServicePickerSheet";
 import { blankLine, draftTotals, toNumber, type Draft, type DraftLine } from "./draft";
 
 const INPUT =
-  "w-full rounded-lg border border-line bg-surface-2 px-3 py-2.5 text-base text-ink placeholder:text-muted/70 focus:border-accent focus:outline-none";
+  "w-full rounded-xl border border-line bg-surface-2 px-3 py-2.5 text-base text-ink placeholder:text-muted/70 focus:border-accent focus:outline-none";
 
 /**
  * The line-item table.
+ *
+ * Each line is a service with a name and a description, because those do
+ * different jobs: the name is what shows in a list and what the price book is
+ * keyed on, the description is the sentence that settles what was included
+ * when the customer rings up three weeks later. Both print.
  *
  * Money fields use inputMode="decimal" rather than type="number": a number
  * input on iOS still shows the full keyboard on some builds, and its spinners
@@ -24,6 +33,8 @@ export function LineItemsEditor({
   disabled?: boolean;
 }) {
   const totals = draftTotals(draft);
+  // Which line the picker is filling, or null when it is closed.
+  const [pickingFor, setPickingFor] = useState<string | null>(null);
 
   function patchLine(id: string, patch: Partial<DraftLine>) {
     onChange({
@@ -38,37 +49,68 @@ export function LineItemsEditor({
     onChange({ ...draft, lines: remaining.length > 0 ? remaining : [blankLine()] });
   }
 
+  /**
+   * Fills a line from the price book. The saved price is a starting point, not
+   * a rule — every driveway is a different size — so it lands in the editable
+   * field rather than being locked.
+   */
+  function applyService(lineId: string, service: SavedService) {
+    patchLine(lineId, {
+      name: service.name,
+      description: service.description,
+      unitPrice: String(service.unitPrice),
+      taxable: service.taxable,
+    });
+    setPickingFor(null);
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <ul className="flex flex-col gap-3">
         {draft.lines.map((line, index) => {
           const lineTotal = toNumber(line.quantity) * toNumber(line.unitPrice);
           return (
-            <li
-              key={line.id}
-              className="rounded-xl border border-line bg-surface p-3 sm:p-4"
-            >
+            <li key={line.id} className="rounded-3xl border border-line bg-surface p-3 sm:p-4">
               <div className="flex items-start gap-2">
                 <input
-                  value={line.description}
-                  onChange={(e) => patchLine(line.id, { description: e.target.value })}
+                  value={line.name}
+                  onChange={(e) => patchLine(line.id, { name: e.target.value })}
                   disabled={disabled}
-                  placeholder="What are you doing? e.g. House wash, 2-story"
-                  aria-label={`Line ${index + 1} description`}
-                  className={INPUT}
+                  placeholder="Service — e.g. House wash"
+                  aria-label={`Line ${index + 1} service`}
+                  className={`${INPUT} font-semibold`}
                 />
                 <button
                   type="button"
                   onClick={() => removeLine(line.id)}
                   disabled={disabled}
                   aria-label={`Remove line ${index + 1}`}
-                  className="tap-target shrink-0 rounded-lg px-3 text-2xl leading-none text-muted hover:bg-surface-2 hover:text-danger disabled:opacity-40"
+                  className="tap-target shrink-0 rounded-xl px-3 text-2xl leading-none text-muted hover:bg-surface-2 hover:text-danger disabled:opacity-40"
                 >
                   ×
                 </button>
               </div>
 
-              <div className="mt-2 flex flex-wrap items-end gap-x-2 gap-y-2">
+              <textarea
+                value={line.description}
+                onChange={(e) => patchLine(line.id, { description: e.target.value })}
+                disabled={disabled}
+                rows={2}
+                placeholder="What it covers — the customer reads this"
+                aria-label={`Line ${index + 1} description`}
+                className={`${INPUT} mt-2 resize-y`}
+              />
+
+              <button
+                type="button"
+                onClick={() => setPickingFor(line.id)}
+                disabled={disabled}
+                className="tap-target mt-1 text-sm font-bold text-accent disabled:opacity-40"
+              >
+                Use a saved service
+              </button>
+
+              <div className="mt-1 flex flex-wrap items-end gap-x-2 gap-y-2">
                 <label className="w-20">
                   <span className="mb-1 block text-xs font-bold text-muted">Qty</span>
                   <input
@@ -118,12 +160,12 @@ export function LineItemsEditor({
         type="button"
         onClick={() => onChange({ ...draft, lines: [...draft.lines, blankLine()] })}
         disabled={disabled}
-        className="tap-target w-full rounded-xl border border-dashed border-line bg-surface-2/50 px-4 py-3 text-base font-bold text-accent hover:bg-surface-2 disabled:opacity-40"
+        className="tap-target w-full rounded-2xl border border-dashed border-line bg-surface-2/50 px-4 py-3 text-base font-bold text-accent hover:bg-surface-2 disabled:opacity-40"
       >
         + Add line
       </button>
 
-      <div className="rounded-xl border border-line bg-surface p-3 sm:p-4">
+      <div className="rounded-3xl border border-line bg-surface p-3 sm:p-4">
         <TotalRow label="Subtotal" value={formatMoneyExact(totals.subtotal)} />
 
         <div className="mt-2 flex items-center justify-between gap-3">
@@ -171,6 +213,14 @@ export function LineItemsEditor({
           </span>
         </div>
       </div>
+
+      <ServicePickerSheet
+        open={pickingFor !== null}
+        onClose={() => setPickingFor(null)}
+        onPick={(service) => {
+          if (pickingFor) applyService(pickingFor, service);
+        }}
+      />
     </div>
   );
 }

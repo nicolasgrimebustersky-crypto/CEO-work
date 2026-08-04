@@ -8,6 +8,7 @@ import { CustomerPickerSheet } from "@/components/documents/CustomerPickerSheet"
 import { useDocuments } from "@/components/providers/DocumentsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { IconTile } from "@/components/ui/Card";
+import { Logo } from "@/components/ui/Logo";
 import { BUSINESS } from "@/lib/business";
 import { formatMoney, initialsFor } from "@/lib/format";
 import { routes } from "@/lib/routes";
@@ -66,9 +67,12 @@ export function NavDrawer({ open, onClose }: { open: boolean; onClose: () => voi
             style={{ animation: "gb-drawer-in 180ms ease-out" }}
           >
             <div className="flex items-center justify-between gap-3 pt-2 pb-5">
-              <div className="min-w-0">
-                <p className="truncate text-lg font-extrabold text-ink">{BUSINESS.name}</p>
-                <p className="text-sm font-semibold text-muted">{BUSINESS.address}</p>
+              <div className="flex min-w-0 items-center gap-3">
+                <Logo className="size-11 shrink-0" />
+                <div className="min-w-0">
+                  <p className="truncate text-lg font-extrabold text-ink">{BUSINESS.name}</p>
+                  <p className="text-sm font-semibold text-muted">{BUSINESS.address}</p>
+                </div>
               </div>
               <button
                 type="button"

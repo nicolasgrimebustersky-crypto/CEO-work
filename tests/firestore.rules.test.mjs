@@ -113,6 +113,19 @@ function businessDoc(uid, overrides = {}) {
   };
 }
 
+function serviceDoc(uid, overrides = {}) {
+  return {
+    name: "House wash",
+    description: "Soft wash, two storey, includes gutter faces",
+    unitPrice: 450,
+    serviceType: "pressure_washing",
+    taxable: true,
+    timesUsed: 3,
+    createdBy: uid,
+    ...overrides,
+  };
+}
+
 function notificationDoc(actorUid, forUid, overrides = {}) {
   return {
     forUid,
@@ -161,6 +174,7 @@ beforeEach(async () => {
     await setDoc(doc(db, "quotes/q1"), quoteDoc("alice"));
     await setDoc(doc(db, "notifications/n1"), notificationDoc("alice", "bob"));
     await setDoc(doc(db, "documents/d1"), businessDoc("alice"));
+    await setDoc(doc(db, "services/s1"), serviceDoc("alice"));
     await setDoc(doc(db, "users/alice"), { displayName: "Alice" });
     await setDoc(doc(db, "users/bob"), { displayName: "Bob" });
   });
@@ -189,6 +203,8 @@ describe("the two-account allowlist", () => {
     await assertFails(getDocs(collection(mallory, "notifications")));
     await assertFails(getDocs(collection(mallory, "documents")));
     await assertFails(addDoc(collection(mallory, "documents"), businessDoc("mallory")));
+    await assertFails(getDocs(collection(mallory, "services")));
+    await assertFails(addDoc(collection(mallory, "services"), serviceDoc("mallory")));
   });
 
   test("an unauthenticated caller gets nothing", async () => {
@@ -391,6 +407,53 @@ describe("estimates and invoices", () => {
     );
     await assertFails(
       addDoc(collection(alice, "documents"), businessDoc("alice", { number: 8904 })),
+    );
+  });
+});
+
+/* ---------------------------------------------------------- the price book */
+
+describe("saved services", () => {
+  test("using a service records it and bumps its count", async () => {
+    const ref = await assertSucceeds(
+      addDoc(collection(alice, "services"), serviceDoc("alice")),
+    );
+    // No author stamp to refresh: the price book is reference data, and this
+    // write happens automatically when an estimate is saved.
+    await assertSucceeds(
+      updateDoc(doc(bob, `services/${ref.id}`), { timesUsed: 4, unitPrice: 475 }),
+    );
+    await assertSucceeds(deleteDoc(doc(alice, `services/${ref.id}`)));
+  });
+
+  test("a service cannot be created under someone else's name", async () => {
+    await assertFails(addDoc(collection(alice, "services"), serviceDoc("bob")));
+  });
+
+  test("a nameless service is rejected — it could never be found again", async () => {
+    await assertFails(
+      addDoc(collection(alice, "services"), serviceDoc("alice", { name: "" })),
+    );
+    await assertFails(
+      addDoc(collection(alice, "services"), serviceDoc("alice", { name: 42 })),
+    );
+  });
+
+  test("a bad price is rejected, here and on update", async () => {
+    // A wrong price in the book quietly propagates onto every future quote,
+    // which is why this is stricter than the text fields.
+    await assertFails(
+      addDoc(collection(alice, "services"), serviceDoc("alice", { unitPrice: -1 })),
+    );
+    await assertFails(
+      addDoc(collection(alice, "services"), serviceDoc("alice", { unitPrice: "450" })),
+    );
+    await assertFails(updateDoc(doc(alice, "services/s1"), { unitPrice: -5 }));
+  });
+
+  test("a bogus service type is rejected", async () => {
+    await assertFails(
+      addDoc(collection(alice, "services"), serviceDoc("alice", { serviceType: "gutters" })),
     );
   });
 });

@@ -8,6 +8,7 @@
  * bytes are swapped.
  */
 import type { AppNotification } from "@/lib/db/notifications";
+import type { SavedService } from "@/lib/db/services";
 import type { BusinessDocument } from "@/lib/documents";
 import type { AppUser, Customer, Job, Quote } from "@/lib/types";
 
@@ -20,3 +21,4 @@ export const demoJobs: Job[] = [];
 export const demoQuotes: Quote[] = [];
 export const demoNotifications: AppNotification[] = [];
 export const demoDocuments: BusinessDocument[] = [];
+export const demoServices: SavedService[] = [];

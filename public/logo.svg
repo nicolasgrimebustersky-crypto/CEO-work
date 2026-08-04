@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Grime Busters">
+  <title>Grime Busters</title>
+  <!--
+    The mark: one droplet, caught halfway through being cleaned.
+
+    Everything this business does is the same act — a hard line travels across
+    a dirty surface and behind it the surface is new. So the line lives inside
+    the droplet rather than under it: below the diagonal the fill is grey and
+    flecked, above it the fill is bright, and a lit edge sits on the boundary
+    where the water is working right now.
+
+    Keeping the whole idea inside a single silhouette is what makes it survive
+    a 32px browser tab. There is one shape to recognise, one diagonal, and no
+    element thinner than about 3% of the canvas — nothing to drop out when the
+    rasteriser gets to a favicon.
+  -->
+  <defs>
+    <linearGradient id="gb-clean" x1="0.15" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#7dedff" />
+      <stop offset="0.42" stop-color="#00d9ff" />
+      <stop offset="1" stop-color="#22c55e" />
+    </linearGradient>
+    <linearGradient id="gb-edge" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#22c55e" />
+      <stop offset="0.55" stop-color="#8ef7ff" />
+      <stop offset="1" stop-color="#00d9ff" />
+    </linearGradient>
+
+    <!-- The droplet: a circle for the belly, tangent curves up to a point. -->
+    <path
+      id="gb-droplet"
+      d="M256 68
+         C 256 68, 356 200, 356 262
+         a 100 100 0 1 1 -200 0
+         C 156 200, 256 68, 256 68 Z"
+    />
+    <clipPath id="gb-inside">
+      <use href="#gb-droplet" />
+    </clipPath>
+    <clipPath id="gb-round">
+      <rect width="512" height="512" rx="116" />
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#gb-round)">
+    <rect width="512" height="512" fill="#050607" />
+
+    <g clip-path="url(#gb-inside)">
+      <!-- Everything above the line: done. -->
+      <use href="#gb-droplet" fill="url(#gb-clean)" />
+
+      <!-- Everything below it: not yet. Angled, because a wand is swung. -->
+      <path d="M110 312 L420 268 L420 440 L110 440 Z" fill="#20262e" />
+      <g fill="#39424e">
+        <circle cx="176" cy="360" r="9" />
+        <circle cx="238" cy="404" r="6" />
+        <circle cx="300" cy="352" r="7.5" />
+        <circle cx="330" cy="410" r="5" />
+        <circle cx="205" cy="332" r="5" />
+        <circle cx="270" cy="330" r="4" />
+      </g>
+
+      <!-- The working edge: where the water is hitting, right now. -->
+      <path d="M104 314 L426 268 L426 289 L104 335 Z" fill="url(#gb-edge)" />
+    </g>
+
+    <!-- Specular highlight, so it reads as water and not as a leaf. -->
+    <ellipse
+      cx="214"
+      cy="228"
+      rx="24"
+      ry="34"
+      fill="#ffffff"
+      opacity="0.42"
+      transform="rotate(-20 214 228)"
+    />
+  </g>
+</svg>

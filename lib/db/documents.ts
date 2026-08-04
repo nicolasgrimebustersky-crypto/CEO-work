@@ -35,17 +35,28 @@ import type { Author, Customer, ServiceType } from "@/lib/types";
 
 const COLLECTION = COLLECTIONS.documents;
 
+/**
+ * Line items gained a `name` after the first documents were already written,
+ * so a stored line may have only `description`. Those are read as the name —
+ * which is what that field held at the time — leaving the detail blank rather
+ * than showing an unnamed line with a paragraph where its title should be.
+ */
 function asLineItems(value: unknown): LineItem[] {
   if (!Array.isArray(value)) return [];
   return value
     .filter((item): item is DocumentData => typeof item === "object" && item !== null)
-    .map((item, index) => ({
-      id: typeof item.id === "string" ? item.id : `li-${index}`,
-      description: typeof item.description === "string" ? item.description : "",
-      quantity: typeof item.quantity === "number" ? item.quantity : 0,
-      unitPrice: typeof item.unitPrice === "number" ? item.unitPrice : 0,
-      taxable: item.taxable !== false,
-    }));
+    .map((item, index) => {
+      const name = typeof item.name === "string" ? item.name : "";
+      const description = typeof item.description === "string" ? item.description : "";
+      return {
+        id: typeof item.id === "string" ? item.id : `li-${index}`,
+        name: name || description,
+        description: name ? description : "",
+        quantity: typeof item.quantity === "number" ? item.quantity : 0,
+        unitPrice: typeof item.unitPrice === "number" ? item.unitPrice : 0,
+        taxable: item.taxable !== false,
+      };
+    });
 }
 
 function asPayments(value: unknown): Payment[] {

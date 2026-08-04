@@ -143,6 +143,27 @@ export function ReportIcon({ active }: NavIconProps) {
   );
 }
 
+export function PriceBookIcon({ active }: NavIconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className="size-6" aria-hidden="true">
+      <path
+        d="M4 5.2A2.2 2.2 0 0 1 6.2 3H19v15H6.2A2.2 2.2 0 0 0 4 20.2V5.2Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={w(active)}
+        strokeLinejoin="round"
+      />
+      <path
+        d="M19 18v3H6.2A2.2 2.2 0 0 1 4 18.8M8.5 8h6.5M8.5 11.5h4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={w(active)}
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export function MenuIcon({ active }: NavIconProps) {
   return (
     <svg viewBox="0 0 24 24" className="size-6" aria-hidden="true">

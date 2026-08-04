@@ -105,6 +105,22 @@ service cloud.firestore {
         && data.balanceDue is number;
     }
 
+    // The price book. Written automatically whenever a service is used on an
+    // estimate, so the validation is deliberately loose on text and strict on
+    // money — a bad price silently propagates onto future quotes.
+    function validService() {
+      let data = request.resource.data;
+      return data.name is string
+        && data.name.size() > 0
+        && data.description is string
+        && data.unitPrice is number
+        && data.unitPrice >= 0
+        && data.serviceType in ['pressure_washing', 'landscaping', 'snow_removal']
+        && data.taxable is bool
+        && data.timesUsed is number
+        && data.timesUsed >= 0;
+    }
+
     function validQuote() {
       let data = request.resource.data;
       return data.status in ['sent', 'accepted', 'declined', 'no_response']
@@ -159,6 +175,17 @@ service cloud.firestore {
         && validDocument()
         && request.resource.data.number == resource.data.number
         && request.resource.data.customerId == resource.data.customerId;
+      allow delete: if isCrew();
+    }
+
+    // The price book is shared reference data, not a record of anything that
+    // happened, so there is no author stamp to refresh on update — the whole
+    // point is that using a service updates its price and its usage count
+    // without anyone opening a form.
+    match /services/{serviceId} {
+      allow read: if isCrew();
+      allow create: if isCrew() && stampedByCaller('createdBy') && validService();
+      allow update: if isCrew() && validService();
       allow delete: if isCrew();
     }
 

@@ -7,6 +7,7 @@ import {
   PeopleIcon,
   PersonIcon,
   PipelineIcon,
+  PriceBookIcon,
   ReportIcon,
   type NavIconProps,
 } from "./navIcons";
@@ -41,6 +42,12 @@ export const DRAWER_ONLY: NavItem[] = [
     label: "Dashboard",
     icon: ChartIcon,
     hint: "Today at a glance",
+  },
+  {
+    href: routes.services,
+    label: "Services",
+    icon: PriceBookIcon,
+    hint: "Your prices and wording",
   },
   {
     href: routes.reports,

@@ -57,6 +57,13 @@ export const DEFAULT_TAX_RATE_PCT = 6;
 
 export interface LineItem {
   id: string;
+  /** What the service is called: "House wash", "Spring cleanup". */
+  name: string;
+  /**
+   * What it actually covers, in the customer's words. This is the line that
+   * stops the argument three weeks later about whether the quote included the
+   * back patio, so it prints under the name rather than being an internal note.
+   */
   description: string;
   /** Hours, square feet, or just 1 for a flat price. */
   quantity: number;
@@ -214,5 +221,10 @@ export function nextNumber(existing: string[]): string {
 }
 
 export function blankLineItem(id: string): LineItem {
-  return { id, description: "", quantity: 1, unitPrice: 0, taxable: true };
+  return { id, name: "", description: "", quantity: 1, unitPrice: 0, taxable: true };
+}
+
+/** What the line is called, falling back to its detail if it was never named. */
+export function lineLabel(item: LineItem): string {
+  return item.name.trim() || item.description.trim() || "Service";
 }

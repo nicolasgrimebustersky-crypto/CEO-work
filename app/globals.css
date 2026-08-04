@@ -193,6 +193,14 @@ button {
 }
 
 @media print {
+  /* The app's canvas is near-black. Left alone it prints as a full-bleed
+     black page with the document floating on it. */
+  html,
+  body {
+    background: #fff !important;
+    height: auto !important;
+  }
+
   body > * {
     display: none !important;
   }

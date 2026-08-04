@@ -18,6 +18,7 @@ import type { ServiceType } from "@/lib/types";
  */
 export interface DraftLine {
   id: string;
+  name: string;
   description: string;
   quantity: string;
   unitPrice: string;
@@ -49,7 +50,14 @@ export function newLineId(): string {
 }
 
 export function blankLine(): DraftLine {
-  return { id: newLineId(), description: "", quantity: "1", unitPrice: "", taxable: true };
+  return {
+    id: newLineId(),
+    name: "",
+    description: "",
+    quantity: "1",
+    unitPrice: "",
+    taxable: true,
+  };
 }
 
 export function emptyDraft(kind: DocumentKind, customerId: string): Draft {
@@ -74,6 +82,7 @@ export function draftFrom(document: BusinessDocument): Draft {
       document.lineItems.length > 0
         ? document.lineItems.map((item) => ({
             id: item.id,
+            name: item.name,
             description: item.description,
             quantity: String(item.quantity),
             unitPrice: String(item.unitPrice),
@@ -104,9 +113,15 @@ export function parseDueDate(value: string): Date | null {
 
 export function lineItemsFrom(draft: Draft): LineItem[] {
   return draft.lines
-    .filter((line) => line.description.trim() !== "" || toNumber(line.unitPrice) !== 0)
+    .filter(
+      (line) =>
+        line.name.trim() !== "" ||
+        line.description.trim() !== "" ||
+        toNumber(line.unitPrice) !== 0,
+    )
     .map((line) => ({
       id: line.id,
+      name: line.name.trim(),
       description: line.description.trim(),
       quantity: toNumber(line.quantity),
       unitPrice: toNumber(line.unitPrice),
@@ -131,7 +146,7 @@ export function draftProblem(draft: Draft): string | null {
   if (!draft.customerId) return "Pick a customer first.";
   const items = lineItemsFrom(draft);
   if (items.length === 0) return "Add at least one line.";
-  if (items.some((item) => item.description === "")) return "Every line needs a description.";
+  if (items.some((item) => item.name === "")) return "Every line needs a service name.";
   if (items.some((item) => item.quantity <= 0)) return "Quantity has to be more than zero.";
   if (items.some((item) => item.unitPrice < 0)) return "A price cannot be negative.";
   return null;

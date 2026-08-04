@@ -1,6 +1,7 @@
 import { Timestamp } from "firebase/firestore";
 
 import type { AppNotification } from "@/lib/db/notifications";
+import type { SavedService } from "@/lib/db/services";
 import {
   computeTotals,
   DEFAULT_TAX_RATE_PCT,
@@ -539,12 +540,13 @@ export const demoQuotes: Quote[] = [
  */
 function line(
   id: string,
+  name: string,
   description: string,
   quantity: number,
   unitPrice: number,
   taxable = true,
 ): LineItem {
-  return { id, description, quantity, unitPrice, taxable };
+  return { id, name, description, quantity, unitPrice, taxable };
 }
 
 function demoDoc(
@@ -605,6 +607,118 @@ function demoDoc(
   };
 }
 
+/**
+ * The price book, as it would look after a season of quoting.
+ *
+ * In the real app nobody types these in — they accumulate from estimates. The
+ * demo seeds them so the picker has something in it on the first tap, with
+ * usage counts spread the way they really would be: the house wash sells
+ * constantly, the roof wash twice a year.
+ */
+function demoService(
+  id: string,
+  name: string,
+  description: string,
+  unitPrice: number,
+  serviceType: Customer["serviceTypes"][number],
+  timesUsed: number,
+  lastUsedDaysAgo: number,
+  taxable = true,
+): SavedService {
+  return {
+    id,
+    name,
+    description,
+    unitPrice,
+    serviceType,
+    taxable,
+    timesUsed,
+    lastUsedAt: ago(lastUsedDaysAgo),
+    createdAt: ago(lastUsedDaysAgo + 60),
+    createdBy: DEMO_NICK,
+    createdByName: "Nick",
+    updatedAt: ago(lastUsedDaysAgo),
+    updatedBy: DEMO_NICK,
+    updatedByName: "Nick",
+  };
+}
+
+export const demoServices: SavedService[] = [
+  demoService(
+    "ds-1",
+    "House wash",
+    "Soft wash of all siding, soffits and gutter faces. No pressure on the siding.",
+    450,
+    "pressure_washing",
+    24,
+    2,
+  ),
+  demoService(
+    "ds-2",
+    "Driveway and walk",
+    "Surface-cleaned and rinsed, front walk included. Oil stains lightened, not guaranteed removed.",
+    165,
+    "pressure_washing",
+    19,
+    2,
+  ),
+  demoService(
+    "ds-3",
+    "Gutter brightening",
+    "Removes the black tiger stripes on the gutter faces. Exteriors only.",
+    120,
+    "pressure_washing",
+    11,
+    9,
+  ),
+  demoService(
+    "ds-4",
+    "Hardwood mulch, installed",
+    "Double-shredded brown hardwood, 2 inches deep. Price is per cubic yard.",
+    42,
+    "landscaping",
+    8,
+    5,
+  ),
+  demoService(
+    "ds-5",
+    "Spring cleanup",
+    "Beds cleared, shrubs shaped, lawn cut and edged, everything hauled.",
+    420,
+    "landscaping",
+    6,
+    14,
+  ),
+  demoService(
+    "ds-6",
+    "Snow clearing, per visit",
+    "Driveway, front walk and a path to the mailbox. Salted. Billed per visit.",
+    95,
+    "snow_removal",
+    5,
+    3,
+  ),
+  demoService(
+    "ds-7",
+    "Haul away debris",
+    "Everything cut or pulled leaves with us the same day.",
+    60,
+    "landscaping",
+    4,
+    5,
+    false,
+  ),
+  demoService(
+    "ds-8",
+    "Roof soft wash",
+    "Low-pressure treatment for moss and black streaking. Shingle-safe.",
+    675,
+    "pressure_washing",
+    2,
+    41,
+  ),
+];
+
 export const demoDocuments: BusinessDocument[] = [
   demoDoc(
     "dd-1",
@@ -615,9 +729,28 @@ export const demoDocuments: BusinessDocument[] = [
     "Ray Whitfield",
     "landscaping",
     [
-      line("dd-1-a", "Full bed cleanout and re-edge", 1, 340),
-      line("dd-1-b", "Hardwood mulch, installed", 6, 42),
-      line("dd-1-c", "Haul away debris", 1, 60, false),
+      line(
+        "dd-1-a",
+        "Bed cleanout and re-edge",
+        "All front and side beds: pull weeds, cut a fresh spade edge, blow out.",
+        1,
+        340,
+      ),
+      line(
+        "dd-1-b",
+        "Hardwood mulch, installed",
+        "Double-shredded brown hardwood, 2 inches deep. Price is per cubic yard.",
+        6,
+        42,
+      ),
+      line(
+        "dd-1-c",
+        "Haul away debris",
+        "Everything cut or pulled leaves with us the same day.",
+        1,
+        60,
+        false,
+      ),
     ],
     {
       issuedDaysAgo: 5,
@@ -634,8 +767,20 @@ export const demoDocuments: BusinessDocument[] = [
     "Alice Brennan",
     "pressure_washing",
     [
-      line("dd-2-a", "House wash, two storey", 1, 380),
-      line("dd-2-b", "Driveway and walk", 1, 165),
+      line(
+        "dd-2-a",
+        "House wash, two storey",
+        "Soft wash of all four elevations including soffits and gutter faces. No pressure on the siding.",
+        1,
+        380,
+      ),
+      line(
+        "dd-2-b",
+        "Driveway and walk",
+        "Surface-cleaned and rinsed, front walk included. Oil stains lightened, not guaranteed removed.",
+        1,
+        165,
+      ),
     ],
     {
       issuedDaysAgo: 9,
@@ -661,9 +806,27 @@ export const demoDocuments: BusinessDocument[] = [
     "Marta Oakley",
     "pressure_washing",
     [
-      line("dd-3-a", "House wash", 1, 450),
-      line("dd-3-b", "Gutter brightening", 1, 120),
-      line("dd-3-c", "Back patio and steps", 1, 180),
+      line(
+        "dd-3-a",
+        "House wash",
+        "Soft wash of all siding, soffits and gutter faces.",
+        1,
+        450,
+      ),
+      line(
+        "dd-3-b",
+        "Gutter brightening",
+        "Removes the black tiger stripes on the gutter faces. Exteriors only.",
+        1,
+        120,
+      ),
+      line(
+        "dd-3-c",
+        "Back patio and steps",
+        "Stamped concrete, surface-cleaned and rinsed.",
+        1,
+        180,
+      ),
     ],
     {
       discount: 50,
@@ -690,7 +853,15 @@ export const demoDocuments: BusinessDocument[] = [
     "d-nolan",
     "Priya Nolan",
     "snow_removal",
-    [line("dd-4-a", "Driveway and walk clearing, per visit", 3, 95)],
+    [
+      line(
+        "dd-4-a",
+        "Snow clearing, per visit",
+        "Driveway, front walk and a path to the mailbox. Salted. Billed per visit.",
+        3,
+        95,
+      ),
+    ],
     { issuedDaysAgo: 3, dueInDays: 14 },
   ),
   demoDoc(
@@ -701,7 +872,15 @@ export const demoDocuments: BusinessDocument[] = [
     "d-castellano",
     "Dev Castellano",
     "landscaping",
-    [line("dd-5-a", "Spring cleanup", 1, 420)],
+    [
+      line(
+        "dd-5-a",
+        "Spring cleanup",
+        "Beds cleared, shrubs shaped, lawn cut and edged, everything hauled.",
+        1,
+        420,
+      ),
+    ],
     { issuedDaysAgo: 0, notes: "Still measuring the back border." },
   ),
 ];

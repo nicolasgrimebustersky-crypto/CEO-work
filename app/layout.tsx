@@ -9,6 +9,7 @@ import { DocumentsProvider } from "@/components/providers/DocumentsProvider";
 import { JobsProvider } from "@/components/providers/JobsProvider";
 import { LocationSharingProvider } from "@/components/providers/LocationSharingProvider";
 import { NotificationsProvider } from "@/components/providers/NotificationsProvider";
+import { ServicesProvider } from "@/components/providers/ServicesProvider";
 import { TeamProvider } from "@/components/providers/TeamProvider";
 import { AppShell } from "@/components/shell/AppShell";
 import "./globals.css";
@@ -79,13 +80,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <CustomersProvider>
                 <JobsProvider>
                   <DocumentsProvider>
-                    <NotificationsProvider>
-                      <ConnectionProvider>
-                        <LocationSharingProvider>
-                          <AppShell>{children}</AppShell>
-                        </LocationSharingProvider>
-                      </ConnectionProvider>
-                    </NotificationsProvider>
+                    <ServicesProvider>
+                      <NotificationsProvider>
+                        <ConnectionProvider>
+                          <LocationSharingProvider>
+                            <AppShell>{children}</AppShell>
+                          </LocationSharingProvider>
+                        </ConnectionProvider>
+                      </NotificationsProvider>
+                    </ServicesProvider>
                   </DocumentsProvider>
                 </JobsProvider>
               </CustomersProvider>

@@ -22,6 +22,7 @@ import {
   updateDocument,
 } from "@/lib/db/documents";
 import {
+  lineLabel,
   lineTotal,
   STATUS_LABEL,
   STATUSES_FOR,
@@ -34,6 +35,7 @@ import {
   formatMoneyExact,
   formatTimestamp,
 } from "@/lib/format";
+import { rememberServices } from "@/lib/db/services";
 import { documentText } from "@/lib/messages";
 import { routes } from "@/lib/routes";
 import { SERVICE_LABEL } from "@/lib/status";
@@ -159,6 +161,7 @@ export function DocumentScreen() {
           author,
         );
         setEditing(false);
+        void rememberServices(lineItemsFrom(draft), draft.serviceType, author);
       } else {
         const target = customersById.get(draft.customerId);
         if (!target) {
@@ -178,6 +181,16 @@ export function DocumentScreen() {
           },
           author,
         );
+        // Fire and forget: the estimate is saved, and a price book that
+        // failed to update must never look like a failed save.
+        void rememberServices(lineItemsFrom(draft), draft.serviceType, author);
+
+        // Leave the editor as well as changing the URL. The route swaps `new`
+        // for `id`, but `editing` is component state and survives that — so
+        // without this the saved document reopens on its own edit form, with
+        // a Save button that looks like the save did not take.
+        setEditing(false);
+        setDraft(null);
         router.replace(routes.document(id));
       }
     } catch (err) {
@@ -458,10 +471,15 @@ export function DocumentScreen() {
                     className="flex items-start justify-between gap-3 px-3 py-3"
                   >
                     <span className="min-w-0">
-                      <span className="block text-base font-semibold break-words text-ink">
-                        {item.description}
+                      <span className="block text-base font-bold break-words text-ink">
+                        {lineLabel(item)}
                       </span>
-                      <span className="block text-sm font-semibold text-muted">
+                      {item.name && item.description ? (
+                        <span className="mt-0.5 block text-sm font-semibold break-words text-muted">
+                          {item.description}
+                        </span>
+                      ) : null}
+                      <span className="mt-0.5 block text-sm font-semibold text-muted">
                         {item.quantity} × {formatMoneyExact(item.unitPrice)}
                         {item.taxable ? "" : " · no tax"}
                       </span>
