@@ -55,6 +55,26 @@ export const STATUSES_FOR: Record<DocumentKind, DocumentStatus[]> = {
 /** Kentucky state sales tax, and what every imported Flyra estimate used. */
 export const DEFAULT_TAX_RATE_PCT = 6;
 
+/**
+ * How long a converted invoice gets before it is due.
+ *
+ * An invoice with no due date can never be late, which means the Money screen
+ * can never tell you what to chase — so a converted one gets a date rather than
+ * nothing. Two weeks is the ordinary trade term and it is editable on the
+ * invoice, which is the point: a default you can change beats a blank you have
+ * to fill in every time.
+ */
+export const INVOICE_TERMS_DAYS = 14;
+
+/** The due date a converted invoice starts with, counted from today. */
+export function defaultInvoiceDueDate(from: Date = new Date()): Date {
+  const due = new Date(from);
+  due.setDate(due.getDate() + INVOICE_TERMS_DAYS);
+  // Midday, so a daylight-saving shift can't roll it onto the previous date.
+  due.setHours(12, 0, 0, 0);
+  return due;
+}
+
 export interface LineItem {
   id: string;
   /** What the service is called: "House wash", "Spring cleanup". */
@@ -120,6 +140,16 @@ export interface BusinessDocument {
 
   /** Set on an invoice created from an estimate, so the trail is not lost. */
   convertedFromId: string | null;
+
+  /**
+   * Set on an estimate once it has been turned into an invoice.
+   *
+   * The other half of `convertedFromId`, and the thing that stops the same
+   * estimate being billed twice. Without it the convert button stays live
+   * forever, and tapping it again — a week later, having forgotten — quietly
+   * issues a second invoice for the same work under a second number.
+   */
+  convertedToId: string | null;
 
   createdAt: Timestamp;
   createdBy: string;

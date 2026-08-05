@@ -567,6 +567,7 @@ function demoDoc(
     payments?: Payment[];
     notes?: string;
     convertedFromId?: string;
+    convertedToId?: string;
   },
 ): BusinessDocument {
   const discount = options.discount ?? 0;
@@ -600,6 +601,7 @@ function demoDoc(
     sentAt: status === "draft" ? null : ago(options.issuedDaysAgo),
     settledAt: status === "paid" || status === "accepted" ? ago(1) : null,
     convertedFromId: options.convertedFromId ?? null,
+    convertedToId: options.convertedToId ?? null,
     createdAt: ago(options.issuedDaysAgo),
     createdBy: DEMO_NICK,
     createdByName: "Nick",

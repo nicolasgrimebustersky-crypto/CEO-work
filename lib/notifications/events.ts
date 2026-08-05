@@ -88,6 +88,11 @@ export const NOTIFICATION_EVENTS = {
 
   /* ---------------------------------------------------------------- money */
   estimate_sent: { category: "money", title: "Estimate sent", destination: "document" },
+  invoice_created: {
+    category: "money",
+    title: "Invoice ready to send",
+    destination: "document",
+  },
   invoice_sent: { category: "money", title: "Invoice sent", destination: "document" },
   estimate_accepted: {
     category: "money",

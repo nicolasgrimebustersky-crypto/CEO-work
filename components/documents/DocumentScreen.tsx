@@ -106,6 +106,13 @@ export function DocumentScreen() {
   const customer =
     customersById.get(draft?.customerId ?? document?.customerId ?? "") ?? null;
 
+  // The invoice this estimate produced, if it still exists. A deleted one falls
+  // back to null, which puts the convert button back rather than offering a
+  // link to nothing.
+  const converted = document?.convertedToId
+    ? (byId.get(document.convertedToId) ?? null)
+    : null;
+
   if (!isNew && loading && !document) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -260,12 +267,36 @@ export function DocumentScreen() {
     }
   }
 
+  /**
+   * Copies the estimate into a new invoice and opens it.
+   *
+   * Everything comes across — lines, descriptions, discount, tax rate, notes —
+   * so there is nothing to retype. The estimate is stamped with what it
+   * produced, which is what turns the button into a link the next time you look
+   * at it, and it moves to Accepted: billing for the work is the clearest
+   * statement there is that the customer said yes.
+   */
   async function onConvert() {
     if (!document || !author) return;
     setBusy(true);
     setError(null);
     try {
       const id = await convertToInvoice(document, author);
+
+      const target = customersById.get(document.customerId);
+      if (target) {
+        await advancePipeline(target, "estimate_accepted", author, {
+          value: document.total,
+          reason: `Estimate ${document.number} billed`,
+        });
+      }
+      await notify({
+        type: "invoice_created",
+        body: `${document.customerName} · ${formatMoneyExact(document.total)} · from estimate ${document.number}`,
+        customerId: document.customerId,
+        documentId: id,
+      });
+
       router.push(routes.document(id));
     } catch (err) {
       setError(
@@ -645,14 +676,30 @@ export function DocumentScreen() {
               >
                 Text a message
               </Button>
+              {/* One estimate, one invoice. Once it has produced one, the
+                  button becomes the way back to it — tapping again a week
+                  later, having forgotten, would otherwise bill the same work
+                  twice under a second number. */}
               {document.kind === "estimate" ? (
-                <Button
-                  className="col-span-2"
-                  onClick={() => void onConvert()}
-                  disabled={busy}
-                >
-                  Turn into an invoice
-                </Button>
+                converted ? (
+                  <Link
+                    href={routes.document(converted.id)}
+                    className="tap-target col-span-2 flex items-center justify-center gap-2 rounded-full border border-money/50 bg-money/10 px-5 py-3 text-base font-semibold text-ink"
+                  >
+                    Invoice #{converted.number} · {formatMoneyExact(converted.total)}
+                    <span aria-hidden="true" className="text-muted">
+                      ›
+                    </span>
+                  </Link>
+                ) : (
+                  <Button
+                    className="col-span-2"
+                    onClick={() => void onConvert()}
+                    disabled={busy}
+                  >
+                    {busy ? "Making the invoice…" : "Turn into an invoice"}
+                  </Button>
+                )
               ) : null}
             </section>
 

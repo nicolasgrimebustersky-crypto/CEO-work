@@ -11,6 +11,7 @@ import {
   Timestamp,
   updateDoc,
   where,
+  writeBatch,
   type DocumentData,
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
@@ -20,6 +21,7 @@ import * as demo from "@/lib/demo/store";
 import {
   computeTotals,
   DEFAULT_TAX_RATE_PCT,
+  defaultInvoiceDueDate,
   nextNumber,
   statusAfterPayment,
   sumPayments,
@@ -103,6 +105,7 @@ export function toDocument(snap: QueryDocumentSnapshot<DocumentData>): BusinessD
     sentAt: data.sentAt instanceof Timestamp ? data.sentAt : null,
     settledAt: data.settledAt instanceof Timestamp ? data.settledAt : null,
     convertedFromId: typeof data.convertedFromId === "string" ? data.convertedFromId : null,
+    convertedToId: typeof data.convertedToId === "string" ? data.convertedToId : null,
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt : Timestamp.now(),
     createdBy: typeof data.createdBy === "string" ? data.createdBy : "",
     createdByName: typeof data.createdByName === "string" ? data.createdByName : "Unknown",
@@ -213,6 +216,7 @@ export async function createDocument(
     sentAt: null,
     settledAt: null,
     convertedFromId: null,
+    convertedToId: null,
     createdAt: serverTimestamp(),
     createdBy: author.uid,
     createdByName: author.displayName,
@@ -354,12 +358,27 @@ export async function removePayment(
  * A new document rather than a flipped `kind`, so the estimate survives as the
  * record of what was agreed. If the invoice is later edited, the estimate still
  * shows the price the customer said yes to.
+ *
+ * Both writes go in one batch. The estimate gets stamped with the invoice it
+ * produced, and that stamp is what stops the same work being billed twice — so
+ * an invoice existing without it would be worse than the conversion failing
+ * outright: the button would still be live, and the second tap would issue a
+ * second invoice under a second number. A batch cannot half-succeed.
+ *
+ * Returns the new invoice's id, or the existing one if this estimate has
+ * already been converted. Converting twice is almost always a mis-tap or a
+ * forgotten conversion, never an intention.
  */
 export async function convertToInvoice(
   estimate: BusinessDocument,
   author: Author,
-  dueAt: Date | null = null,
+  /** Omit for the standard terms; pass null explicitly for no due date. */
+  dueAt: Date | null | undefined = undefined,
 ): Promise<string> {
+  if (estimate.convertedToId) return estimate.convertedToId;
+
+  const due = dueAt === undefined ? defaultInvoiceDueDate() : dueAt;
+
   const payload = {
     number: await allocateNumber(),
     kind: "invoice" satisfies DocumentKind,
@@ -378,10 +397,11 @@ export async function convertToInvoice(
     balanceDue: estimate.total,
     notes: estimate.notes,
     issuedAt: serverTimestamp(),
-    dueAt: dueAt ? Timestamp.fromDate(dueAt) : null,
+    dueAt: due ? Timestamp.fromDate(due) : null,
     sentAt: null,
     settledAt: null,
     convertedFromId: estimate.id,
+    convertedToId: null,
     createdAt: serverTimestamp(),
     createdBy: author.uid,
     createdByName: author.displayName,
@@ -390,9 +410,37 @@ export async function convertToInvoice(
     updatedByName: author.displayName,
   };
 
-  if (isDemoMode) return demo.add(COLLECTION, payload);
-  const ref = await addDoc(collection(getDb(), COLLECTION), payload);
-  return ref.id;
+  /**
+   * Billing for the work is the clearest possible statement that the customer
+   * said yes, so the estimate follows along rather than sitting at "sent"
+   * forever. A declined or void estimate is left alone — converting one of
+   * those is deliberate enough that overwriting the record of what happened
+   * would be the wrong call.
+   */
+  const estimatePatch = (invoiceId: string) => ({
+    convertedToId: invoiceId,
+    ...(estimate.status === "draft" || estimate.status === "sent"
+      ? { status: "accepted" satisfies DocumentStatus }
+      : {}),
+    updatedAt: serverTimestamp(),
+    updatedBy: author.uid,
+    updatedByName: author.displayName,
+  });
+
+  if (isDemoMode) {
+    const id = demo.add(COLLECTION, payload);
+    demo.update(COLLECTION, estimate.id, estimatePatch(id));
+    return id;
+  }
+
+  // An id is minted client-side so both halves can go in the same batch.
+  const invoiceRef = doc(collection(getDb(), COLLECTION));
+  const batch = writeBatch(getDb());
+  batch.set(invoiceRef, payload);
+  batch.update(doc(getDb(), COLLECTION, estimate.id), estimatePatch(invoiceRef.id));
+  await batch.commit();
+
+  return invoiceRef.id;
 }
 
 export async function deleteDocument(id: string): Promise<void> {

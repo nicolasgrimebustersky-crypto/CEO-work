@@ -13,7 +13,7 @@
     "test:api": "bash scripts/test-api.sh",
     "seed": "node scripts/seed-test-data.mjs",
     "test": "npm run typecheck && npm run lint && npm run test:meta && npm run test:rules",
-    "test:meta": "node --experimental-strip-types --test tests/meta.parse.test.mjs tests/theme.test.mjs tests/userColor.test.mjs tests/notifications.test.mjs tests/pushWorker.test.mjs"
+    "test:meta": "node --experimental-strip-types --test tests/meta.parse.test.mjs tests/theme.test.mjs tests/userColor.test.mjs tests/notifications.test.mjs tests/pushWorker.test.mjs tests/documents.test.mjs"
   },
   "dependencies": {
     "@vis.gl/react-google-maps": "^1.5.6",
