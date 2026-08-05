@@ -156,6 +156,7 @@ export function DocumentPreview({
                   {BUSINESS.address}
                   {BUSINESS.phone ? ` · ${formatPhone(BUSINESS.phone)}` : ""}
                   {BUSINESS.email ? ` · ${BUSINESS.email}` : ""}
+                  {BUSINESS.website ? ` · ${BUSINESS.website}` : ""}
                 </p>
               </div>
             </div>

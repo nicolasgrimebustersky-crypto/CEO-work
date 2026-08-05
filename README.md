@@ -73,6 +73,15 @@ live, and every note, text and job carries the name of whoever did it.
 
 ---
 
+## Picking this up cold
+
+`docs/MASTER_PROMPT.md` is the brief for a fresh session with any AI assistant:
+what the business is, what has been asked for and delivered, what is still
+outstanding, and the rules that must not be broken while changing any of it.
+Paste it as a first message and go from there.
+
+---
+
 ## Setup
 
 ### 1. Install

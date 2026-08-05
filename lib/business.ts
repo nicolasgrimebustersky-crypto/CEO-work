@@ -38,6 +38,12 @@ export const BUSINESS = {
   phone: process.env.NEXT_PUBLIC_BUSINESS_PHONE || "",
   email: process.env.NEXT_PUBLIC_BUSINESS_EMAIL || "",
   address: process.env.NEXT_PUBLIC_BUSINESS_ADDRESS || "Oldham County, Kentucky",
+  /**
+   * Printed on every estimate and invoice. A customer holding a quote three
+   * weeks later looks for the website before they look for the phone number,
+   * and it is the cheapest possible way to make the document check out.
+   */
+  website: process.env.NEXT_PUBLIC_BUSINESS_WEBSITE || "grimebusterskyllc.com",
   /** Printed under the totals — payment instructions, licence number, whatever. */
   footer:
     process.env.NEXT_PUBLIC_BUSINESS_FOOTER ||

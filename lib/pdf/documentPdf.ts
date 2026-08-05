@@ -84,6 +84,7 @@ export function buildDocumentPdf(
     BUSINESS.address,
     BUSINESS.phone ? formatPhone(BUSINESS.phone) : "",
     BUSINESS.email,
+    BUSINESS.website,
   ]
     .filter(Boolean)
     .join("  ·  ");
