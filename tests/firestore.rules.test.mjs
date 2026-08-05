@@ -177,6 +177,11 @@ beforeEach(async () => {
     await setDoc(doc(db, "services/s1"), serviceDoc("alice"));
     await setDoc(doc(db, "users/alice"), { displayName: "Alice" });
     await setDoc(doc(db, "users/bob"), { displayName: "Bob" });
+    await setDoc(doc(db, "pushTokens/t-alice"), {
+      uid: "alice",
+      token: "alice-device-token",
+      label: "iPhone · Safari",
+    });
   });
 });
 
@@ -205,6 +210,10 @@ describe("the two-account allowlist", () => {
     await assertFails(addDoc(collection(mallory, "documents"), businessDoc("mallory")));
     await assertFails(getDocs(collection(mallory, "services")));
     await assertFails(addDoc(collection(mallory, "services"), serviceDoc("mallory")));
+    await assertFails(getDocs(collection(mallory, "pushTokens")));
+    await assertFails(
+      addDoc(collection(mallory, "pushTokens"), { uid: "mallory", token: "t" }),
+    );
   });
 
   test("an unauthenticated caller gets nothing", async () => {
@@ -513,5 +522,62 @@ describe("user profiles", () => {
     // able to erase the other on the way out.
     await assertFails(deleteDoc(doc(alice, "users/bob")));
     await assertSucceeds(deleteDoc(doc(alice, "users/alice")));
+  });
+});
+
+/* ------------------------------------------------------------- push tokens */
+
+describe("push tokens", () => {
+  test("a device may file itself", async () => {
+    await assertSucceeds(
+      addDoc(collection(alice, "pushTokens"), {
+        uid: "alice",
+        token: "a-fresh-token",
+        label: "iPhone · Safari",
+      }),
+    );
+  });
+
+  test("a token may not be filed against the other account", async () => {
+    // The whole point of the rule: a push token is a capability to interrupt a
+    // specific handset, so registering one in somebody else's name would mean
+    // receiving their notifications.
+    await assertFails(
+      addDoc(collection(alice, "pushTokens"), { uid: "bob", token: "stolen" }),
+    );
+    // Rewriting an existing row's uid to yourself would satisfy a naive
+    // "uid == request.auth.uid" check and quietly point your notifications at
+    // the other person's phone. Both identifying fields are pinned on update.
+    await assertFails(updateDoc(doc(bob, "pushTokens/t-alice"), { uid: "bob" }));
+    await assertFails(
+      updateDoc(doc(alice, "pushTokens/t-alice"), { token: "a-different-token" }),
+    );
+  });
+
+  test("a token has to actually be a token", async () => {
+    await assertFails(
+      addDoc(collection(alice, "pushTokens"), { uid: "alice", token: "" }),
+    );
+    await assertFails(
+      addDoc(collection(alice, "pushTokens"), { uid: "alice", token: 12345 }),
+    );
+    await assertFails(
+      addDoc(collection(alice, "pushTokens"), {
+        uid: "alice",
+        token: "x".repeat(1200),
+      }),
+    );
+  });
+
+  test("crew can read the collection, and clean up a stale device", async () => {
+    await assertSucceeds(getDocs(collection(alice, "pushTokens")));
+    await assertSucceeds(deleteDoc(doc(alice, "pushTokens/t-alice")));
+  });
+
+  test("an unauthenticated caller can neither read nor register", async () => {
+    await assertFails(getDocs(collection(anon, "pushTokens")));
+    await assertFails(
+      addDoc(collection(anon, "pushTokens"), { uid: "alice", token: "t" }),
+    );
   });
 });

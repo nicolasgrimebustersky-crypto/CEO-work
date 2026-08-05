@@ -5,6 +5,7 @@ import { SERVICE_LABEL } from "@/lib/status";
 import { adminDb } from "@/lib/server/admin";
 import { ApiError, errorResponse, requireCronSecret } from "@/lib/server/auth";
 import { appendNote, getCustomer } from "@/lib/server/customerNotes";
+import { notifyCrew } from "@/lib/server/notify";
 import { isTwilioConfigured, sendSms } from "@/lib/server/twilio";
 import { SERVICE_TYPES, type ServiceType } from "@/lib/types";
 
@@ -136,6 +137,17 @@ export async function GET(request: Request): Promise<Response> {
         kind: "sms_out",
         authorUid: "system",
         authorName: `Automatic follow-up ${attempt} of ${MAX_FOLLOW_UPS}`,
+      });
+
+      // Worth knowing before you next speak to them: the customer has had a
+      // text from the business overnight that neither of you sent.
+      await notifyCrew({
+        type: "followup_sent",
+        actorName: "Automatic follow-up",
+        body: `${customer.firstName} ${customer.lastName}`.trim()
+          ? `${`${customer.firstName} ${customer.lastName}`.trim()} · chase ${attempt} of ${MAX_FOLLOW_UPS} · ${SERVICE_LABEL[serviceType]}`
+          : `Chase ${attempt} of ${MAX_FOLLOW_UPS} · ${SERVICE_LABEL[serviceType]}`,
+        customerId,
       });
 
       outcomes.push({ quoteId: quoteDoc.id, action: "sent", attempt });

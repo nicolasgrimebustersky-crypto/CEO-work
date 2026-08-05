@@ -15,6 +15,10 @@ import {
 import { isDemoMode } from "@/lib/demo/enabled";
 import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
+import {
+  isNotificationCategory,
+  type NotificationCategory,
+} from "@/lib/notifications/events";
 import type { AppUser } from "@/lib/types";
 
 function toAppUser(snap: QueryDocumentSnapshot<DocumentData>): AppUser {
@@ -29,6 +33,9 @@ function toAppUser(snap: QueryDocumentSnapshot<DocumentData>): AppUser {
       data.lastLocationUpdate instanceof Timestamp ? data.lastLocationUpdate : null,
     isActive: data.isActive === true,
     color: typeof data.color === "string" ? data.color : null,
+    mutedNotifications: Array.isArray(data.mutedNotifications)
+      ? data.mutedNotifications.filter(isNotificationCategory)
+      : [],
   };
 }
 
@@ -67,6 +74,9 @@ export async function ensureUserDoc(
     currentLng: null,
     lastLocationUpdate: null,
     isActive: true,
+    // Nothing muted: a new account hears about everything until it says
+    // otherwise, which is the only default that cannot lose an event silently.
+    mutedNotifications: [],
     createdAt: serverTimestamp(),
   });
 }
@@ -117,4 +127,19 @@ export async function updateUserProfile(
   patch: { displayName?: string; phone?: string },
 ): Promise<void> {
   await writeUser(uid, patch);
+}
+
+/**
+ * Which notification categories this person does not want.
+ *
+ * Written to their own profile because it is read at *sending* time by whoever
+ * raised the event — the rules let both crew read each other's profile but only
+ * write their own, so one person can honour the other's preference without
+ * being able to change it.
+ */
+export async function setMutedNotifications(
+  uid: string,
+  muted: NotificationCategory[],
+): Promise<void> {
+  await writeUser(uid, { mutedNotifications: muted });
 }

@@ -13,6 +13,7 @@ import { updateUserProfile } from "@/lib/db/users";
 import { formatPhone, formatRelative } from "@/lib/format";
 import { routes } from "@/lib/routes";
 import { DeleteAccountSheet } from "./DeleteAccountSheet";
+import { NotificationSettings } from "./NotificationSettings";
 import { useOpenMenu } from "@/components/shell/menu";
 import { MenuIcon } from "@/components/shell/navIcons";
 
@@ -139,6 +140,8 @@ export function AccountScreen() {
             ))}
           </ul>
         </section>
+
+        <NotificationSettings />
 
         {/* Location controls live here, not buried in Settings. Apple expects
             background location to be visibly under the user's control, and it

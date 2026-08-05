@@ -14,11 +14,11 @@ import { useCallback, useMemo, useState } from "react";
 
 import { useCustomers } from "@/components/providers/CustomersProvider";
 import { useJobs } from "@/components/providers/JobsProvider";
+import { useNotify } from "@/components/providers/NotificationsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { ScreenHeader } from "@/components/shell/ScreenHeader";
 import { Spinner } from "@/components/ui/Spinner";
 import { rescheduleJob } from "@/lib/db/jobs";
-import { notifyOthers } from "@/lib/db/notifications";
 import { customerName } from "@/lib/format";
 import { jobRescheduledText } from "@/lib/messages";
 import {
@@ -60,6 +60,7 @@ function Schedule() {
   const { jobs, byId: jobsById, loading, error } = useJobs();
   const { byId: customersById } = useCustomers();
   const { author, users, colorFor } = useTeam();
+  const notify = useNotify();
 
   const [view, setView] = useState<CalendarView>("day");
   const [anchor, setAnchor] = useState(() => new Date());
@@ -69,7 +70,6 @@ function Schedule() {
   const [slotStart, setSlotStart] = useState<Date | undefined>(undefined);
   const [toast, setToast] = useState<string | null>(null);
 
-  const crewUids = useMemo(() => users.map((user) => user.uid), [users]);
 
   const visibleJobs = useMemo(() => {
     if (!mineOnly || !author) return jobs;
@@ -101,9 +101,8 @@ function Schedule() {
         const customer = customersById.get(job.customerId);
         const label = customer ? customerName(customer) : "A job";
 
-        await notifyOthers(crewUids, author, {
+        await notify({
           type: "job_rescheduled",
-          title: "Job rescheduled",
           body: `${label} · ${SERVICE_LABEL[job.serviceType]} · ${format(newStart, "EEE MMM d, h:mm a")}`,
           customerId: job.customerId,
           jobId: job.id,
@@ -123,7 +122,7 @@ function Schedule() {
         setToast(err instanceof Error ? err.message : "Could not move that job.");
       }
     },
-    [jobsById, customersById, author, crewUids],
+    [jobsById, customersById, author, notify],
   );
 
   const { drag, didJustDrag, startPress, cancelPress, registerScroller } = useJobDrag(

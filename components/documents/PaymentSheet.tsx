@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { useNotify } from "@/components/providers/NotificationsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chips";
@@ -27,6 +28,7 @@ export function PaymentSheet({
   onClose: () => void;
 }) {
   const { author } = useTeam();
+  const notify = useNotify();
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("Cash");
   const [reference, setReference] = useState("");
@@ -52,6 +54,12 @@ export function PaymentSheet({
     try {
       const label = reference.trim() ? `${method} ${reference.trim()}` : method;
       await recordPayment(document, value, label, author, parseDueDate(receivedOn));
+      await notify({
+        type: "payment_received",
+        body: `${document.customerName} · ${formatMoneyExact(value)} · ${label} · #${document.number}`,
+        customerId: document.customerId,
+        documentId: document.id,
+      });
       setReference("");
       onClose();
     } catch (err) {

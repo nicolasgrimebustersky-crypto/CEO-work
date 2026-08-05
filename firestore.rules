@@ -203,6 +203,40 @@ service cloud.firestore {
       allow delete: if isCrew();
     }
 
+    // One document per device that has agreed to receive push notifications.
+    //
+    // A token is a capability: anyone holding one can have a notification
+    // delivered to that handset. So a device may only ever file itself —
+    // `uid` must be the caller — which stops one account from registering a
+    // token against the other and quietly receiving their notifications.
+    //
+    // Read stays crew-wide because both accounts already read every other
+    // collection, and the sending side runs with the Admin SDK anyway. Delete
+    // is crew-wide so signing out on a shared handset can clean up after
+    // itself.
+    function validPushToken() {
+      let data = request.resource.data;
+      return data.uid == request.auth.uid
+        && data.token is string
+        && data.token.size() > 0
+        && data.token.size() < 1000;
+    }
+
+    match /pushTokens/{tokenId} {
+      allow read: if isCrew();
+      allow create: if isCrew() && validPushToken();
+      // Both identifying fields are pinned on update. Without that, `uid ==
+      // request.auth.uid` is satisfied by *rewriting* uid to yourself — which
+      // would point your own notifications at the other person's handset. The
+      // document id is derived from the token, so a genuinely new token is a
+      // new document and never an edit of this one.
+      allow update: if isCrew()
+        && validPushToken()
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.token == resource.data.token;
+      allow delete: if isCrew();
+    }
+
     // Anything not matched above is denied by default. Do not add a
     // catch-all `match /{document=**}` here: rules are OR'd, so a permissive
     // catch-all would widen access rather than restrict it.

@@ -148,4 +148,6 @@ export const COLLECTIONS = {
   notifications: "notifications",
   documents: "documents",
   services: "services",
+  /** One row per device that has agreed to receive push. See lib/db/pushTokens.ts. */
+  pushTokens: "pushTokens",
 } as const;

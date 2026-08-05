@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { StatusPill as DocumentStatusPill } from "@/components/documents/StatusPill";
 import { useCustomers } from "@/components/providers/CustomersProvider";
 import { useDocuments } from "@/components/providers/DocumentsProvider";
+import { useNotify } from "@/components/providers/NotificationsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { Button } from "@/components/ui/Button";
 import { Chip, StatusPill, UserChip } from "@/components/ui/Chips";
@@ -56,6 +57,7 @@ export function CustomerDetailScreen() {
   const { byId, loading } = useCustomers();
   const { forCustomer } = useDocuments();
   const { author, colorFor, nameFor } = useTeam();
+  const notify = useNotify();
   const documents = forCustomer(customerId);
   const router = useRouter();
 
@@ -147,6 +149,11 @@ export function CustomerDetailScreen() {
     setBusy(true);
     try {
       await changeStatus(customer, next, author);
+      await notify({
+        type: "customer_status",
+        body: `${customerName(customer)} · ${STATUS_LABEL[next]}`,
+        customerId: customer.id,
+      });
     } finally {
       setBusy(false);
     }
@@ -178,6 +185,11 @@ export function CustomerDetailScreen() {
         await advancePipeline(customer, "estimate_accepted", author, {
           value: quote?.amount,
           reason: "Estimate accepted",
+        });
+        await notify({
+          type: "estimate_accepted",
+          body: `${customerName(customer)}${quote ? ` · ${formatMoney(quote.amount)}` : ""}`,
+          customerId: customer.id,
         });
       } else if (status === "declined") {
         await setPipelineStage(customer, "lost", author, {

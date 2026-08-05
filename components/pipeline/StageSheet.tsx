@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { useNotify } from "@/components/providers/NotificationsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { Button } from "@/components/ui/Button";
 import { Sheet } from "@/components/ui/Sheet";
@@ -36,6 +37,7 @@ export function StageSheet({
   onClose: () => void;
 }) {
   const { author, colorFor } = useTeam();
+  const notify = useNotify();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,6 +55,11 @@ export function StageSheet({
     setError(null);
     try {
       await setPipelineStage(customer, stage, author);
+      await notify({
+        type: "stage_changed",
+        body: `${customerName(customer)} · ${PIPELINE_LABEL[stage]}`,
+        customerId: customer.id,
+      });
       if (close) onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not move this lead.");

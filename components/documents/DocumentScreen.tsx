@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { SendTextSheet } from "@/components/customers/SendTextSheet";
 import { useCustomers } from "@/components/providers/CustomersProvider";
 import { useDocuments } from "@/components/providers/DocumentsProvider";
+import { useNotify } from "@/components/providers/NotificationsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chips";
@@ -79,6 +80,7 @@ export function DocumentScreen() {
   const { byId, loading } = useDocuments();
   const { byId: customersById } = useCustomers();
   const { author } = useTeam();
+  const notify = useNotify();
 
   const document = documentId ? (byId.get(documentId) ?? null) : null;
   const isNew = newKind === "estimate" || newKind === "invoice";
@@ -213,6 +215,24 @@ export function DocumentScreen() {
     setError(null);
     try {
       await setDocumentStatus(document, status, author);
+
+      // Only the two transitions worth interrupting somebody for. A document
+      // moving to "draft" or "declined" is a correction, and the timeline is
+      // the right place for those.
+      if (status === "sent" || status === "accepted") {
+        await notify({
+          type:
+            status === "accepted"
+              ? "estimate_accepted"
+              : document.kind === "invoice"
+                ? "invoice_sent"
+                : "estimate_sent",
+          body: `${document.customerName} · #${document.number} · ${formatMoneyExact(document.total)}`,
+          customerId: document.customerId,
+          documentId: document.id,
+        });
+      }
+
       const target = customersById.get(document.customerId);
       if (target && document.kind === "estimate") {
         if (status === "sent") {
