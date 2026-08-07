@@ -5,6 +5,8 @@ import { useMemo, useState } from "react";
 
 import { FilterSheet } from "@/components/map/FilterSheet";
 import { useCustomers } from "@/components/providers/CustomersProvider";
+import { useOpenMenu } from "@/components/shell/menu";
+import { MenuIcon } from "@/components/shell/navIcons";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { NotificationBell } from "@/components/shell/NotificationBell";
 import { StatusPill } from "@/components/ui/Chips";
@@ -58,6 +60,7 @@ function sortCustomers(customers: Customer[], key: SortKey): Customer[] {
 export function CustomerListScreen() {
   const { customers, loading, error } = useCustomers();
   const { colorFor } = useTeam();
+  const openMenu = useOpenMenu();
 
   const [term, setTerm] = useState("");
   const [sort, setSort] = useState<SortKey>("recent");
@@ -75,7 +78,19 @@ export function CustomerListScreen() {
     <div className="flex h-full flex-col">
       <header className="pt-safe shrink-0 border-b border-line bg-surface px-3 pb-3">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <h1 className="text-2xl font-black tracking-tight text-ink">Customers</h1>
+          <div className="flex min-w-0 items-center gap-2">
+            {openMenu ? (
+              <button
+                type="button"
+                onClick={openMenu}
+                aria-label="Open menu"
+                className="tap-target -ml-2 flex shrink-0 items-center justify-center rounded-2xl px-2 text-muted hover:bg-surface-2 hover:text-ink"
+              >
+                <MenuIcon />
+              </button>
+            ) : null}
+            <h1 className="text-2xl font-extrabold tracking-tight text-ink">Customers</h1>
+          </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -114,7 +129,7 @@ export function CustomerListScreen() {
               />
             </svg>
             {filterCount > 0 ? (
-              <span className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full bg-accent text-xs font-black text-accent-ink">
+              <span className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full bg-accent text-xs font-extrabold text-accent-ink">
                 {filterCount}
               </span>
             ) : null}

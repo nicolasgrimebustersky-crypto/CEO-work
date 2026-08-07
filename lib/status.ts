@@ -24,9 +24,9 @@ export const STATUS_LABEL: Record<CustomerStatus, string> = {
 
 /** Text colour to sit on top of the status colour and stay legible in sun. */
 export const STATUS_INK: Record<CustomerStatus, string> = {
-  lead: "#0b0f14",
-  quoted: "#0b0f14",
-  customer: "#0b0f14",
+  lead: "#050607",
+  quoted: "#050607",
+  customer: "#050607",
   not_interested: "#ffffff",
   do_not_knock: "#ffffff",
 };

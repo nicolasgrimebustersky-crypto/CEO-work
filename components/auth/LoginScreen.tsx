@@ -58,7 +58,7 @@ export function LoginScreen() {
       <div className="mx-auto w-full max-w-sm">
         <div className="mb-8">
           <div className="mb-3 h-1.5 w-12 rounded-full bg-accent" />
-          <h1 className="text-3xl font-black tracking-tight text-ink">Grime Busters</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight text-ink">Grime Busters</h1>
           <p className="mt-1 text-base font-semibold text-muted">
             Door-to-door CRM · Oldham County, KY
           </p>

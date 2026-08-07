@@ -37,6 +37,8 @@ live, and every note, text and job carries the name of whoever did it.
 | Dragging a job texts the customer the new time | |
 | Scheduling a job texts a confirmation immediately | |
 | The other user gets an in-app notification on create / edit / complete | Bell with unread badge |
+| Notifications for everything else — new customers, payments, texts back, leads | Same bell, plus push to the phone |
+| Quiet hours — nothing buzzes 9pm–7am Eastern | The record still lands, so the bell is current in the morning |
 | Day view in route order with drive time between stops | Filterable to "my jobs" / "all jobs" |
 
 **Phase 3 — SMS and automation**
@@ -46,8 +48,10 @@ live, and every note, text and job carries the name of whoever did it.
 | `POST /api/sms/send` — one-off text to a customer | |
 | `POST /api/sms/blast` — text the filtered group currently on screen | Skips do-not-knock and missing numbers, capped at 200 |
 | `GET /api/cron/quote-followups` — chases silent quotes | Every 4 days, 3 attempts, then marks declined |
+| `GET /api/cron/money-reminders` — an invoice going past due, and a Monday total | Called out once per invoice, not daily |
 | `POST /api/sms/inbound` — Twilio webhook for replies | Signature-verified |
 | Every SMS in or out is logged to the customer timeline with the sender's name | |
+| **Messages screen** — every conversation in one place, opening on who's waiting | Threads derived from the timeline, so there is only ever one copy |
 
 **Phase 4 — Photos, dashboard, offline**
 
@@ -69,6 +73,15 @@ live, and every note, text and job carries the name of whoever did it.
   phones agree without coordination; a `color` field on the user document
   overrides it.
 - Status colours are fixed by the data model and never reused for anything else.
+
+---
+
+## Picking this up cold
+
+`docs/MASTER_PROMPT.md` is the brief for a fresh session with any AI assistant:
+what the business is, what has been asked for and delivered, what is still
+outstanding, and the rules that must not be broken while changing any of it.
+Paste it as a first message and go from there.
 
 ---
 
@@ -227,7 +240,33 @@ These three variables have **no** `NEXT_PUBLIC_` prefix, deliberately: they are
 only read server-side inside `/api/*` route handlers. Never add the prefix — it
 would ship your auth token to every browser that loads the app.
 
-### 8. Run it
+### 8. Push notifications
+
+The bell inside the app works with no setup. Getting a notification onto a phone
+that is in a pocket with the app closed needs one key.
+
+1. **Firebase console → Project settings → Cloud Messaging → Web configuration
+   → Web Push certificates → Generate key pair.**
+2. Copy the public key into `NEXT_PUBLIC_FIREBASE_VAPID_KEY`, locally and in
+   Vercel. It is public by design — it is the `applicationServerKey` a browser
+   needs to create a subscription.
+3. On each phone: **Account → Notifications → turn the switch on**, and allow the
+   permission prompt. That files a token for that device.
+
+Leave the key blank and everything else still works — records, bell, badge,
+settings — and the Account screen explains why the switch is missing rather than
+showing a dead control.
+
+Two things worth knowing:
+
+- **On iPhone, push only works from the home screen.** Safari itself will not
+  deliver Web Push; the app has to be installed with Share → Add to Home Screen
+  and opened from there. The Account screen detects this and says so.
+- **Sending is server-side**, through `/api/push/send`, which needs
+  `FIREBASE_SERVICE_ACCOUNT_KEY` and `CREW_UIDS` from step 6. A client that
+  could send push to another account could send it anything.
+
+### 9. Run it
 
 ```bash
 npm run dev          # http://localhost:3000
@@ -251,6 +290,7 @@ Vercel preview and open that.
    | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | yes |
    | `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID` | yes |
    | `NEXT_PUBLIC_FIREBASE_*` (six values) | yes |
+   | `NEXT_PUBLIC_FIREBASE_VAPID_KEY` | yes |
    | `FIREBASE_SERVICE_ACCOUNT_KEY` | **no — server only** |
    | `CREW_UIDS` | **no — server only** |
    | `CRON_SECRET` | **no — server only** |
@@ -322,6 +362,8 @@ app/
   api/sms/blast           filtered group text
   api/sms/inbound         Twilio reply webhook
   api/cron/quote-followups  nightly quote chaser
+  api/cron/money-reminders  overdue invoices and Monday's outstanding total
+  api/push/send           fans a notification out to the crew's devices
 components/
   providers/              Auth, Team, Customers, Jobs, Notifications, Connection
   auth/                   login screen, setup screen, route gate
@@ -329,16 +371,24 @@ components/
   schedule/               calendar views, drag hook, job sheet, photo capture
   customers/              list, detail, notes timeline, quote/text/edit sheets
   dashboard/              today's numbers and reports
+  messages/               the inbox and one conversation, with a reply box
   shell/                  nav, headers, notification bell, connection banner
   ui/                     buttons, fields, bottom sheet, chips
 lib/
   firebase.ts             SDK init, emulator wiring, config checks
   db/                     Firestore reads and writes, one module per collection
-  server/                 admin SDK, API auth, Twilio — all `server-only`
+  notifications/          the event catalogue: what exists, what it's called,
+                          where it opens, and when it may interrupt you. No
+                          imports, so both sides can use it
+  push/                   permission, token registration, handing off to the API
+  server/                 admin SDK, API auth, Twilio, push — all `server-only`
   schedule.ts             calendar maths
   driveTime.ts            Distance Matrix with a straight-line fallback
   filters.ts              filter + search logic, shared by map and list
+  threads.ts              texts read back out of the notes as conversations
   useLiveLocation.ts      watchPosition with throttled Firestore writes
+public/
+  push-sw.js              the push service worker — no SDK, just `push`
 tests/
   firestore.rules.test.mjs
 firestore.rules           the uid allowlist — the whole client access model
@@ -469,10 +519,11 @@ for you. The short version of that last part, in priority order:
 Three suites were run against the Firebase emulators with two real signed-in
 accounts:
 
-- **Security rules** (30 tests, `npm run test:rules`) — the allowlist, anonymous
+- **Security rules** (47 tests, `npm run test:rules`) — the allowlist, anonymous
   and non-allowlisted access, self-only profile writes, author stamps on
-  customers and jobs, quote reassignment, notification forging, field
-  validation, and the Storage size/content-type/path rules.
+  customers and jobs, quote reassignment, notification forging, push tokens
+  filed against the wrong account, field validation, and the Storage
+  size/content-type/path rules.
 - **API auth and rate limits** (16 tests, `npm run test:api`) — missing / bogus /
   non-crew tokens on both SMS routes, the recipient cap, the hourly spend
   ceiling, the cron secret (including that a valid user token is *not* accepted
@@ -483,6 +534,13 @@ accounts:
   including horizontal auto-scroll, quotes, dashboard, reports, the offline
   banner, editing a past job from a customer record, and customer deletion with
   its orphan warning. Also confirmed zero CSP violations on every screen.
+- **Notifications** (28 assertions) — the feed rendering every event type with
+  its category, each entry resolving to the right screen and landing there when
+  tapped, the unread badge, the category switches saving and reloading, and the
+  push panel explaining itself rather than showing a dead control. Plus the push
+  service worker driven directly with four payload shapes, including the
+  malformed ones, to confirm it always shows something — a browser revokes a
+  subscription that handles a push silently.
 
 The map screen's chrome renders and the page does not error, but the tiles,
 pins and GPS dots could not be exercised without a Maps key — that is the first

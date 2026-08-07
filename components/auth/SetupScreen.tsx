@@ -11,7 +11,7 @@ export function SetupScreen() {
     <main className="flex min-h-dvh flex-col justify-center px-5 py-10">
       <div className="mx-auto w-full max-w-md">
         <div className="mb-3 h-1.5 w-12 rounded-full bg-accent" />
-        <h1 className="text-2xl font-black tracking-tight text-ink">Finish setup</h1>
+        <h1 className="text-2xl font-extrabold tracking-tight text-ink">Finish setup</h1>
         <p className="mt-2 text-base font-semibold text-muted">
           The app needs its Firebase keys before it can sign anyone in. Copy{" "}
           <code className="rounded bg-surface-2 px-1.5 py-0.5 text-ink">.env.example</code>{" "}

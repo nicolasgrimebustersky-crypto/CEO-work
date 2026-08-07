@@ -1,3 +1,4 @@
+import { notifyCrew } from "@/lib/server/notify";
 import { appendNote, findCustomerByPhone } from "@/lib/server/customerNotes";
 import { verifyTwilioSignature } from "@/lib/server/twilio";
 
@@ -64,12 +65,22 @@ export async function POST(request: Request): Promise<Response> {
       return twiml();
     }
 
+    const who = `${customer.firstName} ${customer.lastName}`.trim() || "Customer";
+
     await appendNote(customer.id, {
       text: body,
       kind: "sms_in",
       authorUid: "customer",
-      authorName:
-        `${customer.firstName} ${customer.lastName}`.trim() || "Customer",
+      authorName: who,
+    });
+
+    // A reply is the one event with a clock on it — a customer who answers and
+    // hears nothing back for six hours has usually called somebody else.
+    await notifyCrew({
+      type: "sms_in",
+      actorName: who,
+      body: `${who}: ${body}`,
+      customerId: customer.id,
     });
 
     return twiml();

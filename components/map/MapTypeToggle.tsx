@@ -19,7 +19,7 @@ export function MapTypeToggle({
     <div
       role="group"
       aria-label="Map type"
-      className="flex overflow-hidden rounded-xl border border-line bg-base/85 backdrop-blur-sm"
+      className="flex overflow-hidden rounded-xl border border-line bg-canvas/85 backdrop-blur-sm"
     >
       {OPTIONS.map((option) => {
         const active = option.value === value;

@@ -61,11 +61,11 @@ export function DraftPin({ position }: { position: google.maps.LatLngLiteral }) 
           <path
             d="M12 1c-5.5 0-10 4.3-10 9.7C2 18.2 12 31 12 31s10-12.8 10-20.3C22 5.3 17.5 1 12 1Z"
             fill="#00d9ff"
-            stroke="#0b0f14"
+            stroke="#050607"
             strokeWidth={2}
             strokeDasharray="3 2"
           />
-          <circle cx="12" cy="10.5" r="3.4" fill="#0b0f14" />
+          <circle cx="12" cy="10.5" r="3.4" fill="#050607" />
         </svg>
       </div>
     </AdvancedMarker>

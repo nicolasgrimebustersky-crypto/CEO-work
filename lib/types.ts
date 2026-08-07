@@ -70,6 +70,17 @@ export interface AppUser {
   isActive: boolean;
   /** Optional override; otherwise assigned deterministically. See lib/userColor.ts */
   color?: string | null;
+  /**
+   * Notification categories this person has switched OFF. Stored as the
+   * exceptions rather than the selections, so an event type added later reaches
+   * everyone by default instead of nobody. See lib/notifications/events.ts.
+   */
+  mutedNotifications: string[];
+  /**
+   * Hold push overnight. The bell and the badge are unaffected — only the
+   * interruption is. See lib/notifications/quietHours.ts.
+   */
+  quietHours: boolean;
 }
 
 export interface Customer {
