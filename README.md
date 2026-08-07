@@ -38,6 +38,7 @@ live, and every note, text and job carries the name of whoever did it.
 | Scheduling a job texts a confirmation immediately | |
 | The other user gets an in-app notification on create / edit / complete | Bell with unread badge |
 | Notifications for everything else — new customers, payments, texts back, leads | Same bell, plus push to the phone |
+| Quiet hours — nothing buzzes 9pm–7am Eastern | The record still lands, so the bell is current in the morning |
 | Day view in route order with drive time between stops | Filterable to "my jobs" / "all jobs" |
 
 **Phase 3 — SMS and automation**
@@ -47,6 +48,7 @@ live, and every note, text and job carries the name of whoever did it.
 | `POST /api/sms/send` — one-off text to a customer | |
 | `POST /api/sms/blast` — text the filtered group currently on screen | Skips do-not-knock and missing numbers, capped at 200 |
 | `GET /api/cron/quote-followups` — chases silent quotes | Every 4 days, 3 attempts, then marks declined |
+| `GET /api/cron/money-reminders` — an invoice going past due, and a Monday total | Called out once per invoice, not daily |
 | `POST /api/sms/inbound` — Twilio webhook for replies | Signature-verified |
 | Every SMS in or out is logged to the customer timeline with the sender's name | |
 | **Messages screen** — every conversation in one place, opening on who's waiting | Threads derived from the timeline, so there is only ever one copy |
@@ -360,6 +362,7 @@ app/
   api/sms/blast           filtered group text
   api/sms/inbound         Twilio reply webhook
   api/cron/quote-followups  nightly quote chaser
+  api/cron/money-reminders  overdue invoices and Monday's outstanding total
   api/push/send           fans a notification out to the crew's devices
 components/
   providers/              Auth, Team, Customers, Jobs, Notifications, Connection
@@ -375,7 +378,8 @@ lib/
   firebase.ts             SDK init, emulator wiring, config checks
   db/                     Firestore reads and writes, one module per collection
   notifications/          the event catalogue: what exists, what it's called,
-                          where it opens. No imports, so both sides can use it
+                          where it opens, and when it may interrupt you. No
+                          imports, so both sides can use it
   push/                   permission, token registration, handing off to the API
   server/                 admin SDK, API auth, Twilio, push — all `server-only`
   schedule.ts             calendar maths

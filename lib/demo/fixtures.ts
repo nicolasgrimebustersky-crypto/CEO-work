@@ -70,6 +70,7 @@ export const demoUsers: AppUser[] = [
     isActive: true,
     color: null,
     mutedNotifications: [],
+    quietHours: true,
   },
   {
     uid: DEMO_DANA,
@@ -81,6 +82,7 @@ export const demoUsers: AppUser[] = [
     isActive: true,
     color: null,
     mutedNotifications: [],
+    quietHours: true,
   },
 ];
 

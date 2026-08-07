@@ -9,6 +9,7 @@ import {
   type NotificationType,
 } from "@/lib/notifications/events";
 import { notificationLink } from "@/lib/notifications/link";
+import { shouldPushNow } from "@/lib/notifications/quietHours";
 import { adminDb, isAdminConfigured } from "./admin";
 import { sendPush } from "./push";
 
@@ -43,22 +44,38 @@ function crewUids(): string[] {
     .filter(Boolean);
 }
 
-/** Honours each person's muted categories, the same as the client path does. */
-async function willingRecipients(type: NotificationType): Promise<string[]> {
+/**
+ * Who wants this event, and of those, who may be interrupted right now.
+ *
+ * Two different answers on purpose, exactly as on the client: a muted category
+ * is never written at all, but a quiet hour only holds the buzz — the record
+ * still lands so the bell is current the moment they next look.
+ */
+async function willingRecipients(
+  type: NotificationType,
+): Promise<{ record: string[]; interrupt: string[] }> {
   const uids = crewUids();
-  if (uids.length === 0) return [];
+  if (uids.length === 0) return { record: [], interrupt: [] };
 
   const docs = await adminDb().getAll(
     ...uids.map((uid) => adminDb().collection("users").doc(uid)),
   );
 
-  return docs
-    .filter((doc) => {
-      const stored = doc.get("mutedNotifications");
-      const muted = Array.isArray(stored) ? stored.filter(isNotificationCategory) : [];
-      return wantsEvent(muted, type);
-    })
-    .map((doc) => doc.id);
+  const record: string[] = [];
+  const interrupt: string[] = [];
+
+  for (const doc of docs) {
+    const stored = doc.get("mutedNotifications");
+    const muted = Array.isArray(stored) ? stored.filter(isNotificationCategory) : [];
+    if (!wantsEvent(muted, type)) continue;
+
+    record.push(doc.id);
+    // Absent means the profile predates the setting, and the helper treats
+    // that as quiet hours on.
+    if (shouldPushNow(doc.get("quietHours"))) interrupt.push(doc.id);
+  }
+
+  return { record, interrupt };
 }
 
 /**
@@ -74,7 +91,7 @@ export async function notifyCrew(payload: ServerNotifyPayload): Promise<void> {
   if (!isAdminConfigured) return;
 
   try {
-    const recipients = await willingRecipients(payload.type);
+    const { record: recipients, interrupt } = await willingRecipients(payload.type);
     if (recipients.length === 0) return;
 
     const title = titleOf(payload.type);
@@ -98,8 +115,10 @@ export async function notifyCrew(payload: ServerNotifyPayload): Promise<void> {
     }
     await batch.commit();
 
+    if (interrupt.length === 0) return;
+
     await sendPush({
-      forUids: recipients,
+      forUids: interrupt,
       title,
       body: payload.body.slice(0, 300),
       url: notificationLink(payload),

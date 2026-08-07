@@ -47,7 +47,7 @@ export const CATEGORY_HINT: Record<NotificationCategory, string> = {
  * "customer" is the default because the customer record is the one screen that
  * has the whole story on it: the timeline, the jobs, the money, the photos.
  */
-type Destination = "customer" | "document" | "schedule" | "pipeline";
+type Destination = "customer" | "document" | "invoices" | "schedule" | "pipeline";
 
 interface EventDefinition {
   category: NotificationCategory;
@@ -103,6 +103,16 @@ export const NOTIFICATION_EVENTS = {
     category: "money",
     title: "Payment received",
     destination: "document",
+  },
+  invoice_overdue: {
+    category: "money",
+    title: "Invoice past due",
+    destination: "document",
+  },
+  money_summary: {
+    category: "money",
+    title: "Money still owed",
+    destination: "invoices",
   },
   followup_sent: {
     category: "money",
@@ -164,6 +174,8 @@ export function destinationFor(item: {
     case "document":
       if (item.documentId) return { screen: "document", id: item.documentId };
       if (item.customerId) return { screen: "customer", id: item.customerId };
+      return { screen: "invoices" };
+    case "invoices":
       return { screen: "invoices" };
     case "schedule":
       return { screen: "schedule" };

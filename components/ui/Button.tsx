@@ -17,7 +17,7 @@ const VARIANTS: Record<Variant, string> = {
   secondary:
     "bg-surface-2 text-ink border border-line hover:bg-surface-3 active:bg-surface-3",
   ghost: "bg-transparent text-ink hover:bg-surface-2 active:bg-surface-2",
-  danger: "bg-danger text-white hover:brightness-110 active:brightness-95",
+  danger: "bg-danger-fill text-white hover:brightness-110 active:brightness-95",
   contrast: "bg-ink text-canvas hover:brightness-95 active:brightness-90",
 };
 

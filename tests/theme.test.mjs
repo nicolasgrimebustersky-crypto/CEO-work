@@ -113,4 +113,36 @@ describe("design tokens", () => {
 
     assert.deepEqual(stale, [], `Retired colour tokens still in use:\n${stale.join("\n")}`);
   });
+
+  test("white on the danger fill is actually readable", () => {
+    // A destructive button is the last control in the app you want misread,
+    // and this one shipped at 3.76:1 — found by sweeping the rendered page,
+    // not by looking at it. --color-danger stays lighter because it is read
+    // as *text* on the near-black canvas, where a darker red would fail
+    // instead. Two jobs, two tokens.
+    const value = (name) => {
+      const match = css.match(new RegExp(`--color-${name}\\s*:\\s*(#[0-9a-fA-F]{6})`));
+      assert.ok(match, `--color-${name} should be declared`);
+      return match[1];
+    };
+
+    const luminance = (hex) => {
+      const channel = (i) => {
+        const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+      };
+      return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+    };
+
+    const contrast = (a, b) => {
+      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+
+    const onFill = contrast("#ffffff", value("danger-fill"));
+    assert.ok(onFill >= 4.5, `white on --color-danger-fill is only ${onFill.toFixed(2)}:1`);
+
+    const asText = contrast(value("danger"), value("canvas"));
+    assert.ok(asText >= 4.5, `--color-danger as text on the canvas is only ${asText.toFixed(2)}:1`);
+  });
 });

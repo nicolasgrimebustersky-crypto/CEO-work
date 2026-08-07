@@ -95,7 +95,16 @@ the iOS share sheet. A price book that fills itself from the estimates you write
 Notifications across every area of the app — schedule, customers, money,
 messages, leads — in the bell, and pushed to a phone with the app closed via FCM
 and a dependency-free service worker. Five category switches on the Account
-screen.
+screen, plus quiet hours: nothing buzzes between 9pm and 7am Eastern, though the
+record still lands so the bell is current in the morning.
+
+A nightly cron chases money that has not come in — an invoice is called out once
+the morning it passes its due date, and Monday brings a single line for
+everything still outstanding.
+
+A Messages screen: every text conversation in one place, opening on who is
+waiting for a reply. Threads are read back out of the notes timeline rather than
+stored twice, so there is only ever one copy of a message.
 
 SMS: one-off, filtered blast, inbound reply webhook, and a nightly cron that
 chases silent quotes three times then marks them declined. Every message in or
@@ -220,6 +229,9 @@ Every request made across the project, and where it stands.
 | **Notifications for everything** | `lib/notifications/events.ts` + push |
 | **Estimate → invoice without making one by hand** | `convertToInvoice`, one-time, dated |
 | The website on the documents | `BUSINESS.website` → `grimebusterskyllc.com` |
+| **Texting integrated, not buried in each customer** | `app/messages`, `lib/threads.ts` |
+| Notifications that don't wake you at 3am | `lib/notifications/quietHours.ts` |
+| Being chased about money nobody has paid | `app/api/cron/money-reminders` |
 
 ### Blocked on you, not on code
 
@@ -260,9 +272,6 @@ These need somebody with account access. None of them are code problems.
   page shows both "Estimates & invoices" and "Quick quotes". Folding the cron
   onto documents and retiring `quotes` is the obvious cleanup; it has not been
   done because it changes what the follow-up automation chases.
-- **The red "Delete my account" button is white-on-red at 3.76:1**, under the
-  4.5:1 threshold. Shared with the delete-customer buttons, so darkening the red
-  is a small deliberate design change rather than a typo fix.
 - **The map is unverified against a real Maps key.** The chrome renders and the
   page does not error, but tiles, pins and GPS dots have never been exercised
   with a live key.

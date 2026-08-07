@@ -160,7 +160,7 @@ describe("who gets told", () => {
 
 describe("the shape the demo and the server both rely on", () => {
   test("destinations are limited to screens that exist", () => {
-    const known = new Set(["customer", "document", "schedule", "pipeline"]);
+    const known = new Set(["customer", "document", "invoices", "schedule", "pipeline"]);
     for (const type of NOTIFICATION_TYPES) {
       assert.ok(
         known.has(NOTIFICATION_EVENTS[type].destination),

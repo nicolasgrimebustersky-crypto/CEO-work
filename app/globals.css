@@ -67,7 +67,12 @@
   --color-user-1: #2f80ff;
   --color-user-2: #ff4fd8;
 
+  /* Read as text and as a border on the canvas, where it clears 5.4:1. */
   --color-danger: #ef4444;
+  /* Filled, with white on top. The lighter red above only reaches 3.76:1
+     against white, which fails on the one control you least want misread —
+     a destructive button. A fill and a text colour are different jobs. */
+  --color-danger-fill: #c81e1e;
   --color-warn: #facc15;
   --color-ok: #22c55e;
 

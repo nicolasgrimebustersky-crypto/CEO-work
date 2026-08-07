@@ -76,6 +76,11 @@ export interface AppUser {
    * everyone by default instead of nobody. See lib/notifications/events.ts.
    */
   mutedNotifications: string[];
+  /**
+   * Hold push overnight. The bell and the badge are unaffected — only the
+   * interruption is. See lib/notifications/quietHours.ts.
+   */
+  quietHours: boolean;
 }
 
 export interface Customer {

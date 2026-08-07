@@ -25,6 +25,7 @@ import {
   type NotificationType,
 } from "@/lib/notifications/events";
 import { notificationLink } from "@/lib/notifications/link";
+import { shouldPushNow } from "@/lib/notifications/quietHours";
 import { deliverPush } from "@/lib/push/client";
 import type { Author } from "@/lib/types";
 
@@ -104,6 +105,7 @@ export function subscribeNotifications(
 export interface NotifyRecipient {
   uid: string;
   mutedNotifications?: string[] | null;
+  quietHours?: boolean | null;
 }
 
 export interface NotifyPayload {
@@ -158,8 +160,16 @@ export async function notifyOthers(
     ),
   );
 
+  // Everyone got the record above. Only the people who are not in their own
+  // quiet hours get the buzz — the bell is already current for the rest.
+  const toInterrupt = crew
+    .filter((member) => recipients.includes(member.uid))
+    .filter((member) => shouldPushNow(member.quietHours))
+    .map((member) => member.uid);
+  if (toInterrupt.length === 0) return;
+
   void deliverPush({
-    forUids: recipients,
+    forUids: toInterrupt,
     title,
     body: payload.body,
     url: notificationLink({

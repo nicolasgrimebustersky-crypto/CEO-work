@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { useTeam } from "@/components/providers/TeamProvider";
 import { Button } from "@/components/ui/Button";
-import { setMutedNotifications } from "@/lib/db/users";
+import { setMutedNotifications, setQuietHours } from "@/lib/db/users";
 import {
   CATEGORY_HINT,
   CATEGORY_LABEL,
@@ -12,6 +12,7 @@ import {
   wantsCategory,
   type NotificationCategory,
 } from "@/lib/notifications/events";
+import { quietHoursLabel } from "@/lib/notifications/quietHours";
 import { disablePush, enablePush, pushStatus, type PushStatus } from "@/lib/push/client";
 
 /**
@@ -130,6 +131,39 @@ export function NotificationSettings() {
             I&apos;ve allowed it — check again
           </Button>
         ) : null}
+      </div>
+
+      {/* Holds the buzz, not the notification. Worth saying on the switch:
+          somebody who thinks overnight events are being dropped will turn this
+          straight back off. */}
+      <div className="mt-3 flex items-start justify-between gap-3 rounded-xl border border-line bg-surface-2 p-3">
+        <div className="min-w-0">
+          <p className="text-base font-bold text-ink">Quiet hours</p>
+          <p className="mt-0.5 text-sm font-semibold text-muted">
+            {me?.quietHours === false
+              ? `Your phone buzzes at any hour, including ${quietHoursLabel()}.`
+              : `Nothing buzzes between ${quietHoursLabel()}. It still lands in the bell, so it's waiting for you in the morning.`}
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={me?.quietHours !== false}
+          aria-label="Quiet hours"
+          disabled={!author}
+          onClick={() => {
+            if (author) void setQuietHours(author.uid, me?.quietHours === false);
+          }}
+          className={`tap-target relative flex w-16 shrink-0 items-center rounded-full p-1 transition ${
+            me?.quietHours !== false ? "bg-accent" : "bg-surface-3"
+          }`}
+        >
+          <span
+            className={`size-8 rounded-full bg-white transition-transform ${
+              me?.quietHours !== false ? "translate-x-6" : "translate-x-0"
+            }`}
+          />
+        </button>
       </div>
 
       <p className="mt-4 mb-2 text-sm font-bold tracking-wide text-muted uppercase">

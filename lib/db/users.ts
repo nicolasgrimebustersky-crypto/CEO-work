@@ -36,6 +36,9 @@ function toAppUser(snap: QueryDocumentSnapshot<DocumentData>): AppUser {
     mutedNotifications: Array.isArray(data.mutedNotifications)
       ? data.mutedNotifications.filter(isNotificationCategory)
       : [],
+    // Absent means this profile predates the setting. On by default: somebody
+    // who has never been asked would rather not be woken at 3am.
+    quietHours: data.quietHours !== false,
   };
 }
 
@@ -77,6 +80,7 @@ export async function ensureUserDoc(
     // Nothing muted: a new account hears about everything until it says
     // otherwise, which is the only default that cannot lose an event silently.
     mutedNotifications: [],
+    quietHours: true,
     createdAt: serverTimestamp(),
   });
 }
@@ -127,6 +131,16 @@ export async function updateUserProfile(
   patch: { displayName?: string; phone?: string },
 ): Promise<void> {
   await writeUser(uid, patch);
+}
+
+/**
+ * Hold push overnight, or do not.
+ *
+ * Per person rather than per device: it is a statement about when you want to
+ * be disturbed, not about which handset you happened to grant permission on.
+ */
+export async function setQuietHours(uid: string, on: boolean): Promise<void> {
+  await writeUser(uid, { quietHours: on });
 }
 
 /**
