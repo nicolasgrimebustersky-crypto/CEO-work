@@ -69,6 +69,26 @@ export function InvoiceIcon({ active }: NavIconProps) {
   );
 }
 
+export function MessageIcon({ active }: NavIconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className="size-6" aria-hidden="true">
+      <path
+        d="M4 5h16v11H9l-5 4V5Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={w(active)}
+        strokeLinejoin="round"
+      />
+      <path
+        d="M8 9h8M8 12.5h5"
+        stroke="currentColor"
+        strokeWidth={w(active)}
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export function PipelineIcon({ active }: NavIconProps) {
   return (
     <svg viewBox="0 0 24 24" className="size-6" aria-hidden="true">

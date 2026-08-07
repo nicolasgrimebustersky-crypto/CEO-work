@@ -161,6 +161,14 @@ const seeds: Seed[] = [
     notes: [
       note("Wants the whole side yard cleared before the first frost.", "note", DEMO_DANA, "Dana", 6),
       note("Estimate for $620 sent", "stage_change", DEMO_DANA, "Dana", 5),
+      note("Any chance you could do it before the frost?", "sms_in", "customer", "Ray Whitfield", 4),
+      note(
+        "We can. Penciling you in for the week of the 14th — I'll confirm Monday.",
+        "sms_out",
+        DEMO_DANA,
+        "Dana",
+        3.8,
+      ),
     ],
   },
   {
@@ -180,6 +188,20 @@ const seeds: Seed[] = [
     lifetime: 380,
     notes: [
       note("Siding and walkway finished. Invoice left in the door.", "note", DEMO_NICK, "Nick", 1),
+      note(
+        "Hi Alice, your estimate for the siding and walkway is $380. Reply STOP to opt out.",
+        "sms_out",
+        DEMO_DANA,
+        "Dana",
+        2,
+      ),
+      note(
+        "That looks great, when can you start?",
+        "sms_in",
+        "customer",
+        "Alice Brennan",
+        0.2,
+      ),
     ],
   },
   {
@@ -214,7 +236,10 @@ const seeds: Seed[] = [
     byName: "Nick",
     contactedDays: 1,
     lifetime: 0,
-    notes: [note("Said yes to the season rate. Needs scheduling.", "note", DEMO_NICK, "Nick", 1)],
+    notes: [
+      note("Said yes to the season rate. Needs scheduling.", "note", DEMO_NICK, "Nick", 1),
+      note("Do you salt the walkway too or just the drive?", "sms_in", "customer", "Priya Nolan", 0.6),
+    ],
   },
   {
     id: "d-fb-hargrove",

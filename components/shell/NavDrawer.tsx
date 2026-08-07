@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { CustomerPickerSheet } from "@/components/documents/CustomerPickerSheet";
+import { useCustomers } from "@/components/providers/CustomersProvider";
 import { useDocuments } from "@/components/providers/DocumentsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { IconTile } from "@/components/ui/Card";
@@ -12,6 +13,7 @@ import { Logo } from "@/components/ui/Logo";
 import { BUSINESS } from "@/lib/business";
 import { formatMoney, initialsFor } from "@/lib/format";
 import { routes } from "@/lib/routes";
+import { buildThreads, needsReplyCount } from "@/lib/threads";
 import { PlusIcon } from "./navIcons";
 import { ALL_DESTINATIONS, isActive } from "./navItems";
 
@@ -27,6 +29,8 @@ export function NavDrawer({ open, onClose }: { open: boolean; onClose: () => voi
   const router = useRouter();
   const { author, colorFor } = useTeam();
   const { outstanding } = useDocuments();
+  const { customers } = useCustomers();
+  const unanswered = needsReplyCount(buildThreads(customers));
   const [picking, setPicking] = useState(false);
 
   // Escape closes it, matching the sheets everywhere else in the app.
@@ -109,6 +113,9 @@ export function NavDrawer({ open, onClose }: { open: boolean; onClose: () => voi
             <nav aria-label="All screens" className="flex flex-col gap-1 pb-4">
               {ALL_DESTINATIONS.map(({ href, label, icon: Icon, hint }) => {
                 const active = isActive(pathname, href);
+                // The one destination with a clock on it: somebody texted and
+                // nobody has answered.
+                const waiting = href === routes.messages ? unanswered : 0;
                 return (
                   <Link
                     key={href}
@@ -124,6 +131,11 @@ export function NavDrawer({ open, onClose }: { open: boolean; onClose: () => voi
                         className={`block text-base font-bold ${active ? "text-accent" : "text-ink"}`}
                       >
                         {label}
+                        {waiting > 0 ? (
+                          <span className="ml-2 inline-flex min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-xs font-extrabold text-accent-ink">
+                            {waiting > 9 ? "9+" : waiting}
+                          </span>
+                        ) : null}
                       </span>
                       {hint ? (
                         <span className="block text-sm font-semibold text-muted">{hint}</span>

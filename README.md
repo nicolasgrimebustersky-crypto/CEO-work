@@ -49,6 +49,7 @@ live, and every note, text and job carries the name of whoever did it.
 | `GET /api/cron/quote-followups` — chases silent quotes | Every 4 days, 3 attempts, then marks declined |
 | `POST /api/sms/inbound` — Twilio webhook for replies | Signature-verified |
 | Every SMS in or out is logged to the customer timeline with the sender's name | |
+| **Messages screen** — every conversation in one place, opening on who's waiting | Threads derived from the timeline, so there is only ever one copy |
 
 **Phase 4 — Photos, dashboard, offline**
 
@@ -367,6 +368,7 @@ components/
   schedule/               calendar views, drag hook, job sheet, photo capture
   customers/              list, detail, notes timeline, quote/text/edit sheets
   dashboard/              today's numbers and reports
+  messages/               the inbox and one conversation, with a reply box
   shell/                  nav, headers, notification bell, connection banner
   ui/                     buttons, fields, bottom sheet, chips
 lib/
@@ -379,6 +381,7 @@ lib/
   schedule.ts             calendar maths
   driveTime.ts            Distance Matrix with a straight-line fallback
   filters.ts              filter + search logic, shared by map and list
+  threads.ts              texts read back out of the notes as conversations
   useLiveLocation.ts      watchPosition with throttled Firestore writes
 public/
   push-sw.js              the push service worker — no SDK, just `push`
