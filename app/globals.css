@@ -7,21 +7,57 @@
    portrait, outdoors, in direct sun. So every foreground colour is checked for
    contrast against the surface it sits on, and there is no thin grey body text
    anywhere — `--color-muted` is the lightest text tone allowed and it is still
-   ~7:1 on the base background.
+   ~7:1 on the canvas.
+
+   Brand colours are black, green and cyan, and each of the two hues means one
+   thing consistently:
+
+     cyan  — what you TAP. Buttons, links, the active nav tab, focus rings.
+     green — what you EARN. Revenue, collected, paid, a sale at the door.
+
+   The green is the logo's own, sampled from the artwork. Cyan is not in the
+   lockup; it is there because it is the one hue that stays legible in direct
+   sun without competing with the green, and because a button and a dollar
+   figure must never be the same colour.
+
+   Keeping them separate is what stops the UI turning into confetti: if every
+   number were accent-coloured, none of them would stand out. Money is the
+   thing this business opens the app to see, so money gets its own hue.
+
+   The canvas is near-black rather than the old blue-grey. On an OLED phone in
+   sunlight, true black gives the cards their edge without needing heavy
+   borders, which is why the surfaces below sit so close together in value —
+   depth comes from the hairline in `--color-line`, not from fill.
 --------------------------------------------------------------------------- */
 
 @theme {
-  --color-base: #0b0f14;
-  --color-surface: #151b23;
-  --color-surface-2: #1f2831;
-  --color-surface-3: #2b3745;
-  --color-line: #35424f;
+  --color-canvas: #050607;
+  --color-surface: #0c0e11;
+  --color-surface-2: #14171c;
+  --color-surface-3: #1e232a;
+  /* A hairline, not a border: barely there until it separates two cards. */
+  --color-line: #262b33;
 
-  --color-ink: #f4f8fb;
-  --color-muted: #b3c2d0;
+  --color-ink: #f7fafc;
+  --color-muted: #9ba7b4;
 
   --color-accent: #00d9ff;
-  --color-accent-ink: #00232b;
+  --color-accent-ink: #00181f;
+
+  /* Money, and the brand green — sampled from the logo artwork rather than
+     picked, so a figure on screen is the same green as the sign on the truck.
+     6:1 on the canvas, which clears AA for the figures it renders. */
+  --color-money: #06a143;
+  /* What sits ON the green. The logo's cream reads beautifully at sign size
+     and fails at button size — 2.68:1, found by sweeping a rendered page. The
+     near-black clears 5.97:1 and is the contrast the artwork itself uses
+     between the green letters and their field. */
+  --color-money-ink: #050607;
+
+  /* The logo's banner text and its outline. Used sparingly, where the UI
+     touches the lockup — the drawer header, the document band. */
+  --color-cream: #f1e3cd;
+  --color-gold: #a37d39;
 
   /* Customer pin colours — fixed by the status model, do not repurpose. */
   --color-status-lead: #9aa7b4;
@@ -35,9 +71,21 @@
   --color-user-1: #2f80ff;
   --color-user-2: #ff4fd8;
 
+  /* Read as text and as a border on the canvas, where it clears 5.4:1. */
   --color-danger: #ef4444;
+  /* Filled, with white on top. The lighter red above only reaches 3.76:1
+     against white, which fails on the one control you least want misread —
+     a destructive button. A fill and a text colour are different jobs. */
+  --color-danger-fill: #c81e1e;
   --color-warn: #facc15;
   --color-ok: #22c55e;
+
+  /* Rounder than the old 12px. Big radii are most of why the reference design
+     reads as calm: at this size a card looks like an object rather than a box
+     drawn around some text. */
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+  --radius-3xl: 1.5rem;
 }
 
 html,
@@ -46,10 +94,13 @@ body {
 }
 
 body {
-  background: var(--color-base);
+  background: var(--color-canvas);
   color: var(--color-ink);
+  /* Poppins is loaded in app/layout.tsx. The system stack behind it is the
+     fallback for the swap window and for the offline shell. */
   font-family:
-    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    var(--font-poppins), ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, sans-serif;
   /* Stop rubber-band scroll fighting the map drag gesture. */
   overscroll-behavior: none;
   -webkit-tap-highlight-color: transparent;
@@ -66,6 +117,29 @@ button {
 @utility tap-target {
   min-height: 44px;
   min-width: 44px;
+}
+
+/* A coloured button should look lit rather than painted on. Kept subtle: this
+   is a glow at arm's length in sunlight, not a neon sign. */
+@utility shadow-glow-accent {
+  box-shadow: 0 6px 24px -8px color-mix(in srgb, var(--color-accent) 65%, transparent);
+}
+
+@utility shadow-glow-money {
+  box-shadow: 0 6px 24px -8px color-mix(in srgb, var(--color-money) 65%, transparent);
+}
+
+/* The active nav tab and the active drawer row. A tinted wash plus a rim,
+   which reads as "lit from within" against a true-black canvas where a solid
+   fill would just look like a grey lozenge. */
+@utility nav-active {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-accent) 18%, transparent),
+      color-mix(in srgb, var(--color-accent) 6%, transparent)
+    );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 35%, transparent);
 }
 
 /* Bottom-anchored chrome has to clear the home indicator. */
@@ -100,6 +174,17 @@ button {
   100% {
     transform: scale(2.4);
     opacity: 0;
+  }
+}
+
+@keyframes gb-drawer-in {
+  from {
+    transform: translateX(-8%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
   }
 }
 

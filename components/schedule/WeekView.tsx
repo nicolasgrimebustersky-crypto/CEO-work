@@ -59,11 +59,11 @@ export function WeekView({
                 onClick={() => onOpenDay(day)}
                 className="sticky top-0 z-10 border-b border-line bg-surface px-2 py-2 text-center"
               >
-                <span className="block text-[11px] font-black text-muted">
+                <span className="block text-[11px] font-extrabold text-muted">
                   {format(day, "EEE")}
                 </span>
                 <span
-                  className={`block text-lg font-black ${
+                  className={`block text-lg font-extrabold ${
                     isToday(day) ? "text-accent" : "text-ink"
                   }`}
                 >

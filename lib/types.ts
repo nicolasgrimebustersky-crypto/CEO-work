@@ -70,6 +70,17 @@ export interface AppUser {
   isActive: boolean;
   /** Optional override; otherwise assigned deterministically. See lib/userColor.ts */
   color?: string | null;
+  /**
+   * Notification categories this person has switched OFF. Stored as the
+   * exceptions rather than the selections, so an event type added later reaches
+   * everyone by default instead of nobody. See lib/notifications/events.ts.
+   */
+  mutedNotifications: string[];
+  /**
+   * Hold push overnight. The bell and the badge are unaffected — only the
+   * interruption is. See lib/notifications/quietHours.ts.
+   */
+  quietHours: boolean;
 }
 
 export interface Customer {
@@ -154,6 +165,73 @@ export interface Quote {
   status: QuoteStatus;
   followUpCount: number;
   lastFollowUpAt: Timestamp | null;
+}
+
+/**
+ * A door-knocking route: a named, ordered list of doors somebody is going to
+ * walk. See lib/knock/plan.ts for the ordering and lib/db/knockRoutes.ts for
+ * the writes.
+ */
+export const ROUTE_STATUSES = ["planned", "walking", "done"] as const;
+export type RouteStatus = (typeof ROUTE_STATUSES)[number];
+
+export const ROUTE_STATUS_LABEL: Record<RouteStatus, string> = {
+  planned: "Planned",
+  walking: "Out walking",
+  done: "Finished",
+};
+
+export interface KnockRoute {
+  id: string;
+  name: string;
+  /** The day it is meant to be walked. Null for "whenever there's a gap". */
+  walkDate: Timestamp | null;
+  /** Crew uids. Empty means nobody has picked it up yet. */
+  assignedTo: string[];
+  /** Customer ids, in the order they are to be walked. Order is the point. */
+  stopIds: string[];
+  /**
+   * Which of those doors have been knocked. A separate list rather than a flag
+   * on the customer, because knocking a door on Tuesday's route says nothing
+   * about whether it was knocked on last month's.
+   */
+  knockedIds: string[];
+  status: RouteStatus;
+  notes: string;
+  createdAt: Timestamp;
+  createdBy: string;
+  createdByName: string;
+  updatedAt: Timestamp | null;
+  updatedBy: string | null;
+  updatedByName: string | null;
+}
+
+/**
+ * A territory: an area of streets somebody owns, drawn on the map.
+ *
+ * The complement of a route. A route is doors you already have pins for; a
+ * territory is the ground you have not knocked yet, which cannot be a list of
+ * ids because the pins do not exist. See lib/knock/territory.ts.
+ */
+export interface Territory {
+  id: string;
+  name: string;
+  /**
+   * The outline, in the order it was drawn. Stored as an array of maps because
+   * Firestore cannot hold an array of arrays.
+   */
+  boundary: LatLng[];
+  /** Crew uids. Empty means it is unclaimed ground. */
+  assignedTo: string[];
+  notes: string;
+  /** Retired territories stay for the record but come off the map. */
+  active: boolean;
+  createdAt: Timestamp;
+  createdBy: string;
+  createdByName: string;
+  updatedAt: Timestamp | null;
+  updatedBy: string | null;
+  updatedByName: string | null;
 }
 
 export const LEAD_SOURCES = ["door_knock", "meta_lead_ad", "referral", "manual"] as const;

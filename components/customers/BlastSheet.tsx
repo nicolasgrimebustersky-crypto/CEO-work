@@ -96,7 +96,7 @@ export function BlastSheet({
     >
       {result ? (
         <div className="flex flex-col gap-3">
-          <p className="text-lg font-black text-ink">
+          <p className="text-lg font-extrabold text-ink">
             Sent {result.sent} of {result.attempted}
           </p>
           {result.failed.length > 0 ? (

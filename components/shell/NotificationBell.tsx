@@ -8,14 +8,18 @@ import { useTeam } from "@/components/providers/TeamProvider";
 import { Button } from "@/components/ui/Button";
 import { UserChip } from "@/components/ui/Chips";
 import { Sheet } from "@/components/ui/Sheet";
+import { notificationLink } from "@/lib/db/notifications";
 import { formatRelative } from "@/lib/format";
-import { routes } from "@/lib/routes";
+import { CATEGORY_LABEL, categoryOf } from "@/lib/notifications/events";
 
 /**
- * When one person creates, edits or completes a job the other gets an entry
- * here. It is a pull surface rather than a push toast on purpose — a toast that
- * covers the map while someone is mid-knock is worse than a badge they check
- * between houses.
+ * Everything that happened while you were not looking, newest first.
+ *
+ * This is the in-app half of the notification system and it is a pull surface
+ * on purpose — a toast that covers the map while someone is mid-knock is worse
+ * than a badge they check between houses. The push notification is the half
+ * that interrupts, and it only fires on a device that asked for it. See
+ * lib/push/client.ts.
  */
 export function NotificationBell() {
   const { items, unreadCount, markEverythingRead, markOneRead, error } =
@@ -50,7 +54,7 @@ export function NotificationBell() {
           />
         </svg>
         {unreadCount > 0 ? (
-          <span className="absolute -top-1.5 -right-1.5 flex min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-xs font-black text-accent-ink">
+          <span className="absolute -top-1.5 -right-1.5 flex min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-xs font-extrabold text-accent-ink">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         ) : null}
@@ -84,8 +88,8 @@ export function NotificationBell() {
 
         {items.length === 0 ? (
           <p className="rounded-xl border border-line bg-surface-2 px-3 py-4 text-base font-semibold text-muted">
-            Nothing yet. You&apos;ll see it here when the other crew member
-            schedules or finishes a job.
+            Nothing yet. Jobs, payments, new customers, texts back and Facebook
+            leads all land here.
           </p>
         ) : (
           <ul className="flex flex-col gap-2">
@@ -95,6 +99,9 @@ export function NotificationBell() {
                 <>
                   <div className="mb-1 flex flex-wrap items-center gap-2">
                     <UserChip name={item.actorName} color={colorFor(item.actorUid)} />
+                    <span className="text-sm font-bold text-muted">
+                      {CATEGORY_LABEL[categoryOf(item.type)]}
+                    </span>
                     {unread ? (
                       <span className="size-2.5 rounded-full bg-accent" aria-label="Unread" />
                     ) : null}
@@ -114,26 +121,18 @@ export function NotificationBell() {
                     unread ? "border-accent/60 bg-surface-2" : "border-line bg-surface-2"
                   }`}
                 >
-                  {item.customerId ? (
-                    <Link
-                      href={routes.customer(item.customerId)}
-                      onClick={() => {
-                        void markOneRead(item.id);
-                        setOpen(false);
-                      }}
-                      className="block"
-                    >
-                      {inner}
-                    </Link>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => void markOneRead(item.id)}
-                      className="block w-full text-left"
-                    >
-                      {inner}
-                    </button>
-                  )}
+                  {/* Every event type resolves to a screen — a payment opens the
+                      invoice, a reschedule opens the calendar. */}
+                  <Link
+                    href={notificationLink(item)}
+                    onClick={() => {
+                      void markOneRead(item.id);
+                      setOpen(false);
+                    }}
+                    className="block"
+                  >
+                    {inner}
+                  </Link>
                 </li>
               );
             })}

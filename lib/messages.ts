@@ -20,6 +20,29 @@ export function jobRescheduledText(service: string, start: Date): string {
   return `${BUSINESS_NAME}: your ${service.toLowerCase()} has been rescheduled to ${whenText(start)}. Reply here if that doesn't work.`;
 }
 
+/**
+ * The text that goes out with an estimate or an invoice.
+ *
+ * Cents are included here where the follow-up template rounds: this number is
+ * the one the customer is being asked to agree to or pay, so it has to match
+ * the document exactly.
+ */
+export function documentText(
+  kind: "estimate" | "invoice",
+  service: string,
+  total: number,
+  balanceDue: number,
+): string {
+  const money = `$${total.toFixed(2)}`;
+  if (kind === "estimate") {
+    return `${BUSINESS_NAME}: here's your estimate for ${service.toLowerCase()} — ${money}. Reply YES to book it, or with any questions.`;
+  }
+  if (balanceDue > 0 && balanceDue < total) {
+    return `${BUSINESS_NAME}: thanks for the payment. ${`$${balanceDue.toFixed(2)}`} is still outstanding on your ${service.toLowerCase()} invoice.`;
+  }
+  return `${BUSINESS_NAME}: your invoice for ${service.toLowerCase()} is ${money}. Thanks for your business — reply here with any questions.`;
+}
+
 export function quoteFollowUpText(
   service: string,
   amount: number,

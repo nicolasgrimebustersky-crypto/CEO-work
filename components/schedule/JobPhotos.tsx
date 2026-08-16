@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useRef, useState } from "react";
 
+import { useNotify } from "@/components/providers/NotificationsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { formatDateOnly } from "@/lib/format";
 import { removeJobPhoto, uploadJobPhoto, type PhotoSlot } from "@/lib/db/photos";
@@ -23,6 +24,7 @@ function PhotoGroup({
   label: string;
 }) {
   const { author, colorFor } = useTeam();
+  const notify = useNotify();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +43,14 @@ function PhotoGroup({
         const photo = await uploadJobPhoto(job.id, slot, file, current, author);
         current = [...current, photo];
       }
+      // One notification for the batch, not one per file — six photos of a
+      // driveway is one event to anybody reading it.
+      await notify({
+        type: "photo_added",
+        body: `${files.length} ${label.toLowerCase()} photo${files.length === 1 ? "" : "s"} added`,
+        customerId: job.customerId,
+        jobId: job.id,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed.");
     } finally {

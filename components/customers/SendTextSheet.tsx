@@ -21,10 +21,13 @@ export function SendTextSheet({
   customer,
   open,
   onClose,
+  /** Prefilled text, e.g. the "here is your estimate" line. Still editable. */
+  initialBody = "",
 }: {
   customer: Customer;
   open: boolean;
   onClose: () => void;
+  initialBody?: string;
 }) {
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
@@ -32,9 +35,9 @@ export function SendTextSheet({
 
   useEffect(() => {
     if (!open) return;
-    setBody("");
+    setBody(initialBody);
     setError(null);
-  }, [open]);
+  }, [open, initialBody]);
 
   async function send() {
     if (!body.trim()) return;

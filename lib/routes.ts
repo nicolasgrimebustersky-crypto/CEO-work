@@ -17,7 +17,18 @@ export const routes = {
   customers: "/customers",
   pipeline: "/pipeline",
   customer: (customerId: string) => `/customers/detail?id=${encodeURIComponent(customerId)}`,
+  invoices: "/invoices",
+  messages: "/messages",
+  services: "/services",
+  document: (documentId: string) => `/invoices/detail?id=${encodeURIComponent(documentId)}`,
+  newDocument: (kind: "estimate" | "invoice", customerId?: string) =>
+    `/invoices/detail?new=${kind}${customerId ? `&customer=${encodeURIComponent(customerId)}` : ""}`,
   schedule: "/schedule",
+  knockRoutes: "/routes",
+  knockRoute: (routeId: string) => `/routes/detail?id=${encodeURIComponent(routeId)}`,
+  newKnockRoute: "/routes/detail?new=1",
+  /** The map, in territory-drawing mode. */
+  drawTerritory: "/map?draw=territory",
   dashboard: "/dashboard",
   reports: "/reports",
   account: "/account",

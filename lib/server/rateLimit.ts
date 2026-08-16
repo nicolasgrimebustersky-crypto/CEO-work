@@ -42,6 +42,17 @@ export const SMS_BLAST_LIMIT: RateLimitRule = {
   label: "group texts",
 };
 
+/**
+ * The self-test only ever reaches your own phone, so the risk is not toll fraud
+ * — it is holding the button down and burning a carrier's patience for
+ * duplicate traffic. A handful an hour is more than enough to prove the wiring.
+ */
+export const SMS_TEST_LIMIT: RateLimitRule = {
+  max: 5,
+  windowMs: 60 * 60 * 1000,
+  label: "test texts",
+};
+
 function minutesUntil(resetAt: number): number {
   return Math.max(1, Math.ceil((resetAt - Date.now()) / 60000));
 }

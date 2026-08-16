@@ -86,7 +86,7 @@ export function DashboardScreen() {
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         <div className="grid grid-cols-2 gap-2">
           <Stat label="Jobs today" value={String(todayJobs.length)} />
-          <Stat label="Expected today" value={formatMoney(todayRevenue)} accent />
+          <Stat label="Expected today" value={formatMoney(todayRevenue)} money />
           <Stat label="Done this week" value={String(completedThisWeek.length)} />
           <Stat
             label="Open quotes"
@@ -108,9 +108,9 @@ export function DashboardScreen() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <UserChip name={user.displayName} color={colorFor(user.uid)} />
-                    <span className="text-base font-black text-ink">
+                    <span className="text-base font-extrabold text-ink">
                       {mine.length} {mine.length === 1 ? "job" : "jobs"} ·{" "}
-                      <span className="text-accent">{formatMoney(revenue)}</span>
+                      <span className="text-money tabular-nums">{formatMoney(revenue)}</span>
                     </span>
                   </div>
                   <p className="mt-1.5 text-sm font-semibold text-muted">
@@ -162,7 +162,7 @@ export function DashboardScreen() {
                           ))}
                         </span>
                       </span>
-                      <span className="shrink-0 text-base font-black text-accent">
+                      <span className="shrink-0 text-base font-extrabold text-money tabular-nums">
                         {formatMoney(job.price)}
                       </span>
                     </Link>
@@ -189,16 +189,17 @@ export function DashboardScreen() {
 function Stat({
   label,
   value,
-  accent = false,
+  money = false,
 }: {
   label: string;
   value: string;
-  accent?: boolean;
+  /** Green rather than white: this figure is money. */
+  money?: boolean;
 }) {
   return (
     <div className="rounded-xl border border-line bg-surface-2 px-3 py-3">
       <p className="text-sm font-bold text-muted">{label}</p>
-      <p className={`mt-0.5 text-2xl font-black ${accent ? "text-accent" : "text-ink"}`}>
+      <p className={`mt-0.5 text-2xl font-extrabold tabular-nums ${money ? "text-money" : "text-ink"}`}>
         {value}
       </p>
     </div>

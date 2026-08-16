@@ -13,6 +13,23 @@ export function formatMoney(amount: number): string {
   return currency.format(amount);
 }
 
+const currencyExact = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+/**
+ * Money with the cents showing. Dashboard tiles round to the dollar because
+ * nobody reads "$12,431.47" at a glance — but an invoice line that says $477
+ * when the customer's card was charged $477.42 is a support call, so anything
+ * on an estimate or an invoice uses this.
+ */
+export function formatMoneyExact(amount: number): string {
+  return currencyExact.format(amount);
+}
+
 export function customerName(customer: Customer): string {
   const name = `${customer.firstName} ${customer.lastName}`.trim();
   if (name) return name;

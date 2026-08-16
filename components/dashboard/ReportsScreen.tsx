@@ -128,7 +128,7 @@ export function ReportsScreen() {
         ) : (
           <>
             <div className="grid grid-cols-2 gap-2">
-              <Stat label="Revenue" value={formatMoney(totalRevenue)} accent />
+              <Stat label="Revenue" value={formatMoney(totalRevenue)} money />
               <Stat label="Jobs completed" value={String(completed.length)} />
               <Stat
                 label="Quote close rate"
@@ -151,7 +151,7 @@ export function ReportsScreen() {
                     </span>
                     <span className="h-6 flex-1 overflow-hidden rounded bg-surface-2">
                       <span
-                        className="block h-full rounded bg-accent"
+                        className="block h-full rounded bg-money"
                         style={{ width: `${Math.max((value / maxMonth) * 100, value > 0 ? 4 : 0)}%` }}
                       />
                     </span>
@@ -172,7 +172,7 @@ export function ReportsScreen() {
                     </span>
                     <span className="h-6 flex-1 overflow-hidden rounded bg-surface-2">
                       <span
-                        className="block h-full rounded bg-accent"
+                        className="block h-full rounded bg-money"
                         style={{
                           width: `${Math.max((value / maxService) * 100, value > 0 ? 4 : 0)}%`,
                         }}
@@ -203,7 +203,7 @@ export function ReportsScreen() {
                           {entry.customers === 1 ? "pin" : "pins"}
                         </span>
                       </span>
-                      <span className="text-base font-black text-accent">
+                      <span className="text-base font-extrabold text-money tabular-nums">
                         {formatMoney(entry.revenue)}
                       </span>
                     </li>
@@ -222,7 +222,7 @@ export function ReportsScreen() {
                   >
                     <div className="flex items-center justify-between gap-2">
                       <UserChip name={entry.name} color={colorFor(entry.uid)} />
-                      <span className="text-base font-black text-accent">
+                      <span className="text-base font-extrabold text-money tabular-nums">
                         {formatMoney(entry.revenue)}
                       </span>
                     </div>
@@ -270,16 +270,17 @@ function Empty({ children }: { children: React.ReactNode }) {
 function Stat({
   label,
   value,
-  accent = false,
+  money = false,
 }: {
   label: string;
   value: string;
-  accent?: boolean;
+  /** Green rather than white: this figure is money. */
+  money?: boolean;
 }) {
   return (
     <div className="rounded-xl border border-line bg-surface-2 px-3 py-3">
       <p className="text-sm font-bold text-muted">{label}</p>
-      <p className={`mt-0.5 text-xl font-black ${accent ? "text-accent" : "text-ink"}`}>
+      <p className={`mt-0.5 text-xl font-extrabold tabular-nums ${money ? "text-money" : "text-ink"}`}>
         {value}
       </p>
     </div>

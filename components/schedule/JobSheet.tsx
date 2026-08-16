@@ -1,10 +1,11 @@
 "use client";
 
 import { addMinutes, format } from "date-fns";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useCustomers } from "@/components/providers/CustomersProvider";
 import { useJobs } from "@/components/providers/JobsProvider";
+import { useNotify } from "@/components/providers/NotificationsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chips";
@@ -19,7 +20,6 @@ import {
   markJobUnpaid,
   updateJob,
 } from "@/lib/db/jobs";
-import { notifyOthers } from "@/lib/db/notifications";
 import { customerName, formatDateOnly, formatMoney } from "@/lib/format";
 import { DEFAULT_JOB_MINUTES } from "@/lib/schedule";
 import { jobConfirmationText, jobRescheduledText } from "@/lib/messages";
@@ -54,6 +54,7 @@ export function JobSheet({
   const { customers, byId } = useCustomers();
   const { byId: jobsById } = useJobs();
   const { author, users } = useTeam();
+  const notify = useNotify();
 
   // Callers pass a snapshot from whenever the sheet was opened. Re-reading it
   // from the live listener keeps uploaded photos and the other crew member's
@@ -71,7 +72,6 @@ export function JobSheet({
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
 
-  const crewUids = useMemo(() => users.map((user) => user.uid), [users]);
 
   useEffect(() => {
     if (!open) return;
@@ -155,9 +155,8 @@ export function JobSheet({
           },
           author,
         );
-        await notifyOthers(crewUids, author, {
+        await notify({
           type: movedTime ? "job_rescheduled" : "job_updated",
-          title: movedTime ? "Job rescheduled" : "Job updated",
           body: `${customer ? customerName(customer) : "A job"} · ${SERVICE_LABEL[serviceType]} · ${format(startDate, "EEE MMM d, h:mm a")}`,
           customerId: selectedCustomer,
           jobId: job.id,
@@ -184,9 +183,8 @@ export function JobSheet({
           },
           author,
         );
-        await notifyOthers(crewUids, author, {
+        await notify({
           type: "job_created",
-          title: "Job scheduled",
           body: `${customer ? customerName(customer) : "A job"} · ${SERVICE_LABEL[serviceType]} · ${format(startDate, "EEE MMM d, h:mm a")}`,
           customerId: selectedCustomer,
           jobId: newId,
@@ -233,9 +231,8 @@ export function JobSheet({
           reason: "Work completed, payment outstanding",
         });
       }
-      await notifyOthers(crewUids, author, {
+      await notify({
         type: "job_completed",
-        title: "Job completed",
         body: `${customer ? customerName(customer) : "A job"} · ${SERVICE_LABEL[job.serviceType]}`,
         customerId: job.customerId,
         jobId: job.id,
@@ -266,6 +263,12 @@ export function JobSheet({
             reason: `Payment received — ${formatMoney(job.price)}`,
           });
         }
+        await notify({
+          type: "payment_received",
+          body: `${customer ? customerName(customer) : "A job"} · ${formatMoney(job.price)} · ${SERVICE_LABEL[job.serviceType]}`,
+          customerId: job.customerId,
+          jobId: job.id,
+        });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update payment.");
@@ -279,9 +282,8 @@ export function JobSheet({
     setSaving(true);
     try {
       await updateJob(job.id, { status: "cancelled" }, author);
-      await notifyOthers(crewUids, author, {
+      await notify({
         type: "job_cancelled",
-        title: "Job cancelled",
         body: `${customer ? customerName(customer) : "A job"} · ${SERVICE_LABEL[job.serviceType]}`,
         customerId: job.customerId,
         jobId: job.id,
