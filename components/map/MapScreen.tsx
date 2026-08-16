@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useCustomers } from "@/components/providers/CustomersProvider";
 import { useLocationSharing } from "@/components/providers/LocationSharingProvider";
+import { useTerritories } from "@/components/providers/TerritoriesProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { GeocodeBackfill } from "./GeocodeBackfill";
 import { MapBoundary, MapUnavailable } from "./MapBoundary";
@@ -20,6 +21,8 @@ import { CustomerPin, DraftPin } from "./CustomerPin";
 import { CustomerPreviewSheet } from "./CustomerPreviewSheet";
 import { FilterSheet } from "./FilterSheet";
 import { MapTypeToggle, type MapTypeOption } from "./MapTypeToggle";
+import { TerritoryDrawBar } from "./TerritoryDrawBar";
+import { DraftTerritory, TerritoryLayer } from "./TerritoryLayer";
 import { QuickEntrySheet } from "./QuickEntrySheet";
 import { TeammateDot } from "./TeammateDot";
 
@@ -80,6 +83,14 @@ function MapCanvas({ mapId }: { mapId: string }) {
   const [draft, setDraft] = useState<LatLng | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  const { territories } = useTerritories();
+  // Drawing mode is entered from the Routes screen (?draw=territory) or from
+  // the button out here. While it is on, tapping the map places a corner
+  // instead of dropping a pin — the two gestures are the same tap, so they
+  // cannot both be live.
+  const [drawing, setDrawing] = useState(searchParams.get("draw") === "territory");
+  const [boundary, setBoundary] = useState<LatLng[]>([]);
+
   const visible = useMemo(
     () => applyFilters(customers, filters),
     [customers, filters],
@@ -139,10 +150,17 @@ function MapCanvas({ mapId }: { mapId: string }) {
         onClick={(event) => {
           const latLng = event.detail.latLng;
           if (!latLng) return;
+          if (drawing) {
+            setBoundary((corners) => [...corners, { lat: latLng.lat, lng: latLng.lng }]);
+            return;
+          }
           setSelectedId(null);
           setDraft({ lat: latLng.lat, lng: latLng.lng });
         }}
       >
+        <TerritoryLayer territories={territories} users={users} />
+        {drawing ? <DraftTerritory boundary={boundary} /> : null}
+
         {visible.map((customer) => (
           <CustomerPin
             key={customer.id}
@@ -232,8 +250,25 @@ function MapCanvas({ mapId }: { mapId: string }) {
         </div>
       </div>
 
-      {/* Bottom-right controls sit inside thumb reach in portrait. */}
-      <div className="absolute right-3 bottom-4 flex flex-col gap-3">
+      {/* Bottom-right controls sit inside thumb reach in portrait. Hidden while
+          drawing, where the draw bar owns the bottom of the screen. */}
+      <div
+        className={`absolute right-3 bottom-4 flex flex-col gap-3 ${drawing ? "hidden" : ""}`}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            setDrawing(true);
+            setBoundary([]);
+            setDraft(null);
+            setSelectedId(null);
+          }}
+          aria-label="Draw a territory"
+          className="tap-target flex size-14 items-center justify-center rounded-full border border-line bg-surface text-ink shadow-lg"
+        >
+          <TerritoryIcon />
+        </button>
+
         <button
           type="button"
           onClick={() => setFilterOpen(true)}
@@ -259,8 +294,24 @@ function MapCanvas({ mapId }: { mapId: string }) {
         </button>
       </div>
 
+      {drawing ? (
+        <TerritoryDrawBar
+          boundary={boundary}
+          onUndo={() => setBoundary((corners) => corners.slice(0, -1))}
+          onClear={() => setBoundary([])}
+          onCancel={() => {
+            setDrawing(false);
+            setBoundary([]);
+          }}
+          onSaved={() => {
+            setDrawing(false);
+            setBoundary([]);
+          }}
+        />
+      ) : null}
+
       {/* Hint only while the map is empty — it stops being useful after that. */}
-      {!loading && customers.length === 0 ? (
+      {!loading && !drawing && customers.length === 0 ? (
         <p className="pointer-events-none absolute inset-x-0 bottom-24 mx-auto w-fit rounded-xl border border-line bg-canvas/90 px-4 py-2.5 text-base font-bold text-ink backdrop-blur-sm">
           Tap a house to drop your first pin
         </p>
@@ -287,6 +338,23 @@ function MapCanvas({ mapId }: { mapId: string }) {
         </div>
       </MapBoundary>
     </div>
+  );
+}
+
+/** A drawn boundary with a corner handle — the shape you are about to make. */
+function TerritoryIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-6" aria-hidden="true">
+      <path
+        d="M4 8.5 11 4l9 4.5-2 9.5-9 2-5-4.5Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.9}
+        strokeLinejoin="round"
+        strokeDasharray="3 2.4"
+      />
+      <circle cx={11} cy={4} r={2.2} fill="currentColor" />
+    </svg>
   );
 }
 

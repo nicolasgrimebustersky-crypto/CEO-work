@@ -10,7 +10,14 @@
 import type { AppNotification } from "@/lib/db/notifications";
 import type { SavedService } from "@/lib/db/services";
 import type { BusinessDocument } from "@/lib/documents";
-import type { AppUser, Customer, Job, KnockRoute, Quote } from "@/lib/types";
+import type {
+  AppUser,
+  Customer,
+  Job,
+  KnockRoute,
+  Quote,
+  Territory,
+} from "@/lib/types";
 
 export const DEMO_NICK = "demo-nick";
 export const DEMO_DANA = "demo-dana";
@@ -23,3 +30,4 @@ export const demoNotifications: AppNotification[] = [];
 export const demoDocuments: BusinessDocument[] = [];
 export const demoServices: SavedService[] = [];
 export const demoKnockRoutes: KnockRoute[] = [];
+export const demoTerritories: Territory[] = [];

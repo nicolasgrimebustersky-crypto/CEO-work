@@ -8,6 +8,7 @@ import { CustomersProvider } from "@/components/providers/CustomersProvider";
 import { DocumentsProvider } from "@/components/providers/DocumentsProvider";
 import { JobsProvider } from "@/components/providers/JobsProvider";
 import { KnockRoutesProvider } from "@/components/providers/KnockRoutesProvider";
+import { TerritoriesProvider } from "@/components/providers/TerritoriesProvider";
 import { LocationSharingProvider } from "@/components/providers/LocationSharingProvider";
 import { NotificationsProvider } from "@/components/providers/NotificationsProvider";
 import { ServicesProvider } from "@/components/providers/ServicesProvider";
@@ -83,6 +84,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <DocumentsProvider>
                     <ServicesProvider>
                       <KnockRoutesProvider>
+                      <TerritoriesProvider>
                       <NotificationsProvider>
                         <ConnectionProvider>
                           <LocationSharingProvider>
@@ -90,6 +92,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                           </LocationSharingProvider>
                         </ConnectionProvider>
                       </NotificationsProvider>
+                      </TerritoriesProvider>
                       </KnockRoutesProvider>
                     </ServicesProvider>
                   </DocumentsProvider>

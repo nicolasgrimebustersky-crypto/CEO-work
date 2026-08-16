@@ -206,6 +206,34 @@ export interface KnockRoute {
   updatedByName: string | null;
 }
 
+/**
+ * A territory: an area of streets somebody owns, drawn on the map.
+ *
+ * The complement of a route. A route is doors you already have pins for; a
+ * territory is the ground you have not knocked yet, which cannot be a list of
+ * ids because the pins do not exist. See lib/knock/territory.ts.
+ */
+export interface Territory {
+  id: string;
+  name: string;
+  /**
+   * The outline, in the order it was drawn. Stored as an array of maps because
+   * Firestore cannot hold an array of arrays.
+   */
+  boundary: LatLng[];
+  /** Crew uids. Empty means it is unclaimed ground. */
+  assignedTo: string[];
+  notes: string;
+  /** Retired territories stay for the record but come off the map. */
+  active: boolean;
+  createdAt: Timestamp;
+  createdBy: string;
+  createdByName: string;
+  updatedAt: Timestamp | null;
+  updatedBy: string | null;
+  updatedByName: string | null;
+}
+
 export const LEAD_SOURCES = ["door_knock", "meta_lead_ad", "referral", "manual"] as const;
 export type LeadSource = (typeof LEAD_SOURCES)[number];
 

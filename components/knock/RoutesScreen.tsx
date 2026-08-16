@@ -14,8 +14,10 @@ import { formatDateOnly } from "@/lib/format";
 import { estimateRouteMinutes, formatMinutes, routeProgress } from "@/lib/knock/plan";
 import { routes } from "@/lib/routes";
 import { ROUTE_STATUS_LABEL, type KnockRoute } from "@/lib/types";
+import { TerritoriesPanel } from "./TerritoriesPanel";
 
 type Scope = "mine" | "all";
+type Tab = "routes" | "territories";
 
 /**
  * Every door-knocking route, opening on the ones still to be walked.
@@ -29,6 +31,7 @@ export function RoutesScreen() {
   const { byId: customersById } = useCustomers();
   const { author, colorFor, nameFor } = useTeam();
   const [scope, setScope] = useState<Scope>("mine");
+  const [tab, setTab] = useState<Tab>("routes");
 
   const visible = useMemo(
     () => (scope === "mine" ? routesFor(allRoutes, author?.uid ?? null) : allRoutes),
@@ -46,24 +49,44 @@ export function RoutesScreen() {
 
   return (
     <div className="h-full overflow-y-auto pb-24">
-      <ScreenHeader title="Routes" subtitle="Doors to knock, and who is walking them">
+      <ScreenHeader
+        title="Routes"
+        subtitle={
+          tab === "routes"
+            ? "Doors to knock, and who is walking them"
+            : "Ground you own, and how much of it is covered"
+        }
+      >
         <div className="mt-3 flex items-center gap-2">
-          <Chip active={scope === "mine"} onClick={() => setScope("mine")}>
-            Mine
+          <Chip active={tab === "routes"} onClick={() => setTab("routes")}>
+            Routes
           </Chip>
-          <Chip active={scope === "all"} onClick={() => setScope("all")}>
-            Everyone
+          <Chip active={tab === "territories"} onClick={() => setTab("territories")}>
+            Territories
           </Chip>
           <Link
-            href={routes.newKnockRoute}
+            href={tab === "routes" ? routes.newKnockRoute : routes.drawTerritory}
             className="tap-target ml-auto inline-flex items-center justify-center rounded-full bg-accent px-4 text-base font-semibold text-accent-ink"
           >
-            New route
+            {tab === "routes" ? "New route" : "Draw one"}
           </Link>
         </div>
+
+        {tab === "routes" ? (
+          <div className="mt-2 flex items-center gap-2">
+            <Chip active={scope === "mine"} onClick={() => setScope("mine")}>
+              Mine
+            </Chip>
+            <Chip active={scope === "all"} onClick={() => setScope("all")}>
+              Everyone
+            </Chip>
+          </div>
+        ) : null}
       </ScreenHeader>
 
-      {error ? (
+      {tab === "territories" ? <TerritoriesPanel /> : null}
+
+      {tab === "routes" && error ? (
         <p
           role="alert"
           className="mx-4 mt-4 rounded-xl border border-danger/60 bg-danger/15 px-3 py-3 text-base font-semibold text-ink"
@@ -72,7 +95,7 @@ export function RoutesScreen() {
         </p>
       ) : null}
 
-      {loading ? (
+      {tab !== "routes" ? null : loading ? (
         <div className="flex justify-center py-16">
           <Spinner />
         </div>

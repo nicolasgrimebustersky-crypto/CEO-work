@@ -10,6 +10,7 @@ import {
   demoNotifications,
   demoKnockRoutes,
   demoServices,
+  demoTerritories,
   demoQuotes,
   demoUsers,
   // Imported by alias, not relatively: next.config.ts swaps this module out in
@@ -66,6 +67,7 @@ function seed(): void {
   seedTable(COLLECTIONS.documents, demoDocuments as unknown as DemoRow[]);
   seedTable(COLLECTIONS.services, demoServices as unknown as DemoRow[]);
   seedTable(COLLECTIONS.knockRoutes, demoKnockRoutes as unknown as DemoRow[]);
+  seedTable(COLLECTIONS.territories, demoTerritories as unknown as DemoRow[]);
 }
 
 function emit(name: string): void {

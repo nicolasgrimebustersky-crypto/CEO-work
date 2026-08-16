@@ -102,6 +102,11 @@ A nightly cron chases money that has not come in — an invoice is called out on
 the morning it passes its due date, and Monday brings a single line for
 everything still outstanding.
 
+Territories: areas of ground drawn on the map by tapping their corners, claimed
+by one of the crew and tinted in their colour. Everything else falls out of one
+question — is this point inside the outline — so coverage is the pins inside,
+and "make a route" is the knockable pins inside, already in walking order.
+
 Door-knocking routes: a named, ordered list of doors with a day and an
 assignee. Ordered nearest-first from wherever you are standing, ticked off as
 you walk, with the next door as a card carrying a Navigate button. Assigning one
@@ -238,6 +243,7 @@ Every request made across the project, and where it stands.
 | Notifications that don't wake you at 3am | `lib/notifications/quietHours.ts` |
 | Being chased about money nobody has paid | `app/api/cron/money-reminders` |
 | **Door-knock routes you can build and assign** | `app/routes`, `lib/knock/plan.ts` |
+| **A territory tool — draw ground, own it, cover it** | `components/map/TerritoryDrawBar.tsx`, `lib/knock/territory.ts` |
 
 ### Blocked on you, not on code
 

@@ -152,4 +152,6 @@ export const COLLECTIONS = {
   pushTokens: "pushTokens",
   /** Door-knocking routes. See lib/db/knockRoutes.ts. */
   knockRoutes: "knockRoutes",
+  /** Drawn areas of ground. See lib/db/territories.ts. */
+  territories: "territories",
 } as const;

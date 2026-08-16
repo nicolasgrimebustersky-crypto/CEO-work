@@ -265,6 +265,35 @@ service cloud.firestore {
       allow delete: if isCrew();
     }
 
+    // Territories: a drawn area of ground somebody owns.
+    //
+    // The boundary is the whole document — a territory with a broken outline
+    // does not draw, and one that draws in the wrong place silently hands
+    // somebody the wrong streets. So the shape is checked: a list, and enough
+    // points to actually enclose something.
+    //
+    // Individual vertices cannot be validated here (rules cannot walk a list),
+    // which is why lib/db/territories.ts drops any point that is not two
+    // numbers on the way back out.
+    function validTerritory() {
+      let data = request.resource.data;
+      return data.name is string
+        && data.boundary is list
+        && data.boundary.size() >= 3
+        // A hand-drawn outline follows streets: a handful of corners, not a
+        // traced curve. The cap is a runaway-loop guard, not a design limit.
+        && data.boundary.size() <= 200
+        && data.assignedTo is list
+        && data.active is bool;
+    }
+
+    match /territories/{territoryId} {
+      allow read: if isCrew();
+      allow create: if isCrew() && stampedByCaller('createdBy') && validTerritory();
+      allow update: if isCrew() && refreshesAuthorStamp() && validTerritory();
+      allow delete: if isCrew();
+    }
+
     // Anything not matched above is denied by default. Do not add a
     // catch-all `match /{document=**}` here: rules are OR'd, so a permissive
     // catch-all would widen access rather than restrict it.

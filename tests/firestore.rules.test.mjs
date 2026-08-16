@@ -187,6 +187,19 @@ beforeEach(async () => {
       createdByName: "Alice",
       updatedBy: "alice",
     });
+    await setDoc(doc(db, "territories/t1"), {
+      name: "Ridgemoor",
+      boundary: [
+        { lat: 38.4, lng: -85.38 },
+        { lat: 38.41, lng: -85.38 },
+        { lat: 38.41, lng: -85.37 },
+      ],
+      assignedTo: ["alice"],
+      active: true,
+      createdBy: "alice",
+      createdByName: "Alice",
+      updatedBy: "alice",
+    });
     await setDoc(doc(db, "pushTokens/t-alice"), {
       uid: "alice",
       token: "alice-device-token",
@@ -221,6 +234,7 @@ describe("the two-account allowlist", () => {
     await assertFails(getDocs(collection(mallory, "services")));
     await assertFails(addDoc(collection(mallory, "services"), serviceDoc("mallory")));
     await assertFails(getDocs(collection(mallory, "knockRoutes")));
+    await assertFails(getDocs(collection(mallory, "territories")));
     await assertFails(getDocs(collection(mallory, "pushTokens")));
     await assertFails(
       addDoc(collection(mallory, "pushTokens"), { uid: "mallory", token: "t" }),
@@ -655,5 +669,73 @@ describe("door-knocking routes", () => {
   test("an unauthenticated caller gets nothing", async () => {
     await assertFails(getDocs(collection(anon, "knockRoutes")));
     await assertFails(addDoc(collection(anon, "knockRoutes"), routeDoc("alice")));
+  });
+});
+
+/* --------------------------------------------------------------- territory */
+
+describe("territories", () => {
+  const square = [
+    { lat: 38.4, lng: -85.38 },
+    { lat: 38.41, lng: -85.38 },
+    { lat: 38.41, lng: -85.37 },
+    { lat: 38.4, lng: -85.37 },
+  ];
+  const territoryDoc = (by, over = {}) => ({
+    name: "Oak Ridge",
+    boundary: square,
+    assignedTo: [],
+    active: true,
+    notes: "",
+    createdBy: by,
+    createdByName: by,
+    updatedBy: by,
+    updatedAt: serverTimestamp(),
+    ...over,
+  });
+
+  test("a crew member can draw one and claim it", async () => {
+    await assertSucceeds(addDoc(collection(alice, "territories"), territoryDoc("alice")));
+    await assertSucceeds(
+      updateDoc(doc(bob, "territories/t1"), {
+        assignedTo: ["bob"],
+        updatedBy: "bob",
+        updatedAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  test("a shape that encloses nothing is refused", async () => {
+    // Two points is a line. Saved, it would draw as nothing and silently own
+    // no ground while looking like a territory in the list.
+    await assertFails(
+      addDoc(collection(alice, "territories"), territoryDoc("alice", { boundary: square.slice(0, 2) })),
+    );
+    await assertFails(
+      addDoc(collection(alice, "territories"), territoryDoc("alice", { boundary: [] })),
+    );
+    await assertFails(
+      addDoc(collection(alice, "territories"), territoryDoc("alice", { boundary: "square" })),
+    );
+  });
+
+  test("a runaway outline cannot be written", async () => {
+    const tooMany = Array.from({ length: 201 }, (_, i) => ({ lat: 38 + i / 1000, lng: -85 }));
+    await assertFails(
+      addDoc(collection(alice, "territories"), territoryDoc("alice", { boundary: tooMany })),
+    );
+  });
+
+  test("it cannot be attributed to somebody else", async () => {
+    await assertFails(addDoc(collection(alice, "territories"), territoryDoc("bob")));
+  });
+
+  test("redrawing a boundary has to say who did it", async () => {
+    await assertFails(updateDoc(doc(bob, "territories/t1"), { boundary: square }));
+  });
+
+  test("an unauthenticated caller gets nothing", async () => {
+    await assertFails(getDocs(collection(anon, "territories")));
+    await assertFails(addDoc(collection(anon, "territories"), territoryDoc("alice")));
   });
 });

@@ -13,7 +13,15 @@ import {
   type Payment,
 } from "@/lib/documents";
 import type { PipelineStage } from "@/lib/pipeline";
-import type { AppUser, Customer, Job, KnockRoute, Note, Quote } from "@/lib/types";
+import type {
+  AppUser,
+  Customer,
+  Job,
+  KnockRoute,
+  Note,
+  Quote,
+  Territory,
+} from "@/lib/types";
 
 /**
  * Demo data.
@@ -951,6 +959,51 @@ export const demoKnockRoutes: KnockRoute[] = [
     createdBy: DEMO_NICK,
     createdByName: "Nick",
     updatedAt: hoursAgo(4),
+    updatedBy: DEMO_NICK,
+    updatedByName: "Nick",
+  },
+];
+
+/**
+ * One claimed territory around the La Grange pins and one unclaimed patch, so
+ * the panel shows coverage, an owner colour and the grey unclaimed state.
+ */
+export const demoTerritories: Territory[] = [
+  {
+    id: "dt-1",
+    name: "Ridgemoor & Oak Ridge",
+    boundary: [
+      { lat: 38.4185, lng: -85.3855 },
+      { lat: 38.4185, lng: -85.3635 },
+      { lat: 38.3985, lng: -85.3635 },
+      { lat: 38.3985, lng: -85.3855 },
+    ],
+    assignedTo: [DEMO_NICK],
+    notes: "Big lots, most of them have a driveway worth washing.",
+    active: true,
+    createdAt: hoursAgo(50),
+    createdBy: DEMO_NICK,
+    createdByName: "Nick",
+    updatedAt: hoursAgo(50),
+    updatedBy: DEMO_NICK,
+    updatedByName: "Nick",
+  },
+  {
+    id: "dt-2",
+    name: "Pewee Valley south",
+    boundary: [
+      { lat: 38.3175, lng: -85.4895 },
+      { lat: 38.3175, lng: -85.4735 },
+      { lat: 38.3065, lng: -85.4735 },
+      { lat: 38.3065, lng: -85.4895 },
+    ],
+    assignedTo: [],
+    notes: "",
+    active: true,
+    createdAt: hoursAgo(20),
+    createdBy: DEMO_NICK,
+    createdByName: "Nick",
+    updatedAt: hoursAgo(20),
     updatedBy: DEMO_NICK,
     updatedByName: "Nick",
   },
