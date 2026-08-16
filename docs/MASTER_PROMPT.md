@@ -160,6 +160,9 @@ Dashboard, reports, PWA offline shell, demo mode.
 6. **Secrets never get the NEXT_PUBLIC_ prefix.** Twilio credentials,
    FIREBASE_SERVICE_ACCOUNT_KEY, CREW_UIDS, CRON_SECRET, META_* are server-only.
    Anything NEXT_PUBLIC_ is inlined into the browser bundle at build time.
+   Never write a real credential into a file, a commit, a comment or a reply —
+   env vars only. If one appears in conversation, say plainly that it must be
+   revoked rather than using it.
 
 7. **Customer data never leaves the machine.** Real names, phone numbers,
    addresses and emails are in this system and the repository is public. Never

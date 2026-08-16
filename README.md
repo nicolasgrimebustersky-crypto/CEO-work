@@ -227,9 +227,20 @@ The SMS routes and the nightly cron run server-side with the Firebase Admin SDK.
 2. **Phone Numbers → Buy a number.** Filter to the **US**, area code **502** so
    texts come from a local Louisville number, and require **SMS**. Roughly
    $1.15/month plus per-message cost.
-3. Copy **Account SID** and **Auth Token** into `TWILIO_ACCOUNT_SID` and
-   `TWILIO_AUTH_TOKEN`, and the number — E.164, e.g. `+15025550147` — into
-   `TWILIO_PHONE_NUMBER`.
+3. Copy the **Account SID** into `TWILIO_ACCOUNT_SID` and the number — E.164,
+   e.g. `+15025550147` — into `TWILIO_PHONE_NUMBER`. The Account SID is an
+   identifier, not a secret; it appears in Twilio's own REST URLs.
+
+   For the sending credential, prefer an **API key** over the account auth
+   token: **Account → API keys & tokens → Create API key**, then set
+   `TWILIO_API_KEY_SID` and `TWILIO_API_KEY_SECRET`. A leaked API key is one
+   deletion in the console; a leaked auth token means resetting the credential
+   every integration on the account uses.
+
+   Set `TWILIO_AUTH_TOKEN` **as well**. Twilio signs inbound webhooks with the
+   account auth token and never with an API key secret, so without it
+   `/api/sms/inbound` refuses every request — deliberately, rather than
+   accepting messages it cannot prove came from Twilio.
 4. **Wire up replies.** On the number's config page set **A message comes in** to
    `POST https://your-app.vercel.app/api/sms/inbound`. Replies then land on the
    customer's timeline. The route verifies Twilio's signature and rejects
@@ -238,9 +249,10 @@ The SMS routes and the nightly cron run server-side with the Firebase Admin SDK.
    [A2P 10DLC registration](https://www.twilio.com/docs/messaging/compliance/a2p-10dlc).
    Start it early — approval takes days.
 
-These three variables have **no** `NEXT_PUBLIC_` prefix, deliberately: they are
-only read server-side inside `/api/*` route handlers. Never add the prefix — it
-would ship your auth token to every browser that loads the app.
+These variables have **no** `NEXT_PUBLIC_` prefix, deliberately: they are only
+read server-side inside `/api/*` route handlers. Never add the prefix — it would
+ship a sending credential to every browser that loads the app, and anyone who
+viewed source could text your customers on your bill.
 
 ### 8. Push notifications
 
@@ -297,6 +309,7 @@ Vercel preview and open that.
    | `CREW_UIDS` | **no — server only** |
    | `CRON_SECRET` | **no — server only** |
    | `TWILIO_ACCOUNT_SID` | **no — server only** |
+   | `TWILIO_API_KEY_SID` / `TWILIO_API_KEY_SECRET` | **no — server only** |
    | `TWILIO_AUTH_TOKEN` | **no — server only** |
    | `TWILIO_PHONE_NUMBER` | **no — server only** |
 
