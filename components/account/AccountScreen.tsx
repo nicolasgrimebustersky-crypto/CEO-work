@@ -14,6 +14,7 @@ import { formatPhone, formatRelative } from "@/lib/format";
 import { routes } from "@/lib/routes";
 import { DeleteAccountSheet } from "./DeleteAccountSheet";
 import { NotificationSettings } from "./NotificationSettings";
+import { PendingAccounts } from "./PendingAccounts";
 import { TextingStatus } from "./TextingStatus";
 import { useOpenMenu } from "@/components/shell/menu";
 import { MenuIcon } from "@/components/shell/navIcons";
@@ -141,6 +142,8 @@ export function AccountScreen() {
             ))}
           </ul>
         </section>
+
+        <PendingAccounts />
 
         <NotificationSettings />
 

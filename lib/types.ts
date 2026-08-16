@@ -1,3 +1,4 @@
+import type { Role } from "@/lib/auth/roles";
 import type { Timestamp } from "firebase/firestore";
 
 import type { PipelineStage } from "./pipeline";
@@ -63,6 +64,14 @@ export interface Note {
 export interface AppUser {
   uid: string;
   displayName: string;
+  /**
+   * "crew" can use the app; "pending" has registered and can see nothing until
+   * somebody already inside approves them. Absent on profiles written before
+   * sign-up existed, which is why every read goes through
+   * lib/auth/roles.ts rather than testing this field directly — a missing
+   * value has to mean pending, not crew.
+   */
+  role?: Role;
   phone: string;
   currentLat: number | null;
   currentLng: number | null;

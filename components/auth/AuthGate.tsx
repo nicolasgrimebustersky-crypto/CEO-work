@@ -7,6 +7,7 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { isPublicRoute } from "@/lib/publicRoutes";
 import { Spinner } from "@/components/ui/Spinner";
 import { LoginScreen } from "./LoginScreen";
+import { PendingScreen } from "./PendingScreen";
 import { SetupScreen } from "./SetupScreen";
 
 /**
@@ -33,6 +34,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
     );
   }
   if (status === "signed-out") return <LoginScreen />;
+  // Registered, not approved. Held here rather than inside the app: the
+  // provider stack below would otherwise mount and start firing reads the
+  // database is going to refuse.
+  if (status === "pending") return <PendingScreen />;
 
   return <>{children}</>;
 }

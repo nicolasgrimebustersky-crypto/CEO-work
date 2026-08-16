@@ -71,6 +71,7 @@ export const demoUsers: AppUser[] = [
   {
     uid: DEMO_NICK,
     displayName: "Nick",
+    role: "crew",
     phone: "5025550147",
     currentLat: 38.4076,
     currentLng: -85.3791,
@@ -83,6 +84,7 @@ export const demoUsers: AppUser[] = [
   {
     uid: DEMO_DANA,
     displayName: "Dana",
+    role: "crew",
     phone: "5025550188",
     currentLat: 38.4102,
     currentLng: -85.3744,

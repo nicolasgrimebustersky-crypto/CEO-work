@@ -2,10 +2,12 @@
 
 import {
   browserLocalPersistence,
+  createUserWithEmailAndPassword,
   onAuthStateChanged,
   setPersistence,
   signInWithEmailAndPassword,
   signOut,
+  updateProfile,
   type User,
 } from "firebase/auth";
 import {
@@ -18,22 +20,34 @@ import {
   type ReactNode,
 } from "react";
 
+import { isCrew as roleIsCrew } from "@/lib/auth/roles";
 import { isDemoMode } from "@/lib/demo/enabled";
 import { DEMO_NICK } from "@/lib/demo/fixtures";
 import { getFirebaseAuth, isFirebaseConfigured } from "@/lib/firebase";
-import { ensureUserDoc } from "@/lib/db/users";
+import { ensureUserDoc, subscribeOwnProfile } from "@/lib/db/users";
 import type { Author } from "@/lib/types";
 
 const DEMO_AUTHOR: Author = { uid: DEMO_NICK, displayName: "Nick" };
 const DEMO_SESSION_KEY = "gb:demo-session";
 
-export type AuthStatus = "loading" | "unconfigured" | "signed-out" | "signed-in";
+/**
+ * "pending" is signed in but not approved. It is a separate status rather than
+ * a flag on "signed-in" so that no screen can forget to check it — AuthGate
+ * switches on this one value, and a pending account never reaches the app.
+ */
+export type AuthStatus =
+  | "loading"
+  | "unconfigured"
+  | "signed-out"
+  | "pending"
+  | "signed-in";
 
 interface AuthContextValue {
   status: AuthStatus;
   author: Author | null;
   email: string | null;
   signIn: (email: string, password: string) => Promise<void>;
+  signUp: (name: string, email: string, password: string) => Promise<void>;
   signOutNow: () => Promise<void>;
 }
 
@@ -81,18 +95,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return onAuthStateChanged(auth, (next) => {
       setUser(next);
-      setStatus(next ? "signed-in" : "signed-out");
-      if (next) {
-        void ensureUserDoc(
-          next.uid,
-          next.displayName ?? nameFromEmail(next.email),
-        ).catch(() => {
-          // A blocked write here means the uid is missing from the Firestore
-          // allowlist. The rest of the app surfaces that as a read error.
-        });
+      if (!next) {
+        setStatus("signed-out");
+        return;
       }
+      // Signed in is not the same as allowed in. Stay on "loading" until the
+      // profile says which — landing on "signed-in" first would flash the whole
+      // app, customer list included, at an account that is not approved.
+      setStatus("loading");
+      void ensureUserDoc(
+        next.uid,
+        next.displayName ?? nameFromEmail(next.email),
+      ).catch(() => {
+        // A blocked write here means the profile already exists and this
+        // account may not rewrite it, or the rules are not deployed. Either
+        // way the role subscription below is what decides access.
+      });
     });
   }, []);
+
+  // Watch our own profile for the role. A live subscription rather than a
+  // one-off read so that being approved takes effect on the pending person's
+  // phone immediately, without them knowing to reload.
+  useEffect(() => {
+    if (isDemoMode || !user) return;
+    return subscribeOwnProfile(
+      user.uid,
+      (profile) => {
+        setStatus(
+          roleIsCrew(user.uid, profile?.role, user.email) ? "signed-in" : "pending",
+        );
+      },
+      () => {
+        // Cannot even read our own profile: the rules are older than this
+        // feature, or Firestore is unreachable. Fail closed for everyone
+        // except the admin, who would otherwise be locked out of the only
+        // screen that can fix it.
+        setStatus(roleIsCrew(user.uid, undefined, user.email) ? "signed-in" : "pending");
+      },
+    );
+  }, [user]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     if (isDemoMode) {
@@ -104,6 +146,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     await signInWithEmailAndPassword(getFirebaseAuth(), email.trim(), password);
   }, []);
+
+  /**
+   * Register. Creates the auth user, names it, and lets `ensureUserDoc` write
+   * the profile as pending — this function grants no access by itself, which
+   * is the property that makes an open sign-up form safe here.
+   */
+  const signUp = useCallback(
+    async (name: string, email: string, password: string) => {
+      if (isDemoMode) {
+        throw new Error("This is the demo — accounts are not real here.");
+      }
+      const credential = await createUserWithEmailAndPassword(
+        getFirebaseAuth(),
+        email.trim(),
+        password,
+      );
+      const trimmed = name.trim();
+      if (trimmed) {
+        await updateProfile(credential.user, { displayName: trimmed });
+      }
+      await ensureUserDoc(credential.user.uid, trimmed || nameFromEmail(email));
+    },
+    [],
+  );
 
   const signOutNow = useCallback(async () => {
     if (isDemoMode) {
@@ -122,6 +188,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         author: status === "signed-in" ? DEMO_AUTHOR : null,
         email: demoEmail,
         signIn,
+        signUp,
         signOutNow,
       };
     }
@@ -136,9 +203,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         : null,
       email: user?.email ?? null,
       signIn,
+      signUp,
       signOutNow,
     };
-  }, [status, user, demoEmail, signIn, signOutNow]);
+  }, [status, user, demoEmail, signIn, signUp, signOutNow]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
