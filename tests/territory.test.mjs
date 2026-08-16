@@ -15,7 +15,9 @@ import assert from "node:assert/strict";
 import { test, describe } from "node:test";
 
 const {
+  MAX_VERTICES,
   MIN_VERTICES,
+  SIMPLIFY_TOLERANCE,
   acresOf,
   boundaryProblem,
   boundsOf,
@@ -23,6 +25,11 @@ const {
   coverageOf,
   formatAcres,
   isInside,
+  TAP_SLOP,
+  isTap,
+  dragSpread,
+  simplifyPath,
+  simplifyToLimit,
   within,
 } = await import("../lib/knock/territory.ts");
 
@@ -171,8 +178,10 @@ describe("framing one", () => {
 
 describe("what stops you saving one", () => {
   test("too few points says so in words", () => {
-    const problem = boundaryProblem(SQUARE.slice(0, 2));
-    assert.match(problem, new RegExp(String(MIN_VERTICES)));
+    // It has to name the gesture, not the vertex count. Somebody looking at a
+    // greyed-out Save button needs to know what to do with their finger.
+    assert.match(boundaryProblem(SQUARE.slice(0, 2)), /[Dd]rag|[Dd]raw/);
+    assert.equal(boundaryProblem(SQUARE.slice(0, MIN_VERTICES - 1)) !== null, true);
   });
 
   test("a shape too small to hold a house is refused", () => {
@@ -209,5 +218,171 @@ describe("how far through one you are", () => {
 
   test("every door knocked reads as finished", () => {
     assert.equal(coverageOf([pin("a"), pin("b")]).fraction, 1);
+  });
+});
+
+/* ---------------------------------------------------- freehand simplifying */
+
+describe("thinning out a freehand drag", () => {
+  /** A straight run of points, every one of them redundant. */
+  const straight = Array.from({ length: 200 }, (_, i) => ({ x: i, y: 0 }));
+
+  test("a straight line collapses to its two ends", () => {
+    const out = simplifyPath(straight, SIMPLIFY_TOLERANCE);
+    assert.deepEqual(out, [
+      { x: 0, y: 0 },
+      { x: 199, y: 0 },
+    ]);
+  });
+
+  test("a corner survives", () => {
+    // The whole job: drop the points that carry no shape, keep the ones that
+    // do. A territory follows streets, so the corners *are* the territory.
+    const out = simplifyPath(
+      [
+        { x: 0, y: 0 },
+        { x: 50, y: 0 },
+        { x: 100, y: 0 },
+        { x: 100, y: 50 },
+        { x: 100, y: 100 },
+      ],
+      SIMPLIFY_TOLERANCE,
+    );
+    assert.deepEqual(out, [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 100 },
+    ]);
+  });
+
+  test("jitter below the tolerance is wobble, not shape", () => {
+    // A hand shaking by a pixel while dragging along a street. Keeping it would
+    // store a thousand vertices describing somebody's grip.
+    const shaky = straight.map((p, i) => ({ x: p.x, y: i % 2 === 0 ? 1 : -1 }));
+    assert.ok(simplifyPath(shaky, SIMPLIFY_TOLERANCE).length <= 4);
+  });
+
+  test("a deliberate detour bigger than the tolerance is kept", () => {
+    const withBump = [
+      { x: 0, y: 0 },
+      { x: 50, y: 40 },
+      { x: 100, y: 0 },
+    ];
+    assert.equal(simplifyPath(withBump, SIMPLIFY_TOLERANCE).length, 3);
+  });
+
+  test("the ends are never dropped", () => {
+    const out = simplifyPath(straight, 10_000);
+    assert.deepEqual(out[0], { x: 0, y: 0 });
+    assert.deepEqual(out.at(-1), { x: 199, y: 0 });
+  });
+
+  test("short paths pass through untouched", () => {
+    assert.deepEqual(simplifyPath([], 3), []);
+    assert.deepEqual(simplifyPath([{ x: 1, y: 2 }], 3), [{ x: 1, y: 2 }]);
+  });
+
+  test("repeated identical points do not produce NaN", () => {
+    // A finger held still samples the same pixel many times. The segment
+    // between two identical points has zero length, and the obvious
+    // perpendicular-distance formula divides by zero there — every distance
+    // comes back NaN, compares false, and the shape silently collapses.
+    const stuck = [
+      { x: 5, y: 5 },
+      { x: 5, y: 5 },
+      { x: 5, y: 5 },
+      { x: 5, y: 60 },
+      { x: 5, y: 5 },
+    ];
+    const out = simplifyPath(stuck, SIMPLIFY_TOLERANCE);
+    assert.ok(out.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y)));
+    assert.ok(
+      out.some((p) => p.y === 60),
+      "the one point that carries shape must survive",
+    );
+  });
+});
+
+describe("keeping a drag under the vertex ceiling", () => {
+  /**
+   * A big loop with a fine ripple riding on it — a hand that shook while
+   * dragging around a subdivision. Both scales are real at 3px, which is
+   * exactly the case the ceiling exists for: a smooth circle simplifies to
+   * about 25 points on its own and would never reach it.
+   */
+  const rippled = Array.from({ length: 1000 }, (_, i) => {
+    const angle = (i / 1000) * Math.PI * 2;
+    const radius = 400 + Math.sin(i * ((Math.PI * 2) / 10)) * 6;
+    return { x: 500 + Math.cos(angle) * radius, y: 500 + Math.sin(angle) * radius };
+  });
+
+  test("one pass at the drawing tolerance is not enough", () => {
+    // If it were, the loosening loop would be dead code and this test would be
+    // the thing that noticed.
+    assert.ok(simplifyPath(rippled, SIMPLIFY_TOLERANCE).length > MAX_VERTICES);
+  });
+
+  test("loosening brings it under the ceiling", () => {
+    const out = simplifyToLimit(rippled);
+    assert.ok(out.length <= MAX_VERTICES, `got ${out.length}`);
+    // The ripple goes and the loop stays: it is still recognisably a loop
+    // rather than the triangle a runaway tolerance would leave.
+    assert.ok(out.length > 8, `over-simplified to ${out.length}`);
+  });
+
+  test("a shape already small enough is left alone", () => {
+    const square = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 100 },
+      { x: 0, y: 100 },
+    ];
+    assert.deepEqual(simplifyToLimit(square), square);
+  });
+});
+
+describe("telling a tap from a drag", () => {
+  test("a still finger is a tap", () => {
+    assert.equal(isTap([{ x: 100, y: 100 }]), true);
+    assert.equal(dragSpread([{ x: 100, y: 100 }]), 0);
+  });
+
+  test("a shaky tap is still a tap", () => {
+    // Nobody holds a phone still. Reading a two-pixel wobble as a drag turns a
+    // deliberate corner into a three-point polygon the size of a doormat.
+    const wobble = [
+      { x: 100, y: 100 },
+      { x: 101, y: 99 },
+      { x: 102, y: 101 },
+      { x: 100, y: 100 },
+    ];
+    assert.equal(isTap(wobble), true);
+  });
+
+  test("a real drag is a drag", () => {
+    const drag = [
+      { x: 100, y: 100 },
+      { x: 160, y: 140 },
+      { x: 200, y: 240 },
+    ];
+    assert.equal(isTap(drag), false);
+  });
+
+  test("spread is measured from the start, not end to end", () => {
+    // A loop finishes where it began. Comparing first to last would call every
+    // closed shape — which is every territory — a tap.
+    const loop = [
+      { x: 0, y: 0 },
+      { x: 0, y: 300 },
+      { x: 300, y: 300 },
+      { x: 0, y: 0 },
+    ];
+    assert.ok(dragSpread(loop) > TAP_SLOP);
+    assert.equal(isTap(loop), false);
+  });
+
+  test("nothing at all is a tap, not a crash", () => {
+    assert.equal(dragSpread([]), 0);
+    assert.equal(isTap([]), true);
   });
 });

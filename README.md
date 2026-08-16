@@ -41,7 +41,7 @@ live, and every note, text and job carries the name of whoever did it.
 | Quiet hours — nothing buzzes 9pm–7am Eastern | The record still lands, so the bell is current in the morning |
 | Day view in route order with drive time between stops | Filterable to "my jobs" / "all jobs" |
 | Door-knocking routes: named, ordered, assigned, ticked off as you walk | Auto-ordered nearest-first from where you're standing |
-| Territories: draw an area on the map, claim it, see what's inside | Tap the corners; coverage counts pins actually spoken to |
+| Territories: draw an area on the map, claim it, see what's inside | Drag a loop freehand; coverage counts pins actually spoken to |
 
 **Phase 3 — SMS and automation**
 

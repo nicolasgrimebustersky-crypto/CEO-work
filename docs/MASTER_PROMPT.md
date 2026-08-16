@@ -102,7 +102,7 @@ A nightly cron chases money that has not come in — an invoice is called out on
 the morning it passes its due date, and Monday brings a single line for
 everything still outstanding.
 
-Territories: areas of ground drawn on the map by tapping their corners, claimed
+Territories: areas of ground drawn freehand on the map — drag a loop, claimed
 by one of the crew and tinted in their colour. Everything else falls out of one
 question — is this point inside the outline — so coverage is the pins inside,
 and "make a route" is the knockable pins inside, already in walking order.

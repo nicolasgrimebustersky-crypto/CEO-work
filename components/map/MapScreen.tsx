@@ -9,6 +9,7 @@ import { useLocationSharing } from "@/components/providers/LocationSharingProvid
 import { useTerritories } from "@/components/providers/TerritoriesProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { GeocodeBackfill } from "./GeocodeBackfill";
+import { FreehandLayer } from "./FreehandLayer";
 import { MapBoundary, MapUnavailable } from "./MapBoundary";
 import { applyFilters, activeFilterCount, EMPTY_FILTERS } from "@/lib/filters";
 import type { CustomerFilters } from "@/lib/filters";
@@ -85,11 +86,25 @@ function MapCanvas({ mapId }: { mapId: string }) {
 
   const { territories } = useTerritories();
   // Drawing mode is entered from the Routes screen (?draw=territory) or from
-  // the button out here. While it is on, tapping the map places a corner
-  // instead of dropping a pin — the two gestures are the same tap, so they
-  // cannot both be live.
+  // the button out here. While it is on, a drag draws a loop instead of panning
+  // the map — one finger, two possible meanings, so they cannot both be live.
   const [drawing, setDrawing] = useState(searchParams.get("draw") === "territory");
-  const [boundary, setBoundary] = useState<LatLng[]>([]);
+  // Shape and its history together in one piece of state. Undo has to step
+  // back over a whole freehand drag, not one of its sixty points — so the past
+  // has to be recorded at the moment of the change, and doing that from inside
+  // a setState updater would double up under StrictMode.
+  const [shape, setShape] = useState<{ boundary: LatLng[]; past: LatLng[][] }>({
+    boundary: [],
+    past: [],
+  });
+  const boundary = shape.boundary;
+  const replaceBoundary = (next: (prev: LatLng[]) => LatLng[]) =>
+    setShape((prev) => ({ boundary: next(prev.boundary), past: [...prev.past, prev.boundary] }));
+  const clearShape = () => setShape({ boundary: [], past: [] });
+  // The escape hatch from drawing: while `panning` is on, the drawing sheet
+  // steps aside and the map behaves normally, so you can reframe without
+  // losing the shape so far.
+  const [panning, setPanning] = useState(false);
 
   const visible = useMemo(
     () => applyFilters(customers, filters),
@@ -150,10 +165,10 @@ function MapCanvas({ mapId }: { mapId: string }) {
         onClick={(event) => {
           const latLng = event.detail.latLng;
           if (!latLng) return;
-          if (drawing) {
-            setBoundary((corners) => [...corners, { lat: latLng.lat, lng: latLng.lng }]);
-            return;
-          }
+          // In drawing mode the sheet above swallows taps, so anything that
+          // reaches here is the map's own gesture — but while Move map is on
+          // the sheet is gone and a tap must not drop a customer pin.
+          if (drawing) return;
           setSelectedId(null);
           setDraft({ lat: latLng.lat, lng: latLng.lng });
         }}
@@ -208,8 +223,18 @@ function MapCanvas({ mapId }: { mapId: string }) {
         {draft ? <DraftPin position={draft} /> : null}
       </Map>
 
+      {/* Sits over the map so a drag draws instead of panning. Off while the
+          Move map toggle is on, which gives the gesture straight back. */}
+      {drawing ? (
+        <FreehandLayer
+          active={!panning}
+          onDrawn={(points) => replaceBoundary(() => points)}
+          onTap={(point) => replaceBoundary((corners) => [...corners, point])}
+        />
+      ) : null}
+
       {/* Top overlay: what you're looking at, and how it's rendered. */}
-      <div className="pt-safe pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 px-3">
+      <div className="pt-safe pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-2 px-3">
         <div className="pointer-events-auto flex flex-col items-start gap-2">
           {/* The map has no ScreenHeader, so it carries its own way into the
               menu — a floating circle, like the other controls out here. */}
@@ -253,13 +278,14 @@ function MapCanvas({ mapId }: { mapId: string }) {
       {/* Bottom-right controls sit inside thumb reach in portrait. Hidden while
           drawing, where the draw bar owns the bottom of the screen. */}
       <div
-        className={`absolute right-3 bottom-4 flex flex-col gap-3 ${drawing ? "hidden" : ""}`}
+        className={`absolute right-3 bottom-4 z-20 flex flex-col gap-3 ${drawing ? "hidden" : ""}`}
       >
         <button
           type="button"
           onClick={() => {
             setDrawing(true);
-            setBoundary([]);
+            setPanning(false);
+            clearShape();
             setDraft(null);
             setSelectedId(null);
           }}
@@ -297,15 +323,26 @@ function MapCanvas({ mapId }: { mapId: string }) {
       {drawing ? (
         <TerritoryDrawBar
           boundary={boundary}
-          onUndo={() => setBoundary((corners) => corners.slice(0, -1))}
-          onClear={() => setBoundary([])}
+          panning={panning}
+          onPanningChange={setPanning}
+          canUndo={shape.past.length > 0}
+          onUndo={() =>
+            setShape((prev) =>
+              prev.past.length === 0
+                ? prev
+                : { boundary: prev.past[prev.past.length - 1], past: prev.past.slice(0, -1) },
+            )
+          }
+          onClear={clearShape}
           onCancel={() => {
             setDrawing(false);
-            setBoundary([]);
+            setPanning(false);
+            clearShape();
           }}
           onSaved={() => {
             setDrawing(false);
-            setBoundary([]);
+            setPanning(false);
+            clearShape();
           }}
         />
       ) : null}

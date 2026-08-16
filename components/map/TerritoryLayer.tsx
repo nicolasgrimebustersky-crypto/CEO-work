@@ -71,15 +71,23 @@ export function TerritoryLayer({
 }
 
 /**
- * The outline being drawn right now.
+ * The outline that has been drawn, between letting go and saving.
  *
- * Separate from the layer above because it changes on every tap and has to
- * redraw instantly; rebuilding every saved territory each time somebody adds a
- * corner would be wasteful and would flicker.
+ * Separate from the layer above because it changes on every gesture and has to
+ * redraw instantly; rebuilding every saved territory each time would be
+ * wasteful and would flicker.
  *
  * Under three points there is no polygon yet, so it draws as a line — which is
  * also the honest picture of what you have so far.
  */
+
+/**
+ * Above this many points the shape came from a freehand drag, and numbering
+ * every vertex would bury the map under sixty labels describing a finger's
+ * path. Handles are for the handful of corners you placed on purpose.
+ */
+const MAX_LABELLED_CORNERS = 12;
+
 export function DraftTerritory({ boundary }: { boundary: LatLng[] }) {
   const map = useMap();
   const shape = useRef<google.maps.Polygon | google.maps.Polyline | null>(null);
@@ -108,8 +116,11 @@ export function DraftTerritory({ boundary }: { boundary: LatLng[] }) {
         : new google.maps.Polyline({ ...common, path: boundary });
 
     // A dot on every corner, so it is obvious which taps registered — on a
-    // phone in sunlight a thin cyan line alone is easy to miscount.
-    dots.current = boundary.map(
+    // phone in sunlight a thin cyan line alone is easy to miscount. Only for
+    // shapes small enough to have been tapped out one corner at a time.
+    const corners =
+      boundary.length <= MAX_LABELLED_CORNERS ? boundary : ([] as LatLng[]);
+    dots.current = corners.map(
       (point, index) =>
         new google.maps.Marker({
           map,

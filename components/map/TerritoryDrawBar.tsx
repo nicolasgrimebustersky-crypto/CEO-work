@@ -13,23 +13,37 @@ import type { LatLng } from "@/lib/types";
 /**
  * The controls for drawing a territory, docked at the bottom of the map.
  *
- * Tap-to-place rather than drag-to-draw. On a phone the map already owns the
- * drag gesture for panning, and freehand drawing means either fighting that or
- * a mode switch nobody discovers. Tapping corners is slower per shape and
- * enormously more reliable one-handed — and a territory follows streets, so it
- * is five or six corners, not a curve.
+ * Drag a loop around the area and let go. One finger, one gesture, the way you
+ * would draw it on paper.
+ *
+ * The map already owns the drag for panning, so the two cannot both be live —
+ * hence the Draw / Move map toggle, which is the whole cost of freehand and is
+ * out in the open rather than hidden behind a long press. Move map hands the
+ * gesture straight back without discarding the shape so far.
+ *
+ * A tap still adds a single corner. It is the fine adjustment a freehand loop
+ * cannot make: nudging a boundary onto the far side of a cul-de-sac.
  *
  * Undo is the one control that must be there. Every shape drawn on a phone
- * involves a mis-tap.
+ * involves a slip.
  */
 export function TerritoryDrawBar({
   boundary,
+  panning,
+  canUndo,
+  onPanningChange,
   onUndo,
   onClear,
   onCancel,
   onSaved,
 }: {
   boundary: LatLng[];
+  /** True while the map has its own gestures back. */
+  panning: boolean;
+  /** There is a previous shape to step back to. */
+  canUndo: boolean;
+  onPanningChange: (panning: boolean) => void;
+  /** Steps back over a whole drag, or one tapped corner. */
   onUndo: () => void;
   onClear: () => void;
   onCancel: () => void;
@@ -66,16 +80,22 @@ export function TerritoryDrawBar({
 
   return (
     <>
-      <div className="pb-safe pointer-events-auto absolute inset-x-0 bottom-0 border-t border-line bg-surface/95 px-3 pt-3 backdrop-blur">
+      {/* z-20 puts this above the drawing sheet (z-10). Without it the sheet
+          covers the bar and every control in here — including the toggle that
+          turns the sheet off — is unclickable. */}
+      <div className="pb-safe pointer-events-auto absolute inset-x-0 bottom-0 z-20 border-t border-line bg-surface/95 px-3 pt-3 backdrop-blur">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-base font-bold text-ink">
               {boundary.length === 0
-                ? "Tap the corners of the area"
-                : `${boundary.length} corner${boundary.length === 1 ? "" : "s"}`}
+                ? "Drag a loop around the area"
+                : `${boundary.length} point${boundary.length === 1 ? "" : "s"}`}
             </p>
             <p className="mt-0.5 text-sm font-semibold text-muted">
-              {problem ?? `About ${formatAcres(acres)}. Tap Save when it looks right.`}
+              {panning && boundary.length === 0
+                ? "Move and zoom the map to frame the area, then switch back to Draw."
+                : (problem ??
+                  `About ${formatAcres(acres)}. Tap Save when it looks right.`)}
             </p>
           </div>
           <button
@@ -87,12 +107,38 @@ export function TerritoryDrawBar({
           </button>
         </div>
 
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          <Button
-            variant="secondary"
-            onClick={onUndo}
-            disabled={boundary.length === 0}
-          >
+        {/* Which one the finger means. Out in the open rather than a long
+            press, because a gesture nobody can see is a gesture nobody finds —
+            and getting it wrong either pans away from the shape or draws a
+            scribble across the county. */}
+        <div
+          role="radiogroup"
+          aria-label="What dragging does"
+          className="mt-3 grid grid-cols-2 gap-1 rounded-full border border-line bg-surface-2 p-1"
+        >
+          {[
+            { label: "Draw", value: false },
+            { label: "Move map", value: true },
+          ].map((mode) => (
+            <button
+              key={mode.label}
+              type="button"
+              role="radio"
+              aria-checked={panning === mode.value}
+              onClick={() => onPanningChange(mode.value)}
+              className={`tap-target rounded-full px-4 text-base font-bold transition ${
+                panning === mode.value
+                  ? "bg-accent text-accent-ink"
+                  : "bg-transparent text-ink"
+              }`}
+            >
+              {mode.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          <Button variant="secondary" onClick={onUndo} disabled={!canUndo}>
             Undo
           </Button>
           <Button

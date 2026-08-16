@@ -2,6 +2,8 @@ import "server-only";
 
 import twilio from "twilio";
 
+import { readTwilioCredentials, twilioSetupHint } from "@/lib/twilio/credentials";
+
 /**
  * Twilio credentials are read here and nowhere else. None of these env vars
  * carry the NEXT_PUBLIC_ prefix, so they never reach the browser bundle — an
@@ -23,40 +25,40 @@ const apiKeySid = process.env.TWILIO_API_KEY_SID ?? "";
 const apiKeySecret = process.env.TWILIO_API_KEY_SECRET ?? "";
 const fromNumber = process.env.TWILIO_PHONE_NUMBER ?? "";
 
-const hasApiKey = apiKeySid.startsWith("SK") && apiKeySecret.length > 0;
+/** The decision itself is pure and tested — see lib/twilio/credentials.ts. */
+export const twilioCredentials = readTwilioCredentials({
+  TWILIO_ACCOUNT_SID: accountSid,
+  TWILIO_AUTH_TOKEN: authToken,
+  TWILIO_API_KEY_SID: apiKeySid,
+  TWILIO_API_KEY_SECRET: apiKeySecret,
+  TWILIO_PHONE_NUMBER: fromNumber,
+});
 
 /** Enough to send a message. */
-export const isTwilioConfigured =
-  accountSid.startsWith("AC") &&
-  (hasApiKey || authToken.length > 0) &&
-  fromNumber.length > 0;
+export const isTwilioConfigured = twilioCredentials.canSend;
 
 /**
- * Signature validation is a separate capability, and this is the trap in
- * switching to API keys: Twilio signs webhooks with the *account auth token*,
- * never with an API key secret. So an app configured with only an API key can
- * send perfectly well and cannot verify a single inbound request.
- *
- * Rather than let that degrade quietly into an endpoint that accepts forged
- * messages, the inbound route checks this and refuses everything when it is
- * false. See verifyTwilioSignature below.
+ * Enough to validate an inbound webhook signature, which is a different
+ * question: Twilio signs webhooks with the account auth token and never with an
+ * API key secret, so an app holding only an API key sends perfectly and can
+ * verify nothing. The inbound route checks this and refuses everything rather
+ * than trusting requests it cannot prove came from Twilio.
  */
-export const canVerifyWebhooks = authToken.length > 0;
+export const canVerifyWebhooks = twilioCredentials.canVerify;
+
+/** What to go and set, for the error somebody actually reads. */
+export const twilioProblem = twilioSetupHint(twilioCredentials);
 
 let cachedClient: ReturnType<typeof twilio> | null = null;
 
 function client() {
-  if (!isTwilioConfigured) {
-    throw new Error(
-      "Twilio is not configured. Set TWILIO_ACCOUNT_SID, TWILIO_PHONE_NUMBER, and either " +
-        "TWILIO_API_KEY_SID + TWILIO_API_KEY_SECRET (preferred) or TWILIO_AUTH_TOKEN.",
-    );
-  }
+  if (!isTwilioConfigured) throw new Error(twilioProblem);
   // An API key authenticates as itself and names the account it acts on; the
   // auth token *is* the account. Hence the third argument in the first form.
-  cachedClient ??= hasApiKey
-    ? twilio(apiKeySid, apiKeySecret, { accountSid })
-    : twilio(accountSid, authToken);
+  cachedClient ??=
+    twilioCredentials.kind === "api-key"
+      ? twilio(apiKeySid, apiKeySecret, { accountSid })
+      : twilio(accountSid, authToken);
   return cachedClient;
 }
 

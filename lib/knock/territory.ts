@@ -152,12 +152,137 @@ export function formatAcres(acres: number): string {
  */
 export function boundaryProblem(polygon: readonly Point[]): string | null {
   if (polygon.length < MIN_VERTICES) {
-    return `Tap at least ${MIN_VERTICES} points on the map to close a shape.`;
+    return "Drag a loop around the area you want.";
   }
   if (acresOf(polygon) < 0.05) {
-    return "That shape is too small to hold a house. Spread the points out.";
+    return "That shape is too small to hold a house. Draw a wider loop.";
   }
   return null;
+}
+
+/* ------------------------------------------------------- freehand drawing */
+
+/**
+ * A point on the screen, in pixels. Simplification happens here rather than in
+ * degrees because the thing being removed is finger jitter, and jitter is a
+ * fixed number of pixels whatever the map is zoomed to. Doing it in degrees
+ * would smooth a street-level shape into a blob and leave a county-level one
+ * untouched.
+ */
+export interface Pixel {
+  x: number;
+  y: number;
+}
+
+/** Roughly the width of the drawn line — below that, it is a wobble. */
+export const SIMPLIFY_TOLERANCE = 3;
+
+/**
+ * A ceiling on stored vertices. A finger dragged around a subdivision produces
+ * something like a thousand samples; every one of them is written to Firestore,
+ * read back on every map load, and walked by `isInside` for every pin. A
+ * hundred and twenty is far more than a neighbourhood outline needs.
+ */
+export const MAX_VERTICES = 120;
+
+/**
+ * How far a finger may wander during a tap and still count as a tap rather
+ * than a drag. Nobody holds a phone still, and a two-pixel wobble read as a
+ * drag becomes a three-point polygon the size of a doormat.
+ */
+export const TAP_SLOP = 10;
+
+/** The furthest any sample strayed from the first — a gesture's size. */
+export function dragSpread(path: readonly Pixel[]): number {
+  if (path.length === 0) return 0;
+  let worst = 0;
+  for (const point of path) {
+    worst = Math.max(worst, Math.hypot(point.x - path[0].x, point.y - path[0].y));
+  }
+  return worst;
+}
+
+/** Was that a tap (place one corner) or a drag (draw a loop)? */
+export function isTap(path: readonly Pixel[]): boolean {
+  return dragSpread(path) < TAP_SLOP;
+}
+
+/** Perpendicular distance from `p` to the segment `a`–`b`. */
+function distanceToSegment(p: Pixel, a: Pixel, b: Pixel): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+
+  // A zero-length segment: the two ends are the same point, so the
+  // "perpendicular" is just the distance to it. Without this the projection
+  // below divides by zero and every distance comes back NaN, which compares
+  // false against the tolerance and silently keeps nothing.
+  if (dx === 0 && dy === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+
+  const t = Math.max(
+    0,
+    Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy)),
+  );
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
+/**
+ * Ramer–Douglas–Peucker: keep the points that carry the shape, drop the rest.
+ *
+ * Iterative with an explicit stack rather than recursive. A freehand drag can
+ * be several thousand samples and the worst case for this algorithm recurses
+ * once per point — a stack overflow in the middle of saving somebody's morning
+ * of work is not a trade worth making for four lines of brevity.
+ */
+export function simplifyPath(path: readonly Pixel[], tolerance: number): Pixel[] {
+  if (path.length <= 2) return [...path];
+
+  const keep = new Array<boolean>(path.length).fill(false);
+  keep[0] = true;
+  keep[path.length - 1] = true;
+
+  const stack: [number, number][] = [[0, path.length - 1]];
+  while (stack.length > 0) {
+    const [first, last] = stack.pop() as [number, number];
+    if (last - first < 2) continue;
+
+    let farthest = -1;
+    let worst = tolerance;
+    for (let i = first + 1; i < last; i += 1) {
+      const distance = distanceToSegment(path[i], path[first], path[last]);
+      if (distance > worst) {
+        worst = distance;
+        farthest = i;
+      }
+    }
+
+    if (farthest === -1) continue;
+    keep[farthest] = true;
+    stack.push([first, farthest], [farthest, last]);
+  }
+
+  return path.filter((_, index) => keep[index]);
+}
+
+/**
+ * Simplify until the result fits under `limit`, loosening the tolerance as
+ * needed. One pass at a fixed tolerance has no upper bound on its output — a
+ * slow, careful drag around a cul-de-sac stays detailed at any tolerance a
+ * street-level shape can afford.
+ */
+export function simplifyToLimit(
+  path: readonly Pixel[],
+  tolerance = SIMPLIFY_TOLERANCE,
+  limit = MAX_VERTICES,
+): Pixel[] {
+  let current = simplifyPath(path, tolerance);
+  let next = tolerance;
+  // Doubling converges in a handful of rounds even from a thousand points, and
+  // the guard means a pathological input ends rather than spinning.
+  for (let round = 0; round < 12 && current.length > limit; round += 1) {
+    next *= 2;
+    current = simplifyPath(path, next);
+  }
+  return current;
 }
 
 /* --------------------------------------------------------------- coverage */
