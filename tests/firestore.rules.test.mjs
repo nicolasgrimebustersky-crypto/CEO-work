@@ -28,9 +28,11 @@ import {
   doc,
   getDoc,
   getDocs,
+  query,
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
 } from "firebase/firestore";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -557,6 +559,55 @@ describe("notifications", () => {
       }),
     );
     await assertFails(updateDoc(doc(bob, "notifications/n1"), { actorUid: "bob" }));
+  });
+
+  test("only the addressee can read one", async () => {
+    // n1 is addressed to bob. Alice raised it and still may not read it back.
+    //
+    // This matters far more since team chat: a chat notification carries the
+    // first sixty characters of a private message in its body, so a crew-wide
+    // read would hand every thread's content to exactly the people the
+    // conversation rules exclude.
+    await assertSucceeds(getDoc(doc(bob, "notifications/n1")));
+    await assertFails(getDoc(doc(alice, "notifications/n1")));
+    await assertFails(getDoc(doc(dana, "notifications/n1")));
+    await assertFails(getDoc(doc(admin, "notifications/n1")));
+  });
+
+  test("you cannot list somebody else's bell", async () => {
+    await assertFails(
+      getDocs(query(collection(alice, "notifications"), where("forUid", "==", "bob"))),
+    );
+    await assertSucceeds(
+      getDocs(query(collection(bob, "notifications"), where("forUid", "==", "bob"))),
+    );
+  });
+
+  test("you cannot mark or delete somebody else's", async () => {
+    await assertFails(
+      updateDoc(doc(alice, "notifications/n1"), { readAt: serverTimestamp() }),
+    );
+    await assertFails(deleteDoc(doc(alice, "notifications/n1")));
+    await assertSucceeds(deleteDoc(doc(bob, "notifications/n1")));
+  });
+
+  test("a chat notification does not leak the message to outsiders", async () => {
+    // The end-to-end version of the same thing, in the shape the leak would
+    // actually have taken.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "notifications/chat1"), {
+        forUid: "bob",
+        actorUid: "alice",
+        actorName: "Alice",
+        type: "chat_message",
+        title: "New message",
+        body: "Alice: the customer is refusing to pay",
+        conversationId: "conv1",
+        readAt: null,
+      });
+    });
+    await assertSucceeds(getDoc(doc(bob, "notifications/chat1")));
+    await assertFails(getDoc(doc(dana, "notifications/chat1")));
   });
 });
 

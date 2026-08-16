@@ -282,15 +282,34 @@ service cloud.firestore {
     // Notifications are addressed to a person and describe what someone else
     // did, so both ends are pinned: you may only create one attributed to
     // yourself, and the only field you may later change is readAt.
+    // A notification is addressed to one person, and only that person may read
+    // it.
+    //
+    // This used to be crew-wide, on the reasoning that both accounts could
+    // already read every other collection. Team chat broke that reasoning: a
+    // chat notification carries the first sixty characters of a private
+    // message in its body, so crew-wide read would hand every thread's content
+    // to people the conversation rules deliberately exclude — including the
+    // admin, who cannot read the threads themselves.
+    //
+    // The client already queried `where forUid == me`. Rules are the boundary,
+    // though, and a modified client or a direct REST call with a valid token
+    // is not bound by the query the app happens to send.
+    function myNotification() {
+      return resource.data.forUid == request.auth.uid;
+    }
+
     match /notifications/{notificationId} {
-      allow read: if isCrew();
+      allow read: if isCrew() && myNotification();
       allow create: if isCrew()
         && stampedByCaller('actorUid')
         && request.resource.data.forUid is string
         && request.resource.data.readAt == null;
+      // Marking read and clearing are things you do to your own bell.
       allow update: if isCrew()
+        && myNotification()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt']);
-      allow delete: if isCrew();
+      allow delete: if isCrew() && myNotification();
     }
 
     // One document per device that has agreed to receive push notifications.
