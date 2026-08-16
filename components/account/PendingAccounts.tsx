@@ -4,7 +4,13 @@ import { useCallback, useState } from "react";
 
 import { useTeam } from "@/components/providers/TeamProvider";
 import { Button } from "@/components/ui/Button";
-import { setUserRole } from "@/lib/db/users";
+import { setNotificationScopes, setUserRole } from "@/lib/db/users";
+import {
+  CATEGORY_LABEL,
+  NOTIFICATION_CATEGORIES,
+  allowsCategory,
+  type NotificationCategory,
+} from "@/lib/notifications/events";
 import { isBootstrapCrew } from "@/lib/auth/roles";
 import type { AppUser } from "@/lib/types";
 
@@ -102,6 +108,7 @@ export function PendingAccounts() {
             {approved.map((user) => (
               <li key={user.uid} className="rounded-xl border border-line bg-surface-2 p-3">
                 <Person user={user} />
+                <ScopePicker user={user} />
                 {/* The two founding accounts cannot be switched off here. The
                     rules ignore their stored role anyway, so a button that
                     appeared to work and did nothing would be a lie. */}
@@ -146,5 +153,90 @@ function Person({ user }: { user: AppUser }) {
         {user.phone || "No phone set"}
       </p>
     </>
+  );
+}
+
+
+/**
+ * Which notification categories this person is allowed to hear about.
+ *
+ * A permission, not a preference — the person themselves still chooses what to
+ * switch on within it, on their own Account screen. Taking a category away
+ * here means they stop receiving it and stop being offered the switch.
+ *
+ * Absent means all of them. A profile written before this existed must not
+ * silently stop hearing about the job it was just assigned, so restricting is
+ * always something somebody did on purpose.
+ */
+function ScopePicker({ user }: { user: AppUser }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const current = user.notificationScopes;
+
+  async function toggle(category: NotificationCategory) {
+    // An absent scope means everything, so the first removal has to start from
+    // the full list rather than from an empty one — otherwise unticking one
+    // box would silently revoke the other four.
+    const base: NotificationCategory[] =
+      current == null
+        ? [...NOTIFICATION_CATEGORIES]
+        : NOTIFICATION_CATEGORIES.filter((entry) => current.includes(entry));
+
+    const next = base.includes(category)
+      ? base.filter((entry) => entry !== category)
+      : [...base, category];
+
+    setBusy(true);
+    setError(null);
+    try {
+      await setNotificationScopes(user.uid, next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save that.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 border-t border-line pt-3">
+      <p className="text-sm font-bold tracking-wide text-muted uppercase">
+        Can be notified about
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {NOTIFICATION_CATEGORIES.map((category) => {
+          const on = allowsCategory(current, category);
+          return (
+            <button
+              key={category}
+              type="button"
+              role="switch"
+              aria-checked={on}
+              aria-label={`${CATEGORY_LABEL[category]} for ${user.displayName}`}
+              disabled={busy}
+              onClick={() => void toggle(category)}
+              className={`tap-target rounded-full border px-4 text-sm font-bold transition ${
+                on
+                  ? "border-accent bg-accent text-accent-ink"
+                  : "border-line bg-surface text-muted"
+              } ${busy ? "opacity-60" : ""}`}
+            >
+              {CATEGORY_LABEL[category]}
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-1.5 text-sm font-semibold text-muted">
+        They still choose which of these to switch on for themselves.
+      </p>
+      {error ? (
+        <p
+          role="alert"
+          className="mt-2 rounded-xl border border-danger/60 bg-danger/15 px-3 py-2 text-sm font-semibold text-ink"
+        >
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }

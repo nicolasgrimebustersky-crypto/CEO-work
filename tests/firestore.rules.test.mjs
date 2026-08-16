@@ -205,6 +205,20 @@ beforeEach(async () => {
       createdByName: "Alice",
       updatedBy: "alice",
     });
+    await setDoc(doc(db, "conversations/conv1"), {
+      title: "",
+      memberUids: ["alice", "bob"],
+      createdBy: "alice",
+      createdByName: "Alice",
+      lastMessageAt: null,
+      lastMessageText: "",
+      lastMessageBy: "",
+    });
+    await setDoc(doc(db, "conversations/conv1/messages/m1"), {
+      text: "on my way",
+      authorUid: "alice",
+      authorName: "Alice",
+    });
     await setDoc(doc(db, "territories/t1"), {
       name: "Ridgemoor",
       boundary: [
@@ -951,5 +965,243 @@ describe("the bootstrap accounts", () => {
       await deleteDoc(doc(ctx.firestore(), "users/alice"));
     });
     await assertSucceeds(getDoc(doc(alice, "customers/c1")));
+  });
+});
+
+
+/* ----------------------------------------------------------- team chat */
+
+/**
+ * Membership is the whole access model here, and it is the one place in this
+ * app where crew must NOT be enough: being allowed to use the app does not
+ * entitle you to read two other people's private thread.
+ *
+ * The escalation is the same shape as the role one — "I may edit a
+ * conversation I am in" plus "I may edit who is in it" equals "I may read any
+ * conversation", one write at a time.
+ */
+describe("who can read a chat", () => {
+  test("a member can read it and its messages", async () => {
+    await assertSucceeds(getDoc(doc(alice, "conversations/conv1")));
+    await assertSucceeds(getDoc(doc(alice, "conversations/conv1/messages/m1")));
+    await assertSucceeds(getDoc(doc(bob, "conversations/conv1")));
+  });
+
+  test("crew who are not in it cannot", async () => {
+    // Dana is fully approved crew. That is deliberately not enough.
+    await assertFails(getDoc(doc(dana, "conversations/conv1")));
+    await assertFails(getDoc(doc(dana, "conversations/conv1/messages/m1")));
+  });
+
+  test("the admin cannot read other people's threads either", async () => {
+    // Granting access is not the same as reading everything. An admin who
+    // could read every private conversation would make the feature useless.
+    await assertFails(getDoc(doc(admin, "conversations/conv1")));
+  });
+
+  test("a pending account cannot", async () => {
+    await assertFails(getDoc(doc(mallory, "conversations/conv1")));
+  });
+});
+
+describe("letting yourself into a chat", () => {
+  test("a member cannot add anybody", async () => {
+    // The escalation. Without this, every conversation is readable by anyone
+    // already in any conversation.
+    await assertFails(
+      updateDoc(doc(alice, "conversations/conv1"), {
+        memberUids: ["alice", "bob", "dana"],
+      }),
+    );
+  });
+
+  test("an outsider cannot add themselves", async () => {
+    await assertFails(
+      updateDoc(doc(dana, "conversations/conv1"), {
+        memberUids: ["alice", "bob", "dana"],
+      }),
+    );
+  });
+
+  test("a member cannot remove somebody", async () => {
+    await assertFails(
+      updateDoc(doc(alice, "conversations/conv1"), { memberUids: ["alice"] }),
+    );
+  });
+
+  test("a member can still update the preview line and title", async () => {
+    // This is what sending a message does.
+    await assertSucceeds(
+      updateDoc(doc(alice, "conversations/conv1"), {
+        memberUids: ["alice", "bob"],
+        title: "Saturday",
+        lastMessageText: "on my way",
+        lastMessageBy: "alice",
+      }),
+    );
+  });
+});
+
+describe("starting a chat", () => {
+  test("you must be in the one you create", async () => {
+    // One you started and are not in would be unreadable to you the instant
+    // it existed.
+    await assertFails(
+      setDoc(doc(alice, "conversations/new1"), {
+        title: "",
+        memberUids: ["bob", "dana"],
+        createdBy: "alice",
+      }),
+    );
+  });
+
+  test("and you must be the stamped creator", async () => {
+    await assertFails(
+      setDoc(doc(alice, "conversations/new2"), {
+        title: "",
+        memberUids: ["alice", "bob"],
+        createdBy: "bob",
+      }),
+    );
+  });
+
+  test("a real one is allowed", async () => {
+    await assertSucceeds(
+      setDoc(doc(alice, "conversations/new3"), {
+        title: "",
+        memberUids: ["alice", "bob"],
+        createdBy: "alice",
+      }),
+    );
+  });
+
+  test("a one-person conversation is refused", async () => {
+    await assertFails(
+      setDoc(doc(alice, "conversations/new4"), {
+        title: "",
+        memberUids: ["alice"],
+        createdBy: "alice",
+      }),
+    );
+  });
+});
+
+describe("messages", () => {
+  test("a member can post, stamped as themselves", async () => {
+    await assertSucceeds(
+      addDoc(collection(bob, "conversations/conv1/messages"), {
+        text: "nearly there",
+        authorUid: "bob",
+        authorName: "Bob",
+      }),
+    );
+  });
+
+  test("you cannot post as somebody else", async () => {
+    // An attribution that can be forged makes the thread worthless as a
+    // record of who said what.
+    await assertFails(
+      addDoc(collection(bob, "conversations/conv1/messages"), {
+        text: "I agree with me",
+        authorUid: "alice",
+        authorName: "Alice",
+      }),
+    );
+  });
+
+  test("an outsider cannot post", async () => {
+    await assertFails(
+      addDoc(collection(dana, "conversations/conv1/messages"), {
+        text: "hello",
+        authorUid: "dana",
+        authorName: "Dana",
+      }),
+    );
+  });
+
+  test("an empty message is refused", async () => {
+    await assertFails(
+      addDoc(collection(alice, "conversations/conv1/messages"), {
+        text: "",
+        authorUid: "alice",
+        authorName: "Alice",
+      }),
+    );
+  });
+
+  test("messages cannot be edited or deleted", async () => {
+    // Editing one silently rewrites what somebody else already read.
+    await assertFails(
+      updateDoc(doc(alice, "conversations/conv1/messages/m1"), { text: "changed" }),
+    );
+    await assertFails(deleteDoc(doc(alice, "conversations/conv1/messages/m1")));
+  });
+});
+
+describe("read receipts", () => {
+  test("you can write your own", async () => {
+    await assertSucceeds(
+      setDoc(doc(alice, "conversations/conv1/reads/alice"), { readAt: serverTimestamp() }),
+    );
+  });
+
+  test("you cannot write somebody else's", async () => {
+    // The reason this is a document per person rather than a map on the
+    // conversation: rules cannot police which key of a map a write touched.
+    await assertFails(
+      setDoc(doc(alice, "conversations/conv1/reads/bob"), { readAt: serverTimestamp() }),
+    );
+  });
+
+  test("an outsider cannot write one at all", async () => {
+    await assertFails(
+      setDoc(doc(dana, "conversations/conv1/reads/dana"), { readAt: serverTimestamp() }),
+    );
+  });
+});
+
+/* -------------------------------------------- notification permissions */
+
+describe("who may widen their own notifications", () => {
+  test("you cannot grant yourself a category", async () => {
+    // Same shape as the role escalation: a permission you can edit yourself
+    // is decorative.
+    await assertFails(
+      updateDoc(doc(mallory, "users/mallory"), { notificationScopes: ["money"] }),
+    );
+    await assertFails(
+      updateDoc(doc(dana, "users/dana"), { notificationScopes: ["money"] }),
+    );
+  });
+
+  test("...nor alongside a legitimate profile edit", async () => {
+    await assertFails(
+      updateDoc(doc(dana, "users/dana"), {
+        displayName: "Dana B",
+        notificationScopes: ["money"],
+      }),
+    );
+  });
+
+  test("the admin can set somebody's categories", async () => {
+    await assertSucceeds(
+      updateDoc(doc(admin, "users/dana"), { notificationScopes: ["jobs"] }),
+    );
+  });
+
+  test("crew who are not the admin cannot", async () => {
+    await assertFails(
+      updateDoc(doc(alice, "users/dana"), { notificationScopes: ["jobs"] }),
+    );
+  });
+
+  test("you can still edit your own name and mutes", async () => {
+    // Losing the ability to grant must not cost you your own preferences.
+    await assertSucceeds(
+      updateDoc(doc(dana, "users/dana"), {
+        displayName: "Dana B",
+        mutedNotifications: ["money"],
+      }),
+    );
   });
 });

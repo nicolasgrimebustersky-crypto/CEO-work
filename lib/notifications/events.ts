@@ -21,6 +21,7 @@ export const NOTIFICATION_CATEGORIES = [
   "money",
   "messages",
   "leads",
+  "chat",
 ] as const;
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
 
@@ -30,6 +31,7 @@ export const CATEGORY_LABEL: Record<NotificationCategory, string> = {
   money: "Money",
   messages: "Messages",
   leads: "New leads",
+  chat: "Team chat",
 };
 
 export const CATEGORY_HINT: Record<NotificationCategory, string> = {
@@ -37,6 +39,7 @@ export const CATEGORY_HINT: Record<NotificationCategory, string> = {
   customers: "New doors knocked, status changes, photos added to a job.",
   money: "Estimates and invoices sent, and payments landing.",
   messages: "A customer texts back.",
+  chat: "Somebody on the crew messages you in the app.",
   leads: "Facebook and Instagram lead forms.",
 };
 
@@ -53,7 +56,8 @@ type Destination =
   | "invoices"
   | "knockRoutes"
   | "schedule"
-  | "pipeline";
+  | "pipeline"
+  | "chat";
 
 interface EventDefinition {
   category: NotificationCategory;
@@ -129,6 +133,9 @@ export const NOTIFICATION_EVENTS = {
   /* ------------------------------------------------------------- messages */
   sms_in: { category: "messages", title: "Customer replied", destination: "customer" },
 
+  /* ------------------------------------------------------------ team chat */
+  chat_message: { category: "chat", title: "New message", destination: "chat" },
+
   /* --------------------------------------------------------------- routes */
   route_assigned: {
     category: "jobs",
@@ -180,7 +187,9 @@ export interface ResolvedDestination {
     | "invoices"
     | "knockRoutes"
     | "schedule"
-    | "pipeline";
+    | "pipeline"
+    | "chat"
+    | "chatThread";
   /** The record to open, when there is one. */
   id?: string;
 }
@@ -189,8 +198,15 @@ export function destinationFor(item: {
   type: NotificationType;
   customerId?: string | null;
   documentId?: string | null;
+  conversationId?: string | null;
 }): ResolvedDestination {
   switch (NOTIFICATION_EVENTS[item.type].destination) {
+    case "chat":
+      // Straight into the thread when we know which one. Landing on the list
+      // instead would make the notification one tap short of useful.
+      return item.conversationId
+        ? { screen: "chatThread", id: item.conversationId }
+        : { screen: "chat" };
     case "document":
       if (item.documentId) return { screen: "document", id: item.documentId };
       if (item.customerId) return { screen: "customer", id: item.customerId };
@@ -229,6 +245,37 @@ export function wantsCategory(
   return !(muted ?? []).includes(category);
 }
 
+/**
+ * Is this person *allowed* to hear about this category at all?
+ *
+ * Separate from muting, and the two are not interchangeable. Muting is a
+ * preference the person sets for themselves; scope is a permission the admin
+ * grants them. Somebody can be allowed a category and have muted it; they
+ * cannot un-mute one they were never granted.
+ *
+ * Absent means everything. A profile written before scopes existed, or one
+ * whose field failed to load, must not silently stop hearing about the job it
+ * was just assigned — the failure mode of "no field, so nothing" is an
+ * operator who quietly stops being told anything and does not know why.
+ * Restricting is therefore always an explicit act.
+ */
+export function allowsCategory(
+  scopes: readonly string[] | null | undefined,
+  category: NotificationCategory,
+): boolean {
+  if (scopes == null) return true;
+  return scopes.includes(category);
+}
+
+/** What this person actually receives: granted, and not muted. */
+export function receivesCategory(
+  scopes: readonly string[] | null | undefined,
+  muted: readonly string[] | null | undefined,
+  category: NotificationCategory,
+): boolean {
+  return allowsCategory(scopes, category) && wantsCategory(muted, category);
+}
+
 export function wantsEvent(
   muted: readonly string[] | null | undefined,
   type: NotificationType,
@@ -236,24 +283,37 @@ export function wantsEvent(
   return wantsCategory(muted, categoryOf(type));
 }
 
+export function receivesEvent(
+  scopes: readonly string[] | null | undefined,
+  muted: readonly string[] | null | undefined,
+  type: NotificationType,
+): boolean {
+  return receivesCategory(scopes, muted, categoryOf(type));
+}
+
 /**
  * Who should actually receive this event.
  *
- * Two filters, in order: never notify the person who did the thing — being told
- * about your own tap is noise, and in a two-person app that would double every
- * event — and then drop anyone who has muted the category.
+ * Three filters, in order: never notify the person who did the thing — being
+ * told about your own tap is noise, and in a two-person app that would double
+ * every event — then drop anyone the admin has not granted the category, and
+ * then anyone who has muted it themselves.
  *
  * Filtering here, at the sending end, rather than when the list is rendered is
  * deliberate: a muted notification should never be written at all, or the badge
  * count would climb for something the person asked not to hear about.
  */
-export function recipientsFor<T extends { uid: string; mutedNotifications?: string[] | null }>(
-  crew: readonly T[],
-  actorUid: string | null,
-  type: NotificationType,
-): string[] {
+export function recipientsFor<
+  T extends {
+    uid: string;
+    mutedNotifications?: string[] | null;
+    notificationScopes?: string[] | null;
+  },
+>(crew: readonly T[], actorUid: string | null, type: NotificationType): string[] {
   return crew
     .filter((member) => member.uid !== actorUid)
-    .filter((member) => wantsEvent(member.mutedNotifications, type))
+    .filter((member) =>
+      receivesEvent(member.notificationScopes, member.mutedNotifications, type),
+    )
     .map((member) => member.uid);
 }

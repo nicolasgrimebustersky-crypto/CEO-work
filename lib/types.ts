@@ -86,6 +86,13 @@ export interface AppUser {
    */
   mutedNotifications: string[];
   /**
+   * Which notification categories the admin has granted this person. Absent
+   * means all of them — a profile written before scopes existed must not
+   * silently stop hearing about the job it was just assigned, so restricting
+   * is always an explicit act. See lib/notifications/events.ts.
+   */
+  notificationScopes?: string[] | null;
+  /**
    * Hold push overnight. The bell and the badge are unaffected — only the
    * interruption is. See lib/notifications/quietHours.ts.
    */
@@ -262,4 +269,27 @@ export interface LatLng {
 export interface Author {
   uid: string;
   displayName: string;
+}
+
+
+/** A team chat thread: a direct message or a group. */
+export interface Conversation {
+  id: string;
+  /** Groups only. A direct chat is named after the other person at render. */
+  title: string;
+  memberUids: string[];
+  createdAt: Timestamp | null;
+  createdBy: string;
+  /** Denormalised from the newest message, so the list needs no subquery. */
+  lastMessageAt: Timestamp | null;
+  lastMessageText: string;
+  lastMessageBy: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  text: string;
+  authorUid: string;
+  authorName: string;
+  createdAt: Timestamp | null;
 }

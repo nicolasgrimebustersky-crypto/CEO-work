@@ -75,9 +75,15 @@ service cloud.firestore {
       return isAdmin() || isBootstrapCrew() || isApprovedCrew();
     }
 
-    // True when this write leaves `role` exactly as it was.
-    function keepsOwnRole() {
-      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']);
+    // True when this write touches neither of the fields the admin owns.
+    //
+    // `role` is whether you can use the app; `notificationScopes` is which
+    // categories you are allowed to hear about. Both are granted *to* you, so
+    // neither may be edited *by* you — a person who could widen their own
+    // scope would make the permission decorative.
+    function keepsAdminGrants() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['role', 'notificationScopes']);
     }
 
     // Every write is stamped with its author. Enforcing it here rather than
@@ -120,16 +126,18 @@ service cloud.firestore {
       //   but NOT your own role. Allowing that would make the sign-up form a
       //   complete privilege escalation: register, then promote yourself.
       //
-      //   Somebody else's role, if you are the admin. Granting access is one
-      //   person's job, so crew who are not the admin cannot do it — they use
-      //   the app fully and hand out nothing. It may change `role` and nothing
-      //   else: an approver has no business rewriting the name or GPS position
-      //   of the account they are letting in.
+      //   Somebody else's grants, if you are the admin: `role` and
+      //   `notificationScopes`, and nothing else. Granting is one person's
+      //   job, so crew who are not the admin cannot do it — they use the app
+      //   fully and hand out nothing. Restricting the editable keys means an
+      //   approver cannot rewrite the name or GPS position of the account
+      //   they are letting in.
       allow update: if request.auth != null && (
-        (request.auth.uid == uid && keepsOwnRole())
+        (request.auth.uid == uid && keepsAdminGrants())
         || (isAdmin()
             && request.auth.uid != uid
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role']))
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['role', 'notificationScopes']))
       );
 
       // Deleting your own profile is the in-app account deletion App Store
@@ -374,6 +382,82 @@ service cloud.firestore {
       allow create: if isCrew() && stampedByCaller('createdBy') && validTerritory();
       allow update: if isCrew() && refreshesAuthorStamp() && validTerritory();
       allow delete: if isCrew();
+    }
+
+    // Team chat.
+    //
+    // Membership is the entire access model: you can read and write a
+    // conversation if and only if you are in its member list. Crew is not
+    // enough — being allowed to use the app does not entitle you to read two
+    // other people's private thread.
+    //
+    // `memberUids` is therefore pinned on update. Without that, "I may edit a
+    // conversation I am in" combines with "I may add myself" into "I may read
+    // any conversation", one write at a time.
+    function chatMembers(conversationId) {
+      return get(/databases/$(database)/documents/conversations/$(conversationId))
+        .data.memberUids;
+    }
+
+    function inConversation(conversationId) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/conversations/$(conversationId))
+        && request.auth.uid in chatMembers(conversationId);
+    }
+
+    function validConversation() {
+      let data = request.resource.data;
+      return data.memberUids is list
+        && data.memberUids.size() >= 2
+        // A runaway loop must not write a document that breaches Firestore's
+        // own 1MB limit. Nobody groups twenty people in a crew of three.
+        && data.memberUids.size() <= 20
+        && data.title is string;
+    }
+
+    match /conversations/{conversationId} {
+      allow read: if isCrew() && request.auth.uid in resource.data.memberUids;
+
+      // You must be in the conversation you are creating. One you started and
+      // are not in would be unreadable to you the instant it existed.
+      allow create: if isCrew()
+        && validConversation()
+        && request.auth.uid in request.resource.data.memberUids
+        && request.resource.data.createdBy == request.auth.uid;
+
+      // Members may update the preview line that sending a message refreshes,
+      // and the title. They may never change who is in it — see above.
+      allow update: if isCrew()
+        && request.auth.uid in resource.data.memberUids
+        && validConversation()
+        && request.resource.data.memberUids == resource.data.memberUids;
+
+      // No delete. A thread is a record of what was said, and one member
+      // erasing it for everybody is not a power worth having here.
+
+      match /messages/{messageId} {
+        allow read: if inConversation(conversationId);
+
+        // Stamped with the sender, enforced rather than trusted: an
+        // attribution that can be forged makes the whole thread worthless as
+        // a record of who said what.
+        allow create: if inConversation(conversationId)
+          && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 2000;
+
+        // Messages are immutable. Editing or deleting one silently rewrites
+        // what somebody else read.
+        allow update, delete: if false;
+      }
+
+      // Where you had got up to. Your own document, and only yours — a map on
+      // the conversation would let any member rewrite everybody's position.
+      match /reads/{readerUid} {
+        allow read, write: if inConversation(conversationId)
+          && request.auth.uid == readerUid;
+      }
     }
 
     // Anything not matched above is denied by default. Do not add a

@@ -13,6 +13,7 @@ export function notificationLink(item: {
   type: NotificationType;
   customerId?: string | null;
   documentId?: string | null;
+  conversationId?: string | null;
 }): string {
   const target = destinationFor(item);
   switch (target.screen) {
@@ -28,6 +29,10 @@ export function notificationLink(item: {
       return routes.schedule;
     case "pipeline":
       return routes.pipeline;
+    case "chatThread":
+      return routes.chatThread(target.id ?? "");
+    case "chat":
+      return routes.chat;
     case "customers":
     default:
       return routes.customers;
