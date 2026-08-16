@@ -146,4 +146,12 @@ export const COLLECTIONS = {
   jobs: "jobs",
   quotes: "quotes",
   notifications: "notifications",
+  documents: "documents",
+  services: "services",
+  /** One row per device that has agreed to receive push. See lib/db/pushTokens.ts. */
+  pushTokens: "pushTokens",
+  /** Door-knocking routes. See lib/db/knockRoutes.ts. */
+  knockRoutes: "knockRoutes",
+  /** Drawn areas of ground. See lib/db/territories.ts. */
+  territories: "territories",
 } as const;

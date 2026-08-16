@@ -3,6 +3,7 @@
 import { useMapsLibrary } from "@vis.gl/react-google-maps";
 import { useEffect, useMemo, useState } from "react";
 
+import { useNotify } from "@/components/providers/NotificationsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chips";
@@ -29,6 +30,7 @@ interface QuickEntrySheetProps {
  */
 export function QuickEntrySheet({ position, onClose, onCreated }: QuickEntrySheetProps) {
   const { author } = useTeam();
+  const notify = useNotify();
   const geocodingLib = useMapsLibrary("geocoding");
 
   const [firstName, setFirstName] = useState("");
@@ -104,6 +106,11 @@ export function QuickEntrySheet({ position, onClose, onCreated }: QuickEntryShee
         },
         author,
       );
+      await notify({
+        type: "customer_added",
+        body: `${[firstName, lastName].filter(Boolean).join(" ") || "New pin"} · ${address || "no address yet"} · ${STATUS_LABEL[status]}`,
+        customerId: id,
+      });
       onCreated(id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save this pin.");

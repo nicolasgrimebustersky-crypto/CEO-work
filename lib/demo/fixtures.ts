@@ -1,8 +1,27 @@
 import { Timestamp } from "firebase/firestore";
 
 import type { AppNotification } from "@/lib/db/notifications";
+import type { SavedService } from "@/lib/db/services";
+import {
+  computeTotals,
+  DEFAULT_TAX_RATE_PCT,
+  sumPayments,
+  type BusinessDocument,
+  type DocumentKind,
+  type DocumentStatus,
+  type LineItem,
+  type Payment,
+} from "@/lib/documents";
 import type { PipelineStage } from "@/lib/pipeline";
-import type { AppUser, Customer, Job, Note, Quote } from "@/lib/types";
+import type {
+  AppUser,
+  Customer,
+  Job,
+  KnockRoute,
+  Note,
+  Quote,
+  Territory,
+} from "@/lib/types";
 
 /**
  * Demo data.
@@ -58,6 +77,8 @@ export const demoUsers: AppUser[] = [
     lastLocationUpdate: hoursAgo(0.05),
     isActive: true,
     color: null,
+    mutedNotifications: [],
+    quietHours: true,
   },
   {
     uid: DEMO_DANA,
@@ -68,6 +89,8 @@ export const demoUsers: AppUser[] = [
     lastLocationUpdate: hoursAgo(0.1),
     isActive: true,
     color: null,
+    mutedNotifications: [],
+    quietHours: true,
   },
 ];
 
@@ -148,6 +171,14 @@ const seeds: Seed[] = [
     notes: [
       note("Wants the whole side yard cleared before the first frost.", "note", DEMO_DANA, "Dana", 6),
       note("Estimate for $620 sent", "stage_change", DEMO_DANA, "Dana", 5),
+      note("Any chance you could do it before the frost?", "sms_in", "customer", "Ray Whitfield", 4),
+      note(
+        "We can. Penciling you in for the week of the 14th — I'll confirm Monday.",
+        "sms_out",
+        DEMO_DANA,
+        "Dana",
+        3.8,
+      ),
     ],
   },
   {
@@ -167,6 +198,20 @@ const seeds: Seed[] = [
     lifetime: 380,
     notes: [
       note("Siding and walkway finished. Invoice left in the door.", "note", DEMO_NICK, "Nick", 1),
+      note(
+        "Hi Alice, your estimate for the siding and walkway is $380. Reply STOP to opt out.",
+        "sms_out",
+        DEMO_DANA,
+        "Dana",
+        2,
+      ),
+      note(
+        "That looks great, when can you start?",
+        "sms_in",
+        "customer",
+        "Alice Brennan",
+        0.2,
+      ),
     ],
   },
   {
@@ -201,7 +246,10 @@ const seeds: Seed[] = [
     byName: "Nick",
     contactedDays: 1,
     lifetime: 0,
-    notes: [note("Said yes to the season rate. Needs scheduling.", "note", DEMO_NICK, "Nick", 1)],
+    notes: [
+      note("Said yes to the season rate. Needs scheduling.", "note", DEMO_NICK, "Nick", 1),
+      note("Do you salt the walkway too or just the drive?", "sms_in", "customer", "Priya Nolan", 0.6),
+    ],
   },
   {
     id: "d-fb-hargrove",
@@ -519,22 +567,493 @@ export const demoQuotes: Quote[] = [
   },
 ];
 
+/**
+ * Estimates and invoices for the demo.
+ *
+ * Numbers continue from where Invoice Fly left off, same as the real books, so
+ * the sequence in the preview looks like the sequence in production. The spread
+ * is deliberate: one draft being written, one estimate sitting with a customer,
+ * one invoice half paid and one settled — every state the screen can show.
+ */
+function line(
+  id: string,
+  name: string,
+  description: string,
+  quantity: number,
+  unitPrice: number,
+  taxable = true,
+): LineItem {
+  return { id, name, description, quantity, unitPrice, taxable };
+}
+
+function demoDoc(
+  id: string,
+  number: string,
+  kind: DocumentKind,
+  status: DocumentStatus,
+  customerId: string,
+  customerName: string,
+  serviceType: Customer["serviceTypes"][number],
+  lineItems: LineItem[],
+  options: {
+    discount?: number;
+    issuedDaysAgo: number;
+    dueInDays?: number;
+    payments?: Payment[];
+    notes?: string;
+    convertedFromId?: string;
+    convertedToId?: string;
+  },
+): BusinessDocument {
+  const discount = options.discount ?? 0;
+  const totals = computeTotals(lineItems, discount, DEFAULT_TAX_RATE_PCT);
+  const payments = options.payments ?? [];
+  const amountPaid = sumPayments(payments);
+
+  return {
+    id,
+    number,
+    kind,
+    status,
+    customerId,
+    customerName,
+    serviceType,
+    lineItems,
+    discount: totals.discount,
+    taxRatePct: DEFAULT_TAX_RATE_PCT,
+    subtotal: totals.subtotal,
+    taxAmount: totals.taxAmount,
+    total: totals.total,
+    payments,
+    amountPaid,
+    balanceDue: Number((totals.total - amountPaid).toFixed(2)),
+    notes: options.notes ?? "",
+    issuedAt: ago(options.issuedDaysAgo),
+    dueAt:
+      options.dueInDays === undefined
+        ? null
+        : ago(options.issuedDaysAgo - options.dueInDays),
+    sentAt: status === "draft" ? null : ago(options.issuedDaysAgo),
+    settledAt: status === "paid" || status === "accepted" ? ago(1) : null,
+    convertedFromId: options.convertedFromId ?? null,
+    convertedToId: options.convertedToId ?? null,
+    createdAt: ago(options.issuedDaysAgo),
+    createdBy: DEMO_NICK,
+    createdByName: "Nick",
+    updatedAt: ago(options.issuedDaysAgo),
+    updatedBy: DEMO_NICK,
+    updatedByName: "Nick",
+  };
+}
+
+/**
+ * The price book, as it would look after a season of quoting.
+ *
+ * In the real app nobody types these in — they accumulate from estimates. The
+ * demo seeds them so the picker has something in it on the first tap, with
+ * usage counts spread the way they really would be: the house wash sells
+ * constantly, the roof wash twice a year.
+ */
+function demoService(
+  id: string,
+  name: string,
+  description: string,
+  unitPrice: number,
+  serviceType: Customer["serviceTypes"][number],
+  timesUsed: number,
+  lastUsedDaysAgo: number,
+  taxable = true,
+): SavedService {
+  return {
+    id,
+    name,
+    description,
+    unitPrice,
+    serviceType,
+    taxable,
+    timesUsed,
+    lastUsedAt: ago(lastUsedDaysAgo),
+    createdAt: ago(lastUsedDaysAgo + 60),
+    createdBy: DEMO_NICK,
+    createdByName: "Nick",
+    updatedAt: ago(lastUsedDaysAgo),
+    updatedBy: DEMO_NICK,
+    updatedByName: "Nick",
+  };
+}
+
+export const demoServices: SavedService[] = [
+  demoService(
+    "ds-1",
+    "House wash",
+    "Soft wash of all siding, soffits and gutter faces. No pressure on the siding.",
+    450,
+    "pressure_washing",
+    24,
+    2,
+  ),
+  demoService(
+    "ds-2",
+    "Driveway and walk",
+    "Surface-cleaned and rinsed, front walk included. Oil stains lightened, not guaranteed removed.",
+    165,
+    "pressure_washing",
+    19,
+    2,
+  ),
+  demoService(
+    "ds-3",
+    "Gutter brightening",
+    "Removes the black tiger stripes on the gutter faces. Exteriors only.",
+    120,
+    "pressure_washing",
+    11,
+    9,
+  ),
+  demoService(
+    "ds-4",
+    "Hardwood mulch, installed",
+    "Double-shredded brown hardwood, 2 inches deep. Price is per cubic yard.",
+    42,
+    "landscaping",
+    8,
+    5,
+  ),
+  demoService(
+    "ds-5",
+    "Spring cleanup",
+    "Beds cleared, shrubs shaped, lawn cut and edged, everything hauled.",
+    420,
+    "landscaping",
+    6,
+    14,
+  ),
+  demoService(
+    "ds-6",
+    "Snow clearing, per visit",
+    "Driveway, front walk and a path to the mailbox. Salted. Billed per visit.",
+    95,
+    "snow_removal",
+    5,
+    3,
+  ),
+  demoService(
+    "ds-7",
+    "Haul away debris",
+    "Everything cut or pulled leaves with us the same day.",
+    60,
+    "landscaping",
+    4,
+    5,
+    false,
+  ),
+  demoService(
+    "ds-8",
+    "Roof soft wash",
+    "Low-pressure treatment for moss and black streaking. Shingle-safe.",
+    675,
+    "pressure_washing",
+    2,
+    41,
+  ),
+];
+
+export const demoDocuments: BusinessDocument[] = [
+  demoDoc(
+    "dd-1",
+    "8904",
+    "estimate",
+    "sent",
+    "d-whitfield",
+    "Ray Whitfield",
+    "landscaping",
+    [
+      line(
+        "dd-1-a",
+        "Bed cleanout and re-edge",
+        "All front and side beds: pull weeds, cut a fresh spade edge, blow out.",
+        1,
+        340,
+      ),
+      line(
+        "dd-1-b",
+        "Hardwood mulch, installed",
+        "Double-shredded brown hardwood, 2 inches deep. Price is per cubic yard.",
+        6,
+        42,
+      ),
+      line(
+        "dd-1-c",
+        "Haul away debris",
+        "Everything cut or pulled leaves with us the same day.",
+        1,
+        60,
+        false,
+      ),
+    ],
+    {
+      issuedDaysAgo: 5,
+      dueInDays: 30,
+      notes: "Price holds for 30 days. We'd need the side gate open on the day.",
+    },
+  ),
+  demoDoc(
+    "dd-2",
+    "8905",
+    "invoice",
+    "paid",
+    "d-brennan",
+    "Alice Brennan",
+    "pressure_washing",
+    [
+      line(
+        "dd-2-a",
+        "House wash, two storey",
+        "Soft wash of all four elevations including soffits and gutter faces. No pressure on the siding.",
+        1,
+        380,
+      ),
+      line(
+        "dd-2-b",
+        "Driveway and walk",
+        "Surface-cleaned and rinsed, front walk included. Oil stains lightened, not guaranteed removed.",
+        1,
+        165,
+      ),
+    ],
+    {
+      issuedDaysAgo: 9,
+      dueInDays: 14,
+      payments: [
+        {
+          id: "dd-2-p1",
+          amount: 577.7,
+          receivedAt: ago(7),
+          method: "Card",
+          recordedBy: DEMO_NICK,
+          recordedByName: "Nick",
+        },
+      ],
+    },
+  ),
+  demoDoc(
+    "dd-3",
+    "8906",
+    "invoice",
+    "partial",
+    "d-oakley",
+    "Marta Oakley",
+    "pressure_washing",
+    [
+      line(
+        "dd-3-a",
+        "House wash",
+        "Soft wash of all siding, soffits and gutter faces.",
+        1,
+        450,
+      ),
+      line(
+        "dd-3-b",
+        "Gutter brightening",
+        "Removes the black tiger stripes on the gutter faces. Exteriors only.",
+        1,
+        120,
+      ),
+      line(
+        "dd-3-c",
+        "Back patio and steps",
+        "Stamped concrete, surface-cleaned and rinsed.",
+        1,
+        180,
+      ),
+    ],
+    {
+      discount: 50,
+      issuedDaysAgo: 12,
+      dueInDays: 14,
+      payments: [
+        {
+          id: "dd-3-p1",
+          amount: 400,
+          receivedAt: ago(6),
+          method: "Check 2214",
+          recordedBy: DEMO_DANA,
+          recordedByName: "Dana",
+        },
+      ],
+      notes: "$50 off for booking the driveway at the same time.",
+    },
+  ),
+  demoDoc(
+    "dd-4",
+    "8907",
+    "invoice",
+    "sent",
+    "d-nolan",
+    "Priya Nolan",
+    "snow_removal",
+    [
+      line(
+        "dd-4-a",
+        "Snow clearing, per visit",
+        "Driveway, front walk and a path to the mailbox. Salted. Billed per visit.",
+        3,
+        95,
+      ),
+    ],
+    { issuedDaysAgo: 3, dueInDays: 14 },
+  ),
+  demoDoc(
+    "dd-5",
+    "8908",
+    "estimate",
+    "draft",
+    "d-castellano",
+    "Dev Castellano",
+    "landscaping",
+    [
+      line(
+        "dd-5-a",
+        "Spring cleanup",
+        "Beds cleared, shrubs shaped, lawn cut and edged, everything hauled.",
+        1,
+        420,
+      ),
+    ],
+    { issuedDaysAgo: 0, notes: "Still measuring the back border." },
+  ),
+];
+
+/**
+ * Two routes: one being walked right now, one planned for tomorrow and handed
+ * to the other person. Between them the list screen shows a progress bar, an
+ * assignment, and both of the states that are not "planned".
+ */
+export const demoKnockRoutes: KnockRoute[] = [
+  {
+    id: "dr-1",
+    name: "Ridgemoor sweep",
+    walkDate: todayAt(14),
+    assignedTo: [DEMO_NICK],
+    stopIds: ["d-castellano", "d-oakley", "d-mcabee"],
+    knockedIds: ["d-castellano"],
+    status: "walking",
+    notes: "Start at the top of the hill and work down.",
+    createdAt: hoursAgo(26),
+    createdBy: DEMO_NICK,
+    createdByName: "Nick",
+    updatedAt: hoursAgo(1),
+    updatedBy: DEMO_NICK,
+    updatedByName: "Nick",
+  },
+  {
+    id: "dr-2",
+    name: "Pewee Valley follow-ups",
+    walkDate: inDays(1, 10),
+    assignedTo: [DEMO_DANA],
+    stopIds: ["d-brennan", "d-nolan"],
+    knockedIds: [],
+    status: "planned",
+    notes: "",
+    createdAt: hoursAgo(4),
+    createdBy: DEMO_NICK,
+    createdByName: "Nick",
+    updatedAt: hoursAgo(4),
+    updatedBy: DEMO_NICK,
+    updatedByName: "Nick",
+  },
+];
+
+/**
+ * One claimed territory around the La Grange pins and one unclaimed patch, so
+ * the panel shows coverage, an owner colour and the grey unclaimed state.
+ */
+export const demoTerritories: Territory[] = [
+  {
+    id: "dt-1",
+    name: "Ridgemoor & Oak Ridge",
+    boundary: [
+      { lat: 38.4185, lng: -85.3855 },
+      { lat: 38.4185, lng: -85.3635 },
+      { lat: 38.3985, lng: -85.3635 },
+      { lat: 38.3985, lng: -85.3855 },
+    ],
+    assignedTo: [DEMO_NICK],
+    notes: "Big lots, most of them have a driveway worth washing.",
+    active: true,
+    createdAt: hoursAgo(50),
+    createdBy: DEMO_NICK,
+    createdByName: "Nick",
+    updatedAt: hoursAgo(50),
+    updatedBy: DEMO_NICK,
+    updatedByName: "Nick",
+  },
+  {
+    id: "dt-2",
+    name: "Pewee Valley south",
+    boundary: [
+      { lat: 38.3175, lng: -85.4895 },
+      { lat: 38.3175, lng: -85.4735 },
+      { lat: 38.3065, lng: -85.4735 },
+      { lat: 38.3065, lng: -85.4895 },
+    ],
+    assignedTo: [],
+    notes: "",
+    active: true,
+    createdAt: hoursAgo(20),
+    createdBy: DEMO_NICK,
+    createdByName: "Nick",
+    updatedAt: hoursAgo(20),
+    updatedBy: DEMO_NICK,
+    updatedByName: "Nick",
+  },
+];
+
 export const demoNotifications: AppNotification[] = [
   {
     id: "dn-1",
     forUid: DEMO_NICK,
-    actorUid: "meta",
-    actorName: "Facebook lead",
-    type: "job_created",
-    title: "New Facebook lead",
+    actorUid: "system",
+    actorName: "Facebook",
+    type: "lead_new",
+    title: "New lead",
     body: "Tom Hargrove submitted an enquiry. Call them while it's warm.",
     customerId: "d-fb-hargrove",
     jobId: null,
+    documentId: null,
     createdAt: hoursAgo(2),
     readAt: null,
   },
   {
     id: "dn-2",
+    forUid: DEMO_NICK,
+    actorUid: "system",
+    actorName: "Alice Brennan",
+    type: "sms_in",
+    title: "Customer replied",
+    body: "Alice Brennan: That looks great, when can you start?",
+    customerId: "d-brennan",
+    jobId: null,
+    documentId: null,
+    createdAt: hoursAgo(3),
+    readAt: null,
+  },
+  {
+    id: "dn-3",
+    forUid: DEMO_NICK,
+    actorUid: DEMO_DANA,
+    actorName: "Dana",
+    type: "payment_received",
+    title: "Payment received",
+    body: "Marta Oakley · $1,160.70 · Pressure washing",
+    customerId: "d-oakley",
+    jobId: null,
+    documentId: "dd-1",
+    createdAt: hoursAgo(5),
+    readAt: null,
+  },
+  {
+    id: "dn-4",
     forUid: DEMO_NICK,
     actorUid: DEMO_DANA,
     actorName: "Dana",
@@ -543,11 +1062,12 @@ export const demoNotifications: AppNotification[] = [
     body: "Priya Nolan · Snow removal · in two days, 8:00 AM",
     customerId: "d-nolan",
     jobId: "dj-4",
+    documentId: null,
     createdAt: hoursAgo(6),
     readAt: null,
   },
   {
-    id: "dn-3",
+    id: "dn-5",
     forUid: DEMO_NICK,
     actorUid: DEMO_DANA,
     actorName: "Dana",
@@ -556,6 +1076,7 @@ export const demoNotifications: AppNotification[] = [
     body: "Alice Brennan · Pressure washing",
     customerId: "d-brennan",
     jobId: "dj-2",
+    documentId: null,
     createdAt: hoursAgo(28),
     readAt: hoursAgo(27),
   },

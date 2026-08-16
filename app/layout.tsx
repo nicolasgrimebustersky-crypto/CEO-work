@@ -1,15 +1,36 @@
 import type { Metadata, Viewport } from "next";
+import { Poppins } from "next/font/google";
 
 import { AuthGate } from "@/components/auth/AuthGate";
 import { AuthProvider } from "@/components/providers/AuthProvider";
 import { ConnectionProvider } from "@/components/providers/ConnectionProvider";
 import { CustomersProvider } from "@/components/providers/CustomersProvider";
+import { DocumentsProvider } from "@/components/providers/DocumentsProvider";
 import { JobsProvider } from "@/components/providers/JobsProvider";
+import { KnockRoutesProvider } from "@/components/providers/KnockRoutesProvider";
+import { TerritoriesProvider } from "@/components/providers/TerritoriesProvider";
 import { LocationSharingProvider } from "@/components/providers/LocationSharingProvider";
 import { NotificationsProvider } from "@/components/providers/NotificationsProvider";
+import { ServicesProvider } from "@/components/providers/ServicesProvider";
 import { TeamProvider } from "@/components/providers/TeamProvider";
 import { AppShell } from "@/components/shell/AppShell";
 import "./globals.css";
+
+/**
+ * A geometric sans, self-hosted by Next at build time rather than fetched from
+ * Google at runtime — the CSP forbids third-party origins, and a font request
+ * that has to resolve DNS in a dead spot between subdivisions would leave the
+ * app rendering in a fallback face exactly when it is being used.
+ *
+ * Only three weights ship. Every weight is another file to download over a
+ * phone connection, and the UI never uses anything between them.
+ */
+const poppins = Poppins({
+  subsets: ["latin"],
+  weight: ["400", "600", "800"],
+  variable: "--font-poppins",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Grime Busters CRM",
@@ -42,7 +63,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0b0f14",
+  themeColor: "#050607",
   colorScheme: "dark",
   width: "device-width",
   initialScale: 1,
@@ -53,20 +74,28 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="h-full">
+    <html lang="en" className={`h-full ${poppins.variable}`}>
       <body className="min-h-full antialiased">
         <AuthProvider>
           <AuthGate>
             <TeamProvider>
               <CustomersProvider>
                 <JobsProvider>
-                  <NotificationsProvider>
-                    <ConnectionProvider>
-                      <LocationSharingProvider>
-                        <AppShell>{children}</AppShell>
-                      </LocationSharingProvider>
-                    </ConnectionProvider>
-                  </NotificationsProvider>
+                  <DocumentsProvider>
+                    <ServicesProvider>
+                      <KnockRoutesProvider>
+                      <TerritoriesProvider>
+                      <NotificationsProvider>
+                        <ConnectionProvider>
+                          <LocationSharingProvider>
+                            <AppShell>{children}</AppShell>
+                          </LocationSharingProvider>
+                        </ConnectionProvider>
+                      </NotificationsProvider>
+                      </TerritoriesProvider>
+                      </KnockRoutesProvider>
+                    </ServicesProvider>
+                  </DocumentsProvider>
                 </JobsProvider>
               </CustomersProvider>
             </TeamProvider>

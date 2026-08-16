@@ -15,6 +15,10 @@ import {
 import { isDemoMode } from "@/lib/demo/enabled";
 import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
+import {
+  isNotificationCategory,
+  type NotificationCategory,
+} from "@/lib/notifications/events";
 import type { AppUser } from "@/lib/types";
 
 function toAppUser(snap: QueryDocumentSnapshot<DocumentData>): AppUser {
@@ -29,6 +33,12 @@ function toAppUser(snap: QueryDocumentSnapshot<DocumentData>): AppUser {
       data.lastLocationUpdate instanceof Timestamp ? data.lastLocationUpdate : null,
     isActive: data.isActive === true,
     color: typeof data.color === "string" ? data.color : null,
+    mutedNotifications: Array.isArray(data.mutedNotifications)
+      ? data.mutedNotifications.filter(isNotificationCategory)
+      : [],
+    // Absent means this profile predates the setting. On by default: somebody
+    // who has never been asked would rather not be woken at 3am.
+    quietHours: data.quietHours !== false,
   };
 }
 
@@ -67,6 +77,10 @@ export async function ensureUserDoc(
     currentLng: null,
     lastLocationUpdate: null,
     isActive: true,
+    // Nothing muted: a new account hears about everything until it says
+    // otherwise, which is the only default that cannot lose an event silently.
+    mutedNotifications: [],
+    quietHours: true,
     createdAt: serverTimestamp(),
   });
 }
@@ -117,4 +131,29 @@ export async function updateUserProfile(
   patch: { displayName?: string; phone?: string },
 ): Promise<void> {
   await writeUser(uid, patch);
+}
+
+/**
+ * Hold push overnight, or do not.
+ *
+ * Per person rather than per device: it is a statement about when you want to
+ * be disturbed, not about which handset you happened to grant permission on.
+ */
+export async function setQuietHours(uid: string, on: boolean): Promise<void> {
+  await writeUser(uid, { quietHours: on });
+}
+
+/**
+ * Which notification categories this person does not want.
+ *
+ * Written to their own profile because it is read at *sending* time by whoever
+ * raised the event — the rules let both crew read each other's profile but only
+ * write their own, so one person can honour the other's preference without
+ * being able to change it.
+ */
+export async function setMutedNotifications(
+  uid: string,
+  muted: NotificationCategory[],
+): Promise<void> {
+  await writeUser(uid, { mutedNotifications: muted });
 }

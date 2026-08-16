@@ -10,6 +10,7 @@ import {
   verifyMetaSignature,
   type ParsedLead,
 } from "@/lib/server/meta";
+import { notifyCrew } from "@/lib/server/notify";
 import { isTwilioConfigured, sendSms } from "@/lib/server/twilio";
 
 export const runtime = "nodejs";
@@ -153,7 +154,12 @@ async function ingestLead(leadgenId: string, formId: string | null): Promise<str
     updatedByName: SYSTEM_AUTHOR.name,
   });
 
-  await notifyCrew(db, name || parsed.phone || "Someone", doc.id);
+  await notifyCrew({
+    type: "lead_new",
+    actorName: "Facebook",
+    body: `${name || parsed.phone || "Someone"} submitted an enquiry. Call them while it's warm.`,
+    customerId: doc.id,
+  });
 
   if (parsed.phone && isTwilioConfigured) {
     await acknowledge(db, doc.id, parsed);
@@ -172,35 +178,6 @@ function buildImportNote(parsed: ParsedLead, formId: string | null): string {
     lines.push(`${extra.label}: ${extra.value}`);
   }
   return lines.join("\n");
-}
-
-/** Both phones get told, since neither of them typed this lead in. */
-async function notifyCrew(
-  db: FirebaseFirestore.Firestore,
-  who: string,
-  customerId: string,
-): Promise<void> {
-  const crewUids = (process.env.CREW_UIDS ?? "")
-    .split(",")
-    .map((uid) => uid.trim())
-    .filter(Boolean);
-
-  await Promise.all(
-    crewUids.map((forUid) =>
-      db.collection("notifications").add({
-        forUid,
-        actorUid: SYSTEM_AUTHOR.uid,
-        actorName: SYSTEM_AUTHOR.name,
-        type: "job_created",
-        title: "New Facebook lead",
-        body: `${who} submitted an enquiry. Call them while it's warm.`,
-        customerId,
-        jobId: null,
-        createdAt: FieldValue.serverTimestamp(),
-        readAt: null,
-      }),
-    ),
-  );
 }
 
 /**

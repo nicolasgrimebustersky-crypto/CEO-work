@@ -81,6 +81,46 @@ service cloud.firestore {
         && data.assignedTo is list;
     }
 
+    // Estimates and invoices share one shape and one collection, so one check
+    // covers both. `number` is pinned separately below: two documents carrying
+    // the same number is the one error that makes the books unreadable.
+    function validDocument() {
+      let data = request.resource.data;
+      return data.kind in ['estimate', 'invoice']
+        && data.status in ['draft', 'sent', 'accepted', 'declined', 'partial', 'paid', 'void']
+        && data.serviceType in ['pressure_washing', 'landscaping', 'snow_removal']
+        && data.customerId is string
+        && data.number is string
+        && data.lineItems is list
+        && data.payments is list
+        && data.discount is number
+        && data.discount >= 0
+        && data.taxRatePct is number
+        && data.taxRatePct >= 0
+        && data.subtotal is number
+        && data.total is number
+        && data.total >= 0
+        && data.amountPaid is number
+        && data.amountPaid >= 0
+        && data.balanceDue is number;
+    }
+
+    // The price book. Written automatically whenever a service is used on an
+    // estimate, so the validation is deliberately loose on text and strict on
+    // money — a bad price silently propagates onto future quotes.
+    function validService() {
+      let data = request.resource.data;
+      return data.name is string
+        && data.name.size() > 0
+        && data.description is string
+        && data.unitPrice is number
+        && data.unitPrice >= 0
+        && data.serviceType in ['pressure_washing', 'landscaping', 'snow_removal']
+        && data.taxable is bool
+        && data.timesUsed is number
+        && data.timesUsed >= 0;
+    }
+
     function validQuote() {
       let data = request.resource.data;
       return data.status in ['sent', 'accepted', 'declined', 'no_response']
@@ -122,6 +162,33 @@ service cloud.firestore {
       allow delete: if isCrew();
     }
 
+    // Estimates and invoices. These are the financial record, so two things are
+    // frozen once the document exists: its number and the customer it belongs
+    // to. Renumbering an invoice after it has been sent, or moving it to
+    // another customer, would silently rewrite history — and unlike a wrong
+    // price, neither leaves any trace of what it used to say.
+    match /documents/{documentId} {
+      allow read: if isCrew();
+      allow create: if isCrew() && stampedByCaller('createdBy') && validDocument();
+      allow update: if isCrew()
+        && refreshesAuthorStamp()
+        && validDocument()
+        && request.resource.data.number == resource.data.number
+        && request.resource.data.customerId == resource.data.customerId;
+      allow delete: if isCrew();
+    }
+
+    // The price book is shared reference data, not a record of anything that
+    // happened, so there is no author stamp to refresh on update — the whole
+    // point is that using a service updates its price and its usage count
+    // without anyone opening a form.
+    match /services/{serviceId} {
+      allow read: if isCrew();
+      allow create: if isCrew() && stampedByCaller('createdBy') && validService();
+      allow update: if isCrew() && validService();
+      allow delete: if isCrew();
+    }
+
     // Notifications are addressed to a person and describe what someone else
     // did, so both ends are pinned: you may only create one attributed to
     // yourself, and the only field you may later change is readAt.
@@ -133,6 +200,97 @@ service cloud.firestore {
         && request.resource.data.readAt == null;
       allow update: if isCrew()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt']);
+      allow delete: if isCrew();
+    }
+
+    // One document per device that has agreed to receive push notifications.
+    //
+    // A token is a capability: anyone holding one can have a notification
+    // delivered to that handset. So a device may only ever file itself —
+    // `uid` must be the caller — which stops one account from registering a
+    // token against the other and quietly receiving their notifications.
+    //
+    // Read stays crew-wide because both accounts already read every other
+    // collection, and the sending side runs with the Admin SDK anyway. Delete
+    // is crew-wide so signing out on a shared handset can clean up after
+    // itself.
+    function validPushToken() {
+      let data = request.resource.data;
+      return data.uid == request.auth.uid
+        && data.token is string
+        && data.token.size() > 0
+        && data.token.size() < 1000;
+    }
+
+    match /pushTokens/{tokenId} {
+      allow read: if isCrew();
+      allow create: if isCrew() && validPushToken();
+      // Both identifying fields are pinned on update. Without that, `uid ==
+      // request.auth.uid` is satisfied by *rewriting* uid to yourself — which
+      // would point your own notifications at the other person's handset. The
+      // document id is derived from the token, so a genuinely new token is a
+      // new document and never an edit of this one.
+      allow update: if isCrew()
+        && validPushToken()
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.token == resource.data.token;
+      allow delete: if isCrew();
+    }
+
+    // Door-knocking routes: a named, ordered list of doors somebody is walking.
+    //
+    // Both crew may edit any route, including reassigning one — that is the
+    // point of a two-person app where either of you might pick up the other's
+    // afternoon. What is pinned is the *shape*: the lists have to be lists and
+    // the status has to be one the UI can render, so a bug on one phone cannot
+    // write a route the other phone refuses to open.
+    function validKnockRoute() {
+      let data = request.resource.data;
+      return data.name is string
+        && data.status in ['planned', 'walking', 'done']
+        && data.assignedTo is list
+        && data.stopIds is list
+        && data.knockedIds is list
+        // A route is walked on foot in an afternoon. The cap is here to stop a
+        // runaway loop writing a document that breaches Firestore's own 1MB
+        // limit, not because anybody would plan four hundred doors.
+        && data.stopIds.size() <= 400
+        && data.knockedIds.size() <= 400;
+    }
+
+    match /knockRoutes/{routeId} {
+      allow read: if isCrew();
+      allow create: if isCrew() && stampedByCaller('createdBy') && validKnockRoute();
+      allow update: if isCrew() && refreshesAuthorStamp() && validKnockRoute();
+      allow delete: if isCrew();
+    }
+
+    // Territories: a drawn area of ground somebody owns.
+    //
+    // The boundary is the whole document — a territory with a broken outline
+    // does not draw, and one that draws in the wrong place silently hands
+    // somebody the wrong streets. So the shape is checked: a list, and enough
+    // points to actually enclose something.
+    //
+    // Individual vertices cannot be validated here (rules cannot walk a list),
+    // which is why lib/db/territories.ts drops any point that is not two
+    // numbers on the way back out.
+    function validTerritory() {
+      let data = request.resource.data;
+      return data.name is string
+        && data.boundary is list
+        && data.boundary.size() >= 3
+        // A hand-drawn outline follows streets: a handful of corners, not a
+        // traced curve. The cap is a runaway-loop guard, not a design limit.
+        && data.boundary.size() <= 200
+        && data.assignedTo is list
+        && data.active is bool;
+    }
+
+    match /territories/{territoryId} {
+      allow read: if isCrew();
+      allow create: if isCrew() && stampedByCaller('createdBy') && validTerritory();
+      allow update: if isCrew() && refreshesAuthorStamp() && validTerritory();
       allow delete: if isCrew();
     }
 

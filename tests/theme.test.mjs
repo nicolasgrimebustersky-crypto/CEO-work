@@ -1,0 +1,161 @@
+/**
+ * Guards the design tokens against shadowing Tailwind's own utilities.
+ *
+ * Tailwind v4 generates a utility for every `--color-*` you declare in
+ * `@theme`. Name one `--color-base` and it emits `.text-base{color:…}`, which
+ * silently replaces the built-in `text-base` font-size utility — and since the
+ * whole app writes `text-base font-semibold text-accent`, whichever colour
+ * utility Tailwind happens to emit last wins. That shipped: every accent-
+ * coloured figure in the app (dashboard revenue, invoice totals, quote amounts)
+ * rendered near-black on a near-black surface for weeks, because `.text-base`
+ * sorted after `.text-accent`.
+ *
+ * Nothing in the build fails when this happens. So this test does.
+ */
+import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import { test, describe } from "node:test";
+
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+const css = readFileSync(join(repoRoot, "app/globals.css"), "utf8");
+
+/** Token names that used to exist. Add to this whenever one is renamed. */
+const RETIRED_TOKENS = ["base"];
+
+function* walk(dir) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) yield* walk(full);
+    else if (/\.(tsx?|css)$/.test(entry.name)) yield full;
+  }
+}
+
+/** Tailwind's built-in scales, whose names a theme colour must not reuse. */
+const FONT_SIZES = ["xs", "sm", "base", "lg", "xl", "2xl", "3xl", "4xl", "5xl", "6xl"];
+const FONT_WEIGHTS = [
+  "thin",
+  "extralight",
+  "light",
+  "normal",
+  "medium",
+  "semibold",
+  "bold",
+  "extrabold",
+  "black",
+];
+const ALIGNMENTS = ["left", "center", "right", "justify", "start", "end"];
+
+function themeColorNames() {
+  const block = css.match(/@theme\s*\{([\s\S]*?)\n\}/);
+  assert.ok(block, "globals.css should declare an @theme block");
+  return [...block[1].matchAll(/--color-([a-z0-9-]+)\s*:/g)].map((m) => m[1]);
+}
+
+describe("design tokens", () => {
+  test("no colour token shadows a text-* utility", () => {
+    const reserved = new Set([...FONT_SIZES, ...FONT_WEIGHTS, ...ALIGNMENTS]);
+    const clashes = themeColorNames().filter((name) => reserved.has(name));
+
+    assert.deepEqual(
+      clashes,
+      [],
+      `--color-${clashes.join(", --color-")} makes text-${clashes.join(
+        "/text-",
+      )} a colour utility, shadowing Tailwind's own. Rename the token.`,
+    );
+  });
+
+  test("the tokens the app relies on are all present", () => {
+    // A rename that misses a usage site fails silently — Tailwind just drops
+    // the unknown class. Pin the ones the whole UI is built from.
+    const names = themeColorNames();
+    for (const required of [
+      "canvas",
+      "surface",
+      "surface-2",
+      "surface-3",
+      "line",
+      "ink",
+      "muted",
+      "accent",
+      "accent-ink",
+      "money",
+      "money-ink",
+      "danger",
+      "warn",
+      "ok",
+    ]) {
+      assert.ok(names.includes(required), `--color-${required} is missing from @theme`);
+    }
+  });
+
+  test("no retired token name is still referenced in the UI", () => {
+    // The other half of a rename: markup still saying `bg-base` after the
+    // token became `--color-canvas` renders as no background at all, and
+    // Tailwind says nothing because an unknown class is simply dropped.
+    const stale = [];
+    // `text-` is deliberately absent: `text-base` is a legitimate font-size
+    // utility now that the token is gone, and the shadowing test above is what
+    // guards that name. These prefixes only ever mean a colour.
+    const prefixes = "bg|border|ring|fill|stroke|divide|outline|from|to|via|caret|decoration";
+
+    for (const dir of ["app", "components"]) {
+      for (const file of walk(join(repoRoot, dir))) {
+        const source = readFileSync(file, "utf8");
+        for (const retired of RETIRED_TOKENS) {
+          const pattern = new RegExp(`\\b(${prefixes})-${retired}\\b`);
+          if (pattern.test(source)) stale.push(`${file.slice(repoRoot.length + 1)} → ${retired}`);
+        }
+      }
+    }
+
+    assert.deepEqual(stale, [], `Retired colour tokens still in use:\n${stale.join("\n")}`);
+  });
+
+  test("white on the danger fill is actually readable", () => {
+    // A destructive button is the last control in the app you want misread,
+    // and this one shipped at 3.76:1 — found by sweeping the rendered page,
+    // not by looking at it. --color-danger stays lighter because it is read
+    // as *text* on the near-black canvas, where a darker red would fail
+    // instead. Two jobs, two tokens.
+    const value = (name) => {
+      const match = css.match(new RegExp(`--color-${name}\\s*:\\s*(#[0-9a-fA-F]{6})`));
+      assert.ok(match, `--color-${name} should be declared`);
+      return match[1];
+    };
+
+    const luminance = (hex) => {
+      const channel = (i) => {
+        const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+      };
+      return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+    };
+
+    const contrast = (a, b) => {
+      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+
+    const onFill = contrast("#ffffff", value("danger-fill"));
+    assert.ok(onFill >= 4.5, `white on --color-danger-fill is only ${onFill.toFixed(2)}:1`);
+
+    const asText = contrast(value("danger"), value("canvas"));
+    assert.ok(asText >= 4.5, `--color-danger as text on the canvas is only ${asText.toFixed(2)}:1`);
+
+    // Same trap on the money button: the logo's cream is lovely at sign size
+    // and unreadable at button size.
+    const onMoney = contrast(value("money-ink"), value("money"));
+    assert.ok(onMoney >= 4.5, `--color-money-ink on the green is only ${onMoney.toFixed(2)}:1`);
+
+    // And the green itself still has to be legible as a figure on the canvas,
+    // which is the job it does everywhere else.
+    const moneyAsText = contrast(value("money"), value("canvas"));
+    assert.ok(
+      moneyAsText >= 4.5,
+      `--color-money as a figure on the canvas is only ${moneyAsText.toFixed(2)}:1`,
+    );
+  });
+});

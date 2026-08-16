@@ -5,7 +5,10 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+import { StatusPill as DocumentStatusPill } from "@/components/documents/StatusPill";
 import { useCustomers } from "@/components/providers/CustomersProvider";
+import { useDocuments } from "@/components/providers/DocumentsProvider";
+import { useNotify } from "@/components/providers/NotificationsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { Button } from "@/components/ui/Button";
 import { Chip, StatusPill, UserChip } from "@/components/ui/Chips";
@@ -20,10 +23,12 @@ import {
 } from "@/lib/db/customers";
 import { completedRevenue, subscribeJobsForCustomer } from "@/lib/db/jobs";
 import { setQuoteStatus, subscribeQuotesForCustomer } from "@/lib/db/quotes";
+import { isOutstanding } from "@/lib/documents";
 import {
   customerName,
   formatDateOnly,
   formatMoney,
+  formatMoneyExact,
   formatPhone,
   formatRelative,
   formatTimestamp,
@@ -50,7 +55,10 @@ export function CustomerDetailScreen() {
   const customerId = searchParams.get("id") ?? "";
 
   const { byId, loading } = useCustomers();
+  const { forCustomer } = useDocuments();
   const { author, colorFor, nameFor } = useTeam();
+  const notify = useNotify();
+  const documents = forCustomer(customerId);
   const router = useRouter();
 
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -86,6 +94,18 @@ export function CustomerDetailScreen() {
    * sorting the list view, this is the number of record.
    */
   const revenue = useMemo(() => completedRevenue(jobs), [jobs]);
+
+  /** What is still owed across this person's open invoices. */
+  const owed = useMemo(
+    () =>
+      Number(
+        documents
+          .filter(isOutstanding)
+          .reduce((sum, document) => sum + document.balanceDue, 0)
+          .toFixed(2),
+      ),
+    [documents],
+  );
 
   const photos = useMemo(() => {
     const all: { photo: Photo; label: string; jobId: string }[] = [];
@@ -129,6 +149,11 @@ export function CustomerDetailScreen() {
     setBusy(true);
     try {
       await changeStatus(customer, next, author);
+      await notify({
+        type: "customer_status",
+        body: `${customerName(customer)} · ${STATUS_LABEL[next]}`,
+        customerId: customer.id,
+      });
     } finally {
       setBusy(false);
     }
@@ -160,6 +185,11 @@ export function CustomerDetailScreen() {
         await advancePipeline(customer, "estimate_accepted", author, {
           value: quote?.amount,
           reason: "Estimate accepted",
+        });
+        await notify({
+          type: "estimate_accepted",
+          body: `${customerName(customer)}${quote ? ` · ${formatMoney(quote.amount)}` : ""}`,
+          customerId: customer.id,
         });
       } else if (status === "declined") {
         await setPipelineStage(customer, "lost", author, {
@@ -198,7 +228,7 @@ export function CustomerDetailScreen() {
           ← Customers
         </Link>
 
-        <h1 className="mt-2 text-2xl font-black tracking-tight text-ink">
+        <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-ink">
           {customerName(customer)}
         </h1>
 
@@ -291,6 +321,14 @@ export function CustomerDetailScreen() {
               label="Jobs completed"
               value={String(jobs.filter((job) => job.status === "complete").length)}
             />
+            {owed > 0 ? (
+              <div className="col-span-2 rounded-xl border border-warn/70 bg-warn/20 px-3 py-3">
+                <p className="text-sm font-bold text-ink">Still owes</p>
+                <p className="mt-0.5 text-2xl font-extrabold text-ink">
+                  {formatMoneyExact(owed)}
+                </p>
+              </div>
+            ) : null}
           </div>
         </section>
 
@@ -330,7 +368,7 @@ export function CustomerDetailScreen() {
                       <span className="text-base font-bold text-ink">
                         {SERVICE_LABEL[job.serviceType]}
                       </span>
-                      <span className="text-base font-bold text-accent">
+                      <span className="text-base font-bold text-money tabular-nums">
                         {formatMoney(job.price)}
                       </span>
                     </span>
@@ -356,11 +394,70 @@ export function CustomerDetailScreen() {
 
         <section>
           <div className="mb-2 flex items-center justify-between gap-2">
-            <h2 className="text-lg font-bold text-ink">Quotes</h2>
+            <h2 className="text-lg font-bold text-ink">Estimates &amp; invoices</h2>
+            <Link
+              href={routes.newDocument("estimate", customer.id)}
+              className="tap-target inline-flex items-center justify-center rounded-xl border border-line bg-surface-2 px-4 py-3 text-base font-semibold text-ink"
+            >
+              New estimate
+            </Link>
+          </div>
+
+          {documents.length === 0 ? (
+            <p className="rounded-xl border border-line bg-surface-2 px-3 py-4 text-base font-semibold text-muted">
+              Nothing priced up yet.
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {documents.map((document) => (
+                <li key={document.id}>
+                  <Link
+                    href={routes.document(document.id)}
+                    className="block rounded-xl border border-line bg-surface-2 p-3 active:bg-surface-3"
+                  >
+                    <span className="flex items-start justify-between gap-3">
+                      <span className="min-w-0">
+                        <span className="block text-base font-bold text-ink">
+                          {document.kind === "invoice" ? "Invoice" : "Estimate"}{" "}
+                          {document.number}
+                        </span>
+                        <span className="block text-sm font-semibold text-muted">
+                          {SERVICE_LABEL[document.serviceType]} ·{" "}
+                          {formatDateOnly(document.issuedAt)}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-right">
+                        <span className="block text-base font-bold text-money tabular-nums">
+                          {formatMoneyExact(document.total)}
+                        </span>
+                        {document.balanceDue > 0 && document.amountPaid > 0 ? (
+                          <span className="block text-sm font-bold text-warn tabular-nums">
+                            {formatMoneyExact(document.balanceDue)} left
+                          </span>
+                        ) : null}
+                      </span>
+                    </span>
+                    <span className="mt-2 block">
+                      <DocumentStatusPill status={document.status} />
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 className="text-lg font-bold text-ink">Quick quotes</h2>
             <Button variant="secondary" onClick={() => setQuoting(true)}>
               New quote
             </Button>
           </div>
+          <p className="mb-2 text-sm font-semibold text-muted">
+            A number and a status, with the automatic follow-up texts attached. Use an
+            estimate above when the customer needs to see the lines.
+          </p>
 
           {quotes.length === 0 ? (
             <p className="rounded-xl border border-line bg-surface-2 px-3 py-4 text-base font-semibold text-muted">
@@ -382,7 +479,7 @@ export function CustomerDetailScreen() {
                           : ""}
                       </span>
                     </span>
-                    <span className="shrink-0 text-base font-bold text-accent">
+                    <span className="shrink-0 text-base font-bold text-money tabular-nums">
                       {formatMoney(quote.amount)}
                     </span>
                   </div>
@@ -429,7 +526,7 @@ export function CustomerDetailScreen() {
                       sizes="(max-width: 640px) 50vw, 240px"
                       className="object-cover"
                     />
-                    <span className="absolute top-1.5 left-1.5 rounded-full bg-base/85 px-2 py-0.5 text-xs font-black text-ink">
+                    <span className="absolute top-1.5 left-1.5 rounded-full bg-canvas/85 px-2 py-0.5 text-xs font-extrabold text-ink">
                       {label}
                     </span>
                   </div>
@@ -566,7 +663,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-line bg-surface-2 px-3 py-3">
       <p className="text-sm font-bold text-muted">{label}</p>
-      <p className="mt-0.5 text-2xl font-black text-ink">{value}</p>
+      <p className="mt-0.5 text-2xl font-extrabold text-ink">{value}</p>
     </div>
   );
 }

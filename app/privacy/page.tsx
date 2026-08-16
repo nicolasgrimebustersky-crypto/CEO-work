@@ -17,7 +17,7 @@ export default function PrivacyPage() {
     <main className="h-full overflow-y-auto px-5 py-8">
       <div className="mx-auto w-full max-w-2xl">
         <div className="mb-3 h-1.5 w-12 rounded-full bg-accent" />
-        <h1 className="text-3xl font-black tracking-tight text-ink">Privacy Policy</h1>
+        <h1 className="text-3xl font-extrabold tracking-tight text-ink">Privacy Policy</h1>
         <p className="mt-2 text-base font-semibold text-muted">
           Grime Busters CRM · Last updated [DATE]
         </p>

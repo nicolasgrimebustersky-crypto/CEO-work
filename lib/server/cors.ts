@@ -40,7 +40,10 @@ export function corsHeaders(request: Request): Record<string, string> {
 
   return {
     "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    // GET is here for the Twilio self-test, which reads configuration without
+    // sending. An Authorization header makes even a GET preflight, so leaving
+    // it out would fail the check before the request was ever made.
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Authorization, Content-Type",
     "Access-Control-Max-Age": "86400",
     // Caches must not serve one origin's response to another.

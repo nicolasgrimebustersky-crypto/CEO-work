@@ -66,6 +66,61 @@ export function sendBlast(customerIds: string[], body: string): Promise<BlastRes
 }
 
 /**
+ * Twilio self-test. `checkTexting` reads what the deployment has configured;
+ * `sendTestText` sends one message to the signed-in user's own profile number,
+ * which the server reads for itself — the number is never sent from here.
+ */
+export interface TwilioStatus {
+  kind: "api-key" | "auth-token" | "none";
+  canSend: boolean;
+  canVerify: boolean;
+  missing: string[];
+  problem: string;
+  hasPhone: boolean;
+}
+
+export interface TestTextResult extends TwilioStatus {
+  sent: boolean;
+  sid: string | null;
+  /** Last four digits of the number it went to. */
+  tail: string;
+  error: string | null;
+}
+
+const DEMO_STATUS: TwilioStatus = {
+  kind: "none",
+  canSend: false,
+  canVerify: false,
+  missing: [],
+  problem: "This is the demo. No Twilio account is connected and nothing is sent.",
+  hasPhone: true,
+};
+
+export async function checkTexting(): Promise<TwilioStatus> {
+  if (isDemoMode) return DEMO_STATUS;
+
+  const response = await fetch(apiUrl("/api/sms/test"), { headers: await authHeader() });
+  const data = (await response.json().catch(() => ({}))) as TwilioStatus & {
+    error?: string;
+  };
+  if (!response.ok) throw new Error(data.error ?? `Request failed (${response.status})`);
+  return data;
+}
+
+export function sendTestText(): Promise<TestTextResult> {
+  if (isDemoMode) {
+    return Promise.resolve({
+      ...DEMO_STATUS,
+      sent: false,
+      sid: null,
+      tail: "",
+      error: "Nothing is sent in the demo.",
+    });
+  }
+  return post("/api/sms/test", {});
+}
+
+/**
  * Job texts are best-effort: the job itself is already saved by the time these
  * run, and a Twilio outage must not make it look like the save failed. Errors
  * come back as a string for the caller to surface as a warning.

@@ -32,7 +32,7 @@ export default function ErrorScreen({
     <main className="flex min-h-dvh flex-col justify-center px-5 py-10">
       <div className="mx-auto w-full max-w-sm">
         <div className="mb-3 h-1.5 w-12 rounded-full bg-danger" />
-        <h1 className="text-2xl font-black tracking-tight text-ink">Something broke</h1>
+        <h1 className="text-2xl font-extrabold tracking-tight text-ink">Something broke</h1>
         <p className="mt-2 text-base font-semibold text-muted">
           Your data is safe — this is a display problem, not a lost record.
         </p>

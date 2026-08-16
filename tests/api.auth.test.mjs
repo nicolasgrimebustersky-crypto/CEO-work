@@ -191,6 +191,57 @@ describe("POST /api/sms/inbound", () => {
   });
 });
 
+describe("/api/sms/test", () => {
+  async function get(token) {
+    const res = await fetch(`${BASE}/api/sms/test`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    return { status: res.status, text: await res.text() };
+  }
+
+  test("the status read is behind the same gate as everything else", async () => {
+    assert.equal((await get()).status, 401);
+    assert.equal((await get(outsiderToken)).status, 403);
+  });
+
+  test("reports what is configured without printing any of it", async () => {
+    const { status, text } = await get(crewToken);
+    assert.equal(status, 200);
+
+    const body = JSON.parse(text);
+    assert.equal(body.canSend, true, "the runner sets fake but complete credentials");
+    assert.equal(body.kind, "auth-token");
+
+    // The whole point of the screen is to say what is set, which is one slip
+    // away from saying what it is set *to*. The runner's auth token is
+    // "faketoken"; if it ever appears in this response, a browser has been
+    // handed a sending credential.
+    assert.ok(!text.includes("faketoken"), "the auth token must never be returned");
+  });
+
+  test("sends to the caller's own number, never one from the request", async () => {
+    // An endpoint that texts whatever number it is given is an open SMS relay
+    // wearing a test label. The destination is read from the profile on the
+    // server, so this injected number must be ignored outright.
+    const { status, json } = await post(
+      "/api/sms/test",
+      { to: "+15558675309", phone: "+15558675309" },
+      crewToken,
+    );
+    assert.equal(status, 200);
+    // Nick's seeded profile number is 502-555-0147.
+    assert.equal(json.tail, "0147");
+    // Twilio itself rejects the fake credentials, and that is reported rather
+    // than thrown — the error is the answer the button exists to give.
+    assert.equal(json.sent, false);
+    assert.ok(json.error, "a failed send must say why");
+  });
+
+  test("refuses an outsider a test text too", async () => {
+    assert.equal((await post("/api/sms/test", {}, outsiderToken)).status, 403);
+  });
+});
+
 describe("security headers", () => {
   test("every response carries the hardening headers", async () => {
     const res = await fetch(`${BASE}/map`);

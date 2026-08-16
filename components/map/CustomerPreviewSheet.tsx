@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { useNotify } from "@/components/providers/NotificationsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { Button } from "@/components/ui/Button";
 import { Chip, StatusPill, UserChip } from "@/components/ui/Chips";
@@ -27,6 +28,7 @@ export function CustomerPreviewSheet({
   onClose: () => void;
 }) {
   const { author, colorFor } = useTeam();
+  const notify = useNotify();
   const [noteText, setNoteText] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -37,6 +39,11 @@ export function CustomerPreviewSheet({
     setBusy(true);
     try {
       await changeStatus(customer, next, author);
+      await notify({
+        type: "customer_status",
+        body: `${customerName(customer)} · ${STATUS_LABEL[next]}`,
+        customerId: customer.id,
+      });
     } finally {
       setBusy(false);
     }
