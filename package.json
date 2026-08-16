@@ -1,0 +1,42 @@
+{
+  "name": "grimebusters-crm",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "emulators": "firebase emulators:start --only auth,firestore,storage",
+    "test:rules": "firebase emulators:exec --only firestore,storage \"node --test tests/firestore.rules.test.mjs tests/storage.rules.test.mjs\"",
+    "test:api": "bash scripts/test-api.sh",
+    "seed": "node scripts/seed-test-data.mjs",
+    "test": "npm run typecheck && npm run lint && npm run test:meta && npm run test:rules",
+    "test:meta": "node --experimental-strip-types --test tests/meta.parse.test.mjs tests/theme.test.mjs tests/userColor.test.mjs tests/notifications.test.mjs tests/pushWorker.test.mjs tests/documents.test.mjs tests/threads.test.mjs tests/quietHours.test.mjs tests/knockPlan.test.mjs tests/territory.test.mjs tests/twilioCredentials.test.mjs"
+  },
+  "dependencies": {
+    "@vis.gl/react-google-maps": "^1.5.6",
+    "date-fns": "^4.1.0",
+    "firebase": "^11.10.0",
+    "firebase-admin": "^13.10.0",
+    "next": "^15.5.4",
+    "next-pwa": "^5.6.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "server-only": "^0.0.1",
+    "twilio": "^5.10.2"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "^15.5.4",
+    "firebase-tools": "^14.24.0",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

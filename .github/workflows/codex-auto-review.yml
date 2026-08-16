@@ -1,0 +1,121 @@
+name: Codex automated review
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, ready_for_review, synchronize]
+
+# The review job can read source code; only the feedback and auto-merge jobs
+# receive permissions to write to the pull request.
+permissions:
+  contents: read
+
+concurrency:
+  group: codex-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # Only Claude-authored pull requests enter the hands-off publish loop.
+    # Human pull requests keep their normal review process.
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.user.login == 'claude[bot]'
+    runs-on: ubuntu-latest
+    outputs:
+      final_message: ${{ steps.codex.outputs.final-message }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fetch pull-request refs
+        env:
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          git fetch --no-tags origin "$PR_BASE_REF" "+refs/pull/$PR_NUMBER/head"
+
+      - name: Review with Codex
+        id: codex
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt: |
+            Review only the changes in PR #${{ github.event.pull_request.number }}.
+            Compare the diff, the PR description, and AGENTS.md. Look for missed
+            requirements, incorrect behavior, security/privacy problems, missing
+            verification, and unnecessary scope.
+
+            If and only if there are no actionable findings, your entire final
+            response must be exactly: CODEX_APPROVED
+
+            Otherwise, your entire final response must begin with @claude on its
+            own line, followed by concise, specific correction instructions.
+            Include the relevant file and expected behavior for every finding.
+            Do not approve a PR with unresolved actionable findings.
+
+  post_feedback:
+    needs: review
+    if: >-
+      always() &&
+      needs.review.result == 'success' &&
+      needs.review.outputs.final_message != 'CODEX_APPROVED'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Send corrections to Claude
+        uses: actions/github-script@v7
+        env:
+          CODEX_FEEDBACK: ${{ needs.review.outputs.final_message }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: process.env.CODEX_FEEDBACK,
+            });
+
+  review_gate:
+    name: Codex review gate
+    needs: [review, post_feedback]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require Codex approval
+        env:
+          REVIEW_RESULT: ${{ needs.review.result }}
+          FINAL_MESSAGE: ${{ needs.review.outputs.final_message }}
+        run: |
+          if [ "$REVIEW_RESULT" = "skipped" ]; then
+            # This is not a Claude-authored PR, so it is outside this workflow.
+            exit 0
+          fi
+          if [ "$REVIEW_RESULT" = "success" ] && [ "$FINAL_MESSAGE" = "CODEX_APPROVED" ]; then
+            exit 0
+          fi
+          echo 'Codex requested corrections or could not complete the review.'
+          exit 1
+
+  enable_auto_merge:
+    needs: review_gate
+    if: >-
+      needs.review.result == 'success' &&
+      needs.review_gate.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Enable squash auto-merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        run: gh pr merge "$PR_NUMBER" --repo "$REPOSITORY" --auto --squash
