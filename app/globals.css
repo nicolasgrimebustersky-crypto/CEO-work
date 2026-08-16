@@ -48,7 +48,11 @@
      picked, so a figure on screen is the same green as the sign on the truck.
      6:1 on the canvas, which clears AA for the figures it renders. */
   --color-money: #06a143;
-  --color-money-ink: #f1e3cd;
+  /* What sits ON the green. The logo's cream reads beautifully at sign size
+     and fails at button size — 2.68:1, found by sweeping a rendered page. The
+     near-black clears 5.97:1 and is the contrast the artwork itself uses
+     between the green letters and their field. */
+  --color-money-ink: #050607;
 
   /* The logo's banner text and its outline. Used sparingly, where the UI
      touches the lockup — the drawer header, the document band. */

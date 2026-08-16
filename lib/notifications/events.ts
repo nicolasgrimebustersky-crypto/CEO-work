@@ -33,7 +33,7 @@ export const CATEGORY_LABEL: Record<NotificationCategory, string> = {
 };
 
 export const CATEGORY_HINT: Record<NotificationCategory, string> = {
-  jobs: "Jobs booked, moved, finished or cancelled.",
+  jobs: "Jobs booked, moved, finished or cancelled, and routes handed to you.",
   customers: "New doors knocked, status changes, photos added to a job.",
   money: "Estimates and invoices sent, and payments landing.",
   messages: "A customer texts back.",
@@ -47,7 +47,13 @@ export const CATEGORY_HINT: Record<NotificationCategory, string> = {
  * "customer" is the default because the customer record is the one screen that
  * has the whole story on it: the timeline, the jobs, the money, the photos.
  */
-type Destination = "customer" | "document" | "invoices" | "schedule" | "pipeline";
+type Destination =
+  | "customer"
+  | "document"
+  | "invoices"
+  | "knockRoutes"
+  | "schedule"
+  | "pipeline";
 
 interface EventDefinition {
   category: NotificationCategory;
@@ -123,6 +129,13 @@ export const NOTIFICATION_EVENTS = {
   /* ------------------------------------------------------------- messages */
   sms_in: { category: "messages", title: "Customer replied", destination: "customer" },
 
+  /* --------------------------------------------------------------- routes */
+  route_assigned: {
+    category: "jobs",
+    title: "Route assigned to you",
+    destination: "knockRoutes",
+  },
+
   /* ---------------------------------------------------------------- leads */
   lead_new: { category: "leads", title: "New lead", destination: "customer" },
 } as const satisfies Record<string, EventDefinition>;
@@ -160,7 +173,14 @@ export function categoryOf(type: NotificationType): NotificationCategory {
  * lib/notifications/link.ts turns the result into a path.
  */
 export interface ResolvedDestination {
-  screen: "customer" | "customers" | "document" | "invoices" | "schedule" | "pipeline";
+  screen:
+    | "customer"
+    | "customers"
+    | "document"
+    | "invoices"
+    | "knockRoutes"
+    | "schedule"
+    | "pipeline";
   /** The record to open, when there is one. */
   id?: string;
 }
@@ -177,6 +197,8 @@ export function destinationFor(item: {
       return { screen: "invoices" };
     case "invoices":
       return { screen: "invoices" };
+    case "knockRoutes":
+      return { screen: "knockRoutes" };
     case "schedule":
       return { screen: "schedule" };
     case "pipeline":

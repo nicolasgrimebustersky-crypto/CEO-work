@@ -102,6 +102,11 @@ A nightly cron chases money that has not come in — an invoice is called out on
 the morning it passes its due date, and Monday brings a single line for
 everything still outstanding.
 
+Door-knocking routes: a named, ordered list of doors with a day and an
+assignee. Ordered nearest-first from wherever you are standing, ticked off as
+you walk, with the next door as a card carrying a Navigate button. Assigning one
+notifies whoever it lands on.
+
 A Messages screen: every text conversation in one place, opening on who is
 waiting for a reply. Threads are read back out of the notes timeline rather than
 stored twice, so there is only ever one copy of a message.
@@ -232,6 +237,7 @@ Every request made across the project, and where it stands.
 | **Texting integrated, not buried in each customer** | `app/messages`, `lib/threads.ts` |
 | Notifications that don't wake you at 3am | `lib/notifications/quietHours.ts` |
 | Being chased about money nobody has paid | `app/api/cron/money-reminders` |
+| **Door-knock routes you can build and assign** | `app/routes`, `lib/knock/plan.ts` |
 
 ### Blocked on you, not on code
 

@@ -13,7 +13,7 @@ import {
   type Payment,
 } from "@/lib/documents";
 import type { PipelineStage } from "@/lib/pipeline";
-import type { AppUser, Customer, Job, Note, Quote } from "@/lib/types";
+import type { AppUser, Customer, Job, KnockRoute, Note, Quote } from "@/lib/types";
 
 /**
  * Demo data.
@@ -914,6 +914,46 @@ export const demoDocuments: BusinessDocument[] = [
     ],
     { issuedDaysAgo: 0, notes: "Still measuring the back border." },
   ),
+];
+
+/**
+ * Two routes: one being walked right now, one planned for tomorrow and handed
+ * to the other person. Between them the list screen shows a progress bar, an
+ * assignment, and both of the states that are not "planned".
+ */
+export const demoKnockRoutes: KnockRoute[] = [
+  {
+    id: "dr-1",
+    name: "Ridgemoor sweep",
+    walkDate: todayAt(14),
+    assignedTo: [DEMO_NICK],
+    stopIds: ["d-castellano", "d-oakley", "d-mcabee"],
+    knockedIds: ["d-castellano"],
+    status: "walking",
+    notes: "Start at the top of the hill and work down.",
+    createdAt: hoursAgo(26),
+    createdBy: DEMO_NICK,
+    createdByName: "Nick",
+    updatedAt: hoursAgo(1),
+    updatedBy: DEMO_NICK,
+    updatedByName: "Nick",
+  },
+  {
+    id: "dr-2",
+    name: "Pewee Valley follow-ups",
+    walkDate: inDays(1, 10),
+    assignedTo: [DEMO_DANA],
+    stopIds: ["d-brennan", "d-nolan"],
+    knockedIds: [],
+    status: "planned",
+    notes: "",
+    createdAt: hoursAgo(4),
+    createdBy: DEMO_NICK,
+    createdByName: "Nick",
+    updatedAt: hoursAgo(4),
+    updatedBy: DEMO_NICK,
+    updatedByName: "Nick",
+  },
 ];
 
 export const demoNotifications: AppNotification[] = [

@@ -177,6 +177,16 @@ beforeEach(async () => {
     await setDoc(doc(db, "services/s1"), serviceDoc("alice"));
     await setDoc(doc(db, "users/alice"), { displayName: "Alice" });
     await setDoc(doc(db, "users/bob"), { displayName: "Bob" });
+    await setDoc(doc(db, "knockRoutes/r1"), {
+      name: "Ridgemoor sweep",
+      status: "planned",
+      assignedTo: ["bob"],
+      stopIds: ["c1"],
+      knockedIds: [],
+      createdBy: "alice",
+      createdByName: "Alice",
+      updatedBy: "alice",
+    });
     await setDoc(doc(db, "pushTokens/t-alice"), {
       uid: "alice",
       token: "alice-device-token",
@@ -210,6 +220,7 @@ describe("the two-account allowlist", () => {
     await assertFails(addDoc(collection(mallory, "documents"), businessDoc("mallory")));
     await assertFails(getDocs(collection(mallory, "services")));
     await assertFails(addDoc(collection(mallory, "services"), serviceDoc("mallory")));
+    await assertFails(getDocs(collection(mallory, "knockRoutes")));
     await assertFails(getDocs(collection(mallory, "pushTokens")));
     await assertFails(
       addDoc(collection(mallory, "pushTokens"), { uid: "mallory", token: "t" }),
@@ -579,5 +590,70 @@ describe("push tokens", () => {
     await assertFails(
       addDoc(collection(anon, "pushTokens"), { uid: "alice", token: "t" }),
     );
+  });
+});
+
+/* ------------------------------------------------------ door-knock routes */
+
+describe("door-knocking routes", () => {
+  const routeDoc = (by, over = {}) => ({
+    name: "Elm Hollow",
+    status: "planned",
+    assignedTo: [],
+    stopIds: ["c1"],
+    knockedIds: [],
+    createdBy: by,
+    createdByName: by,
+    updatedBy: by,
+    updatedAt: serverTimestamp(),
+    ...over,
+  });
+
+  test("a crew member can plan a route and hand it to the other", async () => {
+    await assertSucceeds(addDoc(collection(alice, "knockRoutes"), routeDoc("alice")));
+    // Either of you can pick up the other's afternoon, so reassigning is allowed.
+    await assertSucceeds(
+      updateDoc(doc(bob, "knockRoutes/r1"), {
+        assignedTo: ["alice"],
+        updatedBy: "bob",
+        updatedAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  test("a route cannot be attributed to somebody else", async () => {
+    await assertFails(addDoc(collection(alice, "knockRoutes"), routeDoc("bob")));
+  });
+
+  test("an edit has to say who made it", async () => {
+    // Without the refreshed stamp, "last changed by" on the screen is a lie.
+    await assertFails(updateDoc(doc(bob, "knockRoutes/r1"), { name: "Renamed" }));
+    await assertFails(
+      updateDoc(doc(bob, "knockRoutes/r1"), { name: "Renamed", updatedBy: "alice" }),
+    );
+  });
+
+  test("the shape has to be one the other phone can render", async () => {
+    await assertFails(
+      addDoc(collection(alice, "knockRoutes"), routeDoc("alice", { status: "wandering" })),
+    );
+    await assertFails(
+      addDoc(collection(alice, "knockRoutes"), routeDoc("alice", { stopIds: "c1" })),
+    );
+    await assertFails(
+      addDoc(collection(alice, "knockRoutes"), routeDoc("alice", { name: 42 })),
+    );
+  });
+
+  test("a route cannot grow past what fits in a document", async () => {
+    const tooMany = Array.from({ length: 401 }, (_, i) => `c${i}`);
+    await assertFails(
+      addDoc(collection(alice, "knockRoutes"), routeDoc("alice", { stopIds: tooMany })),
+    );
+  });
+
+  test("an unauthenticated caller gets nothing", async () => {
+    await assertFails(getDocs(collection(anon, "knockRoutes")));
+    await assertFails(addDoc(collection(anon, "knockRoutes"), routeDoc("alice")));
   });
 });

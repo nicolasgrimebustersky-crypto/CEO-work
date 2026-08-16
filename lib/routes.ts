@@ -24,6 +24,9 @@ export const routes = {
   newDocument: (kind: "estimate" | "invoice", customerId?: string) =>
     `/invoices/detail?new=${kind}${customerId ? `&customer=${encodeURIComponent(customerId)}` : ""}`,
   schedule: "/schedule",
+  knockRoutes: "/routes",
+  knockRoute: (routeId: string) => `/routes/detail?id=${encodeURIComponent(routeId)}`,
+  newKnockRoute: "/routes/detail?new=1",
   dashboard: "/dashboard",
   reports: "/reports",
   account: "/account",

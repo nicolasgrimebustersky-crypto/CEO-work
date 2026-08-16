@@ -237,6 +237,34 @@ service cloud.firestore {
       allow delete: if isCrew();
     }
 
+    // Door-knocking routes: a named, ordered list of doors somebody is walking.
+    //
+    // Both crew may edit any route, including reassigning one — that is the
+    // point of a two-person app where either of you might pick up the other's
+    // afternoon. What is pinned is the *shape*: the lists have to be lists and
+    // the status has to be one the UI can render, so a bug on one phone cannot
+    // write a route the other phone refuses to open.
+    function validKnockRoute() {
+      let data = request.resource.data;
+      return data.name is string
+        && data.status in ['planned', 'walking', 'done']
+        && data.assignedTo is list
+        && data.stopIds is list
+        && data.knockedIds is list
+        // A route is walked on foot in an afternoon. The cap is here to stop a
+        // runaway loop writing a document that breaches Firestore's own 1MB
+        // limit, not because anybody would plan four hundred doors.
+        && data.stopIds.size() <= 400
+        && data.knockedIds.size() <= 400;
+    }
+
+    match /knockRoutes/{routeId} {
+      allow read: if isCrew();
+      allow create: if isCrew() && stampedByCaller('createdBy') && validKnockRoute();
+      allow update: if isCrew() && refreshesAuthorStamp() && validKnockRoute();
+      allow delete: if isCrew();
+    }
+
     // Anything not matched above is denied by default. Do not add a
     // catch-all `match /{document=**}` here: rules are OR'd, so a permissive
     // catch-all would widen access rather than restrict it.

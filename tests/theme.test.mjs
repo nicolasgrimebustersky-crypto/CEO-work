@@ -144,5 +144,18 @@ describe("design tokens", () => {
 
     const asText = contrast(value("danger"), value("canvas"));
     assert.ok(asText >= 4.5, `--color-danger as text on the canvas is only ${asText.toFixed(2)}:1`);
+
+    // Same trap on the money button: the logo's cream is lovely at sign size
+    // and unreadable at button size.
+    const onMoney = contrast(value("money-ink"), value("money"));
+    assert.ok(onMoney >= 4.5, `--color-money-ink on the green is only ${onMoney.toFixed(2)}:1`);
+
+    // And the green itself still has to be legible as a figure on the canvas,
+    // which is the job it does everywhere else.
+    const moneyAsText = contrast(value("money"), value("canvas"));
+    assert.ok(
+      moneyAsText >= 4.5,
+      `--color-money as a figure on the canvas is only ${moneyAsText.toFixed(2)}:1`,
+    );
   });
 });

@@ -5,6 +5,7 @@ import {
   InvoiceIcon,
   MapIcon,
   MessageIcon,
+  RouteIcon,
   PeopleIcon,
   PersonIcon,
   PipelineIcon,
@@ -38,6 +39,12 @@ export const TABS: NavItem[] = [
 
 /** Everything else, reachable from the drawer. */
 export const DRAWER_ONLY: NavItem[] = [
+  {
+    href: routes.knockRoutes,
+    label: "Routes",
+    icon: RouteIcon,
+    hint: "Doors to knock, and who is walking them",
+  },
   {
     href: routes.messages,
     label: "Messages",

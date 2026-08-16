@@ -26,6 +26,38 @@ export function MapIcon({ active }: NavIconProps) {
   );
 }
 
+/** A path between two dropped pins — a walking route, not a map. */
+export function RouteIcon({ active }: NavIconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className="size-6" aria-hidden="true">
+      <circle
+        cx={6}
+        cy={6}
+        r={2.6}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={w(active)}
+      />
+      <circle
+        cx={18}
+        cy={18}
+        r={2.6}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={w(active)}
+      />
+      <path
+        d="M8.6 6H14a3 3 0 0 1 0 6h-4a3 3 0 0 0 0 6h5.4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={w(active)}
+        strokeLinecap="round"
+        strokeDasharray="0.1 3.4"
+      />
+    </svg>
+  );
+}
+
 export function CalendarIcon({ active }: NavIconProps) {
   return (
     <svg viewBox="0 0 24 24" className="size-6" aria-hidden="true">

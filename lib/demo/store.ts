@@ -8,6 +8,7 @@ import {
   demoDocuments,
   demoJobs,
   demoNotifications,
+  demoKnockRoutes,
   demoServices,
   demoQuotes,
   demoUsers,
@@ -64,6 +65,7 @@ function seed(): void {
   seedTable(COLLECTIONS.notifications, demoNotifications as unknown as DemoRow[]);
   seedTable(COLLECTIONS.documents, demoDocuments as unknown as DemoRow[]);
   seedTable(COLLECTIONS.services, demoServices as unknown as DemoRow[]);
+  seedTable(COLLECTIONS.knockRoutes, demoKnockRoutes as unknown as DemoRow[]);
 }
 
 function emit(name: string): void {
