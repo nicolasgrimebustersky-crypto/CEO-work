@@ -12,6 +12,7 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 
+import { isBootstrapCrew, SIGNUP_ROLE, type Role } from "@/lib/auth/roles";
 import { isDemoMode } from "@/lib/demo/enabled";
 import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
@@ -26,6 +27,7 @@ function toAppUser(snap: QueryDocumentSnapshot<DocumentData>): AppUser {
   return {
     uid: snap.id,
     displayName: typeof data.displayName === "string" ? data.displayName : "Unknown",
+    role: data.role === "crew" ? "crew" : "pending",
     phone: typeof data.phone === "string" ? data.phone : "",
     currentLat: typeof data.currentLat === "number" ? data.currentLat : null,
     currentLng: typeof data.currentLng === "number" ? data.currentLng : null,
@@ -55,9 +57,15 @@ export function subscribeUsers(
 }
 
 /**
- * Accounts are created by hand in the Firebase console, so the first time one
- * of them signs in there is an auth user but no profile document. Create it
- * here rather than making the console step a two-part job.
+ * Creates the profile document the first time an account signs in.
+ *
+ * The role written here is the whole access decision. A new registration gets
+ * `pending` and can see nothing until somebody inside approves it; the two
+ * bootstrap uids get `crew`, because the first account cannot wait for an
+ * approver who does not exist yet.
+ *
+ * The rules enforce exactly this and do not trust the value — a client writing
+ * `crew` for itself is refused unless it is a bootstrap uid.
  */
 export async function ensureUserDoc(
   uid: string,
@@ -77,6 +85,7 @@ export async function ensureUserDoc(
     currentLng: null,
     lastLocationUpdate: null,
     isActive: true,
+    role: isBootstrapCrew(uid) ? "crew" : SIGNUP_ROLE,
     // Nothing muted: a new account hears about everything until it says
     // otherwise, which is the only default that cannot lose an event silently.
     mutedNotifications: [],
@@ -156,4 +165,45 @@ export async function setMutedNotifications(
   muted: NotificationCategory[],
 ): Promise<void> {
   await writeUser(uid, { mutedNotifications: muted });
+}
+
+/**
+ * Watches one profile — your own.
+ *
+ * Needed separately from the roster because a pending account cannot read the
+ * users collection at all; the rules let it read exactly one document, its own.
+ * This is how the app finds out whether you are approved yet.
+ */
+export function subscribeOwnProfile(
+  uid: string,
+  onChange: (user: AppUser | null) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  if (isDemoMode) {
+    return demo.subscribe<AppUser>(COLLECTIONS.users, (users) => {
+      onChange(users.find((user) => user.uid === uid) ?? null);
+    });
+  }
+  return onSnapshot(
+    doc(getDb(), COLLECTIONS.users, uid),
+    (snap) =>
+      onChange(
+        snap.exists()
+          ? toAppUser(snap as QueryDocumentSnapshot<DocumentData>)
+          : null,
+      ),
+    (error) => onError?.(error),
+  );
+}
+
+/**
+ * Let somebody in, or put them back out.
+ *
+ * Writes `role` on somebody else's profile, which the rules permit only for
+ * crew and only for that one field. Deliberately not a self-service action:
+ * granting access to real customers' addresses is a decision a person makes
+ * about another person.
+ */
+export async function setUserRole(uid: string, role: Role): Promise<void> {
+  await writeUser(uid, { role });
 }

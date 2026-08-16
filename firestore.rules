@@ -3,14 +3,22 @@ rules_version = '2';
 // ---------------------------------------------------------------------------
 // Grime Busters CRM — Firestore security rules.
 //
-// This is a private two-person app. There are no roles and no permission tiers:
-// either you are one of the two crew accounts and you can read and write
-// everything, or you get nothing. The allowlist below is the entire access
-// model, so keep it accurate — an account that exists in Firebase Auth but is
-// missing from this list can sign in and will then fail every read.
+// Anybody can register. Almost nobody can read anything.
 //
-// Replace the two placeholders with the real uids from
-// Firebase console -> Authentication -> Users, then deploy:
+// A new account lands as `pending`: it can sign in, read its own profile, and
+// nothing else. Every customer, job, invoice and message is denied until an
+// existing crew member approves it. That is the entire point of opening sign
+// up without opening the data — this database holds real people's home
+// addresses and phone numbers.
+//
+// Two uids below are crew unconditionally. They are the bootstrap: the first
+// account cannot wait for an approver who does not exist yet, and a profile
+// damaged by a bad write must not lock both owners out of their own business.
+//
+// The escalation this file exists to stop is one line long: sign up, then
+// write your own profile with role 'crew'. See the /users rules.
+//
+// Keep the uid list in step with lib/auth/roles.ts. Deploy with:
 //   npx firebase-tools deploy --only firestore:rules
 //
 // `npm run test:rules` exercises everything below against the emulator.
@@ -19,12 +27,38 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isCrew() {
+    // Crew by uid, whatever the database says. The bootstrap.
+    function isBootstrapCrew() {
       return request.auth != null
         && request.auth.uid in [
              'Bzo7rclax4SdT7PaAua1monNxXG3',
              'QLMsTAHbbceHBAWBXPqtScGdGon2'
            ];
+    }
+
+    function myProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Crew by approval. The `exists` guard matters: `get` on a missing document
+    // is an error, and an account that signed up but whose profile write failed
+    // would otherwise take every rule down with it rather than being denied.
+    //
+    // Compared against the literal 'crew'. A missing field, a null or a typo
+    // all land as not-crew, which is the direction a mistake has to fail in.
+    function isApprovedCrew() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && myProfile().role == 'crew';
+    }
+
+    function isCrew() {
+      return isBootstrapCrew() || isApprovedCrew();
+    }
+
+    // True when this write leaves `role` exactly as it was.
+    function keepsOwnRole() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']);
     }
 
     // Every write is stamped with its author. Enforcing it here rather than
@@ -44,16 +78,44 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasAll(['updatedAt']);
     }
 
-    // Profiles are readable by the crew (both phones draw each other's dot)
-    // but each account may only write its own document — that keeps one
-    // person's GPS position from being overwritten by the other's client.
+    // Profiles. This is the one collection a pending account can touch, and
+    // every clause here is load-bearing.
     match /users/{uid} {
-      allow read: if isCrew();
-      allow create, update: if isCrew() && request.auth.uid == uid;
+      // You can always read your own profile. That is how a pending account
+      // finds out it is pending — without it the app could only show a blank
+      // screen to somebody who just registered. Crew read everyone, for the
+      // roster and the map dots.
+      allow read: if request.auth != null
+        && (isCrew() || request.auth.uid == uid);
+
+      // Registering writes your own profile, and it must land as 'pending'.
+      // Bootstrap accounts are exempt or the very first sign-in deadlocks
+      // waiting for an approver who does not exist.
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && (isBootstrapCrew() || request.resource.data.role == 'pending');
+
+      // Two separate permissions, deliberately not one:
+      //
+      //   Your own profile — name, phone, location, notification settings —
+      //   but NOT your own role. Allowing that would make the sign-up form a
+      //   complete privilege escalation: register, then promote yourself.
+      //
+      //   Somebody else's role, if you are crew. That is what approving is,
+      //   and it may change `role` and nothing else — an approver has no
+      //   business rewriting the name or GPS position of the account they are
+      //   letting in.
+      allow update: if request.auth != null && (
+        (request.auth.uid == uid && keepsOwnRole())
+        || (isCrew()
+            && request.auth.uid != uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role']))
+      );
+
       // Deleting your own profile is the in-app account deletion App Store
-      // Guideline 5.1.1(v) requires. Still owner-only: one crew member must
-      // not be able to erase the other.
-      allow delete: if isCrew() && request.auth.uid == uid;
+      // Guideline 5.1.1(v) requires. Owner-only: one crew member must not be
+      // able to erase the other.
+      allow delete: if request.auth != null && request.auth.uid == uid;
     }
 
     // Light shape checks. These are not a schema — they exist to stop a bug in

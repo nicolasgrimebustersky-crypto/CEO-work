@@ -39,6 +39,8 @@ let testEnv;
 let alice;
 let bob;
 let mallory;
+let dana;
+let newbie;
 let anon;
 
 /* ---------------------------------------------------------------- fixtures */
@@ -157,6 +159,10 @@ before(async () => {
   alice = testEnv.authenticatedContext("alice").firestore();
   bob = testEnv.authenticatedContext("bob").firestore();
   mallory = testEnv.authenticatedContext("mallory").firestore();
+  // Registered and approved — crew by role rather than by uid.
+  dana = testEnv.authenticatedContext("dana").firestore();
+  // Signed in with no profile document at all: the instant after registering.
+  newbie = testEnv.authenticatedContext("newbie").firestore();
   anon = testEnv.unauthenticatedContext().firestore();
 });
 
@@ -175,8 +181,13 @@ beforeEach(async () => {
     await setDoc(doc(db, "notifications/n1"), notificationDoc("alice", "bob"));
     await setDoc(doc(db, "documents/d1"), businessDoc("alice"));
     await setDoc(doc(db, "services/s1"), serviceDoc("alice"));
+    // Alice and Bob deliberately have NO role field. They are the bootstrap
+    // uids, and the rules must treat them as crew regardless — that is what
+    // stops a profile mishap locking the owners out of their own business.
     await setDoc(doc(db, "users/alice"), { displayName: "Alice" });
     await setDoc(doc(db, "users/bob"), { displayName: "Bob" });
+    await setDoc(doc(db, "users/mallory"), { displayName: "Mallory", role: "pending" });
+    await setDoc(doc(db, "users/dana"), { displayName: "Dana", role: "crew" });
     await setDoc(doc(db, "knockRoutes/r1"), {
       name: "Ridgemoor sweep",
       status: "planned",
@@ -737,5 +748,164 @@ describe("territories", () => {
   test("an unauthenticated caller gets nothing", async () => {
     await assertFails(getDocs(collection(anon, "territories")));
     await assertFails(addDoc(collection(anon, "territories"), territoryDoc("alice")));
+  });
+});
+
+
+/* ------------------------------------------------------- open registration */
+
+/**
+ * Sign-up is open to anybody, so these rules are the only thing between a
+ * stranger with an email address and every customer's home address.
+ *
+ * The escalation being tested is two steps long and obvious once you see it:
+ * register, then write `role: 'crew'` onto your own profile. Everything else
+ * in this file is a variation on making sure that cannot happen — including
+ * through the side doors, like renaming yourself while setting the role, or
+ * having a friendly pending account promote another one.
+ */
+describe("registration grants nothing", () => {
+  test("a pending account cannot read customers", async () => {
+    await assertFails(getDoc(doc(mallory, "customers/c1")));
+    await assertFails(getDocs(collection(mallory, "customers")));
+  });
+
+  test("a pending account cannot read money, jobs or messages", async () => {
+    await assertFails(getDoc(doc(mallory, "documents/d1")));
+    await assertFails(getDoc(doc(mallory, "jobs/j1")));
+    await assertFails(getDoc(doc(mallory, "territories/t1")));
+  });
+
+  test("a pending account cannot write anything", async () => {
+    await assertFails(
+      addDoc(collection(mallory, "customers"), customerDoc("mallory")),
+    );
+  });
+
+  test("an account with no profile at all is refused", async () => {
+    // The instant after registering, before the profile write lands. `get` on
+    // a missing document is an error in rules, and an unguarded lookup would
+    // take every rule down with it rather than denying this one caller.
+    await assertFails(getDoc(doc(newbie, "customers/c1")));
+  });
+});
+
+describe("the escalation", () => {
+  test("a pending account cannot promote itself", async () => {
+    // The whole attack, in one line.
+    await assertFails(updateDoc(doc(mallory, "users/mallory"), { role: "crew" }));
+  });
+
+  test("...nor by writing role alongside something legitimate", async () => {
+    // Hiding it in a normal-looking profile save must not slip past a rule
+    // that only inspects some of the keys.
+    await assertFails(
+      updateDoc(doc(mallory, "users/mallory"), {
+        displayName: "Mallory",
+        phone: "5025550100",
+        role: "crew",
+      }),
+    );
+  });
+
+  test("...nor by re-creating the document", async () => {
+    await assertFails(
+      setDoc(doc(mallory, "users/mallory"), { displayName: "Mallory", role: "crew" }),
+    );
+  });
+
+  test("...nor by promoting a second account it controls", async () => {
+    await assertFails(updateDoc(doc(mallory, "users/newbie"), { role: "crew" }));
+  });
+
+  test("a brand new account may only register itself as pending", async () => {
+    await assertFails(
+      setDoc(doc(newbie, "users/newbie"), { displayName: "New", role: "crew" }),
+    );
+    await assertSucceeds(
+      setDoc(doc(newbie, "users/newbie"), { displayName: "New", role: "pending" }),
+    );
+  });
+
+  test("a new account cannot create somebody else's profile", async () => {
+    await assertFails(
+      setDoc(doc(newbie, "users/someone-else"), { displayName: "X", role: "pending" }),
+    );
+  });
+});
+
+describe("what a pending account can still do", () => {
+  test("reads its own profile", async () => {
+    // Without this the app could only show a blank screen to somebody who has
+    // just registered, instead of telling them they are waiting.
+    await assertSucceeds(getDoc(doc(mallory, "users/mallory")));
+  });
+
+  test("edits its own name and phone", async () => {
+    await assertSucceeds(
+      updateDoc(doc(mallory, "users/mallory"), {
+        displayName: "Mallory B",
+        phone: "5025550111",
+      }),
+    );
+  });
+
+  test("cannot read anybody else's profile", async () => {
+    await assertFails(getDoc(doc(mallory, "users/alice")));
+  });
+});
+
+describe("approving somebody", () => {
+  test("crew can let a pending account in", async () => {
+    await assertSucceeds(updateDoc(doc(alice, "users/mallory"), { role: "crew" }));
+  });
+
+  test("crew can put them back out", async () => {
+    await assertSucceeds(updateDoc(doc(alice, "users/dana"), { role: "pending" }));
+  });
+
+  test("approving may change the role and nothing else", async () => {
+    // An approver has no business renaming the account they are letting in,
+    // or moving its map dot.
+    await assertFails(
+      updateDoc(doc(alice, "users/mallory"), { role: "crew", displayName: "Hacked" }),
+    );
+    await assertFails(updateDoc(doc(alice, "users/mallory"), { displayName: "Hacked" }));
+  });
+
+  test("an approved account is crew everywhere", async () => {
+    // Dana is crew by stored role, not by uid. If the rules only honoured the
+    // hardcoded list, approving somebody would appear to work and change
+    // nothing they could actually do.
+    await assertSucceeds(getDoc(doc(dana, "customers/c1")));
+    await assertSucceeds(addDoc(collection(dana, "customers"), customerDoc("dana")));
+  });
+
+  test("an approved account can approve others", async () => {
+    await assertSucceeds(updateDoc(doc(dana, "users/mallory"), { role: "crew" }));
+  });
+});
+
+describe("the bootstrap accounts", () => {
+  test("are crew with no role field stored", async () => {
+    await assertSucceeds(getDoc(doc(alice, "customers/c1")));
+    await assertSucceeds(getDoc(doc(bob, "customers/c1")));
+  });
+
+  test("stay crew even if their profile says pending", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "users/alice"), {
+        displayName: "Alice",
+        role: "pending",
+      });
+    });
+    await assertSucceeds(getDoc(doc(alice, "customers/c1")));
+  });
+
+  test("stay crew even with no profile document at all", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await deleteDoc(doc(ctx.firestore(), "users/alice"));
+    });
+    await assertSucceeds(getDoc(doc(alice, "customers/c1")));
   });
 });

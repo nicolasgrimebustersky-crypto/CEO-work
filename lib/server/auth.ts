@@ -1,16 +1,27 @@
 import "server-only";
 
-import { adminAuth } from "./admin";
+import { isBootstrapCrew } from "@/lib/auth/roles";
+import { adminAuth, adminDb } from "./admin";
 import { corsHeaders } from "./cors";
 
 /**
- * The server-side half of the two-account allowlist. `firestore.rules` protects
- * direct client reads and writes, but API routes run with the Admin SDK, which
+ * The server-side half of the access model. `firestore.rules` protects direct
+ * client reads and writes, but API routes run with the Admin SDK, which
  * bypasses rules entirely — so every route re-checks the caller here.
  *
- * Keep CREW_UIDS in sync with the allowlist in firestore.rules and
- * storage.rules. An empty value fails every request rather than allowing them:
- * an SMS endpoint that anyone can reach is toll fraud waiting to happen.
+ * Two ways to be crew, matching the rules exactly:
+ *
+ *   CREW_UIDS  the bootstrap accounts, always allowed
+ *   role       an account somebody approved, stored on its profile
+ *
+ * The second is why sign-up being open does not open these endpoints: a fresh
+ * registration has role 'pending' and is refused here as well, so it cannot
+ * spend the Twilio balance any more than it can read a customer.
+ *
+ * Keep CREW_UIDS in sync with the uid list in firestore.rules, storage.rules
+ * and lib/auth/roles.ts. An empty value still fails every bootstrap check
+ * rather than allowing them: an SMS endpoint anyone can reach is toll fraud
+ * waiting to happen.
  */
 function crewUids(): string[] {
   return (process.env.CREW_UIDS ?? "")
@@ -39,14 +50,25 @@ export class ApiError extends Error {
  * is one of the two crew accounts. Throws ApiError, which the route handlers
  * turn into a JSON response.
  */
+/**
+ * Has this account been approved? Read from the profile with the Admin SDK.
+ *
+ * Compared against the literal 'crew': a missing document, a missing field or
+ * a typo all come back false. Fails closed by construction rather than by
+ * remembering to handle each case.
+ */
+async function isApprovedCrew(uid: string): Promise<boolean> {
+  try {
+    const snap = await adminDb().collection("users").doc(uid).get();
+    return snap.exists && snap.data()?.role === "crew";
+  } catch {
+    // A Firestore outage must not promote anybody.
+    return false;
+  }
+}
+
 export async function requireCrew(request: Request): Promise<CrewCaller> {
   const allowlist = crewUids();
-  if (allowlist.length === 0) {
-    throw new ApiError(
-      500,
-      "CREW_UIDS is not configured, so no request can be authorised. See the README.",
-    );
-  }
 
   const header = request.headers.get("authorization") ?? "";
   const token = header.toLowerCase().startsWith("bearer ") ? header.slice(7).trim() : "";
@@ -61,8 +83,16 @@ export async function requireCrew(request: Request): Promise<CrewCaller> {
     throw new ApiError(401, "Invalid or expired session.");
   }
 
-  if (!allowlist.includes(decoded.uid)) {
-    throw new ApiError(403, "This account is not on the crew allowlist.");
+  const allowed =
+    allowlist.includes(decoded.uid) ||
+    isBootstrapCrew(decoded.uid) ||
+    (await isApprovedCrew(decoded.uid));
+
+  if (!allowed) {
+    throw new ApiError(
+      403,
+      "This account has not been approved yet. Ask one of the crew to let you in from their Account screen.",
+    );
   }
 
   return {

@@ -9,13 +9,22 @@ import {
   type ReactNode,
 } from "react";
 
+import { isCrew } from "@/lib/auth/roles";
 import { subscribeUsers } from "@/lib/db/users";
 import { buildUserColorMap, colorForUser, FALLBACK_USER_COLOR } from "@/lib/userColor";
 import type { AppUser, Author } from "@/lib/types";
 import { useAuth } from "./AuthProvider";
 
 interface TeamContextValue {
+  /**
+   * The crew. Pending registrations are deliberately not in here — every
+   * consumer of this list treats it as "people who can be given work", and a
+   * stranger awaiting approval must not appear in an assignment picker, on the
+   * map, or in the colour legend.
+   */
   users: AppUser[];
+  /** Registered but not approved. Only the Account screen cares. */
+  pendingUsers: AppUser[];
   me: AppUser | null;
   /** Canonical stamp for writes — prefers the editable profile name. */
   author: Author | null;
@@ -46,11 +55,14 @@ export function TeamProvider({ children }: { children: ReactNode }) {
   }, [status]);
 
   const value = useMemo<TeamContextValue>(() => {
-    const colorMap = buildUserColorMap(users);
-    const me = users.find((u) => u.uid === authAuthor?.uid) ?? null;
+    const crew = users.filter((user) => isCrew(user.uid, user.role));
+    const pendingUsers = users.filter((user) => !isCrew(user.uid, user.role));
+    const colorMap = buildUserColorMap(crew);
+    const me = crew.find((u) => u.uid === authAuthor?.uid) ?? null;
 
     return {
-      users,
+      users: crew,
+      pendingUsers,
       me,
       author: authAuthor
         ? { uid: authAuthor.uid, displayName: me?.displayName ?? authAuthor.displayName }
@@ -72,6 +84,7 @@ export function useTeam(): TeamContextValue {
   if (!ctx) {
     return {
       users: [],
+      pendingUsers: [],
       me: null,
       author: null,
       colorFor: () => FALLBACK_USER_COLOR,
