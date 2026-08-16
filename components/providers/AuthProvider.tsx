@@ -122,13 +122,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return subscribeOwnProfile(
       user.uid,
       (profile) => {
-        setStatus(roleIsCrew(user.uid, profile?.role) ? "signed-in" : "pending");
+        setStatus(
+          roleIsCrew(user.uid, profile?.role, user.email) ? "signed-in" : "pending",
+        );
       },
       () => {
         // Cannot even read our own profile: the rules are older than this
-        // feature. Fail closed — pending shows an explanation, the app does
-        // not open to somebody the database will refuse anyway.
-        setStatus("pending");
+        // feature, or Firestore is unreachable. Fail closed for everyone
+        // except the admin, who would otherwise be locked out of the only
+        // screen that can fix it.
+        setStatus(roleIsCrew(user.uid, undefined, user.email) ? "signed-in" : "pending");
       },
     );
   }, [user]);

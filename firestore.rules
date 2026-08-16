@@ -11,6 +11,9 @@ rules_version = '2';
 // up without opening the data — this database holds real people's home
 // addresses and phone numbers.
 //
+// Granting access is one account's job — see isAdmin() below. Everyone else,
+// including the other owner, uses the whole app and hands out nothing.
+//
 // Two uids below are crew unconditionally. They are the bootstrap: the first
 // account cannot wait for an approver who does not exist yet, and a profile
 // damaged by a bad write must not lock both owners out of their own business.
@@ -26,6 +29,20 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // The single admin: the only account that can grant or remove access.
+    //
+    // Derived from the signed-in email, never from a stored field. If "admin"
+    // lived in the database then anybody who could write that field could mint
+    // an admin, and the one account that matters would be only as safe as
+    // every write path in the app. Firebase enforces one account per email, so
+    // this cannot be claimed by registering either.
+    //
+    // Keep in step with ADMIN_EMAIL in lib/auth/roles.ts.
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email == 'nicolas.grimebustersky@gmail.com';
+    }
 
     // Crew by uid, whatever the database says. The bootstrap.
     function isBootstrapCrew() {
@@ -52,8 +69,10 @@ service cloud.firestore {
         && myProfile().role == 'crew';
     }
 
+    // The admin is always crew — an admin locked out by their own profile
+    // could never reach the screen that fixes it.
     function isCrew() {
-      return isBootstrapCrew() || isApprovedCrew();
+      return isAdmin() || isBootstrapCrew() || isApprovedCrew();
     }
 
     // True when this write leaves `role` exactly as it was.
@@ -101,13 +120,14 @@ service cloud.firestore {
       //   but NOT your own role. Allowing that would make the sign-up form a
       //   complete privilege escalation: register, then promote yourself.
       //
-      //   Somebody else's role, if you are crew. That is what approving is,
-      //   and it may change `role` and nothing else — an approver has no
-      //   business rewriting the name or GPS position of the account they are
-      //   letting in.
+      //   Somebody else's role, if you are the admin. Granting access is one
+      //   person's job, so crew who are not the admin cannot do it — they use
+      //   the app fully and hand out nothing. It may change `role` and nothing
+      //   else: an approver has no business rewriting the name or GPS position
+      //   of the account they are letting in.
       allow update: if request.auth != null && (
         (request.auth.uid == uid && keepsOwnRole())
-        || (isCrew()
+        || (isAdmin()
             && request.auth.uid != uid
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role']))
       );

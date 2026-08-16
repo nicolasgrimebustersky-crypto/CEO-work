@@ -11,8 +11,15 @@ import assert from "node:assert/strict";
 import { test, describe } from "node:test";
 import { readFileSync } from "node:fs";
 
-const { BOOTSTRAP_CREW, SIGNUP_ROLE, isBootstrapCrew, isCrew, roleFor } =
-  await import("../lib/auth/roles.ts");
+const {
+  ADMIN_EMAIL,
+  BOOTSTRAP_CREW,
+  SIGNUP_ROLE,
+  isAdmin,
+  isBootstrapCrew,
+  isCrew,
+  roleFor,
+} = await import("../lib/auth/roles.ts");
 
 const NICK = BOOTSTRAP_CREW[0];
 const STRANGER = "a-brand-new-account-uid";
@@ -103,5 +110,80 @@ describe("agreeing with the rules file", () => {
     // is exercised against the emulator in tests/firestore.rules.test.mjs.
     const rules = readFileSync(new URL("../firestore.rules", import.meta.url), "utf8");
     assert.match(rules, /affectedKeys\(\)[\s\S]{0,80}'role'/);
+  });
+});
+
+
+/* ------------------------------------------------------------ the admin */
+
+describe("who can hand out access", () => {
+  test("the admin email is the admin", () => {
+    assert.equal(isAdmin(ADMIN_EMAIL), true);
+  });
+
+  test("case and stray whitespace do not matter", () => {
+    // The same mailbox, and the same Firebase account.
+    assert.equal(isAdmin(ADMIN_EMAIL.toUpperCase()), true);
+    assert.equal(isAdmin(`  ${ADMIN_EMAIL}  `), true);
+  });
+
+  test("the other owner is not the admin", () => {
+    // The point of the whole tier: Noah uses the entire app and grants
+    // nothing. A bootstrap uid must not imply admin.
+    assert.equal(isAdmin("noah.perkins@example.com"), false);
+    for (const uid of BOOTSTRAP_CREW) {
+      // Passing a uid where an email goes must never succeed.
+      assert.equal(isAdmin(uid), false);
+    }
+  });
+
+  test("nobody else is, however close the address looks", () => {
+    const [local, domain] = ADMIN_EMAIL.split("@");
+    for (const near of [
+      `${local}@evil.com`,
+      `evil${local}@${domain}`,
+      `${local}@${domain}.evil.com`,
+      `${local}+admin@${domain}`,
+      `x${ADMIN_EMAIL}`,
+      `${ADMIN_EMAIL}x`,
+      local,
+      domain,
+      "",
+      null,
+      undefined,
+      {},
+    ]) {
+      assert.equal(isAdmin(near), false, `${String(near)} was treated as admin`);
+    }
+  });
+
+  test("admin is not something the database can grant", () => {
+    // Deliberately not a stored role. If it were, anybody who could write the
+    // field could mint an admin, and the one account that matters would be
+    // only as safe as every write path in the app.
+    assert.equal(isAdmin("someone@else.com"), false);
+    assert.equal(roleFor("someone", "admin"), "pending", "'admin' is not a role");
+  });
+
+  test("the admin can always use the app", () => {
+    // An admin locked out by their own profile could never reach the screen
+    // that fixes it.
+    assert.equal(isCrew("any-uid", "pending", ADMIN_EMAIL), true);
+    assert.equal(isCrew("any-uid", undefined, ADMIN_EMAIL), true);
+  });
+
+  test("a non-admin's email does not grant app access on its own", () => {
+    assert.equal(isCrew("stranger", "pending", "someone@else.com"), false);
+  });
+});
+
+describe("the admin email agrees with the rules file", () => {
+  test("firestore.rules checks the same address", () => {
+    const rules = readFileSync(new URL("../firestore.rules", import.meta.url), "utf8");
+    assert.ok(
+      rules.includes(ADMIN_EMAIL),
+      "firestore.rules does not mention the admin email — the app and the database disagree about who can grant access",
+    );
+    assert.match(rules, /request\.auth\.token\.email/);
   });
 });

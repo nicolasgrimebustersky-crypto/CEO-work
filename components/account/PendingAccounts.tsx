@@ -11,16 +11,20 @@ import type { AppUser } from "@/lib/types";
 /**
  * Letting somebody in, and putting them back out.
  *
- * Sign-up is open, so this is the gate. Approving writes one field on somebody
- * else's profile — the rules permit crew to change `role` and nothing else, so
- * an approver cannot quietly rename an account or move its map dot while
- * they are here.
+ * Sign-up is open, so this is the gate — and it is one person's gate. Only the
+ * admin sees it; the other crew use every part of the app and hand out
+ * nothing. Hiding it is the courtesy, the rules are the enforcement: a
+ * non-admin who called `setUserRole` directly would be refused by Firestore.
+ *
+ * Approving writes one field on somebody else's profile. The rules permit
+ * `role` and nothing else, so an approver cannot quietly rename an account or
+ * move its map dot on the way past.
  *
  * Removing access is on the same screen on purpose. A grant you cannot see and
- * cannot reverse is how a shared login ends up outliving the person who left.
+ * cannot reverse is how a login ends up outliving the person who left.
  */
 export function PendingAccounts() {
-  const { users, pendingUsers, author } = useTeam();
+  const { users, pendingUsers, isAdmin, author } = useTeam();
   const [busyUid, setBusyUid] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,6 +39,9 @@ export function PendingAccounts() {
       setBusyUid(null);
     }
   }, []);
+
+  // Not the admin: this whole section is not theirs to see.
+  if (!isAdmin) return null;
 
   const waiting = pendingUsers;
   // Everybody who is in, other than you — the list you would revoke from.

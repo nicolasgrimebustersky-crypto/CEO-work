@@ -1,6 +1,6 @@
 import "server-only";
 
-import { isBootstrapCrew } from "@/lib/auth/roles";
+import { isAdmin, isBootstrapCrew } from "@/lib/auth/roles";
 import { adminAuth, adminDb } from "./admin";
 import { corsHeaders } from "./cors";
 
@@ -11,8 +11,9 @@ import { corsHeaders } from "./cors";
  *
  * Two ways to be crew, matching the rules exactly:
  *
+ *   admin      the one account that grants access, identified by email
  *   CREW_UIDS  the bootstrap accounts, always allowed
- *   role       an account somebody approved, stored on its profile
+ *   role       an account the admin approved, stored on its profile
  *
  * The second is why sign-up being open does not open these endpoints: a fresh
  * registration has role 'pending' and is refused here as well, so it cannot
@@ -84,6 +85,7 @@ export async function requireCrew(request: Request): Promise<CrewCaller> {
   }
 
   const allowed =
+    isAdmin(decoded.email) ||
     allowlist.includes(decoded.uid) ||
     isBootstrapCrew(decoded.uid) ||
     (await isApprovedCrew(decoded.uid));

@@ -1,34 +1,46 @@
 /**
- * Who is allowed in.
+ * Who is allowed in, and who decides.
  *
- * The app used to answer this with a hardcoded list of two uids. Opening sign
- * up means anybody can create an account, so the question becomes: what can a
- * brand new account do?
+ * Two separate questions, kept separate on purpose:
  *
- * The answer here is *nothing*. Registering gets you a profile marked
- * `pending`, which can sign in and see a screen saying somebody has to let you
- * in. Every customer name, phone number, address, invoice and message stays
- * denied until an existing crew member approves you.
+ *   Can you use the app?      `role` on your profile — crew, or pending
+ *   Can you let others in?    your email address, and nothing else
  *
- * That default is not caution for its own sake. This database holds real
- * customers' home addresses and phone numbers; a sign-up form that granted
- * access on submit would mean anyone who found the URL could read all of it.
+ * The second is deliberately *not* a stored field. If "admin" were a role in
+ * the database, then anybody who could write that field could mint an admin,
+ * and the one account that matters would be only as safe as every write path
+ * in the app. Deriving it from the signed-in email means there is exactly one
+ * admin, it cannot be granted, and a compromised database cannot create
+ * another one.
  *
- * Two uids are crew unconditionally, whatever their profile says. They are the
- * bootstrap: the first account cannot wait for an approver who does not exist
- * yet, and a profile document damaged by a bad write must never be able to lock
- * both owners out of their own business.
+ * Access itself still works the way it did: registering gets you `pending`,
+ * which can sign in and see nothing until the admin approves you. Everything
+ * real — customers, jobs, invoices, messages — stays denied until then,
+ * because this database holds real people's home addresses.
  *
- * Free of imports so the rules tests and the server can both use it, and so it
- * can be tested by running it.
+ * Free of imports so the tests, the server and the browser can all use it.
  */
 
+/** Anything not literally "crew" is pending. See `roleFor`. */
 export type Role = "crew" | "pending";
 
 /**
- * Always crew, regardless of what is stored. Keep in step with the same list in
- * firestore.rules — that file is the enforcement, this is the app agreeing with
- * it. `tests/roles.test.mjs` checks they have not drifted apart.
+ * The single admin. Firebase enforces one account per email address, so this
+ * cannot be claimed by registering — and it is checked against the signed-in
+ * token, not against anything a client can send.
+ *
+ * If this address ever changes in Firebase, change it here and in
+ * firestore.rules together. `tests/roles.test.mjs` checks they agree.
+ */
+export const ADMIN_EMAIL = "nicolas.grimebustersky@gmail.com";
+
+/**
+ * Crew regardless of what is stored — the founding accounts.
+ *
+ * Keep in step with the same list in firestore.rules and storage.rules. This
+ * is the bootstrap: the first accounts cannot wait for an approver, and a
+ * profile damaged by a bad write must never lock the owners out of their own
+ * business.
  */
 export const BOOTSTRAP_CREW: readonly string[] = [
   "Bzo7rclax4SdT7PaAua1monNxXG3",
@@ -40,24 +52,47 @@ export function isBootstrapCrew(uid: string | null | undefined): boolean {
 }
 
 /**
+ * Can this person grant and remove other people's access?
+ *
+ * Compared case-insensitively and trimmed, because an email that differs only
+ * in case is the same mailbox and the same Firebase account — but never
+ * loosely: no prefix matching, no domain matching, no "starts with".
+ */
+export function isAdmin(email: string | null | undefined): boolean {
+  if (typeof email !== "string") return false;
+  return email.trim().toLowerCase() === ADMIN_EMAIL;
+}
+
+/**
  * The effective role for an account.
  *
- * Anything that is not literally the string "crew" is pending. Written that way
- * on purpose: a missing field, a null, a typo, or a value invented by a future
- * version all fail closed. The opposite reading — "not pending, so crew" —
- * turns any storage mishap into an open door.
+ * Anything that is not literally the string "crew" is pending. Written that
+ * way on purpose: a missing field, a null, a typo, or a value invented by a
+ * future version all fail closed. The opposite reading — "not pending, so
+ * crew" — turns any storage mishap into an open door.
  */
 export function roleFor(uid: string | null | undefined, storedRole: unknown): Role {
   if (isBootstrapCrew(uid)) return "crew";
   return storedRole === "crew" ? "crew" : "pending";
 }
 
-export function isCrew(uid: string | null | undefined, storedRole: unknown): boolean {
+/**
+ * Can this person use the app at all?
+ *
+ * The admin always can — an admin locked out by their own profile could never
+ * reach the screen that fixes it.
+ */
+export function isCrew(
+  uid: string | null | undefined,
+  storedRole: unknown,
+  email?: string | null,
+): boolean {
+  if (isAdmin(email)) return true;
   return roleFor(uid, storedRole) === "crew";
 }
 
 /**
  * What a newly registered account is written with. Never "crew" — the whole
- * point is that granting access is a deliberate act by somebody already inside.
+ * point is that granting access is a deliberate act by the admin.
  */
 export const SIGNUP_ROLE: Role = "pending";

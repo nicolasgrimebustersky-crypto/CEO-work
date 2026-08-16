@@ -41,6 +41,7 @@ let bob;
 let mallory;
 let dana;
 let newbie;
+let admin;
 let anon;
 
 /* ---------------------------------------------------------------- fixtures */
@@ -163,6 +164,12 @@ before(async () => {
   dana = testEnv.authenticatedContext("dana").firestore();
   // Signed in with no profile document at all: the instant after registering.
   newbie = testEnv.authenticatedContext("newbie").firestore();
+  // The one account that can grant access. Identified by the email on its
+  // token, which is what the rules check — not by uid, and not by anything
+  // stored in the database.
+  admin = testEnv
+    .authenticatedContext("nicolas", { email: "nicolas.grimebustersky@gmail.com" })
+    .firestore();
   anon = testEnv.unauthenticatedContext().firestore();
 });
 
@@ -856,21 +863,21 @@ describe("what a pending account can still do", () => {
 });
 
 describe("approving somebody", () => {
-  test("crew can let a pending account in", async () => {
-    await assertSucceeds(updateDoc(doc(alice, "users/mallory"), { role: "crew" }));
+  test("the admin can let a pending account in", async () => {
+    await assertSucceeds(updateDoc(doc(admin, "users/mallory"), { role: "crew" }));
   });
 
-  test("crew can put them back out", async () => {
-    await assertSucceeds(updateDoc(doc(alice, "users/dana"), { role: "pending" }));
+  test("the admin can put them back out", async () => {
+    await assertSucceeds(updateDoc(doc(admin, "users/dana"), { role: "pending" }));
   });
 
   test("approving may change the role and nothing else", async () => {
     // An approver has no business renaming the account they are letting in,
     // or moving its map dot.
     await assertFails(
-      updateDoc(doc(alice, "users/mallory"), { role: "crew", displayName: "Hacked" }),
+      updateDoc(doc(admin, "users/mallory"), { role: "crew", displayName: "Hacked" }),
     );
-    await assertFails(updateDoc(doc(alice, "users/mallory"), { displayName: "Hacked" }));
+    await assertFails(updateDoc(doc(admin, "users/mallory"), { displayName: "Hacked" }));
   });
 
   test("an approved account is crew everywhere", async () => {
@@ -880,9 +887,46 @@ describe("approving somebody", () => {
     await assertSucceeds(getDoc(doc(dana, "customers/c1")));
     await assertSucceeds(addDoc(collection(dana, "customers"), customerDoc("dana")));
   });
+});
 
-  test("an approved account can approve others", async () => {
-    await assertSucceeds(updateDoc(doc(dana, "users/mallory"), { role: "crew" }));
+describe("only the admin hands out access", () => {
+  // The whole point of this tier. Alice and Bob are founding crew with full
+  // run of the app; Dana is approved crew. None of them is the admin, and none
+  // of them may change anybody's role. Hiding the UI is the courtesy — these
+  // are the enforcement.
+  test("a founding crew member cannot approve anyone", async () => {
+    await assertFails(updateDoc(doc(alice, "users/mallory"), { role: "crew" }));
+    await assertFails(updateDoc(doc(bob, "users/mallory"), { role: "crew" }));
+  });
+
+  test("a founding crew member cannot revoke anyone", async () => {
+    await assertFails(updateDoc(doc(alice, "users/dana"), { role: "pending" }));
+  });
+
+  test("an approved crew member cannot approve anyone", async () => {
+    await assertFails(updateDoc(doc(dana, "users/mallory"), { role: "crew" }));
+  });
+
+  test("crew keep every other power they had", async () => {
+    // "Don't change Noah's permissions" — losing the ability to grant access
+    // must not cost him anything else.
+    await assertSucceeds(getDoc(doc(bob, "customers/c1")));
+    await assertSucceeds(addDoc(collection(bob, "customers"), customerDoc("bob")));
+    await assertSucceeds(getDoc(doc(bob, "documents/d1")));
+    await assertSucceeds(updateDoc(doc(bob, "users/bob"), { displayName: "Bob P" }));
+  });
+
+  test("an impostor email does not make you admin", async () => {
+    const nearly = testEnv
+      .authenticatedContext("impostor", { email: "nicolas.grimebustersky@evil.com" })
+      .firestore();
+    await assertFails(updateDoc(doc(nearly, "users/mallory"), { role: "crew" }));
+  });
+
+  test("the admin email does not need a stored role", async () => {
+    // Admin is derived from the token, never from the database — so it works
+    // with no profile document at all, and cannot be granted by a write.
+    await assertSucceeds(getDoc(doc(admin, "customers/c1")));
   });
 });
 
