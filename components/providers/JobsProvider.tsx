@@ -12,6 +12,7 @@ import {
 
 import { subscribeJobsFrom } from "@/lib/db/jobs";
 import type { Job } from "@/lib/types";
+import { friendlyError } from "@/lib/db/errors";
 import { useAuth } from "./AuthProvider";
 
 /** How far back the shared calendar keeps jobs loaded. */
@@ -51,7 +52,7 @@ export function JobsProvider({ children }: { children: ReactNode }) {
         setError(null);
       },
       (err) => {
-        setError(err.message);
+        setError(friendlyError(err, "jobs"));
         setLoading(false);
       },
     );

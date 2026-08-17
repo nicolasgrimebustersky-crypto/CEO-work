@@ -11,6 +11,7 @@ import {
 
 import { subscribeDocuments } from "@/lib/db/documents";
 import { isOutstanding, type BusinessDocument } from "@/lib/documents";
+import { friendlyError } from "@/lib/db/errors";
 import { useAuth } from "./AuthProvider";
 
 interface DocumentsContextValue {
@@ -53,7 +54,7 @@ export function DocumentsProvider({ children }: { children: ReactNode }) {
         setError(null);
       },
       (err) => {
-        setError(err.message);
+        setError(friendlyError(err, "estimates and invoices"));
         setLoading(false);
       },
     );

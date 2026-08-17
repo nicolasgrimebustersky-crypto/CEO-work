@@ -11,6 +11,7 @@ import {
 
 import { subscribeKnockRoutes } from "@/lib/db/knockRoutes";
 import type { KnockRoute } from "@/lib/types";
+import { friendlyError } from "@/lib/db/errors";
 import { useAuth } from "./AuthProvider";
 
 interface KnockRoutesContextValue {
@@ -49,7 +50,7 @@ export function KnockRoutesProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       },
       (err) => {
-        setError(err.message);
+        setError(friendlyError(err, "routes"));
         setLoading(false);
       },
     );

@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { friendlyError } from "@/lib/db/errors";
 import { useAuth } from "./AuthProvider";
 import { byMostRecent, hasUnread } from "@/lib/chat/conversation";
 import { subscribeConversations, subscribeReads } from "@/lib/db/conversations";
@@ -61,7 +62,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setError(null);
       },
       (err) => {
-        setError(err.message);
+        setError(friendlyError(err, "chats"));
         setLoading(false);
       },
     );
