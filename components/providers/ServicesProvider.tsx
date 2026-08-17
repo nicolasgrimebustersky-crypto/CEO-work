@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import { subscribeServices, type SavedService } from "@/lib/db/services";
+import { friendlyError } from "@/lib/db/errors";
 import { useAuth } from "./AuthProvider";
 
 interface ServicesContextValue {
@@ -47,7 +48,7 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
         setError(null);
       },
       (err) => {
-        setError(err.message);
+        setError(friendlyError(err, "services"));
         setLoading(false);
       },
     );

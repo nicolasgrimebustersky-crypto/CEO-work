@@ -11,6 +11,7 @@ import {
 
 import { subscribeCustomers } from "@/lib/db/customers";
 import type { Customer } from "@/lib/types";
+import { friendlyError } from "@/lib/db/errors";
 import { useAuth } from "./AuthProvider";
 
 interface CustomersContextValue {
@@ -47,7 +48,7 @@ export function CustomersProvider({ children }: { children: ReactNode }) {
         setError(null);
       },
       (err) => {
-        setError(err.message);
+        setError(friendlyError(err, "customers"));
         setLoading(false);
       },
     );

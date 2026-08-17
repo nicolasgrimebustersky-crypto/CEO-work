@@ -19,6 +19,7 @@ import {
   type NotifyPayload,
 } from "@/lib/db/notifications";
 import { refreshPushToken } from "@/lib/push/client";
+import { friendlyError } from "@/lib/db/errors";
 import { useAuth } from "./AuthProvider";
 import { useTeam } from "./TeamProvider";
 
@@ -53,7 +54,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
         setItems(next);
         setError(null);
       },
-      (err) => setError(err.message),
+      (err) => setError(friendlyError(err, "notifications")),
     );
   }, [status, uid]);
 

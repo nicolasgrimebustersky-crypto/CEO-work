@@ -14,6 +14,7 @@ import { isDemoMode } from "@/lib/demo/enabled";
 import { subscribeUsers } from "@/lib/db/users";
 import { buildUserColorMap, colorForUser, FALLBACK_USER_COLOR } from "@/lib/userColor";
 import type { AppUser, Author } from "@/lib/types";
+import { friendlyError } from "@/lib/db/errors";
 import { useAuth } from "./AuthProvider";
 
 interface TeamContextValue {
@@ -53,7 +54,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
         setUsers(next);
         setError(null);
       },
-      (err) => setError(err.message),
+      (err) => setError(friendlyError(err, "the team roster")),
     );
   }, [status]);
 

@@ -154,4 +154,9 @@ export const COLLECTIONS = {
   knockRoutes: "knockRoutes",
   /** Drawn areas of ground. See lib/db/territories.ts. */
   territories: "territories",
+  /** Team chat threads. Messages and read state are subcollections. */
+  conversations: "conversations",
+  /** Demo mode only — the real app keeps these as subcollections. */
+  chatMessages: "chatMessages",
+  chatReads: "chatReads",
 } as const;

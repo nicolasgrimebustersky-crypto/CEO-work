@@ -11,6 +11,7 @@ import {
 
 import { subscribeTerritories } from "@/lib/db/territories";
 import type { Territory } from "@/lib/types";
+import { friendlyError } from "@/lib/db/errors";
 import { useAuth } from "./AuthProvider";
 
 interface TerritoriesContextValue {
@@ -50,7 +51,7 @@ export function TerritoriesProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       },
       (err) => {
-        setError(err.message);
+        setError(friendlyError(err, "territories"));
         setLoading(false);
       },
     );

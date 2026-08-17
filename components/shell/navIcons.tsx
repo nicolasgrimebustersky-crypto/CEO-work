@@ -243,3 +243,25 @@ export function PlusIcon() {
     </svg>
   );
 }
+
+/** Two overlapping bubbles: people talking to each other, not to a customer. */
+export function ChatIcon({ active }: NavIconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className="size-6" aria-hidden="true">
+      <path
+        d="M3 5h12v8H8l-5 4V5Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={w(active)}
+        strokeLinejoin="round"
+      />
+      <path
+        d="M9 9h8a2 2 0 0 1 2 2v6l-3-2h-4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={w(active)}
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}

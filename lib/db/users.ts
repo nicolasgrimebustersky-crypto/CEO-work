@@ -38,6 +38,11 @@ function toAppUser(snap: QueryDocumentSnapshot<DocumentData>): AppUser {
     mutedNotifications: Array.isArray(data.mutedNotifications)
       ? data.mutedNotifications.filter(isNotificationCategory)
       : [],
+    // null, not [], when the field is absent: an empty list means "granted
+    // nothing", which is the opposite of "not restricted yet".
+    notificationScopes: Array.isArray(data.notificationScopes)
+      ? data.notificationScopes.filter(isNotificationCategory)
+      : null,
     // Absent means this profile predates the setting. On by default: somebody
     // who has never been asked would rather not be woken at 3am.
     quietHours: data.quietHours !== false,
@@ -206,4 +211,19 @@ export function subscribeOwnProfile(
  */
 export async function setUserRole(uid: string, role: Role): Promise<void> {
   await writeUser(uid, { role });
+}
+
+/**
+ * Which notification categories this person is allowed to receive at all.
+ *
+ * Admin-only, and enforced in the rules rather than merely hidden: a person
+ * who could widen their own scope would make the whole permission pointless.
+ * Written on somebody else's profile, which is exactly why the rules treat it
+ * like `role`.
+ */
+export async function setNotificationScopes(
+  uid: string,
+  scopes: NotificationCategory[],
+): Promise<void> {
+  await writeUser(uid, { notificationScopes: scopes });
 }

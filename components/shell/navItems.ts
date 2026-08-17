@@ -4,6 +4,7 @@ import {
   ChartIcon,
   InvoiceIcon,
   MapIcon,
+  ChatIcon,
   MessageIcon,
   RouteIcon,
   PeopleIcon,
@@ -30,11 +31,36 @@ export interface NavItem {
  * are things you read at the kitchen table, so they live in the drawer.
  */
 export const TABS: NavItem[] = [
-  { href: routes.map, label: "Map", icon: MapIcon },
-  { href: routes.schedule, label: "Jobs", icon: CalendarIcon },
-  { href: routes.invoices, label: "Money", icon: InvoiceIcon },
-  { href: routes.pipeline, label: "Leads", icon: PipelineIcon },
-  { href: routes.customers, label: "People", icon: PeopleIcon },
+  {
+    href: routes.map,
+    label: "Map",
+    icon: MapIcon,
+    hint: "Every door you've pinned, and where the crew are",
+  },
+  {
+    href: routes.schedule,
+    label: "Jobs",
+    icon: CalendarIcon,
+    hint: "The calendar, and the order you're driving today",
+  },
+  {
+    href: routes.invoices,
+    label: "Money",
+    icon: InvoiceIcon,
+    hint: "Estimates, invoices, and what's still owed",
+  },
+  {
+    href: routes.pipeline,
+    label: "Leads",
+    icon: PipelineIcon,
+    hint: "Who's warm, and what happens to them next",
+  },
+  {
+    href: routes.customers,
+    label: "People",
+    icon: PeopleIcon,
+    hint: "Every customer, their history and their notes",
+  },
 ];
 
 /** Everything else, reachable from the drawer. */
@@ -46,10 +72,16 @@ export const DRAWER_ONLY: NavItem[] = [
     hint: "Doors to knock, and who is walking them",
   },
   {
+    href: routes.chat,
+    label: "Team chat",
+    icon: ChatIcon,
+    hint: "Talk to the crew inside the app — no texts, no cost",
+  },
+  {
     href: routes.messages,
     label: "Messages",
     icon: MessageIcon,
-    hint: "Every text, and who is waiting",
+    hint: "Texts to and from customers, and who is waiting",
   },
   {
     href: routes.dashboard,

@@ -27,6 +27,9 @@ const {
   recipientsFor,
   titleOf,
   wantsCategory,
+  allowsCategory,
+  receivesCategory,
+  receivesEvent,
 } = await import("../lib/notifications/events.ts");
 
 describe("the catalogue", () => {
@@ -75,6 +78,8 @@ describe("where a notification lands", () => {
     "knockRoutes",
     "schedule",
     "pipeline",
+    "chat",
+    "chatThread",
   ]);
 
   test("every event resolves to a screen the app has", () => {
@@ -168,6 +173,7 @@ describe("the shape the demo and the server both rely on", () => {
       "knockRoutes",
       "schedule",
       "pipeline",
+      "chat",
     ]);
     for (const type of NOTIFICATION_TYPES) {
       assert.ok(
@@ -175,5 +181,107 @@ describe("the shape the demo and the server both rely on", () => {
         `${type} points at an unknown destination`,
       );
     }
+  });
+});
+
+
+/* ------------------------------------------------- granted vs. chosen */
+
+describe("what the admin allows, and what you choose", () => {
+  test("no scope stored means everything is allowed", () => {
+    // A profile written before scopes existed must not silently stop hearing
+    // about the job it was just assigned. Somebody who quietly stops being
+    // told anything, and does not know why, is the worst failure this system
+    // has — so restricting is always an explicit act.
+    for (const category of NOTIFICATION_CATEGORIES) {
+      assert.equal(allowsCategory(undefined, category), true);
+      assert.equal(allowsCategory(null, category), true);
+    }
+  });
+
+  test("an empty list means nothing is allowed", () => {
+    // Distinct from absent. "Granted nothing" is a real state the admin can
+    // choose, and conflating it with "not restricted yet" would make the
+    // last toggle silently do the opposite of what it says.
+    for (const category of NOTIFICATION_CATEGORIES) {
+      assert.equal(allowsCategory([], category), false);
+    }
+  });
+
+  test("only the listed categories are allowed", () => {
+    assert.equal(allowsCategory(["money"], "money"), true);
+    assert.equal(allowsCategory(["money"], "jobs"), false);
+  });
+
+  test("granted and muted is not received", () => {
+    // Two different questions. Being allowed something you switched off still
+    // means you do not get it.
+    assert.equal(receivesCategory(["money"], ["money"], "money"), false);
+    assert.equal(receivesCategory(["money"], [], "money"), true);
+  });
+
+  test("un-muting cannot beat a missing grant", () => {
+    // The permission has to win, or the preference would be a way around it.
+    assert.equal(receivesCategory([], [], "money"), false);
+    assert.equal(receivesCategory(["jobs"], [], "money"), false);
+  });
+
+  test("events follow their category", () => {
+    assert.equal(receivesEvent(["money"], [], "payment_received"), true);
+    assert.equal(receivesEvent(["jobs"], [], "payment_received"), false);
+  });
+});
+
+describe("who actually gets sent it", () => {
+  const crew = [
+    { uid: "admin" },
+    { uid: "restricted", notificationScopes: ["jobs"] },
+    { uid: "muted", mutedNotifications: ["money"] },
+    { uid: "granted", notificationScopes: ["money", "jobs"] },
+  ];
+
+  test("a scope the admin never granted drops the recipient", () => {
+    const got = recipientsFor(crew, "nobody", "payment_received");
+    assert.ok(got.includes("admin"), "no scope stored means everything");
+    assert.ok(got.includes("granted"));
+    assert.ok(!got.includes("restricted"), "money was never granted");
+    assert.ok(!got.includes("muted"), "money was muted");
+  });
+
+  test("the actor is still never notified about their own tap", () => {
+    assert.ok(!recipientsFor(crew, "admin", "payment_received").includes("admin"));
+  });
+
+  test("filtering happens at the sending end", () => {
+    // A notification nobody may receive must not be written at all, or the
+    // unread badge climbs for something the person cannot even open.
+    assert.deepEqual(
+      recipientsFor([{ uid: "restricted", notificationScopes: [] }], null, "payment_received"),
+      [],
+    );
+  });
+});
+
+
+describe("a chat notification opens the thread", () => {
+  test("straight into the conversation when we know which", () => {
+    // Landing on the list instead would leave the notification one tap short
+    // of the thing it is telling you about.
+    assert.deepEqual(
+      destinationFor({ type: "chat_message", conversationId: "conv1" }),
+      { screen: "chatThread", id: "conv1" },
+    );
+  });
+
+  test("the list when we do not", () => {
+    assert.deepEqual(destinationFor({ type: "chat_message" }), { screen: "chat" });
+  });
+
+  test("chat is its own category, separate from customer texts", () => {
+    // One is the crew talking to each other and costs nothing; the other goes
+    // out over SMS to a customer. Being able to mute one and not the other is
+    // the point of keeping them apart.
+    assert.equal(categoryOf("chat_message"), "chat");
+    assert.equal(categoryOf("sms_in"), "messages");
   });
 });

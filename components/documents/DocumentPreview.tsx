@@ -121,7 +121,7 @@ export function DocumentPreview({
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pt-1 pb-5">
         <div
           role="document"
           aria-label={`${isInvoice ? "Invoice" : "Estimate"} ${businessDocument.number}`}
@@ -129,10 +129,25 @@ export function DocumentPreview({
             fontFamily: "system-ui, -apple-system, Helvetica, Arial, sans-serif",
             background: "#fff",
             color: "#111",
-            maxWidth: "760px",
+            // A sheet of US Letter, the same 8.5 x 11 the PDF writer emits.
+            // 612pt at 72dpi is the page's real width, so what is on screen is
+            // the shape of the thing that lands in the customer's inbox rather
+            // than a wide band that happens to hold the same words.
+            //
+            // `aspectRatio` with `height: auto` sets the height from the width
+            // and then *grows* past it when the content is taller, so a long
+            // estimate runs on the way a second page would instead of being
+            // clipped.
+            maxWidth: "612px",
+            aspectRatio: "8.5 / 11",
             margin: "0 auto",
-            padding: "20px",
-            borderRadius: "12px",
+            // Proportional to the width so the margin holds its shape as the
+            // page scales down on a phone.
+            padding: "6%",
+            borderRadius: "4px",
+            // Paper on a dark screen. Without it the white block reads as a
+            // panel of the app rather than as the document itself.
+            boxShadow: "0 10px 40px rgba(0, 0, 0, 0.55)",
           }}
         >
           <div

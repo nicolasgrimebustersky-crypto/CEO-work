@@ -9,6 +9,7 @@ import {
   CATEGORY_HINT,
   CATEGORY_LABEL,
   NOTIFICATION_CATEGORIES,
+  allowsCategory,
   wantsCategory,
   type NotificationCategory,
 } from "@/lib/notifications/events";
@@ -81,6 +82,17 @@ export function NotificationSettings() {
   );
 
   const muted = me?.mutedNotifications ?? [];
+  // What the admin has granted. Categories outside this are not switches this
+  // person can flip, so they are listed as unavailable rather than hidden —
+  // silently missing settings read as a bug, and somebody who expected an
+  // alert needs to know it was a permission, not a fault.
+  const scopes = me?.notificationScopes;
+  const allowed = NOTIFICATION_CATEGORIES.filter((category) =>
+    allowsCategory(scopes, category),
+  );
+  const withheld = NOTIFICATION_CATEGORIES.filter(
+    (category) => !allowsCategory(scopes, category),
+  );
 
   return (
     <section>
@@ -171,7 +183,7 @@ export function NotificationSettings() {
       </p>
 
       <ul className="flex flex-col gap-2">
-        {NOTIFICATION_CATEGORIES.map((category) => {
+        {allowed.map((category) => {
           const on = wantsCategory(muted, category);
           return (
             <li
@@ -207,6 +219,16 @@ export function NotificationSettings() {
           );
         })}
       </ul>
+
+      {withheld.length > 0 ? (
+        <div className="mt-3 rounded-xl border border-line bg-surface-2 p-3">
+          <p className="text-base font-bold text-ink">Not available to you</p>
+          <p className="mt-0.5 text-sm font-semibold text-muted">
+            {withheld.map((category) => CATEGORY_LABEL[category]).join(", ")} —
+            ask the admin if you need these.
+          </p>
+        </div>
+      ) : null}
 
       {muteError ? (
         <p

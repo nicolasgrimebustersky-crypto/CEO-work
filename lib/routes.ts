@@ -29,6 +29,10 @@ export const routes = {
   newKnockRoute: "/routes/detail?new=1",
   /** The map, in territory-drawing mode. */
   drawTerritory: "/map?draw=territory",
+  chat: "/chat",
+  chatThread: (conversationId: string) =>
+    `/chat/thread?id=${encodeURIComponent(conversationId)}`,
+  newChat: "/chat?new=1",
   dashboard: "/dashboard",
   reports: "/reports",
   account: "/account",

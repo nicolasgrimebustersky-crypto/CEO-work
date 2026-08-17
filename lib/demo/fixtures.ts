@@ -20,8 +20,7 @@ import type {
   KnockRoute,
   Note,
   Quote,
-  Territory,
-} from "@/lib/types";
+  Territory, ChatMessage, Conversation } from "@/lib/types";
 
 /**
  * Demo data.
@@ -1023,6 +1022,7 @@ export const demoNotifications: AppNotification[] = [
     customerId: "d-fb-hargrove",
     jobId: null,
     documentId: null,
+    conversationId: null,
     createdAt: hoursAgo(2),
     readAt: null,
   },
@@ -1037,6 +1037,7 @@ export const demoNotifications: AppNotification[] = [
     customerId: "d-brennan",
     jobId: null,
     documentId: null,
+    conversationId: null,
     createdAt: hoursAgo(3),
     readAt: null,
   },
@@ -1051,6 +1052,7 @@ export const demoNotifications: AppNotification[] = [
     customerId: "d-oakley",
     jobId: null,
     documentId: "dd-1",
+    conversationId: null,
     createdAt: hoursAgo(5),
     readAt: null,
   },
@@ -1065,6 +1067,7 @@ export const demoNotifications: AppNotification[] = [
     customerId: "d-nolan",
     jobId: "dj-4",
     documentId: null,
+    conversationId: null,
     createdAt: hoursAgo(6),
     readAt: null,
   },
@@ -1079,7 +1082,50 @@ export const demoNotifications: AppNotification[] = [
     customerId: "d-brennan",
     jobId: "dj-2",
     documentId: null,
+    conversationId: null,
     createdAt: hoursAgo(28),
     readAt: hoursAgo(27),
+  },
+];
+
+
+/** One direct chat, so the feature is visible in the preview. */
+export const demoConversations: Conversation[] = [
+  {
+    id: "conv-1",
+    title: "",
+    memberUids: [DEMO_NICK, DEMO_DANA],
+    createdAt: hoursAgo(30),
+    createdBy: DEMO_DANA,
+    lastMessageAt: hoursAgo(2),
+    lastMessageText: "Ridgemoor's done — heading to Oak Ridge",
+    lastMessageBy: DEMO_DANA,
+  },
+];
+
+export const demoChatMessages: (ChatMessage & { conversationId: string })[] = [
+  {
+    id: "msg-1",
+    conversationId: "conv-1",
+    text: "Starting Ridgemoor now",
+    authorUid: DEMO_DANA,
+    authorName: "Dana",
+    createdAt: hoursAgo(5),
+  },
+  {
+    id: "msg-2",
+    conversationId: "conv-1",
+    text: "Nice one. I'm on the Pewee Valley side",
+    authorUid: DEMO_NICK,
+    authorName: "Nick",
+    createdAt: hoursAgo(4),
+  },
+  {
+    id: "msg-3",
+    conversationId: "conv-1",
+    text: "Ridgemoor's done — heading to Oak Ridge",
+    authorUid: DEMO_DANA,
+    authorName: "Dana",
+    createdAt: hoursAgo(2),
   },
 ];

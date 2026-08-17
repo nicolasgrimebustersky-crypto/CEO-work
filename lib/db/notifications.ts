@@ -43,6 +43,7 @@ export interface AppNotification {
   customerId: string | null;
   jobId: string | null;
   documentId: string | null;
+  conversationId: string | null;
   createdAt: Timestamp;
   readAt: Timestamp | null;
 }
@@ -62,6 +63,8 @@ function toNotification(snap: QueryDocumentSnapshot<DocumentData>): AppNotificat
     customerId: typeof data.customerId === "string" ? data.customerId : null,
     jobId: typeof data.jobId === "string" ? data.jobId : null,
     documentId: typeof data.documentId === "string" ? data.documentId : null,
+    conversationId:
+      typeof data.conversationId === "string" ? data.conversationId : null,
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt : Timestamp.now(),
     readAt: data.readAt instanceof Timestamp ? data.readAt : null,
   };
@@ -115,6 +118,15 @@ export interface NotifyPayload {
   customerId?: string | null;
   jobId?: string | null;
   documentId?: string | null;
+  conversationId?: string | null;
+  /**
+   * Narrows the recipients to these uids.
+   *
+   * For team chat: a group of three must not buzz the two people who are not
+   * in it. Without this the catalogue's rule — "everyone but the actor" — is
+   * right for every other event and wrong for this one.
+   */
+  toUids?: readonly string[] | null;
 }
 
 /**
@@ -131,7 +143,13 @@ export async function notifyOthers(
   actor: Author,
   payload: NotifyPayload,
 ): Promise<void> {
-  const recipients = recipientsFor(crew, actor.uid, payload.type);
+  // Preferences first, then the explicit audience. In that order: somebody
+  // who muted team chat must not be notified merely because they are in the
+  // thread.
+  const allowed = recipientsFor(crew, actor.uid, payload.type);
+  const recipients = payload.toUids
+    ? allowed.filter((uid) => payload.toUids?.includes(uid))
+    : allowed;
   if (recipients.length === 0) return;
 
   const title = titleOf(payload.type);
@@ -145,6 +163,7 @@ export async function notifyOthers(
     customerId: payload.customerId ?? null,
     jobId: payload.jobId ?? null,
     documentId: payload.documentId ?? null,
+    conversationId: payload.conversationId ?? null,
     createdAt: serverTimestamp(),
     readAt: null,
   });
@@ -176,6 +195,7 @@ export async function notifyOthers(
       type: payload.type,
       customerId: payload.customerId ?? null,
       documentId: payload.documentId ?? null,
+      conversationId: payload.conversationId ?? null,
     }),
     tag: payload.type,
   });
