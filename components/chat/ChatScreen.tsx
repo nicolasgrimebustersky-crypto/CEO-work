@@ -42,13 +42,23 @@ export function ChatScreen() {
           </p>
         ) : null}
 
-        <Button full className="mb-4" onClick={() => setComposing(true)}>
+        <Button
+          full
+          className="mb-4"
+          disabled={error !== null}
+          onClick={() => setComposing(true)}
+        >
           Start a chat
         </Button>
 
+        {/* Never claim there are no chats when we could not read them. An
+            empty state and a failure look identical from the inside and mean
+            opposite things to the person holding the phone — "nobody has
+            messaged you" versus "your messages are there and you cannot see
+            them". */}
         {loading ? (
           <p className="text-base font-semibold text-muted">Loading…</p>
-        ) : conversations.length === 0 ? (
+        ) : error ? null : conversations.length === 0 ? (
           <div className="rounded-xl border border-line bg-surface-2 p-4">
             <p className="text-base font-bold text-ink">No chats yet</p>
             <p className="mt-1 text-sm font-semibold text-muted">
