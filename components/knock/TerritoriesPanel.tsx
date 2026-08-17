@@ -13,7 +13,7 @@ import { UserChip } from "@/components/ui/Chips";
 import { Sheet } from "@/components/ui/Sheet";
 import { createKnockRoute } from "@/lib/db/knockRoutes";
 import { deleteTerritory, pinsIn, updateTerritory } from "@/lib/db/territories";
-import { orderByNearest } from "@/lib/knock/plan";
+import { knockableOnly, orderByNearest } from "@/lib/knock/plan";
 import { acresOf, coverageOf, formatAcres } from "@/lib/knock/territory";
 import { routes } from "@/lib/routes";
 import type { Territory } from "@/lib/types";
@@ -48,12 +48,10 @@ export function TerritoriesPanel() {
     setBusyId(territory.id);
     setProblem(null);
     try {
-      const inside = pinsIn(territory, customers).filter(
-        (customer) => customer.status !== "do_not_knock",
-      );
+      const inside = knockableOnly(pinsIn(territory, customers));
       if (inside.length === 0) {
         setProblem(
-          `No doors inside ${territory.name} yet. Drop pins as you knock and they'll join it automatically.`,
+          `Nothing left to knock inside ${territory.name}. Existing customers and do-not-knocks are skipped — drop pins as you knock and they'll join it automatically.`,
         );
         return;
       }

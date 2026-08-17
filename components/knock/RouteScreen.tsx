@@ -233,7 +233,7 @@ export function RouteScreen() {
         subtitle={
           route
             ? `${ROUTE_STATUS_LABEL[route.status]} · ${progress.knocked} of ${progress.total} knocked`
-            : "Name it, pick the doors, hand it to somebody"
+            : "Name it, pick a territory, hand it to somebody"
         }
       />
 
@@ -353,7 +353,7 @@ export function RouteScreen() {
               ) : null}
             </h2>
             <Button variant="secondary" onClick={() => setPicking(true)}>
-              {progress.total === 0 ? "Add doors" : "Edit"}
+              {progress.total === 0 ? "Territories" : "Edit"}
             </Button>
           </div>
 
@@ -371,8 +371,8 @@ export function RouteScreen() {
 
           {stops.length === 0 ? (
             <p className="rounded-xl border border-line bg-surface-2 px-3 py-4 text-base font-semibold text-muted">
-              No doors yet. Add the leads you want to work, and the order sorts
-              itself out.
+              No doors yet. Pick a territory — that is how you decide where to
+              knock — and the order sorts itself out.
             </p>
           ) : (
             <ol className="flex flex-col gap-2">

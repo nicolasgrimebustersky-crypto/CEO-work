@@ -170,3 +170,42 @@ export function nextStop<T extends { id: string }>(
   const knockedSet = new Set(knockedIds);
   return stops.find((stop) => !knockedSet.has(stop.id)) ?? null;
 }
+
+
+/* ------------------------------------------------------- who is worth a door */
+
+/**
+ * Statuses still worth walking up to.
+ *
+ * A positive list, not a blocklist. The two are identical today and diverge
+ * the moment somebody adds a status: an unknown value against a blocklist is
+ * knockable, and against this it is not. Missing a door costs a door; knocking
+ * one you should not have costs a relationship, so the unknown case belongs on
+ * the cautious side.
+ *
+ * What is deliberately absent:
+ *
+ *   do_not_knock  somebody asked to be left alone, and the one screen where
+ *                 that absolutely has to hold is the one deciding whose door
+ *                 to knock on.
+ *   customer      they already buy from you. Knocking them is a cold pitch to
+ *                 somebody you are already working for — at best a wasted door
+ *                 on a finite morning, at worst an odd conversation.
+ *
+ * `not_interested` IS here. A no in March is a different question in November,
+ * and a route is exactly where you would want to revisit one.
+ */
+export const KNOCKABLE_STATUSES: readonly string[] = [
+  "lead",
+  "quoted",
+  "not_interested",
+];
+
+export function isKnockable(status: string | null | undefined): boolean {
+  return typeof status === "string" && KNOCKABLE_STATUSES.includes(status);
+}
+
+/** Everybody in `pins` still worth walking up to. */
+export function knockableOnly<T extends { status: string }>(pins: readonly T[]): T[] {
+  return pins.filter((pin) => isKnockable(pin.status));
+}
