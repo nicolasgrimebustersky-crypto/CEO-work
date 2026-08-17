@@ -22,6 +22,8 @@ const {
   orderByNearest,
   routeMeters,
   routeProgress,
+  isKnockable,
+  knockableOnly,
 } = await import("../lib/knock/plan.ts");
 
 /** Four houses on a rough square, ~1km apart, plus one far away. */
@@ -177,5 +179,56 @@ describe("which door is next", () => {
   test("nothing left to knock", () => {
     assert.equal(nextStop([A, B], ["a", "b"]), null);
     assert.equal(nextStop([], []), null);
+  });
+});
+
+/* --------------------------------------------------- who is worth a door */
+
+describe("who is worth knocking", () => {
+  test("a lead is", () => {
+    assert.equal(isKnockable("lead"), true);
+    assert.equal(isKnockable("quoted"), true);
+  });
+
+  test("an existing customer is not", () => {
+    // Knocking somebody who already buys from you is a cold pitch to a person
+    // you are already working for — a wasted door on a finite morning.
+    assert.equal(isKnockable("customer"), false);
+  });
+
+  test("do-not-knock is not", () => {
+    // Somebody asked to be left alone. The one screen where that has to hold
+    // is the one deciding whose door to knock on.
+    assert.equal(isKnockable("do_not_knock"), false);
+  });
+
+  test("a previous no still is", () => {
+    // A no in March is a different question in November, and a route is
+    // exactly where you would want to revisit one.
+    assert.equal(isKnockable("not_interested"), true);
+  });
+
+  test("a missing or unknown status is not knockable", () => {
+    // Fails closed: an unreadable pin is not somebody to go and disturb, and a
+    // status invented by a future version must not default to knockable.
+    assert.equal(isKnockable(undefined), false);
+    assert.equal(isKnockable(null), false);
+    assert.equal(isKnockable(""), false);
+    assert.equal(isKnockable("some_status_from_next_year"), false);
+  });
+
+  test("filtering keeps the right pins and their order", () => {
+    const pins = [
+      { id: "a", status: "lead" },
+      { id: "b", status: "customer" },
+      { id: "c", status: "not_interested" },
+      { id: "d", status: "do_not_knock" },
+      { id: "e", status: "quoted" },
+    ];
+    assert.deepEqual(knockableOnly(pins).map((p) => p.id), ["a", "c", "e"]);
+  });
+
+  test("nothing in, nothing out", () => {
+    assert.deepEqual(knockableOnly([]), []);
   });
 });

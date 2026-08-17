@@ -3,6 +3,9 @@
 import { useMemo, useState } from "react";
 
 import { useCustomers } from "@/components/providers/CustomersProvider";
+import { useTerritories } from "@/components/providers/TerritoriesProvider";
+import { knockableOnly } from "@/lib/knock/plan";
+import { within } from "@/lib/knock/territory";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chips";
 import { Sheet } from "@/components/ui/Sheet";
@@ -37,6 +40,7 @@ export function StopPickerSheet({
   takenIds?: Set<string>;
 }) {
   const { customers } = useCustomers();
+  const { territories } = useTerritories();
   const [term, setTerm] = useState("");
   const [status, setStatus] = useState<CustomerStatus | "any">("any");
   const [picked, setPicked] = useState<string[]>(selectedIds);
@@ -48,8 +52,10 @@ export function StopPickerSheet({
 
   const results = useMemo(() => {
     const needle = term.trim().toLowerCase();
-    return customers
-      .filter((customer) => customer.status !== "do_not_knock")
+    // Existing customers and do-not-knocks never appear. You do not cold-pitch
+    // somebody who already buys from you, and the one screen where a
+    // do-not-knock absolutely has to hold is this one.
+    return knockableOnly(customers)
       .filter((customer) => status === "any" || customer.status === status)
       .filter((customer) => {
         if (!needle) return true;
@@ -78,7 +84,7 @@ export function StopPickerSheet({
   return (
     <Sheet
       open={open}
-      title="Pick the doors"
+      title="Where are you knocking?"
       onClose={onClose}
       footer={
         <Button
@@ -94,6 +100,51 @@ export function StopPickerSheet({
         </Button>
       }
     >
+      {/* Territories first: a territory is how you decide where to knock, and
+          picking one is a single tap instead of twenty. The search below is
+          still there for the odd door you want to add or drop by hand. */}
+      {territories.length > 0 ? (
+        <div className="mb-4">
+          <p className="mb-1.5 text-sm font-bold tracking-wide text-muted uppercase">
+            Add a whole territory
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {territories
+              .filter((territory) => territory.active)
+              .map((territory) => {
+                const inside = knockableOnly(within(customers, territory.boundary));
+                return (
+                  <button
+                    key={territory.id}
+                    type="button"
+                    disabled={inside.length === 0}
+                    onClick={() => {
+                      setDirty(true);
+                      setPicked([
+                        ...new Set([...current, ...inside.map((c) => c.id)]),
+                      ]);
+                    }}
+                    className="tap-target rounded-full border border-accent/50 bg-accent/10 px-4 text-sm font-bold text-ink disabled:opacity-45"
+                  >
+                    {territory.name} · {inside.length}
+                  </button>
+                );
+              })}
+          </div>
+          <p className="mt-1.5 text-sm font-semibold text-muted">
+            The number is how many doors are still worth knocking in it.
+          </p>
+        </div>
+      ) : (
+        <p className="mb-4 rounded-xl border border-line bg-surface-2 p-3 text-sm font-semibold text-muted">
+          Draw a territory on the map and it shows up here — that is the quickest
+          way to fill a route.
+        </p>
+      )}
+
+      <p className="mb-1.5 text-sm font-bold tracking-wide text-muted uppercase">
+        Or pick doors one by one
+      </p>
       <input
         value={term}
         onChange={(e) => setTerm(e.target.value)}
@@ -125,8 +176,8 @@ export function StopPickerSheet({
 
       {results.length === 0 ? (
         <p className="mt-4 text-base font-semibold text-muted">
-          No doors match that. Drop pins on the map as you knock, and they show up
-          here.
+          No doors match that. Existing customers are not shown — you do not
+          knock somebody who already buys from you.
         </p>
       ) : (
         <ul className="mt-3 flex flex-col gap-2">
