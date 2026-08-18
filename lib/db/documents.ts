@@ -106,6 +106,8 @@ export function toDocument(snap: QueryDocumentSnapshot<DocumentData>): BusinessD
     settledAt: data.settledAt instanceof Timestamp ? data.settledAt : null,
     convertedFromId: typeof data.convertedFromId === "string" ? data.convertedFromId : null,
     convertedToId: typeof data.convertedToId === "string" ? data.convertedToId : null,
+    scheduledJobId:
+      typeof data.scheduledJobId === "string" ? data.scheduledJobId : null,
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt : Timestamp.now(),
     createdBy: typeof data.createdBy === "string" ? data.createdBy : "",
     createdByName: typeof data.createdByName === "string" ? data.createdByName : "Unknown",
@@ -217,6 +219,7 @@ export async function createDocument(
     settledAt: null,
     convertedFromId: null,
     convertedToId: null,
+    scheduledJobId: null,
     createdAt: serverTimestamp(),
     createdBy: author.uid,
     createdByName: author.displayName,
@@ -402,6 +405,7 @@ export async function convertToInvoice(
     settledAt: null,
     convertedFromId: estimate.id,
     convertedToId: null,
+    scheduledJobId: null,
     createdAt: serverTimestamp(),
     createdBy: author.uid,
     createdByName: author.displayName,
@@ -475,4 +479,90 @@ export function collectedFor(docs: BusinessDocument[], customerId: string): numb
       .reduce((sum, d) => sum + d.amountPaid, 0)
       .toFixed(2),
   );
+}
+
+/**
+ * Puts an accepted estimate on the calendar as a job.
+ *
+ * The estimate already knows the customer, the service and the price, so the
+ * only thing missing is when — which is why this takes a start and an end and
+ * nothing else. Retyping a price you already agreed is how the calendar and
+ * the invoice end up disagreeing about what the work was worth.
+ *
+ * One-time and atomic, for the same reason converting to an invoice is: the
+ * button is the only feedback that anything happened, so a second tap a week
+ * later — having forgotten, or because the first did not look like it worked —
+ * must not produce two jobs on two different days for one agreed piece of
+ * work. The id is minted client-side so both halves go in one batch, and a
+ * batch cannot half-succeed: a job existing without the stamp would leave the
+ * button live and the guard useless.
+ */
+export async function scheduleAsJob(
+  estimate: BusinessDocument,
+  when: { start: Date; end: Date; assignedTo: string[] },
+  author: Author,
+): Promise<string> {
+  if (estimate.scheduledJobId) return estimate.scheduledJobId;
+
+  const jobPayload = {
+    customerId: estimate.customerId,
+    serviceType: estimate.serviceType,
+    scheduledStart: Timestamp.fromDate(when.start),
+    scheduledEnd: Timestamp.fromDate(when.end),
+    status: "scheduled",
+    // The agreed total, not a re-entered number.
+    price: estimate.total,
+    assignedTo: when.assignedTo,
+    beforePhotos: [],
+    afterPhotos: [],
+    // What was actually quoted, so whoever turns up knows the scope without
+    // opening the estimate on a phone in a driveway.
+    jobNotes: [
+      `From estimate ${estimate.number}.`,
+      ...estimate.lineItems.map((line) =>
+        line.description ? `${line.name} — ${line.description}` : line.name,
+      ),
+      estimate.notes,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    completedAt: null,
+    completedBy: null,
+    paidAt: null,
+    paidBy: null,
+    createdAt: serverTimestamp(),
+    createdBy: author.uid,
+    createdByName: author.displayName,
+    updatedAt: serverTimestamp(),
+    updatedBy: author.uid,
+    updatedByName: author.displayName,
+  };
+
+  const estimatePatch = (jobId: string) => ({
+    scheduledJobId: jobId,
+    // Scheduling the work is a statement that the customer said yes, so a
+    // draft or sent estimate follows along. A declined or void one is left
+    // alone: scheduling one of those is deliberate enough that overwriting the
+    // record of what happened would be the wrong call.
+    ...(estimate.status === "draft" || estimate.status === "sent"
+      ? { status: "accepted" as const }
+      : {}),
+    updatedAt: serverTimestamp(),
+    updatedBy: author.uid,
+    updatedByName: author.displayName,
+  });
+
+  if (isDemoMode) {
+    const id = demo.add(COLLECTIONS.jobs, jobPayload);
+    demo.update(COLLECTION, estimate.id, estimatePatch(id));
+    return id;
+  }
+
+  const jobRef = doc(collection(getDb(), COLLECTIONS.jobs));
+  const batch = writeBatch(getDb());
+  batch.set(jobRef, jobPayload);
+  batch.update(doc(getDb(), COLLECTION, estimate.id), estimatePatch(jobRef.id));
+  await batch.commit();
+
+  return jobRef.id;
 }

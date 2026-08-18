@@ -638,6 +638,7 @@ function demoDoc(
     settledAt: status === "paid" || status === "accepted" ? ago(1) : null,
     convertedFromId: options.convertedFromId ?? null,
     convertedToId: options.convertedToId ?? null,
+    scheduledJobId: null,
     createdAt: ago(options.issuedDaysAgo),
     createdBy: DEMO_NICK,
     createdByName: "Nick",
