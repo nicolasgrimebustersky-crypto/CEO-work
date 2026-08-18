@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import { SendTextSheet } from "@/components/customers/SendTextSheet";
 import { useCustomers } from "@/components/providers/CustomersProvider";
+import { useJobs } from "@/components/providers/JobsProvider";
 import { useDocuments } from "@/components/providers/DocumentsProvider";
 import { useNotify } from "@/components/providers/NotificationsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
@@ -44,6 +45,7 @@ import { SERVICE_LABEL } from "@/lib/status";
 import { SERVICE_TYPES, type ServiceType } from "@/lib/types";
 import { CustomerPickerSheet } from "./CustomerPickerSheet";
 import { DocumentPreview } from "./DocumentPreview";
+import { ScheduleJobSheet } from "./ScheduleJobSheet";
 import { LineItemsEditor } from "./LineItemsEditor";
 import { PaymentSheet } from "./PaymentSheet";
 import { StatusPill } from "./StatusPill";
@@ -79,6 +81,7 @@ export function DocumentScreen() {
   const router = useRouter();
   const { byId, loading } = useDocuments();
   const { byId: customersById } = useCustomers();
+  const { byId: jobsById } = useJobs();
   const { author } = useTeam();
   const notify = useNotify();
 
@@ -94,6 +97,7 @@ export function DocumentScreen() {
   const [texting, setTexting] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
 
   // A new document starts as local state and is not written until Save, so
   // backing out of one leaves nothing behind.
@@ -111,6 +115,13 @@ export function DocumentScreen() {
   // link to nothing.
   const converted = document?.convertedToId
     ? (byId.get(document.convertedToId) ?? null)
+    : null;
+
+  // The job this estimate was scheduled as, if it still exists. A deleted one
+  // falls back to null, which puts the button back rather than offering a link
+  // to a job that is no longer on anybody's calendar.
+  const scheduledJob = document?.scheduledJobId
+    ? (jobsById.get(document.scheduledJobId) ?? null)
     : null;
 
   if (!isNew && loading && !document) {
@@ -701,6 +712,33 @@ export function DocumentScreen() {
                   </Button>
                 )
               ) : null}
+
+              {/* Scheduling is the other thing an accepted estimate leads to,
+                  and until now it meant retyping the whole job by hand on the
+                  calendar. Only on estimates, and only once accepted: offering
+                  it on a draft would put work on the calendar the customer has
+                  not agreed to. */}
+              {document.kind === "estimate" && document.status === "accepted" ? (
+                scheduledJob ? (
+                  <Link
+                    href={routes.schedule}
+                    className="tap-target col-span-2 flex items-center justify-center gap-2 rounded-full border border-accent/50 bg-accent/10 px-5 py-3 text-base font-semibold text-ink"
+                  >
+                    Booked for {formatDateOnly(scheduledJob.scheduledStart)}
+                    <span aria-hidden="true" className="text-muted">
+                      ›
+                    </span>
+                  </Link>
+                ) : (
+                  <Button
+                    className="col-span-2"
+                    onClick={() => setScheduling(true)}
+                    disabled={busy}
+                  >
+                    Turn into a job
+                  </Button>
+                )
+              ) : null}
             </section>
 
             <section className="border-t border-line pt-5">
@@ -752,6 +790,28 @@ export function DocumentScreen() {
             document.total,
             document.balanceDue,
           )}
+        />
+      ) : null}
+
+      {document ? (
+        <ScheduleJobSheet
+          open={scheduling}
+          document={document}
+          author={author}
+          onClose={() => setScheduling(false)}
+          onScheduled={(jobId) => {
+            setScheduling(false);
+            // Fire and forget, after the job is safely written. A notification
+            // that failed to send must never make a booked job look unbooked.
+            void notify({
+              type: "job_created",
+              body: `${document.customerName} · ${SERVICE_LABEL[document.serviceType]} · from estimate ${document.number}`,
+              customerId: document.customerId,
+              jobId,
+              documentId: document.id,
+            });
+            router.push(routes.schedule);
+          }}
         />
       ) : null}
 

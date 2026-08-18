@@ -151,6 +151,14 @@ export interface BusinessDocument {
    */
   convertedToId: string | null;
 
+  /**
+   * The job this estimate was scheduled as, once somebody put it on the
+   * calendar. Same shape and same reasoning as `convertedToId`: it is what
+   * turns the button into a link and what stops one accepted estimate becoming
+   * two jobs on two different days.
+   */
+  scheduledJobId: string | null;
+
   createdAt: Timestamp;
   createdBy: string;
   createdByName: string;
