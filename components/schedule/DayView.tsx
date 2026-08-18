@@ -7,8 +7,10 @@ import { useMemo, useRef } from "react";
 import { useCustomers } from "@/components/providers/CustomersProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { UserChip } from "@/components/ui/Chips";
+import { NavigateLink } from "@/components/ui/NavigateLink";
 import { formatDriveMinutes, useDriveTimes } from "@/lib/driveTime";
 import { customerName, formatMoney } from "@/lib/format";
+import { canNavigateTo } from "@/lib/maps";
 import {
   DAY_END_HOUR,
   DAY_START_HOUR,
@@ -160,7 +162,20 @@ export function DayView({
                         {job.assignedTo.map((uid) => (
                           <UserChip key={uid} name={nameFor(uid)} color={colorFor(uid)} />
                         ))}
-                        {customer ? (
+                        {/* The day view is read standing next to a truck, so
+                            this hands the stop to the phone's maps app rather
+                            than to our own map. A job on a pin with no address
+                            and no fix has nowhere to send them, so it falls
+                            back to showing where it is on our map. */}
+                        {customer && canNavigateTo(customer) ? (
+                          <NavigateLink
+                            destination={customer}
+                            label={`Directions to ${customer.address || customerName(customer)}`}
+                            className="rounded-full border border-line px-2.5 py-1 text-sm font-bold text-ink"
+                          >
+                            Directions
+                          </NavigateLink>
+                        ) : customer ? (
                           <Link
                             href={routes.mapFocus(customer.id)}
                             className="rounded-full border border-line px-2.5 py-1 text-sm font-bold text-ink"

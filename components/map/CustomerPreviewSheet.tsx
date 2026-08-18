@@ -7,9 +7,11 @@ import { useNotify } from "@/components/providers/NotificationsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { Button } from "@/components/ui/Button";
 import { Chip, StatusPill, UserChip } from "@/components/ui/Chips";
+import { NavigateLink } from "@/components/ui/NavigateLink";
 import { Sheet } from "@/components/ui/Sheet";
 import { addNote, changeStatus } from "@/lib/db/customers";
 import { customerName, formatPhone, formatRelative } from "@/lib/format";
+import { canNavigateTo } from "@/lib/maps";
 import { STATUS_LABEL } from "@/lib/status";
 import { CUSTOMER_STATUSES } from "@/lib/types";
 import type { Customer } from "@/lib/types";
@@ -97,7 +99,20 @@ export function CustomerPreviewSheet({
         </div>
 
         <div className="flex flex-col gap-1">
-          {customer.address ? (
+          {/* Tapping the address hands it to the phone's maps app. This is the
+              sheet you get standing on a street with the truck running, so the
+              address is something to act on rather than to read out and type
+              in somewhere else. A pin with a fix but no address typed in yet
+              is still navigable, and says so. */}
+          {canNavigateTo(customer) ? (
+            <NavigateLink
+              destination={customer}
+              label={`Directions to ${customer.address || "this pin"}`}
+              className="text-base font-semibold text-accent underline decoration-accent/40 underline-offset-4"
+            >
+              {customer.address || "Directions to the pin"}
+            </NavigateLink>
+          ) : customer.address ? (
             <p className="text-base font-semibold text-ink">{customer.address}</p>
           ) : null}
           {customer.phone ? (

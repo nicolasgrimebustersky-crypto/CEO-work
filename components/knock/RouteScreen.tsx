@@ -11,6 +11,7 @@ import { useNotify } from "@/components/providers/NotificationsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { ScreenHeader } from "@/components/shell/ScreenHeader";
 import { Button } from "@/components/ui/Button";
+import { NavigateLink } from "@/components/ui/NavigateLink";
 import { Chip, UserChip } from "@/components/ui/Chips";
 import { TextField } from "@/components/ui/Field";
 import { Sheet } from "@/components/ui/Sheet";
@@ -261,18 +262,17 @@ export function RouteScreen() {
               {upNext.address || "No address"}
             </p>
             <div className="mt-3 grid grid-cols-2 gap-2">
-              <a
-                href={
-                  upNext.lat || upNext.lng
-                    ? `https://www.google.com/maps/dir/?api=1&destination=${upNext.lat},${upNext.lng}`
-                    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(upNext.address)}`
-                }
-                target="_blank"
-                rel="noopener noreferrer"
+              {/* Apple Maps on an iPhone, Google everywhere else. This used
+                  to be hardcoded to Google, which on the phone this app is
+                  actually used on meant a web page instead of the maps app
+                  with the driver's ear. */}
+              <NavigateLink
+                destination={upNext}
+                label={`Navigate to ${upNext.address}`}
                 className="tap-target inline-flex items-center justify-center rounded-full bg-accent px-4 text-base font-semibold text-accent-ink"
               >
                 Navigate
-              </a>
+              </NavigateLink>
               <Button
                 variant="money"
                 onClick={() => void onToggleKnocked(upNext.id, true)}
