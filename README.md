@@ -42,6 +42,7 @@ live, and every note, text and job carries the name of whoever did it.
 | Day view in route order with drive time between stops | Filterable to "my jobs" / "all jobs" |
 | Door-knocking routes: named, ordered, assigned, ticked off as you walk | Auto-ordered nearest-first from where you're standing |
 | Territories: draw an area on the map, claim it, see what's inside | Drag a loop freehand; coverage counts pins actually spoken to |
+| Four on-site buttons on every job: en route, starting, finished, mark complete | The first three text the customer a fixed message; the fourth asks whether the money was collected and tells the owner |
 
 **Phase 3 — SMS and automation**
 

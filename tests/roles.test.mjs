@@ -13,6 +13,7 @@ import { readFileSync } from "node:fs";
 
 const {
   ADMIN_EMAIL,
+  OWNER_UID,
   BOOTSTRAP_CREW,
   SIGNUP_ROLE,
   isAdmin,
@@ -185,5 +186,19 @@ describe("the admin email agrees with the rules file", () => {
       "firestore.rules does not mention the admin email — the app and the database disagree about who can grant access",
     );
     assert.match(rules, /request\.auth\.token\.email/);
+  });
+});
+
+describe("the owner's account", () => {
+  test("is one of the founding accounts", () => {
+    // The sign-off notification is addressed to this uid. If it drifts out of
+    // the crew list it addresses nobody, and the failure is silent — the owner
+    // simply stops being told which jobs went unpaid.
+    assert.equal(isBootstrapCrew(OWNER_UID), true);
+  });
+
+  test("is a real uid, not a placeholder", () => {
+    assert.equal(typeof OWNER_UID, "string");
+    assert.ok(OWNER_UID.length >= 20, OWNER_UID);
   });
 });

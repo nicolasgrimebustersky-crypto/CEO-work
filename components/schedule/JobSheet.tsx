@@ -13,7 +13,6 @@ import { SelectField, TextAreaField, TextField } from "@/components/ui/Field";
 import { Sheet } from "@/components/ui/Sheet";
 import { advancePipeline } from "@/lib/db/customers";
 import {
-  completeJob,
   createJob,
   deleteJob,
   markJobPaid,
@@ -28,6 +27,7 @@ import { trySendSms } from "@/lib/smsClient";
 import { SERVICE_TYPES } from "@/lib/types";
 import type { Job, ServiceType } from "@/lib/types";
 import { JobPhotos } from "./JobPhotos";
+import { JobStatusActions } from "./JobStatusActions";
 
 interface JobSheetProps {
   open: boolean;
@@ -219,32 +219,6 @@ export function JobSheet({
     }
   }
 
-  async function markComplete() {
-    if (!job || !author) return;
-    setSaving(true);
-    try {
-      await completeJob(job.id, author);
-      // Work done but not settled — the lead sits in "awaiting payment" until
-      // someone records the money arriving.
-      if (customer) {
-        await advancePipeline(customer, "awaiting_payment", author, {
-          reason: "Work completed, payment outstanding",
-        });
-      }
-      await notify({
-        type: "job_completed",
-        body: `${customer ? customerName(customer) : "A job"} · ${SERVICE_LABEL[job.serviceType]}`,
-        customerId: job.customerId,
-        jobId: job.id,
-      });
-      onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not complete this job.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
   /**
    * Recording payment closes the deal. This is the only thing that moves a lead
    * out of "awaiting payment", which is what makes that column a real list of
@@ -347,6 +321,16 @@ export function JobSheet({
           </p>
         ) : null}
 
+        {/* Above the scheduling fields on purpose. Somebody opening a saved job
+            is almost always standing outside the house about to do one of these
+            four things; editing the price is the rare case, not the common
+            one. */}
+        {job ? (
+          <div className="border-b border-line pb-4">
+            <JobStatusActions job={job} customer={customer} onSignedOff={onClose} />
+          </div>
+        ) : null}
+
         <div>
           <p className="mb-1.5 text-sm font-semibold text-muted">Service</p>
           <div className="flex flex-wrap gap-2">
@@ -440,11 +424,10 @@ export function JobSheet({
 
         {job ? (
           <div className="mt-2 flex flex-col gap-2 border-t border-line pt-4">
-            {job.status !== "complete" ? (
-              <Button variant="secondary" full onClick={() => void markComplete()} disabled={saving}>
-                Mark complete
-              </Button>
-            ) : (
+            {/* Completing a job now happens through the four on-site buttons
+                above, which ask about the money. This stays for the payment
+                that turns up days later, and for correcting a wrong answer. */}
+            {job.status === "complete" ? (
               <Button
                 variant={job.paidAt ? "secondary" : "primary"}
                 full
@@ -455,7 +438,7 @@ export function JobSheet({
                   ? `Paid ${formatDateOnly(job.paidAt)} — undo`
                   : `Mark paid (${formatMoney(job.price)})`}
               </Button>
-            )}
+            ) : null}
             {job.status !== "cancelled" ? (
               <Button variant="secondary" full onClick={() => void cancelJob()} disabled={saving}>
                 Cancel job

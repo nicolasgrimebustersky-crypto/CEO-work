@@ -114,6 +114,16 @@ export const NOTIFICATION_EVENTS = {
     title: "Payment received",
     destination: "document",
   },
+  /**
+   * A job signed off on site. Money rather than jobs: the thing the owner is
+   * being told is whether the cash arrived, and somebody who has muted the
+   * schedule still wants to hear about an unpaid job.
+   */
+  job_signed_off: {
+    category: "money",
+    title: "Job signed off",
+    destination: "customer",
+  },
   invoice_overdue: {
     category: "money",
     title: "Invoice past due",
@@ -303,6 +313,36 @@ export function receivesEvent(
  * deliberate: a muted notification should never be written at all, or the badge
  * count would climb for something the person asked not to hear about.
  */
+/**
+ * The final audience, once an event has named specific people.
+ *
+ * Two rules, and the order matters: preferences first, then the address list.
+ * Somebody who muted team chat must not be notified merely because they were
+ * added to the thread, and the owner must not be notified about a job they
+ * signed off themselves.
+ *
+ * Addressed events are the exception rather than the rule — team chat, and the
+ * sign-off line the owner gets when a job is finished on site. Everything else
+ * goes to the whole crew, so `toUids` absent means "everyone `recipientsFor`
+ * allows" rather than "nobody".
+ */
+export function audienceFor<
+  T extends {
+    uid: string;
+    mutedNotifications?: string[] | null;
+    notificationScopes?: string[] | null;
+  },
+>(
+  crew: readonly T[],
+  actorUid: string | null,
+  type: NotificationType,
+  toUids?: readonly string[] | null,
+): string[] {
+  const allowed = recipientsFor(crew, actorUid, type);
+  if (!toUids) return allowed;
+  return allowed.filter((uid) => toUids.includes(uid));
+}
+
 export function recipientsFor<
   T extends {
     uid: string;
