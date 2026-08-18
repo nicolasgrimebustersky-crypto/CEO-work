@@ -11,6 +11,8 @@ import { useDocuments } from "@/components/providers/DocumentsProvider";
 import { useNotify } from "@/components/providers/NotificationsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { Button } from "@/components/ui/Button";
+import { NavigateLink } from "@/components/ui/NavigateLink";
+import { canNavigateTo } from "@/lib/maps";
 import { Chip, StatusPill, UserChip } from "@/components/ui/Chips";
 import { Sheet } from "@/components/ui/Sheet";
 import { Spinner } from "@/components/ui/Spinner";
@@ -276,12 +278,27 @@ export function CustomerDetailScreen() {
           >
             Job
           </button>
-          <Link
-            href={routes.mapFocus(customer.id)}
-            className="tap-target flex items-center justify-center rounded-xl border border-line bg-surface-2 px-1 py-3 text-sm font-bold text-ink"
-          >
-            Map
-          </Link>
+          {/* Out to the phone's own maps app, not to our map. Our map is for
+              deciding where to go; this button is pressed when that decision
+              is already made and somebody is about to drive. A pin with no
+              address and no fix has nowhere to send them, so it falls back to
+              showing them where it is on our map instead. */}
+          {canNavigateTo(customer) ? (
+            <NavigateLink
+              destination={customer}
+              label={`Directions to ${customer.address || "this pin"}`}
+              className="tap-target flex items-center justify-center rounded-xl border border-line bg-surface-2 px-1 py-3 text-sm font-bold text-ink"
+            >
+              Directions
+            </NavigateLink>
+          ) : (
+            <Link
+              href={routes.mapFocus(customer.id)}
+              className="tap-target flex items-center justify-center rounded-xl border border-line bg-surface-2 px-1 py-3 text-sm font-bold text-ink"
+            >
+              Map
+            </Link>
+          )}
         </section>
 
         <section>
@@ -294,7 +311,30 @@ export function CustomerDetailScreen() {
           <dl className="divide-y divide-line rounded-xl border border-line bg-surface-2">
             <Row label="Phone" value={customer.phone ? formatPhone(customer.phone) : "—"} />
             <Row label="Email" value={customer.email || "—"} />
-            <Row label="Address" value={customer.address || "—"} />
+            {/* The address is the one field on this screen you act on rather
+                than read: tapping it hands the customer to the phone's maps
+                app. Copying it out by hand was the alternative.
+
+                Three cases, not two. A pin dropped at a door often has
+                coordinates and no typed address yet — that is still navigable,
+                so it gets a link that says so rather than an empty one. */}
+            <div className="flex items-start justify-between gap-4 px-3 py-2.5">
+              <dt className="text-sm font-bold text-muted">Address</dt>
+              <dd className="text-right text-base font-semibold break-words text-ink">
+                {canNavigateTo(customer) ? (
+                  <NavigateLink
+                    destination={customer}
+                    label={`Directions to ${customer.address || "this pin"}`}
+                    className="text-accent underline decoration-accent/40 underline-offset-4"
+                  >
+                    {customer.address || "Directions to the pin"}
+                  </NavigateLink>
+                ) : (
+                  (customer.address || "—")
+                )}
+              </dd>
+            </div>
+
             <Row
               label="Services"
               value={
