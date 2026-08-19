@@ -18,6 +18,7 @@ import {
 import { isDemoMode } from "@/lib/demo/enabled";
 import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
+import { STEP_BY_FIELD, STEP_FIELD, type JobStep } from "@/lib/jobFlow";
 import { JOB_STATUSES, SERVICE_TYPES } from "@/lib/types";
 import type { Author, Job, JobStatus, Photo, ServiceType } from "@/lib/types";
 
@@ -60,6 +61,14 @@ export function toJob(snap: QueryDocumentSnapshot<DocumentData>): Job {
     beforePhotos: asPhotos(data.beforePhotos),
     afterPhotos: asPhotos(data.afterPhotos),
     jobNotes: typeof data.jobNotes === "string" ? data.jobNotes : "",
+    enRouteAt: data.enRouteAt instanceof Timestamp ? data.enRouteAt : null,
+    enRouteBy: typeof data.enRouteBy === "string" ? data.enRouteBy : null,
+    startedAt: data.startedAt instanceof Timestamp ? data.startedAt : null,
+    startedBy: typeof data.startedBy === "string" ? data.startedBy : null,
+    finishedAt: data.finishedAt instanceof Timestamp ? data.finishedAt : null,
+    finishedBy: typeof data.finishedBy === "string" ? data.finishedBy : null,
+    paymentCollected:
+      typeof data.paymentCollected === "boolean" ? data.paymentCollected : null,
     completedAt: data.completedAt instanceof Timestamp ? data.completedAt : null,
     completedBy: typeof data.completedBy === "string" ? data.completedBy : null,
     paidAt: data.paidAt instanceof Timestamp ? data.paidAt : null,
@@ -265,6 +274,59 @@ export async function completeJob(jobId: string, author: Author): Promise<void> 
     status: "complete" satisfies JobStatus,
     completedAt: serverTimestamp(),
     completedBy: author.uid,
+    updatedAt: serverTimestamp(),
+    updatedBy: author.uid,
+    updatedByName: author.displayName,
+  });
+}
+
+/**
+ * Records that the customer has been told the crew is on the way, has started,
+ * or has finished.
+ *
+ * Called only after the text has actually left, which is the point: the stamp
+ * is what the screen shows as "Sent 9:14 AM", and stamping a step whose text
+ * bounced would tell the crew a customer was warned when they were not.
+ *
+ * "Starting job" also moves the job itself to in_progress. That is the same
+ * fact said twice — somebody is at the house with the machine running — and
+ * keeping the calendar in step with it costs nothing here and means the day
+ * view does not quietly disagree with the buttons.
+ */
+export async function stampJobStep(
+  jobId: string,
+  step: JobStep,
+  author: Author,
+): Promise<void> {
+  const patch: Record<string, unknown> = {
+    [STEP_FIELD[step]]: serverTimestamp(),
+    [STEP_BY_FIELD[step]]: author.uid,
+    updatedAt: serverTimestamp(),
+    updatedBy: author.uid,
+    updatedByName: author.displayName,
+  };
+  if (step === "started") patch.status = "in_progress" satisfies JobStatus;
+  await writeJob(jobId, patch);
+}
+
+/**
+ * Signs a job off, recording whether the money was actually in hand.
+ *
+ * One write rather than a complete-then-pay pair: a job that is marked done and
+ * then fails to record its payment reads as an unpaid job in the pipeline, and
+ * chasing somebody who already paid you is the expensive kind of wrong.
+ */
+export async function signOffJob(
+  jobId: string,
+  collected: boolean,
+  author: Author,
+): Promise<void> {
+  await writeJob(jobId, {
+    status: "complete" satisfies JobStatus,
+    completedAt: serverTimestamp(),
+    completedBy: author.uid,
+    paymentCollected: collected,
+    ...(collected ? { paidAt: serverTimestamp(), paidBy: author.uid } : {}),
     updatedAt: serverTimestamp(),
     updatedBy: author.uid,
     updatedByName: author.displayName,

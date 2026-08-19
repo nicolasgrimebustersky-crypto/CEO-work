@@ -488,6 +488,15 @@ function job(
     beforePhotos: [],
     afterPhotos: [],
     jobNotes: "",
+    // A finished job in the demo has already been walked through the on-site
+    // sequence; a scheduled one has not, so its buttons start clean.
+    enRouteAt: status === "complete" ? start : null,
+    enRouteBy: status === "complete" ? uid : null,
+    startedAt: status === "complete" ? start : null,
+    startedBy: status === "complete" ? uid : null,
+    finishedAt: status === "complete" ? start : null,
+    finishedBy: status === "complete" ? uid : null,
+    paymentCollected: status === "complete" ? paid : null,
     completedAt: status === "complete" ? start : null,
     completedBy: status === "complete" ? uid : null,
     paidAt: paid ? start : null,

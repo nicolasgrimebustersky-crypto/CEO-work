@@ -47,6 +47,21 @@ export const BOOTSTRAP_CREW: readonly string[] = [
   "QLMsTAHbbceHBAWBXPqtScGdGon2",
 ];
 
+/**
+ * The owner's account, for the one notification that is addressed rather than
+ * broadcast: a job signed off on site, with the amount and whether the money
+ * was collected.
+ *
+ * A uid rather than an email because notifications are addressed by uid, and
+ * the roster carries no email to match on. It is the first bootstrap account —
+ * the same uid the legacy import scripts write as "Nicolas".
+ *
+ * Safe to hold in client code: it addresses a message, it does not grant
+ * anything. Permission still comes from `isAdmin`, which is checked against the
+ * signed-in token.
+ */
+export const OWNER_UID = "Bzo7rclax4SdT7PaAua1monNxXG3";
+
 export function isBootstrapCrew(uid: string | null | undefined): boolean {
   return typeof uid === "string" && BOOTSTRAP_CREW.includes(uid);
 }

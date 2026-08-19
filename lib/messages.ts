@@ -57,3 +57,53 @@ export function quoteFollowUpText(
   }
   return `${BUSINESS_NAME}: last check on that ${money} ${service.toLowerCase()} quote. Reply any time if you'd like to book — otherwise we'll leave you be.`;
 }
+
+/* ------------------------------------------------------------ on the job */
+
+/**
+ * The four texts the crew sends from a driveway, in the order they happen:
+ * pulling up, starting, finishing, and then the sign-off that is not a text at
+ * all — see lib/jobFlow.ts.
+ *
+ * These carry the legal name rather than the short one. A customer writing a
+ * cheque needs the name their bank will accept, and somebody deciding whether
+ * an unknown number is a scam needs the name on the invoice they were sent.
+ */
+const LEGAL_NAME = "Grime Busters KY LLC";
+
+/** Who a customer is pointed at when the person on site cannot help. */
+const OWNER_NAME = "Nicolas";
+const OWNER_PHONE = "502-599-6855";
+
+/**
+ * How to pay. Deliberately not secrets and deliberately not in the environment:
+ * these are handed to every customer at the end of every job, and a payment
+ * handle that differs between the text and the invoice is a support call.
+ */
+export const PAYMENT_HANDLES = {
+  venmo: "@NicolasTimmons",
+  cashApp: "$GrimeBustersKYLLC",
+} as const;
+
+/**
+ * "Hi Marta" where we know the name, "Hi there" where we do not.
+ *
+ * A pin dropped at a door often has an address and no name yet. "Hi ," reads as
+ * a broken mail merge, which is exactly what a stranger's text has to avoid.
+ */
+export function greetingFor(firstName: string | null | undefined): string {
+  const name = (firstName ?? "").trim();
+  return name ? `Hi ${name}` : "Hi there";
+}
+
+export function enRouteText(customerFirstName: string | null | undefined): string {
+  return `${greetingFor(customerFirstName)}, your technicians from ${LEGAL_NAME} are currently en route to your scheduled appointment.`;
+}
+
+export function jobStartedText(technicianFirstName: string): string {
+  return `Hey! This is ${technicianFirstName} from ${LEGAL_NAME}. I'm your technician for the day, if you have any questions feel free to reach out to ${OWNER_NAME} @ ${OWNER_PHONE}.`;
+}
+
+export function jobFinishedText(technicianFirstName: string): string {
+  return `Hey! This is ${technicianFirstName} from ${LEGAL_NAME}. We just finished and are ready awaiting payment. We accept checks made out to ${LEGAL_NAME}, cash, Venmo ${PAYMENT_HANDLES.venmo}, Cash App ${PAYMENT_HANDLES.cashApp}. If you have none of these please reach out to ${OWNER_NAME} at ${OWNER_PHONE}.`;
+}

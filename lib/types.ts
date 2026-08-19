@@ -157,8 +157,26 @@ export interface Job {
   beforePhotos: Photo[];
   afterPhotos: Photo[];
   jobNotes: string;
+  /**
+   * The on-site sequence: pulling up, starting, finishing. Each is stamped only
+   * once the customer's text has actually gone out, so a stamp is evidence the
+   * customer was told rather than evidence somebody pressed a button. See
+   * lib/jobFlow.ts.
+   */
+  enRouteAt: Timestamp | null;
+  enRouteBy: string | null;
+  startedAt: Timestamp | null;
+  startedBy: string | null;
+  finishedAt: Timestamp | null;
+  finishedBy: string | null;
   completedAt: Timestamp | null;
   completedBy: string | null;
+  /**
+   * What the person signing the job off answered when asked whether they had
+   * the money in hand. Null on a job completed before the question existed, or
+   * through any path that does not ask — which is not the same as "no".
+   */
+  paymentCollected: boolean | null;
   /** Null until the money actually lands. Drives the awaiting-payment stage. */
   paidAt: Timestamp | null;
   paidBy: string | null;

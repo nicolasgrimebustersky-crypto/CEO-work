@@ -2,6 +2,7 @@
 
 import { apiUrl } from "@/lib/apiBase";
 import { isDemoMode } from "@/lib/demo/enabled";
+import { recordDemoText } from "@/lib/demo/sms";
 import { getFirebaseAuth } from "@/lib/firebase";
 
 /**
@@ -27,6 +28,13 @@ async function fakeSend<T>(path: string, payload: unknown): Promise<T> {
   if (path.endsWith("/blast")) {
     const ids = (payload as { customerIds?: string[] }).customerIds ?? [];
     return { ok: true, attempted: ids.length, sent: ids.length, failed: [] } as T;
+  }
+  // One-to-one messages land on the customer's timeline the way the real route
+  // writes them, so a walkthrough can read what was actually said. See
+  // lib/demo/sms.ts.
+  const { customerId, body } = payload as { customerId?: string; body?: string };
+  if (path.endsWith("/sms/send") && customerId && body) {
+    recordDemoText(customerId, body);
   }
   return { ok: true, sid: "DEMO", to: "demo" } as T;
 }

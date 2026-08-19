@@ -19,8 +19,8 @@ import { isDemoMode } from "@/lib/demo/enabled";
 import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
 import {
+  audienceFor,
   isNotificationType,
-  recipientsFor,
   titleOf,
   type NotificationType,
 } from "@/lib/notifications/events";
@@ -143,13 +143,7 @@ export async function notifyOthers(
   actor: Author,
   payload: NotifyPayload,
 ): Promise<void> {
-  // Preferences first, then the explicit audience. In that order: somebody
-  // who muted team chat must not be notified merely because they are in the
-  // thread.
-  const allowed = recipientsFor(crew, actor.uid, payload.type);
-  const recipients = payload.toUids
-    ? allowed.filter((uid) => payload.toUids?.includes(uid))
-    : allowed;
+  const recipients = audienceFor(crew, actor.uid, payload.type, payload.toUids);
   if (recipients.length === 0) return;
 
   const title = titleOf(payload.type);

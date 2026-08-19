@@ -24,6 +24,7 @@ const {
   isNotificationType,
   isNotificationCategory,
   destinationFor,
+  audienceFor,
   recipientsFor,
   titleOf,
   wantsCategory,
@@ -283,5 +284,53 @@ describe("a chat notification opens the thread", () => {
     // the point of keeping them apart.
     assert.equal(categoryOf("chat_message"), "chat");
     assert.equal(categoryOf("sms_in"), "messages");
+  });
+});
+
+describe("an event addressed to one person", () => {
+  const crew = [
+    { uid: "owner", mutedNotifications: [] },
+    { uid: "noah", mutedNotifications: [] },
+    { uid: "sam", mutedNotifications: [] },
+  ];
+
+  test("reaches the addressee and nobody else", () => {
+    // A job signed off on site tells the owner what it was worth and whether
+    // the money arrived. The rest of the crew has no business seeing the
+    // takings of a job they were not on.
+    assert.deepEqual(audienceFor(crew, "noah", "job_signed_off", ["owner"]), ["owner"]);
+  });
+
+  test("the owner signing off their own job is told nothing", () => {
+    // Being notified about your own tap is noise, and in a two-person business
+    // it would double every event.
+    assert.deepEqual(audienceFor(crew, "owner", "job_signed_off", ["owner"]), []);
+  });
+
+  test("an unaddressed event still goes to the whole crew", () => {
+    // The regression this guards: treating a missing address list as an empty
+    // one would silently stop every ordinary notification in the app.
+    assert.deepEqual(audienceFor(crew, "noah", "job_completed"), ["owner", "sam"]);
+    assert.deepEqual(audienceFor(crew, "noah", "job_completed", null), ["owner", "sam"]);
+  });
+
+  test("preferences beat the address list, not the other way round", () => {
+    // Somebody who muted money must not start hearing about it merely because
+    // an event named them.
+    const quiet = [{ uid: "owner", mutedNotifications: ["money"] }];
+    assert.deepEqual(audienceFor(quiet, "noah", "job_signed_off", ["owner"]), []);
+  });
+
+  test("a permission the admin never granted is not overridden either", () => {
+    const limited = [
+      { uid: "owner", mutedNotifications: [], notificationScopes: ["jobs"] },
+    ];
+    assert.deepEqual(audienceFor(limited, "noah", "job_signed_off", ["owner"]), []);
+  });
+
+  test("addressing somebody who is not on the crew reaches nobody", () => {
+    // A stale uid must not become a broadcast.
+    assert.deepEqual(audienceFor(crew, "noah", "job_signed_off", ["ghost"]), []);
+    assert.deepEqual(audienceFor(crew, "noah", "job_signed_off", []), []);
   });
 });
