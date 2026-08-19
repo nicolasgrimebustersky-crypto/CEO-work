@@ -1,7 +1,12 @@
 import "server-only";
 
 import { isAdmin, isBootstrapCrew } from "@/lib/auth/roles";
-import { adminAuth, adminDb, isAdminConfigured } from "./admin";
+import {
+  adminAuth,
+  adminDb,
+  isAdminConfigured,
+  serviceAccountProblem,
+} from "./admin";
 import { corsHeaders } from "./cors";
 
 /**
@@ -82,9 +87,12 @@ export async function requireCrew(request: Request): Promise<CrewCaller> {
   // is a missing deployment variable. That is an hour of looking in the wrong
   // place, so the two are named separately.
   if (!isAdminConfigured) {
+    // The specific complaint, not a generic one: "set but 200 characters" is a
+    // truncated paste and tells somebody what to do next, where "not
+    // configured" sends them to re-add a variable that is already there.
     throw new ApiError(
       503,
-      "This deployment is missing FIREBASE_SERVICE_ACCOUNT_KEY, so the server cannot check who is signed in. Nothing is wrong with your login — set it in the hosting environment and redeploy.",
+      `${serviceAccountProblem()} The server cannot check who is signed in without it — nothing is wrong with your login.`,
     );
   }
 
