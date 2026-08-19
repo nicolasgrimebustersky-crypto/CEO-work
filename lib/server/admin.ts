@@ -4,6 +4,11 @@ import { cert, getApp, getApps, initializeApp, type App } from "firebase-admin/a
 import { getAuth, type Auth } from "firebase-admin/auth";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 
+import {
+  describeServiceAccountKey,
+  parseServiceAccountKey,
+} from "@/lib/serviceAccountKey";
+
 /**
  * Admin SDK, used only inside API routes. It bypasses Firestore security rules
  * entirely, so nothing here may run in response to an unauthenticated request —
@@ -14,45 +19,22 @@ import { getFirestore, type Firestore } from "firebase-admin/firestore";
 const RAW_KEY = process.env.FIREBASE_SERVICE_ACCOUNT_KEY ?? "";
 
 /**
- * Accepts the service-account JSON either raw or base64-encoded. Vercel's env
- * editor mangles multi-line values, so base64 is the recommended form and the
- * one the README documents.
+ * Accepts the service-account JSON either raw or base64-encoded, and tolerates
+ * what a dashboard paste does to it. The reading itself lives in
+ * lib/serviceAccountKey.ts, which imports nothing and is therefore tested
+ * against every mangled shape rather than trusted.
  */
-function parseServiceAccount(): {
-  projectId: string;
-  clientEmail: string;
-  privateKey: string;
-} | null {
-  if (!RAW_KEY) return null;
-
-  let json = RAW_KEY.trim();
-  if (!json.startsWith("{")) {
-    try {
-      json = Buffer.from(json, "base64").toString("utf8");
-    } catch {
-      return null;
-    }
-  }
-
-  try {
-    const parsed = JSON.parse(json) as Record<string, unknown>;
-    const projectId = typeof parsed.project_id === "string" ? parsed.project_id : "";
-    const clientEmail = typeof parsed.client_email === "string" ? parsed.client_email : "";
-    const privateKey = typeof parsed.private_key === "string" ? parsed.private_key : "";
-    if (!projectId || !clientEmail || !privateKey) return null;
-
-    return {
-      projectId,
-      clientEmail,
-      // Env vars flatten real newlines into the two-character sequence \n.
-      privateKey: privateKey.replace(/\\n/g, "\n"),
-    };
-  } catch {
-    return null;
-  }
-}
+const parseServiceAccount = () => parseServiceAccountKey(RAW_KEY);
 
 export const isAdminConfigured = parseServiceAccount() !== null;
+
+/**
+ * Why it could not be read, for the operator. Empty string when all is well.
+ * Never contains the value — it is a private key.
+ */
+export function serviceAccountProblem(): string {
+  return describeServiceAccountKey(RAW_KEY);
+}
 
 let cachedApp: App | null = null;
 
@@ -64,11 +46,7 @@ function getAdminApp(): App {
   }
 
   const serviceAccount = parseServiceAccount();
-  if (!serviceAccount) {
-    throw new Error(
-      "FIREBASE_SERVICE_ACCOUNT_KEY is missing or malformed. Server-side routes (SMS, cron) cannot run without it — see the README.",
-    );
-  }
+  if (!serviceAccount) throw new Error(serviceAccountProblem());
 
   cachedApp = initializeApp({
     credential: cert(serviceAccount),
