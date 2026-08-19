@@ -53,6 +53,18 @@ export const SMS_TEST_LIMIT: RateLimitRule = {
   label: "test texts",
 };
 
+/**
+ * Each draft is a model call the business pays for, and the button sits on a
+ * screen somebody taps while distracted. Thirty an hour is far more estimates
+ * than two people can write in an hour, and a low enough ceiling that a stuck
+ * finger cannot run up a bill.
+ */
+export const ESTIMATE_DRAFT_LIMIT: RateLimitRule = {
+  max: 30,
+  windowMs: 60 * 60 * 1000,
+  label: "drafted estimates",
+};
+
 function minutesUntil(resetAt: number): number {
   return Math.max(1, Math.ceil((resetAt - Date.now()) / 60000));
 }

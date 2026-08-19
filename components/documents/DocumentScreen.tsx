@@ -46,6 +46,7 @@ import { SERVICE_TYPES, type ServiceType } from "@/lib/types";
 import { CustomerPickerSheet } from "./CustomerPickerSheet";
 import { DocumentPreview } from "./DocumentPreview";
 import { ScheduleJobSheet } from "./ScheduleJobSheet";
+import { DraftEstimateSheet } from "./DraftEstimateSheet";
 import { LineItemsEditor } from "./LineItemsEditor";
 import { PaymentSheet } from "./PaymentSheet";
 import { StatusPill } from "./StatusPill";
@@ -55,6 +56,7 @@ import {
   draftTotals,
   emptyDraft,
   lineItemsFrom,
+  newLineId,
   parseDueDate,
   toNumber,
   type Draft,
@@ -98,6 +100,7 @@ export function DocumentScreen() {
   const [previewing, setPreviewing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [scheduling, setScheduling] = useState(false);
+  const [drafting, setDrafting] = useState(false);
 
   // A new document starts as local state and is not written until Save, so
   // backing out of one leaves nothing behind.
@@ -440,7 +443,17 @@ export function DocumentScreen() {
             </section>
 
             <section>
-              <h2 className="mb-2 text-lg font-bold text-ink">Lines</h2>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h2 className="text-lg font-bold text-ink">Lines</h2>
+                {/* Only offered on an estimate. An invoice is a record of work
+                    already agreed and priced — redrafting its wording after the
+                    customer has seen it changes what they agreed to. */}
+                {draft.kind === "estimate" ? (
+                  <Button variant="secondary" onClick={() => setDrafting(true)} disabled={busy}>
+                    Draft it for me
+                  </Button>
+                ) : null}
+              </div>
               <LineItemsEditor
                 draft={draft}
                 onChange={setDraft}
@@ -753,6 +766,32 @@ export function DocumentScreen() {
           </>
         ) : null}
       </div>
+
+      {draft ? (
+        <DraftEstimateSheet
+          open={drafting}
+          serviceType={draft.serviceType}
+          taxRatePct={toNumber(draft.taxRatePct)}
+          discount={toNumber(draft.discount)}
+          onClose={() => setDrafting(false)}
+          onDrafted={(items) => {
+            // Replaces the lines rather than appending to them. Somebody who
+            // taps "draft it for me" has not written anything yet, and merging
+            // a draft into a half-typed line is a worse outcome than either.
+            setDraft({
+              ...draft,
+              lines: items.map((item) => ({
+                id: newLineId(),
+                name: item.name,
+                description: item.description,
+                quantity: String(item.quantity),
+                unitPrice: item.unitPrice.toFixed(2),
+                taxable: true,
+              })),
+            });
+          }}
+        />
+      ) : null}
 
       <CustomerPickerSheet
         open={picking}
