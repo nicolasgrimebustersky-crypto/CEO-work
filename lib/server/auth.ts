@@ -1,7 +1,7 @@
 import "server-only";
 
 import { isAdmin, isBootstrapCrew } from "@/lib/auth/roles";
-import { adminAuth, adminDb } from "./admin";
+import { adminAuth, adminDb, isAdminConfigured } from "./admin";
 import { corsHeaders } from "./cors";
 
 /**
@@ -75,13 +75,26 @@ export async function requireCrew(request: Request): Promise<CrewCaller> {
   const token = header.toLowerCase().startsWith("bearer ") ? header.slice(7).trim() : "";
   if (!token) throw new ApiError(401, "Missing bearer token.");
 
+  // Checked before the token is, because otherwise it cannot be. Without the
+  // service account the Admin SDK throws on the very first call, and that throw
+  // lands in the catch below and comes back to the operator as "invalid or
+  // expired session" — pointing them at their own login when the actual fault
+  // is a missing deployment variable. That is an hour of looking in the wrong
+  // place, so the two are named separately.
+  if (!isAdminConfigured) {
+    throw new ApiError(
+      503,
+      "This deployment is missing FIREBASE_SERVICE_ACCOUNT_KEY, so the server cannot check who is signed in. Nothing is wrong with your login — set it in the hosting environment and redeploy.",
+    );
+  }
+
   let decoded;
   try {
     // checkRevoked: a signed-out or disabled account must stop working
     // immediately, not when its hour-long token happens to expire.
     decoded = await adminAuth().verifyIdToken(token, true);
   } catch {
-    throw new ApiError(401, "Invalid or expired session.");
+    throw new ApiError(401, "Invalid or expired session. Sign out and back in.");
   }
 
   const allowed =
