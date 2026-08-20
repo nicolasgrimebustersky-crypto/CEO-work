@@ -284,6 +284,32 @@ export function computeTotals(
   };
 }
 
+/**
+ * What the per-line percentages came to on a stored document.
+ *
+ * Recomputed from the lines rather than read back from a stored field. The
+ * totals on a document were written by whichever version of the app saved it,
+ * and a savings figure that disagrees with the lines printed above it on the
+ * same page is the one error a customer is guaranteed to spot.
+ *
+ * Shared by the on-screen preview and the PDF writer, which are two separate
+ * renderers of the same page. They must never disagree, and the only way to
+ * guarantee that is for both to call this.
+ */
+export function documentLineDiscounts(lineItems: readonly LineItem[]): number {
+  return round2(lineItems.reduce((sum, item) => sum + lineDiscount(item), 0));
+}
+
+/** Everything the customer was let off: the per-line ones plus the flat one. */
+export function documentSaved(businessDocument: {
+  lineItems: readonly LineItem[];
+  discount: number;
+}): number {
+  return round2(
+    documentLineDiscounts(businessDocument.lineItems) + businessDocument.discount,
+  );
+}
+
 export function sumPayments(payments: Payment[]): number {
   return round2(payments.reduce((sum, payment) => sum + payment.amount, 0));
 }

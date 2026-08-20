@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { Logo } from "@/components/ui/Logo";
 import { BRAND, BUSINESS } from "@/lib/business";
 import {
+  documentLineDiscounts,
+  documentSaved,
   lineDiscount,
   lineDiscountPct,
   lineGross,
@@ -298,13 +300,13 @@ export function DocumentPreview({
                 <span style={{ color: "#4b5563" }}>Subtotal</span>
                 <span>{formatMoneyExact(businessDocument.subtotal)}</span>
               </div>
-              {lineDiscountsOf(businessDocument) > 0 ? (
+              {documentLineDiscounts(businessDocument.lineItems) > 0 ? (
                 <div style={totalRow}>
                   <span style={{ color: BRAND.money, fontWeight: 700 }}>
                     Line discounts
                   </span>
                   <span style={{ color: BRAND.money, fontWeight: 700 }}>
-                    −{formatMoneyExact(lineDiscountsOf(businessDocument))}
+                    −{formatMoneyExact(documentLineDiscounts(businessDocument.lineItems))}
                   </span>
                 </div>
               ) : null}
@@ -337,7 +339,7 @@ export function DocumentPreview({
 
               {/* The headline. Everything above is arithmetic; this is the line
                   the customer repeats to their spouse. */}
-              {savedOn(businessDocument) > 0 ? (
+              {documentSaved(businessDocument) > 0 ? (
                 <div
                   style={{
                     marginTop: "7px",
@@ -351,7 +353,7 @@ export function DocumentPreview({
                     letterSpacing: "0.01em",
                   }}
                 >
-                  You saved {formatMoneyExact(savedOn(businessDocument))}
+                  You saved {formatMoneyExact(documentSaved(businessDocument))}
                 </div>
               ) : null}
 
@@ -422,28 +424,5 @@ export function DocumentPreview({
         </div>
       </div>
     </div>
-  );
-}
-
-/**
- * What the per-line percentages came to on a *stored* document.
- *
- * Recomputed from the lines rather than read from a field: the stored totals
- * were written by whichever version of the app saved the document, and a figure
- * that disagrees with the lines printed above it on the same page is the one
- * error a customer is guaranteed to spot.
- */
-function lineDiscountsOf(businessDocument: BusinessDocument): number {
-  return (
-    Math.round(
-      businessDocument.lineItems.reduce((sum, item) => sum + lineDiscount(item), 0) * 100,
-    ) / 100
-  );
-}
-
-/** Everything the customer was let off, line discounts and the flat one. */
-function savedOn(businessDocument: BusinessDocument): number {
-  return (
-    Math.round((lineDiscountsOf(businessDocument) + businessDocument.discount) * 100) / 100
   );
 }

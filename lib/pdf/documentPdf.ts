@@ -1,9 +1,25 @@
 import { BRAND, BUSINESS } from "@/lib/business";
-import { lineLabel, lineTotal, type BusinessDocument } from "@/lib/documents";
+import {
+  documentLineDiscounts,
+  documentSaved,
+  lineDiscount,
+  lineDiscountPct,
+  lineGross,
+  lineLabel,
+  lineTotal,
+  type BusinessDocument,
+} from "@/lib/documents";
 import { formatDateOnly, formatMoneyExact, formatPhone } from "@/lib/format";
 import { SERVICE_LABEL } from "@/lib/status";
 import type { Customer } from "@/lib/types";
-import { Doc, hexToRgb, PAGE_WIDTH, PT_PER_INCH, type JpegImage } from "./writer";
+import {
+  Doc,
+  hexToRgb,
+  PAGE_WIDTH,
+  PT_PER_INCH,
+  textWidth,
+  type JpegImage,
+} from "./writer";
 
 /**
  * An estimate or invoice as a PDF.
@@ -24,6 +40,8 @@ const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
 const INK = hexToRgb(BRAND.ink);
 const ACCENT = hexToRgb(BRAND.accent);
 const MONEY = hexToRgb(BRAND.money);
+/** Near-black, for text sitting on the money-green band. */
+const INK_ON_MONEY = hexToRgb("#04120a");
 const MONEY_WASH = hexToRgb(BRAND.moneyWash);
 const WHITE = { r: 1, g: 1, b: 1 };
 const BODY = hexToRgb("#111111");
@@ -158,12 +176,30 @@ export function buildDocumentPdf(
       color: BODY,
       align: "right",
     });
-    pdf.text(formatMoneyExact(lineTotal(item)), COL_AMOUNT, y, {
-      size: 10,
-      font: "Helvetica-Bold",
-      color: BODY,
-      align: "right",
-    });
+    const off = lineDiscount(item);
+    if (off > 0) {
+      // The full price stays on the page, struck through, with the discounted
+      // one under it in green. A discount the customer cannot see is money
+      // given away for nothing — and this is the copy they keep.
+      const grossText = formatMoneyExact(lineGross(item));
+      pdf.text(grossText, COL_AMOUNT, y, { size: 9, color: MUTED, align: "right" });
+      const struckWidth = textWidth(grossText, 9, "Helvetica");
+      pdf.line(COL_AMOUNT - struckWidth, y + 5, struckWidth, MUTED, 0.7);
+
+      pdf.text(formatMoneyExact(lineTotal(item)), COL_AMOUNT, y + 12, {
+        size: 10.5,
+        font: "Helvetica-Bold",
+        color: MONEY,
+        align: "right",
+      });
+    } else {
+      pdf.text(formatMoneyExact(lineTotal(item)), COL_AMOUNT, y, {
+        size: 10,
+        font: "Helvetica-Bold",
+        color: BODY,
+        align: "right",
+      });
+    }
     y += 15;
 
     // The line that settles what was included, three weeks later.
@@ -174,7 +210,19 @@ export function buildDocumentPdf(
       });
     }
 
-    y = Math.max(y, rowTop + 20) + 7;
+    if (off > 0) {
+      pdf.text(
+        `${lineDiscountPct(item)}% off · saved ${formatMoneyExact(off)}`,
+        MARGIN,
+        y,
+        { size: 8.5, font: "Helvetica-Bold", color: MONEY },
+      );
+      y += 12;
+    }
+
+    // A discounted row carries two stacked amounts, so it needs more room
+    // before the hairline than a plain one.
+    y = Math.max(y, rowTop + (off > 0 ? 34 : 20)) + 7;
     pdf.line(MARGIN, y, CONTENT_WIDTH, HAIRLINE, 0.6);
     y += 11;
   }
@@ -195,6 +243,23 @@ export function buildDocumentPdf(
 
   y += 4;
   money("Subtotal", formatMoneyExact(document.subtotal));
+
+  const lineDiscounts = documentLineDiscounts(document.lineItems);
+  if (lineDiscounts > 0) {
+    pdf.text("Line discounts", totalsLeft, y, {
+      size: 10,
+      font: "Helvetica-Bold",
+      color: MONEY,
+    });
+    pdf.text(`-${formatMoneyExact(lineDiscounts)}`, COL_AMOUNT, y, {
+      size: 10,
+      font: "Helvetica-Bold",
+      color: MONEY,
+      align: "right",
+    });
+    y += 16;
+  }
+
   if (document.discount > 0) money("Discount", `-${formatMoneyExact(document.discount)}`);
   money(`Tax (${document.taxRatePct}%)`, formatMoneyExact(document.taxAmount));
 
@@ -215,6 +280,20 @@ export function buildDocumentPdf(
     align: "right",
   });
   y += 44;
+
+  // The line the customer repeats to their spouse. Everything above it is
+  // arithmetic; this is the one that makes the discount land.
+  const saved = documentSaved(document);
+  if (saved > 0) {
+    pdf.rect(totalsLeft - 12, y - 6, 262, 24, MONEY);
+    pdf.text(`You saved ${formatMoneyExact(saved)}`, totalsLeft + 119, y + 1, {
+      size: 11.5,
+      font: "Helvetica-Bold",
+      color: INK_ON_MONEY,
+      align: "center",
+    });
+    y += 30;
+  }
 
   if (document.amountPaid > 0) {
     money("Paid", `-${formatMoneyExact(document.amountPaid)}`);

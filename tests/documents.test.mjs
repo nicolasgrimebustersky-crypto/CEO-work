@@ -16,6 +16,8 @@ import { test, describe } from "node:test";
 
 const {
   computeTotals,
+  documentLineDiscounts,
+  documentSaved,
   lineDiscount,
   lineDiscountPct,
   lineGross,
@@ -277,5 +279,46 @@ describe("tax, once lines are discounted", () => {
     assert.equal(totals.discount, 500);
     assert.equal(totals.total, 0);
     assert.ok(totals.taxableBase >= 0);
+  });
+});
+
+describe("what the preview and the PDF both read", () => {
+  // These two renderers draw the same page by different means. If they ever
+  // compute their savings figures separately, one of them drifts and a customer
+  // gets a document whose own numbers disagree.
+  const item = (price, pct) => ({
+    id: String(price),
+    name: "x",
+    description: "",
+    quantity: 1,
+    unitPrice: price,
+    taxable: true,
+    discountPct: pct,
+  });
+
+  test("line discounts add up across the document", () => {
+    assert.equal(documentLineDiscounts([item(1000, 10), item(500, 20)]), 200);
+  });
+
+  test("nothing discounted is nothing saved", () => {
+    assert.equal(documentLineDiscounts([item(1000, 0), item(500, 0)]), 0);
+    assert.equal(documentSaved({ lineItems: [item(1000, 0)], discount: 0 }), 0);
+  });
+
+  test("the total saved includes the flat discount", () => {
+    assert.equal(documentSaved({ lineItems: [item(1000, 10)], discount: 25 }), 125);
+  });
+
+  test("it agrees with computeTotals, which is the point", () => {
+    const lines = [item(1700, 10), item(900, 0)];
+    const totals = computeTotals(lines, 50, 0);
+    assert.equal(documentLineDiscounts(lines), totals.lineDiscounts);
+    assert.equal(documentSaved({ lineItems: lines, discount: totals.discount }), totals.totalSaved);
+  });
+
+  test("lines written before discounts existed contribute nothing", () => {
+    const old = { id: "o", name: "o", description: "", quantity: 1, unitPrice: 400, taxable: true };
+    assert.equal(documentLineDiscounts([old]), 0);
+    assert.equal(documentSaved({ lineItems: [old], discount: 0 }), 0);
   });
 });
