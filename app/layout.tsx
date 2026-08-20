@@ -3,6 +3,7 @@ import { Poppins } from "next/font/google";
 
 import { AuthGate } from "@/components/auth/AuthGate";
 import { AuthProvider } from "@/components/providers/AuthProvider";
+import { StaleBuildBanner } from "@/components/shell/StaleBuildBanner";
 import { ConnectionProvider } from "@/components/providers/ConnectionProvider";
 import { CustomersProvider } from "@/components/providers/CustomersProvider";
 import { DocumentsProvider } from "@/components/providers/DocumentsProvider";
@@ -77,6 +78,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`h-full ${poppins.variable}`}>
       <body className="min-h-full antialiased">
+        {/* Above every provider and every screen: somebody on a replaced
+            link needs to be told before they trust anything they see. */}
+        <StaleBuildBanner />
         <AuthProvider>
           <AuthGate>
             <TeamProvider>
