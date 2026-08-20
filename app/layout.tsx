@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Poppins } from "next/font/google";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 import { AuthGate } from "@/components/auth/AuthGate";
 import { AuthProvider } from "@/components/providers/AuthProvider";
@@ -104,6 +105,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </TeamProvider>
           </AuthGate>
         </AuthProvider>
+        <SpeedInsights />
       </body>
     </html>
   );
