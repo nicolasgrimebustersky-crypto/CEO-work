@@ -16,6 +16,7 @@
     "test:meta": "node --experimental-strip-types --test tests/meta.parse.test.mjs tests/theme.test.mjs tests/userColor.test.mjs tests/notifications.test.mjs tests/pushWorker.test.mjs tests/documents.test.mjs tests/threads.test.mjs tests/quietHours.test.mjs tests/knockPlan.test.mjs tests/territory.test.mjs tests/twilioCredentials.test.mjs tests/roles.test.mjs tests/conversation.test.mjs tests/errors.test.mjs tests/maps.test.mjs tests/jobFlow.test.mjs tests/serviceAccountKey.test.mjs"
   },
   "dependencies": {
+    "@vercel/speed-insights": "^2.0.0",
     "@vis.gl/react-google-maps": "^1.5.6",
     "date-fns": "^4.1.0",
     "firebase": "^11.10.0",
