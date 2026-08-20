@@ -44,6 +44,7 @@ live, and every note, text and job carries the name of whoever did it.
 | Territories: draw an area on the map, claim it, see what's inside | Drag a loop freehand; coverage counts pins actually spoken to |
 | Four on-site buttons on every job: en route, starting, finished, mark complete | The first three text the customer a fixed message; the fourth asks whether the money was collected and tells the owner |
 | Draft an estimate from a spoken description, a price and up to four photos | Claude writes the wording only; the price you type is split across the lines to the cent. Needs `ANTHROPIC_API_KEY`; without it the builder still works by hand |
+| A percentage discount on each line, not just the whole document | Discount the labour and leave the materials alone; the customer's copy strikes the old price through and totals what they saved |
 
 **Phase 3 — SMS and automation**
 

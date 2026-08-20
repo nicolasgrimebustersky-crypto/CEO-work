@@ -57,6 +57,12 @@ function asLineItems(value: unknown): LineItem[] {
         quantity: typeof item.quantity === "number" ? item.quantity : 0,
         unitPrice: typeof item.unitPrice === "number" ? item.unitPrice : 0,
         taxable: item.taxable !== false,
+        // Absent on everything written before per-line discounts existed, and
+        // a missing value has to read as "no discount" rather than NaN.
+        discountPct:
+          typeof item.discountPct === "number" && Number.isFinite(item.discountPct)
+            ? item.discountPct
+            : 0,
       };
     });
 }

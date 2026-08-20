@@ -4,7 +4,14 @@ import { useEffect, useState } from "react";
 
 import { Logo } from "@/components/ui/Logo";
 import { BRAND, BUSINESS } from "@/lib/business";
-import { lineLabel, lineTotal, type BusinessDocument } from "@/lib/documents";
+import {
+  lineDiscount,
+  lineDiscountPct,
+  lineGross,
+  lineLabel,
+  lineTotal,
+  type BusinessDocument,
+} from "@/lib/documents";
 import { formatDateOnly, formatMoneyExact, formatPhone } from "@/lib/format";
 import { downloadPdf, sharePdf } from "@/lib/pdf/share";
 import { documentText } from "@/lib/messages";
@@ -247,7 +254,38 @@ export function DocumentPreview({
                     {formatMoneyExact(item.unitPrice)}
                   </td>
                   <td style={{ ...cell, textAlign: "right", fontWeight: 600 }}>
-                    {formatMoneyExact(lineTotal(item))}
+                    {/* The full price stays visible, struck through. A discount
+                        the customer cannot see is money given away for nothing —
+                        they have to be able to tell they were given something. */}
+                    {lineDiscount(item) > 0 ? (
+                      <span
+                        style={{
+                          display: "block",
+                          fontWeight: 500,
+                          color: "#9ca3af",
+                          textDecoration: "line-through",
+                        }}
+                      >
+                        {formatMoneyExact(lineGross(item))}
+                      </span>
+                    ) : null}
+                    <span style={{ color: lineDiscount(item) > 0 ? BRAND.money : undefined }}>
+                      {formatMoneyExact(lineTotal(item))}
+                    </span>
+                    {lineDiscount(item) > 0 ? (
+                      <span
+                        style={{
+                          display: "block",
+                          marginTop: "2px",
+                          fontSize: "10px",
+                          fontWeight: 700,
+                          color: BRAND.money,
+                        }}
+                      >
+                        {lineDiscountPct(item)}% off · saved{" "}
+                        {formatMoneyExact(lineDiscount(item))}
+                      </span>
+                    ) : null}
                   </td>
                 </tr>
               ))}
@@ -260,6 +298,16 @@ export function DocumentPreview({
                 <span style={{ color: "#4b5563" }}>Subtotal</span>
                 <span>{formatMoneyExact(businessDocument.subtotal)}</span>
               </div>
+              {lineDiscountsOf(businessDocument) > 0 ? (
+                <div style={totalRow}>
+                  <span style={{ color: BRAND.money, fontWeight: 700 }}>
+                    Line discounts
+                  </span>
+                  <span style={{ color: BRAND.money, fontWeight: 700 }}>
+                    −{formatMoneyExact(lineDiscountsOf(businessDocument))}
+                  </span>
+                </div>
+              ) : null}
               {businessDocument.discount > 0 ? (
                 <div style={totalRow}>
                   <span style={{ color: "#4b5563" }}>Discount</span>
@@ -286,6 +334,26 @@ export function DocumentPreview({
                 <span>{businessDocument.amountPaid > 0 ? "Total" : "Total due"}</span>
                 <span>{formatMoneyExact(businessDocument.total)}</span>
               </div>
+
+              {/* The headline. Everything above is arithmetic; this is the line
+                  the customer repeats to their spouse. */}
+              {savedOn(businessDocument) > 0 ? (
+                <div
+                  style={{
+                    marginTop: "7px",
+                    borderRadius: "8px",
+                    background: BRAND.money,
+                    color: "#04120a",
+                    padding: "8px 11px",
+                    fontSize: "13px",
+                    fontWeight: 800,
+                    textAlign: "center",
+                    letterSpacing: "0.01em",
+                  }}
+                >
+                  You saved {formatMoneyExact(savedOn(businessDocument))}
+                </div>
+              ) : null}
 
               {businessDocument.amountPaid > 0 ? (
                 <>
@@ -354,5 +422,28 @@ export function DocumentPreview({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * What the per-line percentages came to on a *stored* document.
+ *
+ * Recomputed from the lines rather than read from a field: the stored totals
+ * were written by whichever version of the app saved the document, and a figure
+ * that disagrees with the lines printed above it on the same page is the one
+ * error a customer is guaranteed to spot.
+ */
+function lineDiscountsOf(businessDocument: BusinessDocument): number {
+  return (
+    Math.round(
+      businessDocument.lineItems.reduce((sum, item) => sum + lineDiscount(item), 0) * 100,
+    ) / 100
+  );
+}
+
+/** Everything the customer was let off, line discounts and the flat one. */
+function savedOn(businessDocument: BusinessDocument): number {
+  return (
+    Math.round((lineDiscountsOf(businessDocument) + businessDocument.discount) * 100) / 100
   );
 }

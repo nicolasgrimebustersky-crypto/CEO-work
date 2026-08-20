@@ -23,6 +23,8 @@ export interface DraftLine {
   quantity: string;
   unitPrice: string;
   taxable: boolean;
+  /** Held as a string for the same reason every other number here is. */
+  discountPct: string;
 }
 
 export interface Draft {
@@ -57,6 +59,7 @@ export function blankLine(): DraftLine {
     quantity: "1",
     unitPrice: "",
     taxable: true,
+    discountPct: "",
   };
 }
 
@@ -87,6 +90,7 @@ export function draftFrom(document: BusinessDocument): Draft {
             quantity: String(item.quantity),
             unitPrice: String(item.unitPrice),
             taxable: item.taxable,
+            discountPct: item.discountPct ? String(item.discountPct) : "",
           }))
         : [blankLine()],
     discount: document.discount > 0 ? String(document.discount) : "",
@@ -126,6 +130,7 @@ export function lineItemsFrom(draft: Draft): LineItem[] {
       quantity: toNumber(line.quantity),
       unitPrice: toNumber(line.unitPrice),
       taxable: line.taxable,
+      discountPct: toNumber(line.discountPct),
     }));
 }
 

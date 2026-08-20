@@ -68,7 +68,11 @@ export function LineItemsEditor({
     <div className="flex flex-col gap-3">
       <ul className="flex flex-col gap-3">
         {draft.lines.map((line, index) => {
-          const lineTotal = toNumber(line.quantity) * toNumber(line.unitPrice);
+          const gross = toNumber(line.quantity) * toNumber(line.unitPrice);
+          const pct = Math.min(100, Math.max(0, toNumber(line.discountPct)));
+          const saved = Math.round(gross * (pct / 100) * 100) / 100;
+          const lineTotal = Math.round((gross - saved) * 100) / 100;
+          const discounted = pct > 0 && saved > 0;
           return (
             <li key={line.id} className="rounded-3xl border border-line bg-surface p-3 sm:p-4">
               <div className="flex items-start gap-2">
@@ -118,6 +122,7 @@ export function LineItemsEditor({
                     onChange={(e) => patchLine(line.id, { quantity: e.target.value })}
                     disabled={disabled}
                     inputMode="decimal"
+                    aria-label={`Line ${index + 1} quantity`}
                     className={INPUT}
                   />
                 </label>
@@ -132,14 +137,49 @@ export function LineItemsEditor({
                     disabled={disabled}
                     inputMode="decimal"
                     placeholder="0.00"
+                    aria-label={`Line ${index + 1} price`}
                     className={INPUT}
                   />
                 </label>
 
-                <span className="ml-auto pb-2.5 text-lg font-extrabold text-ink tabular-nums">
-                  {formatMoneyExact(lineTotal)}
+                <label className="w-24">
+                  <span className="mb-1 block text-xs font-bold text-muted">Off %</span>
+                  <input
+                    value={line.discountPct}
+                    onChange={(e) => patchLine(line.id, { discountPct: e.target.value })}
+                    disabled={disabled}
+                    inputMode="decimal"
+                    placeholder="0"
+                    aria-label={`Line ${index + 1} discount percent`}
+                    className={`${INPUT} ${discounted ? "border-money text-money" : ""}`}
+                  />
+                </label>
+
+                {/* The full price is struck through rather than replaced. A
+                    discount nobody sees is money given away for nothing — the
+                    customer has to be able to tell they were given something. */}
+                <span className="ml-auto flex flex-col items-end pb-2.5">
+                  {discounted ? (
+                    <span className="text-sm font-bold text-muted line-through tabular-nums">
+                      {formatMoneyExact(gross)}
+                    </span>
+                  ) : null}
+                  <span
+                    className={`text-lg font-extrabold tabular-nums ${
+                      discounted ? "text-money" : "text-ink"
+                    }`}
+                  >
+                    {formatMoneyExact(lineTotal)}
+                  </span>
                 </span>
               </div>
+
+              {discounted ? (
+                <p className="mt-2 flex items-center gap-1.5 rounded-xl border border-money/50 bg-money/10 px-2.5 py-1.5 text-sm font-bold text-money">
+                  <span aria-hidden="true">🏷</span>
+                  {pct}% off — saves {formatMoneyExact(saved)} on this line
+                </p>
+              ) : null}
 
               <label className="mt-2 flex items-center gap-2 text-sm font-semibold text-muted">
                 <input
@@ -167,6 +207,45 @@ export function LineItemsEditor({
 
       <div className="rounded-3xl border border-line bg-surface p-3 sm:p-4">
         <TotalRow label="Subtotal" value={formatMoneyExact(totals.subtotal)} />
+
+        {/* Named line by line rather than as one lump. "Discounts −$340" invites
+            the question "off what?", and the answer being right there is the
+            difference between a concession that lands and one that is argued
+            about on the phone a week later. */}
+        {totals.lineDiscounts > 0 ? (
+          <div className="mt-2 rounded-2xl border border-money/50 bg-money/10 p-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-base font-extrabold text-money">
+                Line discounts
+              </span>
+              <span className="text-base font-extrabold text-money tabular-nums">
+                −{formatMoneyExact(totals.lineDiscounts)}
+              </span>
+            </div>
+            <ul className="mt-1.5 flex flex-col gap-0.5">
+              {draft.lines.map((line, index) => {
+                const gross = toNumber(line.quantity) * toNumber(line.unitPrice);
+                const pct = Math.min(100, Math.max(0, toNumber(line.discountPct)));
+                const saved = Math.round(gross * (pct / 100) * 100) / 100;
+                if (saved <= 0) return null;
+                return (
+                  <li
+                    key={line.id}
+                    className="flex items-center justify-between gap-3 text-sm font-semibold text-money/90"
+                  >
+                    <span className="truncate">
+                      {line.name.trim() || line.description.trim() || `Line ${index + 1}`} ·{" "}
+                      {pct}% off
+                    </span>
+                    <span className="shrink-0 tabular-nums">
+                      −{formatMoneyExact(saved)}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : null}
 
         <div className="mt-2 flex items-center justify-between gap-3">
           <label className="text-base font-semibold text-muted" htmlFor="gb-discount">
@@ -212,6 +291,15 @@ export function LineItemsEditor({
             {formatMoneyExact(totals.total)}
           </span>
         </div>
+
+        {totals.totalSaved > 0 ? (
+          <p
+            role="status"
+            className="mt-2 rounded-xl bg-money px-3 py-2 text-center text-base font-extrabold text-black"
+          >
+            They save {formatMoneyExact(totals.totalSaved)}
+          </p>
+        ) : null}
       </div>
 
       <ServicePickerSheet

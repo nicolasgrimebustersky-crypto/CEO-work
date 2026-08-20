@@ -787,6 +787,7 @@ export function DocumentScreen() {
                 quantity: String(item.quantity),
                 unitPrice: item.unitPrice.toFixed(2),
                 taxable: true,
+                discountPct: "",
               })),
             });
           }}
