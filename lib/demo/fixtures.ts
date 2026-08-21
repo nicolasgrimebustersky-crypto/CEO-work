@@ -593,7 +593,7 @@ function line(
   unitPrice: number,
   taxable = true,
 ): LineItem {
-  return { id, name, description, quantity, unitPrice, taxable };
+  return { id, name, description, quantity, unitPrice, taxable, discountPct: 0 };
 }
 
 function demoDoc(

@@ -2,6 +2,7 @@
 
 import { differenceInDays } from "date-fns";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { useCustomers } from "@/components/providers/CustomersProvider";
@@ -18,6 +19,7 @@ import {
 } from "@/lib/pipeline";
 import { routes } from "@/lib/routes";
 import { LEAD_SOURCE_LABEL, type Customer } from "@/lib/types";
+import { NewCustomerSheet } from "@/components/customers/NewCustomerSheet";
 import { StageSheet } from "./StageSheet";
 
 /** A lead untouched for this long in an open stage gets flagged. */
@@ -28,6 +30,8 @@ export function PipelineScreen() {
   const { colorFor } = useTeam();
   const [selected, setSelected] = useState<Customer | null>(null);
   const [showClosed, setShowClosed] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const router = useRouter();
 
   const stages = useMemo(
     () => (showClosed ? PIPELINE_STAGES : PIPELINE_STAGES.filter((s) => s !== "paid" && s !== "lost")),
@@ -67,6 +71,15 @@ export function PipelineScreen() {
   return (
     <div className="flex h-full flex-col">
       <ScreenHeader title="Pipeline" subtitle={`${formatMoney(openValue)} in play`}>
+        {/* A lead that arrived by phone or referral never had a door knocked,
+            so it needs a way in that does not start on the map. */}
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="tap-target mt-3 w-full rounded-xl bg-accent px-4 text-base font-bold text-accent-ink"
+        >
+          Add a lead by hand
+        </button>
         <div className="mt-3 flex items-center gap-2">
           <button
             type="button"
@@ -162,6 +175,14 @@ export function PipelineScreen() {
       )}
 
       <StageSheet customer={liveSelected} onClose={() => setSelected(null)} />
+
+      {/* Lands the new lead in front of whoever typed it, rather than leaving
+          them to find it among the others. */}
+      <NewCustomerSheet
+        open={adding}
+        onClose={() => setAdding(false)}
+        onCreated={(id) => router.push(routes.customer(id))}
+      />
     </div>
   );
 }

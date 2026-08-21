@@ -16,6 +16,12 @@ import { test, describe } from "node:test";
 
 const {
   computeTotals,
+  documentLineDiscounts,
+  documentSaved,
+  lineDiscount,
+  lineDiscountPct,
+  lineGross,
+  lineTotal,
   defaultInvoiceDueDate,
   INVOICE_TERMS_DAYS,
   nextNumber,
@@ -123,5 +129,196 @@ describe("what happens once it is paid", () => {
 
   test("a voided invoice stays voided whatever arrives", () => {
     assert.equal(statusAfterPayment("void", 450, 450), "void");
+  });
+});
+
+/* ------------------------------------------------- per-line percentages */
+
+describe("a discount on one line and not the others", () => {
+  // The case this was built for: a customer supplied her own sealant, so the
+  // labour is discounted ten percent and the materials are not. A single
+  // document-level figure cannot express that — it comes off everything.
+  const labour = (name, price) => ({
+    id: name,
+    name,
+    description: "",
+    quantity: 1,
+    unitPrice: price,
+    taxable: true,
+    discountPct: 10,
+  });
+  const materials = (name, price) => ({
+    id: name,
+    name,
+    description: "",
+    quantity: 1,
+    unitPrice: price,
+    taxable: true,
+    discountPct: 0,
+  });
+
+  test("only the discounted line loses money", () => {
+    const totals = computeTotals([labour("Wash", 1700), materials("Sealant", 900)], 0, 0);
+    assert.equal(totals.subtotal, 2600, "full price of everything");
+    assert.equal(totals.lineDiscounts, 170, "ten percent of the labour only");
+    assert.equal(totals.total, 2430);
+  });
+
+  test("the pressure washing number from the real quote", () => {
+    // $1,700 of washing at 10% is $1,530. Worked out by hand in a text message;
+    // if this ever disagrees, the app is wrong and the text was right.
+    const totals = computeTotals([labour("Pressure washing", 1700)], 0, 0);
+    assert.equal(totals.total, 1530);
+    assert.equal(totals.totalSaved, 170);
+  });
+
+  test("what the customer saved is line discounts plus the flat one", () => {
+    const totals = computeTotals(
+      [labour("Wash", 1000), materials("Sealant", 500)],
+      50,
+      0,
+    );
+    assert.equal(totals.lineDiscounts, 100);
+    assert.equal(totals.discount, 50);
+    assert.equal(totals.totalSaved, 150);
+    assert.equal(totals.total, 1350);
+  });
+});
+
+describe("the line arithmetic", () => {
+  const item = (patch) => ({
+    id: "x",
+    name: "x",
+    description: "",
+    quantity: 1,
+    unitPrice: 100,
+    taxable: true,
+    ...patch,
+  });
+
+  test("gross is what it was worth, total is what it costs", () => {
+    const discounted = item({ discountPct: 25 });
+    assert.equal(lineGross(discounted), 100);
+    assert.equal(lineDiscount(discounted), 25);
+    assert.equal(lineTotal(discounted), 75);
+  });
+
+  test("quantity is discounted too, not just the unit price", () => {
+    const three = item({ quantity: 3, unitPrice: 200, discountPct: 10 });
+    assert.equal(lineGross(three), 600);
+    assert.equal(lineDiscount(three), 60);
+    assert.equal(lineTotal(three), 540);
+  });
+
+  test("a line written before discounts existed is simply undiscounted", () => {
+    // Every stored document predates this field. Reading one must not produce
+    // NaN prices on an invoice somebody already sent.
+    const old = { id: "a", name: "a", description: "", quantity: 2, unitPrice: 50, taxable: true };
+    assert.equal(lineDiscountPct(old), 0);
+    assert.equal(lineTotal(old), 100);
+    assert.equal(computeTotals([old], 0, 0).total, 100);
+  });
+
+  test("nonsense percentages are clamped rather than trusted", () => {
+    // A negative is a surcharge wearing a discount's clothes; over 100 would pay
+    // the customer to take the work.
+    assert.equal(lineDiscountPct(item({ discountPct: -20 })), 0);
+    assert.equal(lineDiscountPct(item({ discountPct: 250 })), 100);
+    assert.equal(lineDiscountPct(item({ discountPct: Number.NaN })), 0);
+    assert.equal(lineDiscountPct(item({ discountPct: "10" })), 0);
+    assert.equal(lineTotal(item({ discountPct: 250 })), 0, "free, never negative");
+  });
+
+  test("a hundred percent off is free, and does not go below zero", () => {
+    const free = item({ discountPct: 100 });
+    assert.equal(lineTotal(free), 0);
+    assert.equal(computeTotals([free], 0, 6).total, 0);
+  });
+});
+
+describe("tax, once lines are discounted", () => {
+  const taxed = (price, pct) => ({
+    id: String(price),
+    name: "t",
+    description: "",
+    quantity: 1,
+    unitPrice: price,
+    taxable: true,
+    discountPct: pct,
+  });
+  const untaxed = (price, pct) => ({ ...taxed(price, pct), id: "u", taxable: false });
+
+  test("tax is charged on the discounted amount, not the full price", () => {
+    // Charging tax on money the customer was never asked for is overcharging
+    // them, and it is the kind of error that survives for years.
+    const totals = computeTotals([taxed(1000, 10)], 0, 6);
+    assert.equal(totals.taxableBase, 900);
+    assert.equal(totals.taxAmount, 54);
+    assert.equal(totals.total, 954);
+  });
+
+  test("a discount on an untaxed line does not move the taxable base", () => {
+    const totals = computeTotals([taxed(1000, 0), untaxed(500, 20)], 0, 6);
+    assert.equal(totals.taxableBase, 1000);
+    assert.equal(totals.taxAmount, 60);
+    assert.equal(totals.total, round2(1000 + 400 + 60));
+  });
+
+  test("the flat discount still spreads proportionally over what is left", () => {
+    const totals = computeTotals([taxed(1000, 10), untaxed(1000, 0)], 190, 6);
+    // Net: 900 taxable + 1000 untaxed = 1900. The 190 is 10% of that, so 90 of
+    // it lands on the taxable side.
+    assert.equal(totals.taxableBase, 810);
+    assert.equal(totals.taxAmount, 48.6);
+  });
+
+  test("a flat discount cannot exceed what the lines still cost", () => {
+    // Discounting past zero would invent a negative bill, and clamping to the
+    // pre-discount subtotal would let it.
+    const totals = computeTotals([taxed(1000, 50)], 5000, 6);
+    assert.equal(totals.discount, 500);
+    assert.equal(totals.total, 0);
+    assert.ok(totals.taxableBase >= 0);
+  });
+});
+
+describe("what the preview and the PDF both read", () => {
+  // These two renderers draw the same page by different means. If they ever
+  // compute their savings figures separately, one of them drifts and a customer
+  // gets a document whose own numbers disagree.
+  const item = (price, pct) => ({
+    id: String(price),
+    name: "x",
+    description: "",
+    quantity: 1,
+    unitPrice: price,
+    taxable: true,
+    discountPct: pct,
+  });
+
+  test("line discounts add up across the document", () => {
+    assert.equal(documentLineDiscounts([item(1000, 10), item(500, 20)]), 200);
+  });
+
+  test("nothing discounted is nothing saved", () => {
+    assert.equal(documentLineDiscounts([item(1000, 0), item(500, 0)]), 0);
+    assert.equal(documentSaved({ lineItems: [item(1000, 0)], discount: 0 }), 0);
+  });
+
+  test("the total saved includes the flat discount", () => {
+    assert.equal(documentSaved({ lineItems: [item(1000, 10)], discount: 25 }), 125);
+  });
+
+  test("it agrees with computeTotals, which is the point", () => {
+    const lines = [item(1700, 10), item(900, 0)];
+    const totals = computeTotals(lines, 50, 0);
+    assert.equal(documentLineDiscounts(lines), totals.lineDiscounts);
+    assert.equal(documentSaved({ lineItems: lines, discount: totals.discount }), totals.totalSaved);
+  });
+
+  test("lines written before discounts existed contribute nothing", () => {
+    const old = { id: "o", name: "o", description: "", quantity: 1, unitPrice: 400, taxable: true };
+    assert.equal(documentLineDiscounts([old]), 0);
+    assert.equal(documentSaved({ lineItems: [old], discount: 0 }), 0);
   });
 });

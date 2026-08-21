@@ -90,6 +90,19 @@ export interface LineItem {
   unitPrice: number;
   /** Sales tax does not apply to every line — labour often is not taxed. */
   taxable: boolean;
+  /**
+   * A discount on this line alone, 0–100.
+   *
+   * Per line rather than per document because that is how a real concession is
+   * given: ten percent off the labour because the customer supplied the
+   * sealant, with the materials untouched. A single document-level figure
+   * cannot express that — it comes off everything, including the things you
+   * did not mean to discount.
+   *
+   * Absent on every document written before this existed, which is why every
+   * read goes through `lineDiscountPct` rather than touching the field.
+   */
+  discountPct?: number;
 }
 
 export interface Payment {
@@ -172,14 +185,50 @@ export function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
-export function lineTotal(item: LineItem): number {
+/**
+ * The line before any discount — what the customer is told the work is worth.
+ *
+ * Kept separate from the net so the printed document can show both: crossing
+ * out a real price and showing a lower one is the whole point of giving a
+ * discount, and a line that silently prints its net price gives away money
+ * without the customer ever noticing they were given anything.
+ */
+export function lineGross(item: LineItem): number {
   return round2(item.quantity * item.unitPrice);
 }
 
+/**
+ * This line's discount percentage, clamped and defaulted.
+ *
+ * Anything outside 0–100 is nonsense: a negative would be a surcharge dressed
+ * as a discount, and over 100 would pay the customer to take the work.
+ */
+export function lineDiscountPct(item: LineItem): number {
+  const pct = item.discountPct;
+  if (typeof pct !== "number" || !Number.isFinite(pct)) return 0;
+  return Math.min(100, Math.max(0, pct));
+}
+
+/** What this line's discount is worth in money. */
+export function lineDiscount(item: LineItem): number {
+  return round2(lineGross(item) * (lineDiscountPct(item) / 100));
+}
+
+/** What this line actually adds to the bill. */
+export function lineTotal(item: LineItem): number {
+  return round2(lineGross(item) - lineDiscount(item));
+}
+
 export interface Totals {
+  /** Every line at full price, before any discount. */
   subtotal: number;
+  /** What the per-line percentages came to. */
+  lineDiscounts: number;
   taxableBase: number;
+  /** The document-level flat discount, after clamping. */
   discount: number;
+  /** Line discounts and the document one together — what the customer saved. */
+  totalSaved: number;
   taxAmount: number;
   total: number;
 }
@@ -197,19 +246,68 @@ export function computeTotals(
   discount: number,
   taxRatePct: number,
 ): Totals {
-  const subtotal = round2(lineItems.reduce((sum, item) => sum + lineTotal(item), 0));
-  const taxableGross = round2(
-    lineItems.filter((item) => item.taxable).reduce((sum, item) => sum + lineTotal(item), 0),
+  const subtotal = round2(lineItems.reduce((sum, item) => sum + lineGross(item), 0));
+  const lineDiscounts = round2(
+    lineItems.reduce((sum, item) => sum + lineDiscount(item), 0),
   );
 
-  const appliedDiscount = round2(Math.min(Math.max(discount, 0), subtotal));
-  const share = subtotal === 0 ? 0 : taxableGross / subtotal;
-  const taxableBase = round2(taxableGross - appliedDiscount * share);
+  const taxable = lineItems.filter((item) => item.taxable);
+  const taxableGross = round2(taxable.reduce((sum, item) => sum + lineGross(item), 0));
+  const taxableLineDiscounts = round2(
+    taxable.reduce((sum, item) => sum + lineDiscount(item), 0),
+  );
+
+  // Line discounts come off their own line's taxable base exactly, not by
+  // apportionment — the money is known to belong to that line, so guessing
+  // would be strictly worse than the arithmetic we already have.
+  const netSubtotal = round2(subtotal - lineDiscounts);
+  const netTaxable = round2(taxableGross - taxableLineDiscounts);
+
+  // The document-level figure is still a flat amount spread across taxable and
+  // untaxed lines in proportion, and it can only discount what is left after
+  // the per-line ones.
+  const appliedDiscount = round2(Math.min(Math.max(discount, 0), netSubtotal));
+  const share = netSubtotal === 0 ? 0 : netTaxable / netSubtotal;
+  const taxableBase = round2(Math.max(0, netTaxable - appliedDiscount * share));
 
   const taxAmount = round2(taxableBase * (taxRatePct / 100));
-  const total = round2(subtotal - appliedDiscount + taxAmount);
+  const total = round2(netSubtotal - appliedDiscount + taxAmount);
 
-  return { subtotal, taxableBase, discount: appliedDiscount, taxAmount, total };
+  return {
+    subtotal,
+    lineDiscounts,
+    taxableBase,
+    discount: appliedDiscount,
+    totalSaved: round2(lineDiscounts + appliedDiscount),
+    taxAmount,
+    total,
+  };
+}
+
+/**
+ * What the per-line percentages came to on a stored document.
+ *
+ * Recomputed from the lines rather than read back from a stored field. The
+ * totals on a document were written by whichever version of the app saved it,
+ * and a savings figure that disagrees with the lines printed above it on the
+ * same page is the one error a customer is guaranteed to spot.
+ *
+ * Shared by the on-screen preview and the PDF writer, which are two separate
+ * renderers of the same page. They must never disagree, and the only way to
+ * guarantee that is for both to call this.
+ */
+export function documentLineDiscounts(lineItems: readonly LineItem[]): number {
+  return round2(lineItems.reduce((sum, item) => sum + lineDiscount(item), 0));
+}
+
+/** Everything the customer was let off: the per-line ones plus the flat one. */
+export function documentSaved(businessDocument: {
+  lineItems: readonly LineItem[];
+  discount: number;
+}): number {
+  return round2(
+    documentLineDiscounts(businessDocument.lineItems) + businessDocument.discount,
+  );
 }
 
 export function sumPayments(payments: Payment[]): number {
@@ -259,7 +357,15 @@ export function nextNumber(existing: string[]): string {
 }
 
 export function blankLineItem(id: string): LineItem {
-  return { id, name: "", description: "", quantity: 1, unitPrice: 0, taxable: true };
+  return {
+    id,
+    name: "",
+    description: "",
+    quantity: 1,
+    unitPrice: 0,
+    taxable: true,
+    discountPct: 0,
+  };
 }
 
 /** What the line is called, falling back to its detail if it was never named. */

@@ -41,6 +41,7 @@ import {
   SERVICE_LABEL,
   STATUS_LABEL,
 } from "@/lib/status";
+import { LEAD_SOURCE_LABEL } from "@/lib/types";
 import { CUSTOMER_STATUSES, QUOTE_STATUSES } from "@/lib/types";
 import type { Job, Photo, Quote } from "@/lib/types";
 import { JobSheet } from "@/components/schedule/JobSheet";
@@ -311,6 +312,13 @@ export function CustomerDetailScreen() {
           <dl className="divide-y divide-line rounded-xl border border-line bg-surface-2">
             <Row label="Phone" value={customer.phone ? formatPhone(customer.phone) : "—"} />
             <Row label="Email" value={customer.email || "—"} />
+            {/* Where they came from. Worth showing: a referral and a cold door
+                are different kinds of relationship, and the reports only mean
+                anything if the distinction survives on the record. */}
+            <Row
+              label="Source"
+              value={LEAD_SOURCE_LABEL[customer.source] ?? "Door knock"}
+            />
             {/* The address is the one field on this screen you act on rather
                 than read: tapping it hands the customer to the phone's maps
                 app. Copying it out by hand was the alternative.

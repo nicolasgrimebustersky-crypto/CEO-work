@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { FilterSheet } from "@/components/map/FilterSheet";
@@ -12,6 +13,7 @@ import { NotificationBell } from "@/components/shell/NotificationBell";
 import { StatusPill } from "@/components/ui/Chips";
 import { Spinner } from "@/components/ui/Spinner";
 import { BlastSheet } from "./BlastSheet";
+import { NewCustomerSheet } from "./NewCustomerSheet";
 import {
   activeFilterCount,
   applyFilters,
@@ -67,6 +69,8 @@ export function CustomerListScreen() {
   const [filters, setFilters] = useState<CustomerFilters>(EMPTY_FILTERS);
   const [filterOpen, setFilterOpen] = useState(false);
   const [blastOpen, setBlastOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const router = useRouter();
 
   const rows = useMemo(
     () => sortCustomers(searchCustomers(applyFilters(customers, filters), term), sort),
@@ -92,6 +96,15 @@ export function CustomerListScreen() {
             <h1 className="text-2xl font-extrabold tracking-tight text-ink">Customers</h1>
           </div>
           <div className="flex items-center gap-2">
+            {/* Typing somebody in, for the leads that never involved a door:
+                a referral over the phone, a number on a napkin. */}
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              className="tap-target rounded-xl bg-accent px-3 text-sm font-bold text-accent-ink"
+            >
+              Add
+            </button>
             <button
               type="button"
               onClick={() => setBlastOpen(true)}
@@ -226,6 +239,12 @@ export function CustomerListScreen() {
         recipients={rows}
         open={blastOpen}
         onClose={() => setBlastOpen(false)}
+      />
+
+      <NewCustomerSheet
+        open={adding}
+        onClose={() => setAdding(false)}
+        onCreated={(id) => router.push(routes.customer(id))}
       />
     </div>
   );

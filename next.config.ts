@@ -33,6 +33,25 @@ const isDemo = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
  * and write. Only ever added when emulator mode is explicitly switched on —
  * never in a production build.
  */
+/**
+ * The canonical site, so a *different* deployment may ask it which build is
+ * live. Without this, `connect-src 'self'` blocks the check on exactly the
+ * deployments it exists to warn — a preview URL is not 'self' to production.
+ *
+ * The exact origin, never a wildcard: this widens the policy, and widening it
+ * to `https://*.vercel.app` would let any page on any Vercel deployment be
+ * talked to from ours.
+ */
+const SITE_ORIGIN = (() => {
+  const raw = (process.env.NEXT_PUBLIC_SITE_URL ?? "").trim();
+  if (!raw) return "";
+  try {
+    return ` ${new URL(raw).origin}`;
+  } catch {
+    return "";
+  }
+})();
+
 const EMULATOR_ORIGINS =
   process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "true"
     ? " http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:*"
@@ -47,7 +66,7 @@ const CSP = [
   `img-src 'self' blob: data: https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.ggpht.com https://firebasestorage.googleapis.com https://storage.googleapis.com${EMULATOR_ORIGINS}`,
   // Firestore uses long-polling/WebSocket to firestore.googleapis.com; Auth
   // talks to identitytoolkit; the map talks to maps/places/routes.
-  `connect-src 'self' https://*.googleapis.com https://*.google.com https://*.gstatic.com https://firebaseinstallations.googleapis.com https://securetoken.googleapis.com wss://*.firebaseio.com${EMULATOR_ORIGINS}`,
+  `connect-src 'self' https://*.googleapis.com https://*.google.com https://*.gstatic.com https://firebaseinstallations.googleapis.com https://securetoken.googleapis.com wss://*.firebaseio.com${SITE_ORIGIN}${EMULATOR_ORIGINS}`,
   "worker-src 'self' blob:",
   "manifest-src 'self'",
   "media-src 'self' blob:",
@@ -87,6 +106,18 @@ const SECURITY_HEADERS = [
 ];
 
 const nextConfig: NextConfig = {
+  /**
+   * The commit this bundle was built from, readable by the browser.
+   *
+   * Every Vercel deployment keeps a permanent URL, so an old link still loads
+   * long after it stops being current. Freezing the commit in lets the running
+   * page ask production which build is live and notice it is not it. See
+   * components/shell/StaleBuildBanner.tsx.
+   */
+  env: {
+    NEXT_PUBLIC_BUILD_ID:
+      process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.NEXT_PUBLIC_BUILD_ID ?? "",
+  },
   reactStrictMode: true,
 
   webpack(config, { webpack }) {
