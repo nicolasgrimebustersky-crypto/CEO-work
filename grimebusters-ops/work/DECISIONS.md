@@ -1,0 +1,84 @@
+# Standing Decisions
+
+Every agent reads this file before every task. Rulings here override anything
+in an individual agent file.
+
+Marcus logs every context edit and every new standing rule here, with a date.
+
+---
+
+## 2026-08-21 — Initial configuration (from /onboard)
+
+**Money.** No agent commits to any spend, any amount, ever. Ads, tools,
+subscriptions, materials. Draft the case, Nicolas authorizes. (A6, G5)
+
+**Customer-facing text.** Agents draft, Nicolas sends. No agent has a send
+mechanism and none claims a message went out. Anything containing a price
+requires his approval; routine no-price replies do not. (D5)
+
+**Pricing.** GrimelineCRM is the only source. No estimating from memory.
+Ranges allowed only when flagged as estimates pending a property walk. (D1)
+
+**Itemization (interim).** Line items by service. No unit costs, no material
+costs on customer-facing documents. Overrides the literal D6 answer pending
+Nicolas's confirmation. (D6 — see CONFIG.md conflict 1)
+
+**Service radius.** 25 miles from Crestwood. Beyond that: flag to Nicolas,
+no customer reply. (D2, G3)
+
+**Minimum job size.** Decline politely below minimum — unless the customer's
+responses show buying signal, in which case offer a bundle to clear the
+minimum. Agent's judgment, must state which way it went. (D3)
+
+**Services not offered.** Do not decline, do not refer out. Flag to Nicolas
+as a possible new service line. (D4)
+
+**Disagreements.** When two agents land differently, both positions go to
+Nicolas. No agent resolves it, no averaging. (E3)
+
+**Model default.** Sonnet for all five specialists. Opus only on explicit
+request or a pricing decision above $1,000. (E4 resolution)
+
+**Quiet hours.** No Telegram 8:10am–3:10pm on weekdays. Queue and send at
+3:10pm. Emergencies only exception. (C3)
+
+---
+
+## 2026-08-21 — Firestore wired to GrimelineCRM
+
+**Why.** CONFIG.md conflict 4 was the blocker under everything else: pricing
+was declared CRM-only, and there was no CRM connection, so every price
+question returned UNKNOWN. The setup notes guessed at collection names
+(`invoices`, `lineItems`) that do not exist.
+
+**Changed.**
+- `scripts/crm-query.py` rewritten against the real schema in `lib/types.ts`.
+  Three modes: `pricing`, `list`, `doc`.
+- `scripts/README-firestore.md` — the actual collection and field map, not a
+  list of likely candidates.
+- `context/PRICING.md` — the UNKNOWN-blocker section replaced with the query
+  to run.
+- `context/CONFIG.md` — conflict 4 marked resolved.
+
+**Standing rules this adds.**
+
+*Pricing lookups.* Before answering any price question, run
+`python3 scripts/crm-query.py pricing --service <service>`. Historical
+figures are the ground a quote is built on, never the quote itself. Hard rule
+3 is unchanged: anything with a price in it goes to Nicolas first.
+
+*UNKNOWN survives.* A service with no priced records still returns
+`UNKNOWN — no priced records in CRM`. Wiring the CRM removed the excuse for
+UNKNOWN, not the answer. Snow removal history is thin.
+
+*Read-only, always.* The service account is Cloud Datastore Viewer. Marcus
+reads the CRM; he never writes to it. The CRM is the live book of customers
+and money for a running business.
+
+*No customer contact details in agent output.* `phone`, `email`, `address`
+and `notes` are stripped from query results unless `--pii` is passed
+explicitly. Query output lands in agent context windows and Telegram
+messages; customer phone numbers belong in neither.
+
+**Still on Nicolas.** Generate the read-only key. Until then the script exits
+with instructions and pricing answers stay UNKNOWN.
