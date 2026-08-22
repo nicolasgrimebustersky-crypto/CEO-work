@@ -128,3 +128,22 @@ boundaries, weekdays only, verified across nine cases including both edges.
 **Testing.** All of the above was exercised against a local stand-in for the
 Telegram API. `TELEGRAM_API_BASE` now overrides the endpoint, which is what
 made that possible; it defaults to the real one.
+
+---
+
+## 2026-08-21 — `.env` Telegram credentials fixed
+
+**Why.** `notify.sh` failed outright: `getMe` returned 404. `TELEGRAM_TOKEN`
+was missing its bot-ID prefix — only the auth-string half
+(`AAGYKgCTD...`) was set, with no numeric ID and no colon in front of it.
+
+**Changed (local `.env`, not tracked in git).**
+- `TELEGRAM_TOKEN` — completed with the bot ID from BotFather:
+  `8834247309:AAGYKgCTD...`. `getMe` now returns 200 (`@grimebusterskyBOT`).
+- `TELEGRAM_CHAT_ID` — was set to `8834247309`, the bot's own ID, so
+  `sendMessage` came back `403 Forbidden: the bot can't send messages to the
+  bot`. Replaced with Nicolas's real private chat ID (`7346898248`), pulled
+  from `getUpdates` after he messaged the bot directly.
+
+**Verified.** `FORCE=1 ./scripts/notify.sh "Marcus online."` delivered
+successfully.
