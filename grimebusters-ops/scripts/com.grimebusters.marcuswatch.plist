@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.grimebusters.marcuswatch</string>
+
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/bash</string>
+		<string>/Users/nicolastimmons/gb-ops/grimebusters-ops/scripts/watch.sh</string>
+	</array>
+
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/Users/nicolastimmons/.nvm/versions/node/v24.19.0/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
+
+	<!-- Starts the moment this is loaded, and again on every login. -->
+	<key>RunAtLoad</key>
+	<true/>
+
+	<!-- If watch.sh's loop ever exits (crash, killed, etc.) launchd starts
+	     it again -- this is the whole point of using launchd over cron for
+	     this one script: something that stays alive between messages. -->
+	<key>KeepAlive</key>
+	<true/>
+
+	<key>StandardOutPath</key>
+	<string>/tmp/gb-watch.log</string>
+	<key>StandardErrorPath</key>
+	<string>/tmp/gb-watch.log</string>
+
+	<key>WorkingDirectory</key>
+	<string>/Users/nicolastimmons/gb-ops/grimebusters-ops</string>
+</dict>
+</plist>
