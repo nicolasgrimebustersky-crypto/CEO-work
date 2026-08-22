@@ -24,8 +24,12 @@ fi
 # Anything still unmarked is unanswered, whether it arrived on this poll or on
 # an earlier one whose reply failed to send. Gating on "did this poll bring
 # something new" instead would strand a message permanently the first time a
-# send failed: no new message means no next attempt.
-NEW=$(grep -E '^\- \[[0-9-]+ [0-9:]+\] ' work/inbox.md | grep -v '\[replied' || true)
+# send failed: no new message means no next attempt. Two tag words excluded
+# here: "[replied" is this script's own mark, "[handled" is how entries from
+# before this script existed were marked by hand -- without excluding both,
+# those old lines get swept back into the prompt and re-marked "[replied" on
+# top of their existing tag the first time anything new comes in.
+NEW=$(grep -E '^\- \[[0-9-]+ [0-9:]+\] ' work/inbox.md | grep -v -E '\[(replied|handled)' || true)
 [ -z "$NEW" ] && exit 0
 
 REPLY=$(claude -p "You are Marcus. Nicolas just sent this via Telegram:
