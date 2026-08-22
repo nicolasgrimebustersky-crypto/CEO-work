@@ -11,8 +11,8 @@ Cole writes here. Reese reads it for campaign targeting.
 | 2026-08-22 | Green Valley Apartments (402 Lakewood Dr, La Grange) | commercial prospecting | COMMERCIAL-P3 | pressure_washing + landscaping bundle | draft ready, not sent | 2026-08-25 |
 | 2026-08-22 | Oldham Oaks Apartments (1000 Cassandra Ln, La Grange — mgmt: A.R. Building Co.) | commercial prospecting | COMMERCIAL-P3 | pressure_washing + landscaping bundle | draft ready, not sent | 2026-08-25 |
 | 2026-08-22 | Cardinal Harbour HOA | commercial prospecting | COMMERCIAL-P4 | landscaping | draft ready, not sent | 2026-08-25 |
-| 2026-08-22 | Grand Dell HOA | commercial prospecting | COMMERCIAL-P4 | landscaping | Gmail draft created, awaiting Nicolas's send | 2026-08-25 |
-| 2026-08-22 | Kenwood Northeast Baptist Church (Crestwood) | commercial prospecting | COMMERCIAL-P5 | pressure_washing + landscaping bundle | Gmail draft created, awaiting Nicolas's send | 2026-08-25 |
+| 2026-08-22 | Grand Dell HOA | commercial prospecting | COMMERCIAL-P4 | landscaping | **Board@GrandDell.com bounced (554 5.1.1) — see verification note below, do not resend to that address** | 2026-08-25 |
+| 2026-08-22 | Kenwood Northeast Baptist Church (Crestwood) | commercial prospecting | COMMERCIAL-P5 | pressure_washing + landscaping bundle | **PastorBooker@bellsouth.net bounced (554 5.1.1) — no verified email found, switch to phone/in-person, see note below** | 2026-08-25 |
 | 2026-08-22 | St. James Episcopal Church (Pewee Valley) | commercial prospecting | COMMERCIAL-P5 | pressure_washing | draft ready, not sent | 2026-08-25 |
 | 2026-08-22 | Cherrywood Crossing Shopping Center (1208–1230 Market St, La Grange) | commercial prospecting | COMMERCIAL-P6 | pressure_washing (common area) | decision-maker unidentified, flagged below | 2026-08-25 |
 | 2026-08-22 | Commonwealth Dentistry (previously pitched, per ICP.md) | prior outreach, cold | COMMERCIAL-P1 | pressure_washing | re-engage, no response logged from first pitch | 2026-08-25 |
@@ -133,31 +133,86 @@ Oldham County, KY 40026
   to?"
 
 **8. Grand Dell Homeowners Association**
-Oldham County, KY · board contact: Board@GrandDell.com
-- Decision-maker: HOA board (email above is a live, public contact point —
-  rare for these).
+Oldham County, KY (Ballardsville, KY 40014) · granddell.com
+- Decision-maker: HOA board. Secretary named on-site: **Steve Dixon**.
 - Fit: same as Cardinal Harbour — entrance and common-area maintenance,
   one decision-maker, low competition for this kind of work locally.
-- **Sent as a Gmail draft 2026-08-22**, signed as Nicolas rather than Cole —
-  no employee named Cole exists at the company. Subject: "Entrance &
-  Common-Area Upkeep — Grime Busters KY." Framed around slip-risk and home
-  values rather than a bare "can I take a look."
+- **2026-08-22 update — Board@GrandDell.com bounced hard (554 5.1.1,
+  mailbox does not exist).** Re-verified directly against the HOA's own
+  site rather than resending to the same address:
+  - Fetched `https://www.granddell.com/contact-us` directly (2026-08-22):
+    the page itself still displays "Board@GrandDell.com" as the listed
+    contact and invites site visitors to use it — so the address that
+    bounced is the one their own site currently advertises. That page is
+    stale or the mailbox was decommissioned without the site being
+    updated; either way, don't trust it as-is.
+  - Fetched `https://www.granddell.com/` (homepage, 2026-08-22): lists a
+    set of role-based addresses — `secretary@granddell.com`,
+    `President@GrandDell.com`, `VicePresident@GrandDell.com`,
+    `Treasurer@GrandDell.com`, plus several first-name addresses. The page
+    text names **Steve Dixon** as secretary and instructs homeowners to
+    "contact Steve Dixon at secretary@granddell.com to be sure your phone
+    number and e-mail address are current" — i.e. this is described as the
+    address actually used and monitored for HOA correspondence, not just a
+    listed alias.
+  - **I cannot confirm `secretary@granddell.com` will deliver** — I have no
+    send mechanism, so "bounces or not" can only be settled by actually
+    sending. Given the first guess already bounced, don't treat this as
+    verified either. It's the strongest lead I found, not a confirmed
+    inbox.
+  - **Better option: the site's own contact form**, at
+    `https://www.granddell.com/contact-us`, submits through whatever
+    routing the HOA has configured on their own platform rather than a
+    specific mailbox we're guessing at. That's a more reliable channel
+    than any email address on this page.
+  - No phone number or physical meeting address found anywhere public for
+    this HOA (site, Manta listing, or Facebook group page) — email/contact
+    form are the only channels found, so there's no phone fallback here if
+    both email paths fail.
+- **Recommendation:** do not re-send the existing Gmail draft to Board@. Use
+  the site's contact form directly, or retry with `secretary@granddell.com`
+  attributed to Steve Dixon — Nicolas's call which he prefers to try first.
 
 ### Churches (P5)
 
 **9. Kenwood Northeast Baptist Church**
-8900 KY-22 W, Crestwood, KY 40014 · (502) 241-7709 ·
-PastorBooker@bellsouth.net
-- Decision-maker: Pastor Booker.
+8900 KY-22 W (W Highway 22), Crestwood, KY 40014 · (502) 241-7709
+- Decision-maker: **Pastor James E. Booker Jr., Senior Pastor** — full name
+  confirmed on the church's own site,
+  `https://www.kenwoodnortheast.org/about-us` (fetched 2026-08-22).
 - Fit: church buildings sit empty most of the week, exterior upkeep slips
   down the list — sidewalks, entrance, and siding show it. One decision
   maker, budget cycle usually annual.
-- **Sent as a Gmail draft 2026-08-22**, revised to reference a real
-  comparable job — sidewalks, sign, and curb cleaned at New Life Church (not
-  in the CRM, reported directly by Nicolas; see `context/ASSETS.md`).
-  Subject: "Sidewalk, Sign & Curb Cleaning — Grime Busters KY." Signed as
-  Nicolas, not Cole — there's no employee named Cole at the company, and
-  BRAND.md's own voice samples sign customer-facing outreach as Nicolas.
+- **2026-08-22 update — PastorBooker@bellsouth.net bounced hard (554 5.1.1,
+  mailbox does not exist). No verified working email found after checking
+  the church's own site, its Facebook page, and the state Baptist
+  directory:**
+  - `https://www.kenwoodnortheast.org/` and every page under it (`about-us`,
+    `visit-us`, `church-service`, `events`, `donate`) — fetched directly
+    2026-08-22. The site does **not publish an email address for the
+    pastor or the church at all.** Only phone (502-241-7709), a P.O. Box
+    (351, Crestwood KY 40014), and a street address. The one email that
+    does appear anywhere on the site is a deacon's personal Gmail
+    (Russell West, listed on `visit-us`) — not the decision-maker and not
+    an appropriate address for a business pitch to the church.
+  - `https://www.facebook.com/p/Kenwood-Northeast-Baptist-Church-100064732150832/`
+    — fetch tool could not retrieve the About/Contact section (content
+    truncated / requires a logged-in view). Could not verify via Facebook.
+  - `https://www.kybaptist.org/churches/kenwood-northeast-baptist-church/`
+    (Kentucky Baptist Convention's own church directory, fetched
+    2026-08-22) lists **the same PastorBooker@bellsouth.net address that
+    already bounced.** That directory entry is almost certainly the
+    original (bad) source the earlier list was drawn from — it didn't
+    independently confirm anything, it just repeated the same dead
+    mailbox.
+  - Conclusion: there is no second, independently-sourced email to try
+    here. Guessing a new one (e.g. a name@ pattern at the church domain)
+    would repeat the exact mistake that caused this bounce, since
+    `kenwoodnortheast.org` has never published any email address publicly.
+- **Recommendation: switch this prospect to phone or in-person, not
+  email.** Call (502) 241-7709 and ask for Pastor Booker directly, or since
+  Crestwood is core service area, a drop-by during office hours is
+  reasonable. Do not re-send or re-guess an email for this one.
 
 **10. St. James Episcopal Church**
 401 La Grange Rd, Pewee Valley, KY 40056 · (502) 241-8136
@@ -205,6 +260,16 @@ Since these all go out together, that's roughly:
 - **Day-3 nudge:** 2026-08-28, for anyone who hasn't responded
 - **Day-10 nudge:** 2026-09-04, for anyone still quiet
 
-Nicolas sends all of it — nothing here has gone out yet. Church and HOA
-contacts (Kenwood Northeast, Grand Dell) are the two with a named person or
-live email; start there since they're the easiest to actually reach.
+Nicolas sends all of it — nothing here has gone out yet.
+
+**2026-08-22 correction:** the two email addresses sourced for Kenwood
+Northeast and Grand Dell both bounced hard (554 5.1.1 — mailbox doesn't
+exist), which means they went into this file without being checked against
+a live source. Re-verified against each org's own site — see entries #8
+and #9 above for exactly what was checked and found. Grand Dell has a
+plausible second email (`secretary@granddell.com`, attributed to Steve
+Dixon) plus a working contact form as a more reliable channel; Kenwood
+Northeast has no email published anywhere and should move to phone/
+in-person. Going forward, don't log an email to this file unless it's been
+pulled from the organization's own site or an official directory — a search
+snippet repeating an address isn't verification.
