@@ -196,3 +196,47 @@ test before Marcus is told pricing is wired, not just an IAM-console glance.
 `pricing --service pressure_washing` both returned real GrimelineCRM data.
 Marcus is fully installed: Telegram verified, Firestore read-only and
 write-blocked, cron scheduled.
+
+---
+
+## 2026-08-22 — Specialist agent audit; PRICING.md gaps filled
+
+**Why.** Nicolas asked for the same treatment the CRM wiring got: check the
+five specialist files (`grant.md`, `cole.md`, `reese.md`, `avery.md`,
+`tyler.md`) against actual repo state rather than assuming they're current.
+
+**Checked.** Every `work/*.md` and `context/*.md` file each agent claims to
+read or write — all exist, all match the writer/reader pairing described
+(e.g. Grant writes `work/site-changes.md`, Reese reads it before promoting a
+page — headers match on both ends). No phantom scripts, no stale competitor
+lists, no broken cross-references.
+
+**Found two real gaps, both Nicolas's numbers, not bugs:**
+- `context/PRICING.md` had four unfilled TODOs Cole and Reese's own rules
+  depend on (minimum job size, travel surcharge, commercial/residential
+  split, discount structure).
+- `context/ASSETS.md` — job library still not indexed. Tyler's "never invent
+  a job" rule means he's blocked on content until this has real entries.
+  Still open; Nicolas didn't provide this round.
+
+**Changed.**
+- `context/PRICING.md` — TODO checklist replaced with confirmed rules:
+  - Minimum job size: **$250**. Below it, decline politely unless buying
+    signal justifies a bundle (D3, unchanged).
+  - Travel surcharge: **15+ miles from Crestwood, $50–100**, exact figure is
+    Nicolas's call per job, not the agent's. Reconciled against the existing
+    25-mile hard service-radius cutoff (D2) — the surcharge band is 15–25
+    miles; beyond 25, flag and don't reply at all.
+  - Commercial vs. residential: commercial trends higher, no fixed
+    multiplier — scope-driven, case by case.
+  - Discounts: **none, ever, without Nicolas's explicit sign-off on that
+    specific instance.** Not a standing tier or referral rate. Default is
+    full price. This overrides anything a specialist might infer from
+    "retention" or "win-back" language elsewhere.
+- `.claude/agents/cole.md` — dropped the stale "or the key isn't in place
+  yet" clause now that Firestore is live; UNKNOWN still handled the same way
+  if a service genuinely has no priced records.
+
+**Not changed.** `reese.md` wasn't touched — she already reads
+`context/PRICING.md` before every task, so the new no-discount rule reaches
+her without duplicating it in her file and risking drift between the two.

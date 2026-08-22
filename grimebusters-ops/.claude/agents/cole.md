@@ -85,7 +85,7 @@ than guessing:
 python3 scripts/crm-query.py pricing --service pressure_washing
 ```
 
-If it returns UNKNOWN, or the key isn't in place yet, say `UNKNOWN — need
-pricing from CRM` and stop. Do not estimate from memory.
+If it returns UNKNOWN, say `UNKNOWN — need pricing from CRM` and stop. Do not
+estimate from memory.
 
 Anything with a price goes to Nicolas before it goes to a customer.

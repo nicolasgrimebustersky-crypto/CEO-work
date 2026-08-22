@@ -39,11 +39,17 @@ of what went into a 2025 job is not there. Do not promise one.
 - Anything with a price goes to Nicolas before it goes to a customer (D5)
 - Line items by service. **No unit costs, no material costs** (D6, interim)
 - Round, clean totals on customer-facing quotes
-- Below minimum: decline politely, unless buying signal suggests a bundle (D3)
-- Outside 25 miles: flag to Nicolas, no customer reply (D2)
-
-## TODO — Nicolas to fill or confirm via CRM
-- [ ] Minimum job size
-- [ ] Travel surcharge threshold and rate
-- [ ] Commercial vs residential rate difference
-- [ ] Recurring / contract discount structure
+- **Minimum job size: $250.** Below that, decline politely — unless the
+  customer's responses suggest buying signal, in which case offer a bundle to
+  clear the minimum. Judgment call, state which way you went (D3).
+- **Travel surcharge: 15+ miles from Crestwood, $50–100.** Exact figure in
+  that range is Nicolas's call per job — flag the distance and let him set
+  the number, don't pick one yourself.
+- **Outside 25 miles: flag to Nicolas, no customer reply at all** (D2). The
+  travel surcharge only applies inside that radius, between 15 and 25 miles.
+- **Commercial tends to run higher than residential.** No fixed multiplier —
+  scope and scale drive it case by case. Don't apply a flat percentage bump.
+- **No discounts, ever, without Nicolas's explicit sign-off on that specific
+  instance.** Not a discount tier, not a standing referral rate, not a
+  recurring-contract structure — every discount is a one-off he approves.
+  Default assumption is full price.
