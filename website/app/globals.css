@@ -1,0 +1,156 @@
+@import "tailwindcss";
+/*
+  ---break---
+*/
+@custom-variant dark (&:is(.dark *));
+
+/*
+  Grime Bustersky — brand theme
+  Emerald green + warm cream/sand on a deep green-black, taken from the logo.
+  Tokens are HSL channel triplets so they work both with Tailwind v4 color
+  utilities (bg-primary, ring-ring, …) and with raw hsl(var(--token) / a) usage.
+*/
+:root {
+  --background: 156 32% 4%;
+  --foreground: 40 33% 96%;
+
+  --card: 156 26% 7%;
+  --card-foreground: 40 33% 96%;
+
+  --popover: 156 30% 6%;
+  --popover-foreground: 40 33% 96%;
+
+  --primary: 150 80% 40%;
+  --primary-foreground: 150 60% 6%;
+
+  --secondary: 154 18% 13%;
+  --secondary-foreground: 40 33% 96%;
+
+  --muted: 154 14% 15%;
+  --muted-foreground: 150 10% 66%;
+
+  --accent: 152 30% 14%;
+  --accent-foreground: 40 33% 96%;
+
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 154 16% 16%;
+  --input: 154 16% 20%;
+  --ring: 150 84% 46%;
+
+  /* warm cream accent from the logo wordmark */
+  --sand: 42 58% 84%;
+
+  --radius: 0.75rem;
+}
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-sand: hsl(var(--sand));
+
+  --font-sans: var(--font-sans);
+  --font-heading: var(--font-heading);
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+  --animate-orbit: orbit calc(var(--duration)*1s) linear infinite;
+  @keyframes orbit {
+  0% {
+    transform: rotate(calc(var(--angle) * 1deg)) translateY(calc(var(--radius) * 1px)) rotate(calc(var(--angle) * -1deg));
+    }
+  100% {
+    transform: rotate(calc(var(--angle) * 1deg + 360deg)) translateY(calc(var(--radius) * 1px)) rotate(calc((var(--angle) * -1deg) - 360deg));
+    }
+  }
+  --animate-shimmer-slide: shimmer-slide var(--speed) ease-in-out infinite alternate;
+  --animate-spin-around: spin-around calc(var(--speed) * 2) infinite linear
+;
+  @keyframes shimmer-slide {
+  to {
+    transform: translate(calc(100cqw - 100%), 0);
+    }
+  }
+  @keyframes spin-around {
+  0% {
+    transform: translateZ(0) rotate(0);
+    }
+  15%, 35% {
+    transform: translateZ(0) rotate(90deg);
+    }
+  65%, 85% {
+    transform: translateZ(0) rotate(270deg);
+    }
+  100% {
+    transform: translateZ(0) rotate(360deg);
+    }
+  }
+  --animate-shiny-text: shiny-text 8s infinite;
+  @keyframes shiny-text {
+  0%, 90%, 100% {
+    background-position: calc(-100% - var(--shiny-width)) 0;
+    }
+  30%, 60% {
+    background-position: calc(100% + var(--shiny-width)) 0;
+    }
+  }}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+  body {
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: hsl(var(--primary) / 0.85);
+    color: hsl(var(--primary-foreground));
+  }
+}
+
+/* thin emerald scrollbar to match the brand */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: hsl(var(--background));
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--primary) / 0.5);
+  border-radius: 999px;
+  border: 2px solid hsl(var(--background));
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary) / 0.8);
+}
