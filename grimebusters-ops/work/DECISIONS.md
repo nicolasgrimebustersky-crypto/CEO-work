@@ -314,3 +314,45 @@ clicking send.
 **Not changed.** The other 10 prospects stay as phone/in-person scripts in
 `work/leads.md` — no email address on file for them, so nothing to draft in
 Gmail. Nicolas calls or visits those himself.
+
+---
+
+## 2026-08-22 — `scripts/respond.sh`: real auto-reply, not just a queue
+
+**Why.** Nicolas revised the "online 24/7" ask (see the earlier Firestore-era
+entries' sibling conversation, not logged here since it was a live discussion,
+not a file edit): he doesn't need Marcus running background work on a
+server. He needs Marcus to actually answer when texted, any time. The gap:
+`check-replies.sh` only ever pulled messages into `work/inbox.md` as a
+queue — nothing read that queue and generated a reply. A message sent at
+noon sat there until the next interactive session, which could be hours or
+days away.
+
+**Changed.** New `scripts/respond.sh`. Calls `check-replies.sh` to pull new
+messages (which also advances `.tg_offset`, so Telegram's own offset is the
+dedup mechanism — a message can never be pulled twice regardless of what
+happens downstream). Any inbox line not yet marked `[replied]` gets bundled
+into one `claude -p` call that reads full context and answers directly, then
+the reply goes through `notify.sh` unmodified — which means the **existing
+quiet-hours gate governs auto-replies too**, deliberately. Nicolas's explicit
+call: keep quiet hours for this. A question sent at 9am on a school day still
+queues and answers at 3:10pm, same as before; 24/7 responsiveness applies to
+nights, weekends, and after 3:10pm on weekdays.
+
+Crontab interval tightened from the prior `*/30 * * * *` check-replies.sh
+entry to `*/5 * * * * respond.sh` (which calls check-replies.sh internally,
+so the standalone entry was removed, not duplicated).
+
+**Not live-tested.** Grant's worktree task failed mid-run today on the
+account's session usage cap (resets 2:10pm America/New_York) — a real
+constraint discovered today, not assumed. Rather than risk tripping the same
+cap on this session while other work is still in flight, the `claude -p`
+call inside `respond.sh` has been syntax-checked but not exercised against a
+real Telegram message. Test after the reset before trusting it fully.
+
+**Standing rule this adds.** *A live send capability does not relax hard
+rule on quiet hours either* — same principle as the Gmail-drafts entry
+above, applied to a different mechanism. Auto-reply infrastructure inherits
+`notify.sh`'s quiet-hours logic by construction rather than re-implementing
+it, so there is exactly one place that rule lives, not two that could drift
+apart.
