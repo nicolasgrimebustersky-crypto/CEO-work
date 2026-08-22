@@ -14,18 +14,17 @@ if ! command -v claude > /dev/null 2>&1; then
   exit 1
 fi
 
-PULL_OUT=$("$DIR/scripts/check-replies.sh" 2>>"$LOG")
-if echo "$PULL_OUT" | grep -q "^FAILED"; then
-  echo "$PULL_OUT" >> "$LOG"
+# check-replies.sh reports failure on stderr and through its exit status, so
+# the status is what to test -- stderr is already going to the log.
+if ! "$DIR/scripts/check-replies.sh" >>"$LOG" 2>&1; then
+  echo "[$(date '+%F %T')] check-replies failed; no reply attempted this run" >> "$LOG"
   exit 1
 fi
-if ! echo "$PULL_OUT" | grep -q "new message"; then
-  exit 0
-fi
 
-# Lines not yet marked [replied] are the ones new since the last successful
-# run of this script -- Telegram's own offset already guarantees inbox.md
-# never gets a duplicate line in the first place.
+# Anything still unmarked is unanswered, whether it arrived on this poll or on
+# an earlier one whose reply failed to send. Gating on "did this poll bring
+# something new" instead would strand a message permanently the first time a
+# send failed: no new message means no next attempt.
 NEW=$(grep -E '^\- \[[0-9-]+ [0-9:]+\] ' work/inbox.md | grep -v '\[replied' || true)
 [ -z "$NEW" ] && exit 0
 
@@ -50,15 +49,33 @@ fi
 "$DIR/scripts/notify.sh" "$REPLY"
 SENT_STATUS=$?
 
-python3 - <<'PYEOF'
-import re
-with open("work/inbox.md") as f:
-    lines = f.readlines()
-with open("work/inbox.md", "w") as f:
-    for line in lines:
-        if re.match(r'^\- \[[0-9-]+ [0-9:]+\] ', line) and '[replied' not in line:
-            line = line.rstrip("\n") + " [replied]\n"
-        f.write(line)
+# Nothing gets marked answered unless the reply actually went out. notify.sh
+# returns 0 when it queues for quiet hours, so a queued reply still counts --
+# it is going to be delivered. A real failure leaves inbox.md untouched so the
+# next run picks the same message up again. Marking on a failed send would
+# lose Nicolas's message silently, which is the one thing this system is not
+# allowed to do.
+if [ "$SENT_STATUS" -ne 0 ]; then
+  echo "[$(date '+%F %T')] reply not delivered; inbox.md left unmarked for retry" >> "$LOG"
+  exit "$SENT_STATUS"
+fi
+
+# Mark only the lines that were actually in the prompt. check-replies.sh also
+# runs on its own cron, so a message can land in inbox.md while claude -p is
+# still thinking -- marking every unmarked line would stamp that one answered
+# without it ever having been read.
+ANSWERED="$NEW" python3 - <<'PYEOF'
+import os
+
+answered = {l for l in os.environ["ANSWERED"].splitlines() if l.strip()}
+if answered:
+    with open("work/inbox.md") as f:
+        lines = f.readlines()
+    with open("work/inbox.md", "w") as f:
+        for line in lines:
+            if line.rstrip("\n") in answered:
+                line = line.rstrip("\n") + " [replied]\n"
+            f.write(line)
 PYEOF
 
-exit $SENT_STATUS
+exit 0
