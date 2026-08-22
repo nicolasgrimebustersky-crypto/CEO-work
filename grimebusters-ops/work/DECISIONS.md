@@ -147,3 +147,52 @@ was missing its bot-ID prefix — only the auth-string half
 
 **Verified.** `FORCE=1 ./scripts/notify.sh "Marcus online."` delivered
 successfully.
+
+---
+
+## 2026-08-22 — Firestore key installed; Marcus fully installed
+
+**Why.** CONFIG.md conflict 4's last step — generate the read-only
+service-account key — was still on Nicolas. Without it every pricing answer
+was `UNKNOWN` regardless of the query wiring from the prior session.
+
+**Changed.**
+- `firebase-readonly.json` dropped in at the repo root (gitignored, verified
+  with `git check-ignore` before use). Project: `grimeline-5e3d8`.
+- `.env` — `FIREBASE_PROJECT_ID=grimeline-5e3d8` filled in.
+- `pip install firebase-admin` run.
+- Crontab installed: daily report (7am), quiet-hours queue flush (3:10pm
+  weekdays), weekly review (Friday 3:30pm), reply-check (every 30min) — all
+  four from the README, with an explicit `PATH` line since `claude` lives
+  under nvm and cron's default PATH doesn't see it.
+
+**The permission problem.** Firebase's default-generated key for this service
+account (`firebase-adminsdk-fbsvc@grimeline-5e3d8...`) was not just Editor —
+it carried **Firebase Admin SDK Administrator Service Agent** (near-full
+Firebase access, including Firestore writes), **Storage Admin** (full access
+to job photos in Cloud Storage), and **Service Account Token Creator**
+(lets this key mint tokens to impersonate other service accounts — the most
+dangerous of the three if the key ever leaks). Cloud Datastore Viewer being
+present didn't help while the broader roles were still granted alongside it.
+
+**Verified, not assumed.** After Nicolas removed the three extra roles in
+IAM, a live write attempt against the CRM still succeeded — IAM propagation
+lag, not a failed removal. Confirmed by rechecking the console (only
+`Cloud Datastore Viewer` listed) and retesting: a write to a throwaway test
+document (`_marcus_permission_test/probe`) then returned
+`403 PermissionDenied`, and a read (`pricing --service pressure_washing`)
+still returned real figures. Both test writes were deleted immediately after
+each attempt — nothing left behind in the CRM.
+
+**Standing rule this adds.**
+
+*Never trust a Firebase-generated key's default role.* Firebase's own
+"Generate new private key" flow does not hand out Cloud Datastore Viewer by
+default — it hands out project Editor plus several Firebase-specific admin
+roles. Every future service-account key for this project gets a live write
+test before Marcus is told pricing is wired, not just an IAM-console glance.
+
+**Confirmed live.** `python3 scripts/crm-query.py list jobs --limit 1` and
+`pricing --service pressure_washing` both returned real GrimelineCRM data.
+Marcus is fully installed: Telegram verified, Firestore read-only and
+write-blocked, cron scheduled.

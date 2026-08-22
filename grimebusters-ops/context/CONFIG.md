@@ -91,19 +91,20 @@ Unclear whether 1 = highest or lowest priority. Currently read as **1 =
 highest**, which puts booked revenue last and systems first. Consistent with
 the long-term build-to-sell plan, but unusual enough to confirm.
 
-### 4. Firestore — RESOLVED 2026-08-21
-Wired. `scripts/crm-query.py` reads GrimelineCRM against the real schema:
-collections `jobs`, `quotes`, `customers`, `services`, `conversations`,
-`knockRoutes`, `territories`, `users`. Pricing comes from completed `jobs`
-(`price`, `serviceType`, `status`) with accepted `quotes` (`amount`)
-alongside. There is no `invoices` or `lineItems` collection — that was a
-guess in the original setup notes and it was wrong.
+### 4. Firestore — RESOLVED 2026-08-22
+Wired and live. `scripts/crm-query.py` reads GrimelineCRM against the real
+schema: collections `jobs`, `quotes`, `customers`, `services`,
+`conversations`, `knockRoutes`, `territories`, `users`. Pricing comes from
+completed `jobs` (`price`, `serviceType`, `status`) with accepted `quotes`
+(`amount`) alongside. There is no `invoices` or `lineItems` collection — that
+was a guess in the original setup notes and it was wrong.
 
 Query paths were verified end to end against a Firestore emulator, including
 the case where a service has no priced records (it returns UNKNOWN rather
 than a number).
 
-**Still on Nicolas:** generate the read-only service-account key and drop it
-in as `grimebusters-ops/firebase-readonly.json`, Cloud Datastore Viewer only.
-Until that key exists the script exits with a message pointing at
-`scripts/README-firestore.md`. That is the last step — about five minutes.
+Key installed (`firebase-readonly.json`, project `grimeline-5e3d8`), locked
+to Cloud Datastore Viewer, and confirmed both ways: reads return real pricing
+figures, writes get `403 PermissionDenied`. See `work/DECISIONS.md` for the
+IAM cleanup this needed — the Firebase-generated key came with far more than
+Editor by default. Nothing left to do here.
