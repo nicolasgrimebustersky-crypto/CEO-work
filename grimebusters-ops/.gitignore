@@ -1,0 +1,6 @@
+.env
+.tg_offset
+firebase-readonly.json
+*.log
+work/queued-texts.log
+node_modules/
