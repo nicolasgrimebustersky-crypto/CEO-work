@@ -240,3 +240,32 @@ lists, no broken cross-references.
 **Not changed.** `reese.md` wasn't touched — she already reads
 `context/PRICING.md` before every task, so the new no-discount rule reaches
 her without duplicating it in her file and risking drift between the two.
+
+---
+
+## 2026-08-22 — `context/ASSETS.md` populated from real CRM job data
+
+**Why.** Nicolas asked for the job list to fill in ASSETS.md, which the prior
+audit flagged as blocking Tyler's content.
+
+**What the CRM actually has.** Pulled all 11 `status=complete` jobs via
+`crm-query.py list jobs`. Every one of them has an empty `beforePhotos` and
+`afterPhotos` array — the CRM has never had media attached to a job. That's
+a finding, not an assumption: the table Marcus built from real job data
+(id, date, service, price, a notability read pulled from `jobNotes`) has real
+values in every column except photos and video, which stay `TODO` because
+there is no CRM field to pull them from.
+
+**Changed.** `context/ASSETS.md` — replaced the empty TODO table with 10 real
+job rows. Matched `fl-fb8e88a9` (Adam, driveway, sodium hypochlorite, same
+week) against the pre-existing "Adam's concrete driveway" note as a likely
+match, flagged for Nicolas to confirm rather than asserted as certain.
+Flagged Broeck Pointe Cir as unmatched — no job in the pull references it by
+name. Flagged the YWAM Mazatlán trip as a mission trip, not a paid job, so it
+will never appear in a CRM pull regardless.
+
+**Still open.** Photos and video for all 10 rows — that media lives outside
+the CRM (Nicolas's phone, Google Photos, etc.), and nothing in this system
+has access to it. Tyler stays blocked on visual content until those columns
+are filled, though he can now reference real job specifics (service, price,
+date, what made it notable) instead of nothing.
