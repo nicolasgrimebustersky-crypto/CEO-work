@@ -269,3 +269,48 @@ the CRM (Nicolas's phone, Google Photos, etc.), and nothing in this system
 has access to it. Tyler stays blocked on visual content until those columns
 are filled, though he can now reference real job specifics (service, price,
 date, what made it notable) instead of nothing.
+
+---
+
+## 2026-08-22 — First real outreach sent as Gmail drafts; "Cole" signature bug fixed
+
+**Why.** Nicolas approved Cole's 11-prospect commercial list and asked for
+two of them (Grand Dell HOA, Kenwood Northeast Baptist Church — the only two
+with an email address) to go out as email, with Kenwood Northeast updated to
+reference a real completed job at New Life Church he described directly
+(sidewalks, sign, curb). Marcus has a live Gmail connection in this session,
+but hard rule 4 (draft, don't send) still applies — the fix was creating
+**drafts** in Nicolas's Gmail for him to review and send, not sending
+directly.
+
+**Changed.**
+- Two Gmail drafts created (`create_draft`, not `send_message`): Grand Dell
+  HOA and Kenwood Northeast Baptist Church. Rewritten to lead with a real
+  pain point (slip risk / home values; visitor first impression) rather than
+  a bare "can I take a look," per Nicolas's ask to make prospects actually
+  want the service.
+- `context/ASSETS.md` — added New Life Church (pressure washing: sidewalks,
+  sign, curb). Not in the CRM under any collection — checked jobs, quotes,
+  customers, no match. Logged as Nicolas-reported, date/price unconfirmed.
+- `work/leads.md` — status updated for the two emailed prospects, and a real
+  bug fixed across **all 12** drafted opening lines: every one said "I'm Cole
+  with Grime Busters KY." There is no employee named Cole — that's Marcus's
+  internal specialist name, and BRAND.md's own voice samples sign
+  customer-facing messages as Nicolas. Replaced throughout.
+- `context/BRAND.md` — added an explicit "Do not" line: never sign
+  customer-facing outreach with a specialist's name (Cole, Reese, Grant,
+  Avery, Tyler). This was silent in BRAND.md before — implied by the voice
+  samples, never stated as a rule — so it slipped through Cole's own draft
+  without him catching it.
+
+**Standing rule this adds.** *A live send capability does not relax hard
+rule 4.* Marcus having Gmail (or any other) send access in a given session
+does not change "you draft, he sends" — it only changes the mechanism from
+"paste this into your email client" to "review this draft I already typed
+in for you." The distinction that matters is whether Nicolas's own action is
+what actually sends it, not whether Marcus is technically capable of
+clicking send.
+
+**Not changed.** The other 10 prospects stay as phone/in-person scripts in
+`work/leads.md` — no email address on file for them, so nothing to draft in
+Gmail. Nicolas calls or visits those himself.

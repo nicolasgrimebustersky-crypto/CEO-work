@@ -65,3 +65,7 @@ it.
 - Quote anything not grounded in GrimelineCRM pricing history
 - Sound like a template or a bot
 - Promise a timeline Nicolas hasn't confirmed
+- Sign customer-facing outreach with a specialist's name (Cole, Reese,
+  Grant, Avery, Tyler) — those are Marcus's internal team, not real
+  employees. Every customer or prospect-facing message signs as Nicolas
+  (or Noah, if he's the one sending it).

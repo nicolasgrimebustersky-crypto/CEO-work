@@ -27,6 +27,14 @@ One job on the list didn't come back in this query — it's either a quote that
 never converted or fell outside the 50-row pull. Not investigated further
 here.
 
+**New Life Church** — pressure washing: sidewalks, sign, and curb around the
+church. Not in the CRM (checked jobs, quotes, and customers — no match on
+"New Life" or "church" in any collection); reported directly by Nicolas on
+2026-08-22. Referenced in the Kenwood Northeast Baptist Church outreach
+email as comparable church-property experience. Date and price unconfirmed —
+ask Nicolas if this needs logging into GrimelineCRM directly so it shows up
+in future pricing/asset pulls instead of living only here.
+
 Notable jobs mentioned previously, still needing a CRM match or Nicolas's
 detail:
 - Broeck Pointe Cir — landscaping, weeding + vine wall cutback. No job in the
