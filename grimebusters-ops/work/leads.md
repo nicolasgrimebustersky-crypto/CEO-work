@@ -4,18 +4,18 @@ Cole writes here. Reese reads it for campaign targeting.
 
 | date | name/handle | source | score | service | status | next follow-up |
 |---|---|---|---|---|---|---|
-| 2026-08-22 | Dr. Janet Visanescu, DMD (Family & Cosmetic Dentistry) | commercial prospecting | COMMERCIAL-P1 | pressure_washing | draft ready, not sent | 2026-08-25 |
-| 2026-08-22 | Pediatric Dentistry of Oldham County | commercial prospecting | COMMERCIAL-P1 | pressure_washing | draft ready, not sent | 2026-08-25 |
-| 2026-08-22 | Hometown Pizza (Crestwood, since 1982) | commercial prospecting | COMMERCIAL-P2 | pressure_washing | draft ready, not sent | 2026-08-25 |
-| 2026-08-22 | Gustavo's Mexican Grill (Cherrywood Crossing, La Grange) | commercial prospecting | COMMERCIAL-P2 | pressure_washing | draft ready, not sent | 2026-08-25 |
-| 2026-08-22 | Green Valley Apartments (402 Lakewood Dr, La Grange) | commercial prospecting | COMMERCIAL-P3 | pressure_washing + landscaping bundle | draft ready, not sent | 2026-08-25 |
-| 2026-08-22 | Oldham Oaks Apartments (1000 Cassandra Ln, La Grange — mgmt: A.R. Building Co.) | commercial prospecting | COMMERCIAL-P3 | pressure_washing + landscaping bundle | draft ready, not sent | 2026-08-25 |
-| 2026-08-22 | Cardinal Harbour HOA | commercial prospecting | COMMERCIAL-P4 | landscaping | draft ready, not sent | 2026-08-25 |
+| 2026-08-22 | Dr. Janet Visanescu, DMD (Family & Cosmetic Dentistry) | commercial prospecting | COMMERCIAL-P1 | pressure_washing | no email published anywhere on site (verified) — phone/in-person only | 2026-08-25 |
+| 2026-08-22 | Pediatric Dentistry of Oldham County | commercial prospecting | COMMERCIAL-P1 | pressure_washing | **email verified: pediatricdentistyoc@gmail.com** — draft ready for email | 2026-08-25 |
+| 2026-08-22 | Hometown Pizza (Crestwood, since 1982) | commercial prospecting | COMMERCIAL-P2 | pressure_washing | no email published anywhere on site (verified) — phone/in-person only | 2026-08-25 |
+| 2026-08-22 | Gustavo's Mexican Grill (Cherrywood Crossing, La Grange) | commercial prospecting | COMMERCIAL-P2 | pressure_washing | no email published anywhere on site (verified) — phone/in-person only | 2026-08-25 |
+| 2026-08-22 | Green Valley Apartments (402 Lakewood Dr, La Grange) | commercial prospecting | COMMERCIAL-P3 | pressure_washing + landscaping bundle | no email published on site (verified) — phone/in-person only; note site phone (502) 222-1614 differs from previously logged (502) 443-1977 | 2026-08-25 |
+| 2026-08-22 | Oldham Oaks Apartments (1000 Cassandra Ln, La Grange — mgmt: A.R. Building Co.) | commercial prospecting | COMMERCIAL-P3 | pressure_washing + landscaping bundle | no email published on site (verified) — phone/in-person only; site's own leasing phone is (502) 991-8101, separate from A.R. Building's corporate line | 2026-08-25 |
+| 2026-08-22 | Cardinal Harbour HOA | commercial prospecting | COMMERCIAL-P4 | landscaping | **email verified: chhacommongrounds@gmail.com** (Common Grounds chair, Jerry Stamler) — draft ready for email | 2026-08-25 |
 | 2026-08-22 | Grand Dell HOA | commercial prospecting | COMMERCIAL-P4 | landscaping | **Board@GrandDell.com bounced (554 5.1.1) — see verification note below, do not resend to that address** | 2026-08-25 |
 | 2026-08-22 | Kenwood Northeast Baptist Church (Crestwood) | commercial prospecting | COMMERCIAL-P5 | pressure_washing + landscaping bundle | **PastorBooker@bellsouth.net bounced (554 5.1.1) — no verified email found, switch to phone/in-person, see note below** | 2026-08-25 |
-| 2026-08-22 | St. James Episcopal Church (Pewee Valley) | commercial prospecting | COMMERCIAL-P5 | pressure_washing | draft ready, not sent | 2026-08-25 |
-| 2026-08-22 | Cherrywood Crossing Shopping Center (1208–1230 Market St, La Grange) | commercial prospecting | COMMERCIAL-P6 | pressure_washing (common area) | decision-maker unidentified, flagged below | 2026-08-25 |
-| 2026-08-22 | Commonwealth Dentistry (previously pitched, per ICP.md) | prior outreach, cold | COMMERCIAL-P1 | pressure_washing | re-engage, no response logged from first pitch | 2026-08-25 |
+| 2026-08-22 | St. James Episcopal Church (Pewee Valley) | commercial prospecting | COMMERCIAL-P5 | pressure_washing | **email verified: parishadmin@stjamespewee.org** (Annie Casey, Parish Administrator) — draft ready for email | 2026-08-25 |
+| 2026-08-22 | Cherrywood Crossing Shopping Center (1208–1230 Market St, La Grange) | commercial prospecting | COMMERCIAL-P6 | pressure_washing (common area) | decision-maker still unidentified after re-check — no email, flagged below | 2026-08-25 |
+| 2026-08-22 | Commonwealth Dentistry (previously pitched, per ICP.md) | prior outreach, cold | COMMERCIAL-P1 | pressure_washing | **target unclear — no Oldham County dental practice by this name found online, see note below** | 2026-08-25 |
 
 Score key for this batch: standard HOT/WARM/COLD is the social-lead scale
 (see Social lead triage in Cole's brief). Commercial prospects are scored by
@@ -273,3 +273,110 @@ Northeast has no email published anywhere and should move to phone/
 in-person. Going forward, don't log an email to this file unless it's been
 pulled from the organization's own site or an official directory — a search
 snippet repeating an address isn't verification.
+
+---
+
+## 2026-08-22 — Email verification pass, remaining 10 commercial prospects
+
+Same standard as the Grand Dell/Kenwood Northeast fix above: only logging an
+email actually fetched from the org's own site, a real contact page, or an
+official directory. No search-snippet guesses. Checked one at a time.
+
+**1. Dr. Janet Visanescu, DMD**
+Practice site: `drjanetvisanescu.com`. Fetched `/contact-us`, `/` (homepage),
+and `/office` directly (2026-08-22) — **no email address anywhere on any of
+the three pages.** Only phone (502-222-7874) and a contact form. Stays
+phone/in-person, no change from the existing opening line.
+
+**2. Pediatric Dentistry of Oldham County**
+Site: `pediatricdentistryoc.com`. Fetched `/phone/contact-us.html` (no
+email — phone/fax only) and `/` (2026-08-22) — the homepage footer lists
+**`pediatricdentistyoc@gmail.com`**. Note the spelling: it's missing the "r"
+in "dentistry" — that's the practice's own typo, confirmed by re-fetching and
+spelling it out character-by-character twice to rule out a misread, not a
+guess on my part. Use exactly as spelled.
+
+**3. Hometown Pizza (Crestwood)**
+Site: `hometownpizza.com`. Fetched `/` and `/contact/` (2026-08-22) — both
+list phone numbers for 14–15 locations, **no email address anywhere.**
+`/locations/` 404'd. Stays phone/in-person.
+
+**4. Gustavo's Mexican Grill (Cherrywood Crossing)**
+Site: `gustavosmexgrill.com`. Fetched `/`, `/locations/lagrange/`, and
+`/contact/` (2026-08-22) — **no email address on any page**, phone only
+((502) 222-4050 for the La Grange location). Stays phone/in-person.
+
+**5. Green Valley Apartments**
+Site: `greenvalleyapts.com`. Fetched `/` (2026-08-22) — **no email**, only a
+phone number and a contact form. The number on the site itself,
+**(502) 222-1614**, doesn't match the (502) 443-1977 previously logged —
+flagging that discrepancy, didn't overwrite it without Nicolas confirming
+which is current. `/contact/` and `/contact-us/` both 404'd, so no separate
+contact page to check. Stays phone/in-person.
+
+**6. Oldham Oaks Apartments (mgmt: A.R. Building Co.)**
+Site: `oldhamoaksapartments.com`. Fetched `/`, then the actual "Email Us"
+link target `/apartments/ky/la-grange/contact-us` (2026-08-22) — that link
+routes to a contact **form**, not a mailto address; **no email displayed
+anywhere.** Site's own leasing phone is **(502) 991-8101** — separate from
+A.R. Building's PA corporate line, (844) 787-6856 / (724) 863-7600, which
+also had nothing Kentucky-specific on `arbuilding.com`. Stays phone/in-person.
+
+**7. Cardinal Harbour Homeowners Association**
+Site: `cardinalharbour.org`. Fetched `/`, `/contact`, and `/board-members/`
+(2026-08-22). The rendered pages show real emails but Cloudflare's
+email-obfuscation (`cdn-cgi/l/email-protection`) hides them from a normal
+fetch — the tool can only report "obfuscated," not decode it. Pulled the raw
+HTML with `curl` and decoded the `data-cfemail` hex using Cloudflare's own
+published (reversible, standard) XOR scheme — this is un-obfuscating what the
+site itself intends browsers to render, not guessing a pattern. Full board
+list decoded; most relevant for a landscaping/entrance-bed pitch:
+- **Common Grounds chair (Jerry Stamler): `chhacommongrounds@gmail.com`** —
+  using this one, matches the pitch already drafted.
+- Secretary (Lori Still): `chhasecretary@yahoo.com` — backup/general contact.
+- Homepage also had an obfuscated address decoding to
+  `courtney@protaxky.com` — that's the outside accountant handling dues
+  billing (Courtney Wittsell), not a board decision-maker, so not using it.
+
+**8. St. James Episcopal Church (Pewee Valley)**
+Site: `stjamespewee.org`. A search snippet claimed
+`parishadmin@stjamespewee.org` before I fetched anything — flagged that as
+unverified per the standing rule and checked it directly. Fetched
+`/contact-us.html` (2026-08-22): confirmed, page displays
+**`parishadmin@stjamespewee.org`**, attributed to Annie Casey, Parish
+Administrator. Verified, not just repeated from the snippet.
+
+**9. Cherrywood Crossing Shopping Center**
+Re-checked per Nicolas's ask. Fetched LoopNet and CIMLS listing pages
+(2026-08-22) — LoopNet returned 403 (blocked), CIMLS loaded but showed **no
+broker/agent name, phone, or email**, just a "Request Info" button.
+CommercialCafe's La Grange commercial listings page doesn't include this
+property at all. No property management company or ownership entity
+surfaced anywhere. **Still unidentified** — same conclusion as the prior
+pass, not for lack of trying a second time. Two paths remain unchanged: pitch
+individual tenants directly (Gustavo's already listed, though no email
+either), or Nicolas calls one of the listing platforms directly since
+they're gated behind logins/paywalls I can't get through.
+
+**10. Commonwealth Dentistry**
+This is the one I can't resolve cleanly. `context/ICP.md` names "Commonwealth
+Dentistry" as previously pitched but gives no address. Searched for that name
+plus every Oldham County town (Crestwood, La Grange, Buckner, Pewee Valley,
+Goshen) — the only "Commonwealth Dentistry" with a live web presence is a
+Virginia-based multi-location practice (`commonwealth-dentistry.com`,
+confirmed by fetching `/contact/`: 14 Virginia offices listed, nothing in
+Kentucky). Every other "Commonwealth"-adjacent dental result
+(mycommonwealthdental.com — Florence, KY; commonwealthoms.com — Louisville
+oral surgery) is also not an Oldham County general practice. **I can't
+confirm which real-world practice this refers to**, so there's no site to
+verify an email against. Likely explanation: this was a practice Nicolas
+pitched in person or knows by a name that doesn't match its registered
+business name online. Flagging back to Nicolas rather than guessing which
+Oldham County dentist he means — if he confirms the actual practice name or
+address, I'll verify an email the same way as the rest of this batch.
+
+**Net for this pass:** 3 of 10 got a verified email (Pediatric Dentistry,
+Cardinal Harbour, St. James). 6 of 10 confirmed to have no email published
+anywhere, checked multiple pages each — those stay on the phone/in-person
+scripts already drafted. 1 of 10 (Commonwealth Dentistry) can't be resolved
+without Nicolas confirming which practice he means.
