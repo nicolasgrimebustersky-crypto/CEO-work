@@ -48,6 +48,13 @@ fi
 NEW=$(grep -E '^\- \[[0-9-]+ [0-9:]+\] ' work/inbox.md | grep -v -E '\[(replied|handled)' || true)
 [ -z "$NEW" ] && exit 0
 
+# claude -p takes real seconds-to-minutes (reading context, maybe
+# delegating) -- an instant ack is what makes this feel like texting
+# instead of waiting in silence. Fire-and-forget: does not affect marking
+# or retries, and respects quiet hours the same as the real reply since it
+# goes through notify.sh too.
+"$DIR/scripts/notify.sh" "👀 on it" >> "$LOG" 2>&1
+
 # claude -p's own timeout, as a backstop against a true hang (a stuck tool
 # call, not normal delegation runtime) -- not a normal-duration cutoff. Real
 # delegated work has taken 8+ minutes in this system before, so this is
