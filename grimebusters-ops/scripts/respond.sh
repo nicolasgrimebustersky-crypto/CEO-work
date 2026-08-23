@@ -50,10 +50,18 @@ NEW=$(grep -E '^\- \[[0-9-]+ [0-9:]+\] ' work/inbox.md | grep -v -E '\[(replied|
 
 # claude -p takes real seconds-to-minutes (reading context, maybe
 # delegating) -- an instant ack is what makes this feel like texting
-# instead of waiting in silence. Fire-and-forget: does not affect marking
-# or retries, and respects quiet hours the same as the real reply since it
-# goes through notify.sh too.
-"$DIR/scripts/notify.sh" "👀 on it" >> "$LOG" 2>&1
+# instead of waiting in silence. But only on the first message of a
+# conversation, not every single text once things are already flowing --
+# skip it if the last reply went out within the last 10 minutes. Fire-and-
+# forget: does not affect marking or retries, and respects quiet hours the
+# same as the real reply since it goes through notify.sh too.
+LAST_REPLY_FILE="$DIR/.last_reply_at"
+NOW_EPOCH=$(date +%s)
+LAST_REPLY_EPOCH=$(cat "$LAST_REPLY_FILE" 2>/dev/null || echo 0)
+case "$LAST_REPLY_EPOCH" in (*[!0-9]*|"") LAST_REPLY_EPOCH=0 ;; esac
+if [ $((NOW_EPOCH - LAST_REPLY_EPOCH)) -gt 600 ]; then
+  "$DIR/scripts/notify.sh" "👀 on it" >> "$LOG" 2>&1
+fi
 
 # claude -p's own timeout, as a backstop against a true hang (a stuck tool
 # call, not normal delegation runtime) -- not a normal-duration cutoff. Real
@@ -140,6 +148,10 @@ if [ "$SENT_STATUS" -ne 0 ]; then
   echo "[$(date '+%F %T')] reply not delivered; inbox.md left unmarked for retry" >> "$LOG"
   exit "$SENT_STATUS"
 fi
+
+# Marks the conversation as "already flowing" so the next message's ack gets
+# skipped -- see the LAST_REPLY_FILE check above.
+date +%s > "$LAST_REPLY_FILE"
 
 # Mark only the lines that were actually in the prompt. check-replies.sh also
 # runs on its own cron, so a message can land in inbox.md while claude -p is

@@ -1,5 +1,6 @@
 .env
 .tg_offset
+.last_reply_at
 firebase-readonly.json
 *.log
 work/queued-texts.log
