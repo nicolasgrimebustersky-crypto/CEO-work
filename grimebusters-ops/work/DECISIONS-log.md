@@ -356,3 +356,54 @@ them.
 default.* State the rule and a one-line pointer to this log for the why;
 don't duplicate the full why/changed/verified narrative in the file that
 gets read on every response.
+
+---
+
+## 2026-08-22 — Estimate drafting via Telegram, without touching Firestore
+
+**Why.** Nicolas wants to describe a job and a price to Marcus on the go
+and get a draft estimate back to approve — "for more on-the-go quickness."
+
+**What already existed.** The CRM (`grimebusters-crm`, PR #22, merged
+before this session started) already has exactly this feature:
+`POST /api/estimate/draft`, backed by `lib/server/estimateAI.ts`. It takes
+a spoken description, a total the operator already decided, and up to four
+photos, and returns line-item wording via Claude Opus 5 — the model is
+explicitly told never to see or mention a price, only to write around one
+the human supplied. That division (human prices, model words) is the whole
+point of the existing design, and it's the same principle CLAUDE.md already
+enforces for every other pricing interaction in this system.
+
+**Why Marcus doesn't call that endpoint directly.** It requires
+`Authorization: Bearer <firebase id token>` for an allowlisted crew UID
+(`requireCrew` in `lib/server/auth.ts`). Marcus's only CRM credential is the
+read-only service-account key, deliberately locked to Cloud Datastore
+Viewer after the IAM cleanup earlier this session — it cannot mint a user
+auth token, and getting Marcus a real one would mean either sharing a
+short-lived personal token repeatedly (impractical, token expires in about
+an hour) or granting a broader credential (reopens exactly the "no write
+access" boundary that got real IAM cleanup work earlier today).
+
+**The design chosen instead.** Marcus drafts the same shape of output
+using the same rules, inline, in his own response — no API call, no new
+credential, no Firestore write. `CLAUDE.md` now carries the rules verbatim
+(adapted from `estimateAI.ts`'s system prompt): plain language, one line
+per distinct piece of work, never invent a service, never state a rate or
+show the math, and above all — Nicolas gives the price, Marcus never does.
+
+**What happens after the draft.** It's a Telegram text, not a persisted
+object. Nicolas reviews it like any other draft (hard rules 3 and 4 are
+unchanged — nothing reaches a customer until he says so, and Marcus still
+has no send mechanism), and if he approves it, *he* enters it into the
+CRM's actual estimate builder to create and send the real thing. This
+keeps the read-only boundary intact and avoids building a second,
+parallel estimate-creation path that could drift from the one the CRM app
+already ships and tests.
+
+**Not done.** No code in the CRM repo was touched — this is entirely a
+Marcus-side (CLAUDE.md) change. If real usage shows this manual
+copy-into-the-builder step is too much friction, the next step would be
+giving Marcus a scoped way to call `/api/estimate/draft` itself (e.g. a
+dedicated service credential distinct from the read-only Firestore key) —
+that's a deliberate future decision, not something to slide into
+unprompted.

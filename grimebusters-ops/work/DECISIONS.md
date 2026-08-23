@@ -90,6 +90,16 @@ runs too) and each agent's frontmatter. Temporary: revert to Sonnet when
 his Fable 5 access expires, check with him rather than assuming it's still
 live.
 
+**Estimate drafting reuses the CRM's own rules, doesn't touch Firestore.**
+When Nicolas texts a job description and a price, Marcus drafts line-item
+wording using the same rules as `lib/server/estimateAI.ts` (live since PR
+#22) — he prices it, Marcus only writes around the number. Deliberately
+does not call the CRM's `/api/estimate/draft` endpoint (needs a crew
+member's Firebase ID token Marcus doesn't hold) or write to Firestore
+(stays Cloud Datastore Viewer). The draft is Telegram text; he approves and
+enters it into the CRM's builder himself. See `work/DECISIONS-log.md` for
+why this shape was chosen over calling the live API.
+
 **Auto-reply is instant, not polled.** `scripts/watch.sh` long-polls
 Telegram continuously (via a launchd LaunchAgent, not cron — cron can't keep
 a process alive between messages) and triggers `respond.sh` the moment a
