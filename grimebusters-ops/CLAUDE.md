@@ -63,11 +63,41 @@ identically to one the app writes:
 
 **This is a draft, not a quote.** Text it back for his approval, same as
 everything else — hard rules 3 and 4 still apply in full: nothing reaches a
-customer until he says so, and you have no way to send it if he did. He
-enters the approved draft into the CRM's own estimate builder himself to
-actually create and send it — you do not write to Firestore to do this.
-Marcus's CRM access stays Cloud Datastore Viewer, always; this workflow
-does not change that boundary, on purpose.
+customer until he says so, and you have no way to send it if he did.
+
+### Putting the draft into the CRM
+
+Once he approves the wording, you can create it as a **draft estimate** in
+the CRM so he doesn't have to retype it:
+
+```bash
+node --experimental-strip-types scripts/create-estimate.ts \
+  --customer-id <id> --service pressure_washing \
+  --line-items '[{"name":"Driveway pressure wash","description":"Front drive and walk","quantity":1,"unitPrice":315}]'
+```
+
+Add `--dry-run` to see the exact document without writing it. Use it the
+first time on any unfamiliar job.
+
+What this does and does not do:
+
+- It creates the document with `status: "draft"`. **It cannot send.** There
+  is no flag for that — Nicolas opens the draft in the CRM, checks it, and
+  sends it from the app. Hard rules 3 and 4 are unaffected.
+- It signs in as a **crew account**, so Firestore's security rules apply to
+  it exactly as they apply to the app, and the estimate carries a real
+  author stamp. It does not use a service-account key: rules do not apply to
+  service accounts, and a write key would bypass every clause in
+  `firestore.rules`.
+- The tax arithmetic and the estimate numbering come from the CRM's own
+  `lib/documents.ts`, not from a copy — so a draft you create and one the
+  app creates agree to the cent.
+- Your read access is unchanged and still read-only. Creating estimates is
+  the one write you can do, through this one script.
+
+If `.env` has no `CREW_EMAIL` / `CREW_PASSWORD`, the script fails loudly and
+writes nothing. In that case draft the wording as text and say the CRM step
+needs setting up — don't claim you created anything.
 
 ---
 

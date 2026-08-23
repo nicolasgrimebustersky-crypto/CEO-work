@@ -451,3 +451,55 @@ same way snow was just handled.
 beats `UNKNOWN`* — but it must be labeled as his standard rate, not dressed
 up as a historical figure, and the CRM wins as soon as it has real records.
 
+
+## 2026-08-23 — Marcus can create draft estimates, authenticated as crew
+
+**Why.** Nicolas asked for Marcus to *create* an estimate rather than hand
+back wording to retype: "I want him to be able to create and then I can send
+it." The existing flow stopped at Telegram text on purpose, because Marcus's
+CRM credential is Cloud Datastore Viewer.
+
+**The decision that mattered.** Three ways to give Marcus write access were
+put to him, and he chose crew authentication. The one that was rejected is
+worth recording: **Firestore security rules do not apply to service
+accounts.** Adding Cloud Datastore User to the existing key would have been
+a two-minute change and would have bypassed every clause in
+`firestore.rules` — `isCrew()`, the author stamps, the frozen invoice
+numbers — giving unrestricted write to every collection, including `users`,
+which is what decides who counts as crew. A read key and a write key are not
+the same kind of object.
+
+**Changed.** New `scripts/create-estimate.ts`. It signs in with
+`signInWithEmailAndPassword` as a dedicated crew account, then writes one
+document to `documents` with `status: "draft"`. Rules therefore apply to it
+exactly as they apply to the app, and `stampedByCaller('createdBy')` means
+the estimate carries a real author stamp rather than an anonymous
+service-account write.
+
+Two things are imported from the CRM's own `lib/documents.ts` rather than
+reimplemented: `computeTotals` and `nextNumber`. A second copy of the tax
+arithmetic would drift from the app's the first time either changed, and
+then a draft Marcus created and one the app created would disagree about
+what a customer owes. Node 22's `--experimental-strip-types` runs the
+TypeScript directly, so there is no build step and no copy.
+
+`status` is a hardcoded string, not an argument. There is no send path.
+
+**Verified.** Six failure paths, run against the real script: missing
+`.env`; missing `--customer-id`; a service type that isn't one of the three;
+malformed `--line-items` JSON; a line item with a name but no `unitPrice`
+(which would otherwise have become a silent $0 line); and valid arguments
+with bad credentials, which reached a live Firebase Auth call and failed
+there. Each named its own cause. `computeTotals` was checked directly: a
+single $315 line at the default 6% returns `total: 333.9`.
+
+**Not verified.** No estimate has actually been created. The crew account
+does not exist yet, and the credential belongs in the `.env` on Nicolas's
+Mac — not in a remote session's environment, and not in a transcript. First
+real run should use `--dry-run`, which exercises sign-in, the customer read
+and the number allocation, and prints the document without writing it.
+
+**Standing rule this adds.** *Write access to the CRM goes through a crew
+login, never a service-account key.* Rules are the boundary; a service
+account is outside it.
+

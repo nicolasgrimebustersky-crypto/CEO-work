@@ -113,6 +113,15 @@ CRM, which holds zero priced snow records; `context/PRICING.md` has the full
 rule. Snow is a per-visit recurring service, so the minimum job size written
 for pressure washing does not gate it. See `work/DECISIONS-log.md`.
 
+**Marcus can create draft estimates in the CRM, as a crew member.**
+`scripts/create-estimate.ts` signs in as a crew account and writes one
+document with `status: "draft"`. It cannot send, and there is no flag that
+makes it send — Nicolas opens the draft in the app and sends it there. It
+deliberately does not use a service-account key: Firestore rules do not
+apply to service accounts, so a write key would bypass every clause in
+`firestore.rules`. Read access stays read-only; this is the single write.
+See `work/DECISIONS-log.md`.
+
 ---
 
 See `work/DECISIONS-log.md` for the full why/what-changed/verified narrative
