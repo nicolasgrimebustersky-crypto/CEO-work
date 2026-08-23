@@ -52,17 +52,61 @@ while true; do
     continue
   fi
 
-  HAS_UPDATE=$(echo "$RESP" | python3 -c "
+  STATUS=$(echo "$RESP" | python3 -c "
 import json, sys
 try:
     d = json.load(sys.stdin)
 except Exception:
-    print('no')
+    print('error')
     sys.exit()
-print('yes' if d.get('ok') and d.get('result') else 'no')
+if not d.get('ok'):
+    print('error')
+elif d.get('result'):
+    print('update')
+else:
+    print('empty')
 ")
 
-  if [ "$HAS_UPDATE" = "yes" ]; then
-    bash "$DIR/scripts/respond.sh" >> "$LOG" 2>&1
-  fi
+  case "$STATUS" in
+    update)
+      # What stops the next peek seeing this same update again is respond.sh
+      # advancing .tg_offset (via check-replies.sh). So the offset -- not
+      # respond.sh's exit code -- is the thing to check: there are ordinary
+      # cases where it returns 0 having consumed nothing, and the exit code
+      # alone cannot tell them apart from a real run.
+      #
+      # The common one is the lock. A delegated run can take minutes (8+ has
+      # happened here), and every tick during that window hits the lock and
+      # exits 0 immediately. Without a pause the loop would spin at tens of
+      # iterations a second for the whole delegation -- a getUpdates request
+      # and a bash process each time, which is how a bot earns a 429 and
+      # stops delivering real messages.
+      #
+      # The failure cases land here too: claude missing from PATH, or
+      # check-replies failing, both of which exit before the offset moves and
+      # re-send a FORCE=1 warning text on every pass, bypassing quiet hours
+      # by design.
+      OFFSET_BEFORE=$(cat "$DIR/.tg_offset" 2>/dev/null || echo 0)
+      bash "$DIR/scripts/respond.sh" >> "$LOG" 2>&1
+      RESPOND_RC=$?
+      OFFSET_AFTER=$(cat "$DIR/.tg_offset" 2>/dev/null || echo 0)
+
+      if [ "$OFFSET_AFTER" = "$OFFSET_BEFORE" ]; then
+        echo "[$(date '+%F %T')] respond.sh consumed nothing (rc=$RESPOND_RC, offset still $OFFSET_AFTER); backing off 30s" >> "$LOG"
+        sleep 30
+      fi
+      ;;
+    error)
+      # ok:false, or a body that is not JSON at all -- a revoked token, a
+      # rate limit, a Telegram-side error. Telegram answers these instantly
+      # rather than holding the long poll open, so without a pause this is a
+      # hot loop against the API.
+      echo "[$(date '+%F %T')] getUpdates returned an error; backing off 30s" >> "$LOG"
+      sleep 30
+      ;;
+    empty)
+      # The long poll timed out with nothing new. It already blocked ~50s,
+      # so go straight back round.
+      ;;
+  esac
 done
