@@ -106,6 +106,13 @@ a process alive between messages) and triggers `respond.sh` the moment a
 message arrives. The `*/5 * * * *` cron entry stays too, as a fallback if
 the watcher ever dies. Still requires the Mac to be on and awake.
 
+**Snow removal is $60–100 per visit, and the $250 minimum does not apply
+to it.** The rate scales with driveway size — $60 for small or standard,
+$100 at the top and uncommon. It comes from Nicolas (2026-08-23), not the
+CRM, which holds zero priced snow records; `context/PRICING.md` has the full
+rule. Snow is a per-visit recurring service, so the minimum job size written
+for pressure washing does not gate it. See `work/DECISIONS-log.md`.
+
 ---
 
 See `work/DECISIONS-log.md` for the full why/what-changed/verified narrative

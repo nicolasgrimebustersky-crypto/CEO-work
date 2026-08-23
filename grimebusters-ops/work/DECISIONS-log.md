@@ -407,3 +407,47 @@ giving Marcus a scoped way to call `/api/estimate/draft` itself (e.g. a
 dedicated service credential distinct from the read-only Firestore key) —
 that's a deliberate future decision, not something to slide into
 unprompted.
+
+
+## 2026-08-23 — Snow removal rate set from Nicolas; CRM linked from the remote session
+
+**Why.** The remote session was given live read access to the CRM (a fresh
+`claude-session-readonly` service account, Cloud Datastore Viewer only,
+verified read-only by a real write attempt returning `403 Missing or
+insufficient permissions`). The first pricing queries against production
+showed snow removal with **zero priced records** — no completed jobs, no
+accepted quotes — while `context/PRICING.md` named `snow_removal` as a
+queryable service. Marcus would have answered every snow price question with
+`UNKNOWN`, which is honest but useless in December.
+
+Nicolas gave the real number directly: $60–100 per visit, "rarely 100."
+
+**Changed.** `context/PRICING.md` gains a **Snow removal** section: $60–100
+per visit scaling with driveway size, $60 for small or standard, $100 the
+uncommon top. Stated explicitly as Nicolas's standard rate rather than a
+historical median, with an instruction to prefer the CRM if it ever starts
+carrying completed snow jobs. The "thin history" line above it was replaced,
+since "thin" understated it — the history is empty.
+
+Also resolved a conflict this exposed: the **$250 minimum job size** would
+have made Marcus politely decline every snow job, since $60–100 is well
+under it. Snow is now explicitly exempt — it is a per-visit recurring
+service, not a one-off job, and the floor was written for pressure washing.
+Both the snow section and the minimum-job-size bullet say so.
+
+**Verified.** Live queries against production Firestore, this session:
+pressure washing 6 completed jobs, median $315, range $200–1,095, quote win
+rate 27%; landscaping 4 completed jobs, median $263, range $45–4,750; snow
+removal 0 records on both bases. The write probe was denied before any of
+these ran.
+
+**Still open.** Landscaping's p75 is $3,681 against a $263 median across four
+jobs — too few records, and too wide a spread, to price from. Anything
+Marcus says about landscaping pricing is currently an extrapolation from
+almost nothing. Worth either more history or a stated rate from Nicolas, the
+same way snow was just handled.
+
+**Standing rule this adds.** *Where the CRM is empty, a rate from Nicolas
+beats `UNKNOWN`* — but it must be labeled as his standard rate, not dressed
+up as a historical figure, and the CRM wins as soon as it has real records.
+
