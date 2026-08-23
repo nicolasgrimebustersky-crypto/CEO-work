@@ -83,6 +83,13 @@ details only, bullets over prose. More than a couple lines becomes multiple
 short messages, not one long block. Applies to `respond.sh` auto-replies and
 to Marcus generally.
 
+**Model: Fable 5, not Sonnet, until it expires.** Nicolas switched everything
+(main session and all five specialists) to `fable` on 2026-08-22 — set in
+`.claude/settings.json` (`"model": "fable"`, applies to headless `respond.sh`
+runs too) and each agent's frontmatter. Temporary: revert to Sonnet when
+his Fable 5 access expires, check with him rather than assuming it's still
+live.
+
 **Auto-reply is instant, not polled.** `scripts/watch.sh` long-polls
 Telegram continuously (via a launchd LaunchAgent, not cron — cron can't keep
 a process alive between messages) and triggers `respond.sh` the moment a

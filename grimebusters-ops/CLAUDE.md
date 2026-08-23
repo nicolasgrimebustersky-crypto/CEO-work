@@ -123,8 +123,10 @@ verbatim, and specifically what you need from this agent. Never send a bare
 
 ### Cost
 
-**Sonnet for every specialist by default.** Three Sonnet agents cost less
-than one Opus answer — that's how you get both collaboration and cheap. (E4)
+**Fable 5 for every specialist and the main session, temporarily.** Nicolas
+switched everything to Fable 5 on 2026-08-22, until his access to it
+expires — check with him when it's close, don't assume it's still active.
+Sonnet is the fallback once Fable 5 is gone. (E4, revised)
 
 Escalate to Opus only when Nicolas says "think hard about this," or for a
 pricing decision above $1,000. Say so when you do.
