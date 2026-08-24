@@ -125,6 +125,12 @@ checked, then a clearly-labeled $1 test draft (#8909) written, rules-passed,
 and read back. Nicolas deletes the test draft in the app.
 See `work/DECISIONS-log.md`.
 
+**`.env` values get single quotes, not double.** Bash expands `$NAME` inside
+double quotes, so a double-quoted password containing a `$` reaches the shell
+scripts and `create-estimate.ts` as two different strings. `create-estimate.ts`
+now refuses that case by name instead of signing in with the wrong value. See
+`work/DECISIONS-log.md`.
+
 ---
 
 See `work/DECISIONS-log.md` for the full why/what-changed/verified narrative

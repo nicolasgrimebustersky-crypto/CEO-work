@@ -503,3 +503,37 @@ and the number allocation, and prints the document without writing it.
 login, never a service-account key.* Rules are the boundary; a service
 account is outside it.
 
+
+## 2026-08-24 — `.env` quoting: single quotes required, ambiguity refused
+
+**Why.** The crew password contains `&` and `$`, which broke `source .env` in
+the shell scripts, and the fix quoted the value and taught
+`create-estimate.ts` to strip a surrounding pair of quotes "so both readers
+see the same value." That holds for single quotes and not for double ones.
+Tested directly:
+
+    A='pass@&$word'   bash -> pass@&$word    reader -> pass@&$word   agree
+    B="pass@&$word"   bash -> pass@&         reader -> pass@&$word   diverge
+
+Bash still expands `$word` inside double quotes. A double-quoted password
+with a `$` mid-string would have the shell scripts and the estimate script
+authenticating as different values — one works, one fails, and nothing in
+either error points at `.env`. The password in use ends in a bare `$`, which
+bash leaves literal, so this was latent rather than live.
+
+**Changed.** `loadEnv()` in `create-estimate.ts` now tracks *which* quote
+style was used. A double-quoted value containing `$NAME` or `${NAME}` is
+refused by name with an instruction to use single quotes, rather than
+silently returning a string bash never saw. Single-quoted, unquoted, and
+double-quoted-without-expansion values are unchanged.
+
+**Verified.** Four cases run against the real script: single-quoted with `$`
+mid-string reaches the live sign-in; double-quoted with `$word` is refused
+and names `CREW_PASSWORD`; double-quoted with a trailing `$` (the value
+actually in use) still reaches sign-in; a plain unquoted value still reaches
+sign-in.
+
+**Standing rule this adds.** *Where two readers parse the same file, they
+either agree or one of them refuses.* Guessing at the other's semantics is
+how a wrong value gets used silently.
+

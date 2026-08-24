@@ -68,7 +68,17 @@ function die(message: string): never {
  * double-quoted — a password containing & or $ must be quoted or bash's
  * `source .env` in the shell scripts mangles it, so this reader strips a
  * matching pair of surrounding quotes to agree with what bash sees.
+ *
+ * Single and double quotes are not interchangeable here. Bash still expands
+ * `$NAME` and `${NAME}` inside double quotes, so `X="a$b"` reaches the shell
+ * scripts as `a` while a naive reader returns `a$b` — the two would sign in
+ * with different passwords and only one would fail, which is the kind of
+ * disagreement that costs an afternoon to find. Rather than reimplement
+ * bash's expansion, this refuses the ambiguous case and says to use single
+ * quotes, which bash takes literally.
  */
+const SHELL_EXPANDS = /\$(\{|[A-Za-z_])/;
+
 function loadEnv(): Record<string, string> {
   const out: Record<string, string> = {};
   let raw: string;
@@ -82,15 +92,24 @@ function loadEnv(): Record<string, string> {
     if (!trimmed || trimmed.startsWith("#")) continue;
     const eq = trimmed.indexOf("=");
     if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
     let value = trimmed.slice(eq + 1).trim();
-    if (
-      value.length >= 2 &&
-      ((value.startsWith("'") && value.endsWith("'")) ||
-        (value.startsWith('"') && value.endsWith('"')))
-    ) {
-      value = value.slice(1, -1);
+
+    const singleQuoted =
+      value.length >= 2 && value.startsWith("'") && value.endsWith("'");
+    const doubleQuoted =
+      value.length >= 2 && value.startsWith('"') && value.endsWith('"');
+
+    if (singleQuoted || doubleQuoted) value = value.slice(1, -1);
+    if (doubleQuoted && SHELL_EXPANDS.test(value)) {
+      die(
+        `${key} in .env is double-quoted and contains a $ that bash would expand, ` +
+          `so the shell scripts and this script would read different values. ` +
+          `Use single quotes: ${key}='...'`,
+      );
     }
-    out[trimmed.slice(0, eq).trim()] = value;
+
+    out[key] = value;
   }
   return out;
 }
