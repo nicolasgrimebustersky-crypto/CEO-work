@@ -28,16 +28,9 @@ fi
 MSG="${1:-}"
 [ -z "$MSG" ] && { echo "usage: notify.sh \"message\""; exit 1; }
 
-# Quiet hours -- weekdays 8:10am (490) to 3:10pm (910).
-DOW=$(date +%u)          # 1-5 = Mon-Fri
-MINS=$((10#$(date +%H) * 60 + 10#$(date +%M)))
-if [ "$DOW" -le 5 ] && [ "$MINS" -ge 490 ] && [ "$MINS" -lt 910 ]; then
-  if [ "${FORCE:-}" != "1" ]; then
-    echo "[$(date '+%F %T')] QUEUED: $MSG" >> "$DIR/work/queued-texts.log"
-    echo "Quiet hours (school). Queued. Use FORCE=1 to override."
-    exit 0
-  fi
-fi
+# Quiet hours removed on Nicolas's instruction, 2026-08-24. Everything sends
+# immediately; the 3:30pm progress update (scripts/progress-update.sh) is the
+# scheduled touchpoint. FORCE=1 is accepted for compatibility and ignored.
 
 # Returns the API response body, or empty on a transport failure.
 send() {

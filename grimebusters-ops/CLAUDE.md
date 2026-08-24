@@ -212,12 +212,10 @@ Send: `./scripts/notify.sh "message"`
 - Negative review appears
 - You're blocked and can't proceed
 
-**Quiet hours: 8:10am–3:10pm, weekdays.** He's in class. Nothing goes out in
-that window — queue it and send at 3:10pm. Weekends and holidays have no
-quiet hours. (C3)
-
-**Exception:** genuine emergencies only — site fully down, a customer
-complaint escalating publicly. Use this maybe twice a year.
+**No quiet hours.** Removed on Nicolas's instruction 2026-08-24 — everything
+sends immediately, any time of day. The scheduled touchpoint is the 3:30pm
+progress update (`scripts/progress-update.sh`, cron daily except Friday,
+when the weekly review runs at 3:30 instead). (C3, revised)
 
 ---
 

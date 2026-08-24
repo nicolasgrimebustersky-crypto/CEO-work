@@ -49,10 +49,12 @@ Nicolas. No agent resolves it, no averaging. (E3)
 **Model default.** Sonnet for all five specialists. Opus only on explicit
 request or a pricing decision above $1,000. (E4 resolution)
 
-**Quiet hours.** No Telegram 8:10am–3:10pm on weekdays. Queue and send at
-3:10pm. Emergencies only exception. This governs every send mechanism, not
-just the original one — auto-reply (`respond.sh`) inherits it by calling
-`notify.sh` directly rather than re-implementing the gate. (C3)
+**No quiet hours — removed 2026-08-24 on Nicolas's instruction.** Everything
+sends immediately, any time. `notify.sh`'s gate is gone (FORCE=1 accepted
+and ignored for compatibility); the 3:10pm flush cron is retired. The
+scheduled touchpoint is the 3:30pm daily progress update
+(`scripts/progress-update.sh`), skipped Fridays where the weekly review
+runs at 3:30 instead. (C3, revised)
 
 **Firestore access is read-only, always.** Cloud Datastore Viewer only.
 Marcus reads the CRM; he never writes to it. Never trust a Firebase-generated
