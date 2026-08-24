@@ -63,7 +63,12 @@ function die(message: string): never {
   process.exit(1);
 }
 
-/** Reads .env without adding a dependency. Values are not quoted in this file. */
+/**
+ * Reads .env without adding a dependency. Values may be single- or
+ * double-quoted — a password containing & or $ must be quoted or bash's
+ * `source .env` in the shell scripts mangles it, so this reader strips a
+ * matching pair of surrounding quotes to agree with what bash sees.
+ */
 function loadEnv(): Record<string, string> {
   const out: Record<string, string> = {};
   let raw: string;
@@ -77,7 +82,15 @@ function loadEnv(): Record<string, string> {
     if (!trimmed || trimmed.startsWith("#")) continue;
     const eq = trimmed.indexOf("=");
     if (eq === -1) continue;
-    out[trimmed.slice(0, eq).trim()] = trimmed.slice(eq + 1).trim();
+    let value = trimmed.slice(eq + 1).trim();
+    if (
+      value.length >= 2 &&
+      ((value.startsWith("'") && value.endsWith("'")) ||
+        (value.startsWith('"') && value.endsWith('"')))
+    ) {
+      value = value.slice(1, -1);
+    }
+    out[trimmed.slice(0, eq).trim()] = value;
   }
   return out;
 }

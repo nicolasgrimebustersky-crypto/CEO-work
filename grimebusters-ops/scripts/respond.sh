@@ -59,8 +59,14 @@ LAST_REPLY_FILE="$DIR/.last_reply_at"
 NOW_EPOCH=$(date +%s)
 LAST_REPLY_EPOCH=$(cat "$LAST_REPLY_FILE" 2>/dev/null || echo 0)
 case "$LAST_REPLY_EPOCH" in (*[!0-9]*|"") LAST_REPLY_EPOCH=0 ;; esac
-if [ $((NOW_EPOCH - LAST_REPLY_EPOCH)) -gt 600 ]; then
+# Nicolas's spec (2026-08-24): the ack fires on the first contact of a
+# calendar day, or when the conversation has sat quiet for more than an
+# hour. Inside an active conversation it stays out of the way.
+LAST_REPLY_DAY=$(date -r "$LAST_REPLY_EPOCH" '+%F' 2>/dev/null || echo "never")
+TODAY=$(date '+%F')
+if [ "$LAST_REPLY_DAY" != "$TODAY" ] || [ $((NOW_EPOCH - LAST_REPLY_EPOCH)) -gt 3600 ]; then
   "$DIR/scripts/notify.sh" "👀 on it" >> "$LOG" 2>&1
+  echo "[$(date '+%F %T')] ack sent (last reply: $LAST_REPLY_DAY, gap $((NOW_EPOCH - LAST_REPLY_EPOCH))s)" >> "$LOG"
 fi
 
 # claude -p's own timeout, as a backstop against a true hang (a stuck tool
