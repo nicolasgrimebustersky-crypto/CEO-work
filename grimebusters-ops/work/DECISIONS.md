@@ -120,6 +120,9 @@ makes it send — Nicolas opens the draft in the app and sends it there. It
 deliberately does not use a service-account key: Firestore rules do not
 apply to service accounts, so a write key would bypass every clause in
 `firestore.rules`. Read access stays read-only; this is the single write.
+**Verified live 2026-08-23**: crew account created and approved, dry-run
+checked, then a clearly-labeled $1 test draft (#8909) written, rules-passed,
+and read back. Nicolas deletes the test draft in the app.
 See `work/DECISIONS-log.md`.
 
 ---
