@@ -25,7 +25,7 @@ git check-ignore -v .env     # must print a match before you commit again
 
 **4. Test**
 ```bash
-FORCE=1 ./scripts/notify.sh "Marcus online."
+./scripts/notify.sh "Marcus online."
 ```
 
 **5. Firestore** — the query tool is already wired to the real GrimelineCRM
@@ -43,10 +43,10 @@ optional; all pricing lives in the CRM.
 crontab -e
 ```
 ```
-0  7 * * *   /FULL/PATH/grimebusters-ops/scripts/daily-report.sh   >> /tmp/gb.log 2>&1
-10 15 * * 1-5 /FULL/PATH/grimebusters-ops/scripts/flush-queue.sh   >> /tmp/gb.log 2>&1
-30 15 * * 5  /FULL/PATH/grimebusters-ops/scripts/weekly-review.sh  >> /tmp/gb.log 2>&1
-*/30 * * * * /FULL/PATH/grimebusters-ops/scripts/check-replies.sh  >> /tmp/gb.log 2>&1
+0  7 * * *    /FULL/PATH/grimebusters-ops/scripts/daily-report.sh     >> /tmp/gb.log 2>&1
+30 15 * * 1-4 /FULL/PATH/grimebusters-ops/scripts/progress-update.sh  >> /tmp/gb.log 2>&1
+30 15 * * 5   /FULL/PATH/grimebusters-ops/scripts/weekly-review.sh    >> /tmp/gb.log 2>&1
+*/30 * * * *  /FULL/PATH/grimebusters-ops/scripts/check-replies.sh    >> /tmp/gb.log 2>&1
 ```
 Windows: run the same scripts through Git Bash from Task Scheduler.
 
@@ -89,3 +89,20 @@ Nicolas can make:
    booked revenue last.
 3. **Cost policy** — resolved as Sonnet for all five specialists; noted here
    so it is visible rather than buried.
+
+## Retired: the quiet-hours queue
+
+Quiet hours were removed on 2026-08-24 — everything sends immediately, and
+the 15:10 `flush-queue.sh` cron entry is gone. `FORCE=1` is still accepted by
+`notify.sh` and ignored, so older callers keep working.
+
+`scripts/flush-queue.sh` is deliberately left in place. If `work/queued-texts.log`
+still holds anything queued before the change, nothing will send it on its
+own now — run the script once by hand to drain it:
+
+```bash
+./scripts/flush-queue.sh
+```
+
+It restores the queue if the send fails, so it is safe to run twice. Once the
+file is empty, the script has no further use.
