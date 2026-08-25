@@ -27,6 +27,17 @@ Cole writes here. Reese reads it for campaign targeting.
 | 2026-08-25 | Blooms Boutique (111 W Main St, La Grange) | commercial prospecting, small-rig batch | COMMERCIAL-P6 | pressure_washing + light landscaping | no email published on site (verified) — phone-only, (502) 222-1626; draft pending as call script | 2026-08-28 |
 | 2026-08-25 | Friends & Fiber (106 E Main St, La Grange) | commercial prospecting, small-rig batch | COMMERCIAL-P6 | pressure_washing | no email published on site (verified) — phone-only, (502) 222-0658; draft pending as call script | 2026-08-28 |
 | 2026-08-25 | The Fine Print Shop (4725 W Hwy 146, Buckner) | commercial prospecting, small-rig batch | COMMERCIAL-P7 | pressure_washing | no email published anywhere found (verified via BBB) — phone-only, (502) 222-8700; draft pending as call script | 2026-08-28 |
+| 2026-08-25 | Clean Eatz Springhurst (3565 Springhurst Blvd) | commercial prospecting, Springhurst batch | COMMERCIAL-P2 | pressure_washing | **email verified: louisvilleky@cleaneatz.com** — email draft pending | 2026-08-28 |
+| 2026-08-25 | JJ Grill (3741 Pamela Rae Dr, off Westport Rd) | commercial prospecting, Springhurst batch | COMMERCIAL-P2 | pressure_washing | no email published on site (verified, contact form only) — phone-only, (502) 501-6300 | 2026-08-28 |
+| 2026-08-25 | Great China Cafe (10494 Westport Rd Ste 106) | commercial prospecting, Springhurst batch | COMMERCIAL-P2 | pressure_washing | no email published on site (verified) — phone-only, (502) 425-1818 | 2026-08-28 |
+| 2026-08-25 | El Nopal Mexican Restaurant (9451 Westport Rd Ste 101) | commercial prospecting, Springhurst batch | COMMERCIAL-P2 | pressure_washing | no official website found — phone-only, (502) 327-6551 from directory listings, confirm before calling | 2026-08-28 |
+| 2026-08-25 | The Charcoal Restaurant (2805 N Hurstbourne Pkwy #100, Westport corner) | commercial prospecting, Springhurst batch | COMMERCIAL-P2 | pressure_washing | no email published on site (verified) — phone-only, (502) 749-8888 | 2026-08-28 |
+| 2026-08-25 | Bearno's Pizza Westport (9222 Westport Rd) | commercial prospecting, Springhurst batch | COMMERCIAL-P2 | pressure_washing | no email published on site (verified) — phone-only, (502) 423-1224 | 2026-08-28 |
+| 2026-08-25 | McAlister's Deli Springhurst (4002 Towne Center Dr) | commercial prospecting, Springhurst batch | COMMERCIAL-P2 (franchise) | pressure_washing | no email on official location page (verified) — phone-only, (502) 384-7312 | 2026-08-28 |
+| 2026-08-25 | Olive Garden Springhurst (9730 Von Allmen Ct) | commercial prospecting, Springhurst batch | COMMERCIAL-P2 — **corporate, low priority** | pressure_washing | Darden corporate — facilities route through corporate; phone-only, (502) 425-3607 from listing | 2026-08-28 |
+| 2026-08-25 | Karina's Jewelers (4231 Towne Center Dr) | commercial prospecting, Springhurst batch | COMMERCIAL-P6 | pressure_washing | no website; a hotmail address appears only in search snippets — **not logged per standing rule**; phone-only, (502) 394-9122 from directory listings, confirm before calling | 2026-08-28 |
+| 2026-08-25 | Bowles Mattress Factory Direct (3545 Springhurst Blvd) | commercial prospecting, Springhurst batch | COMMERCIAL-P6 | pressure_washing | no email published on site (verified) — phone-only, (502) 425-4181 | 2026-08-28 |
+| 2026-08-25 | Feeders Pet Supply Springhurst (9486 Brownsboro Rd) | commercial prospecting, Springhurst batch | COMMERCIAL-P6 | pressure_washing | own site's location page geo-serves wrong-region content, no email verifiable — phone-only, (502) 326-9404 from listings, confirm before calling | 2026-08-28 |
 
 Score key for this batch: standard HOT/WARM/COLD is the social-lead scale
 (see Social lead triage in Cole's brief). Commercial prospects are scored by
@@ -560,3 +571,184 @@ maker. None of these duplicate the 2026-08-22 batch.
 - All 11: **email draft pending** (call-script pending for the four
   phone-only). Nothing sent, nothing drafted yet — Nicolas drafts/sends
   per standing rules.
+
+---
+
+## 2026-08-25 — Springhurst restaurant & retail batch (11 new prospects)
+
+Target per Nicolas: **restaurants and retail stores in the Springhurst area
+of Louisville** — Springhurst Towne Center / Westport Rd / Gene Snyder
+corridor, ~zip 40241. This is in-market: we completed the Chipotle on
+Westport Rd this summer ($1,095, entrance concrete + pad areas, job
+fl-f8fed7ca — and that Chipotle sits on the Springhurst Commons outparcel at
+10211–10221 Westport Rd, so for this whole batch the credibility line is
+literally "we did the Chipotle in this shopping center / down the road."
+Nicolas adds we also **plan to clean Cattleman's Roadhouse in La Grange** —
+use both as commercial references in drafts. Chipotle itself excluded:
+existing customer.
+
+Service pitch for every entry: storefront sidewalks, entrances, patio
+concrete, and dumpster pads — recurring monthly/quarterly, not one-off.
+Preference order: independents and local franchise operators first;
+corporate-owned national chains kept but flagged low-priority (facilities
+route through corporate).
+
+Email standard: same as both prior batches. An email is logged **only** if
+fetched from the business's own site or an official page actually loaded
+(URL cited per entry, fetched 2026-08-25). No search-snippet addresses, no
+guessed patterns. Everything else is phone-only.
+
+### Restaurants
+
+**1. Clean Eatz Springhurst** — P2 (franchise café, locally operated)
+3565 Springhurst Blvd, Louisville, KY 40241 · (502) 653-7865
+- **Email verified: `louisvilleky@cleaneatz.com`** — fetched from the
+  brand's official location page for this store,
+  `https://locations.cleaneatz.com/ky/louisville/meal-prep-103.html`
+  (2026-08-25; address and phone from the same page).
+- Independent/corporate: national franchise brand, but the store email is
+  location-specific — the franchisee is reachable directly.
+- Angle: a health-brand café selling clean living — a stained sidewalk
+  contradicts the brand promise. Storefront sidewalk + entrance, monthly;
+  they're in the same center orbit as the Chipotle reference.
+
+**2. JJ Grill** — P2 (independent, Mediterranean)
+3741 Pamela Rae Dr, Louisville, KY 40241 · (502) 501-6300
+- No email: fetched `https://www.jjmedgrill.com/` and `/Contact`
+  (2026-08-25) — contact form only, no address published. **Phone-only.**
+- Independent: single-location, family-run Mediterranean grill.
+- Angle: standalone building just off Westport Rd — they own their whole
+  exterior (entrance walk, curb, dumpster pad), no landlord to route
+  through. Grease + foot traffic is the classic restaurant-pad pitch.
+
+**3. Great China Cafe** — P2 (independent)
+10494 Westport Rd Ste 106, Louisville, KY 40241 · (502) 425-1818
+- No email: loaded `https://www.chinacafelouisville.com/` (2026-08-25;
+  WebFetch was 403'd so the raw HTML was pulled directly and searched — no
+  email or mailto anywhere in the page). **Phone-only.**
+- Independent: single-location takeout/dine-in Chinese café.
+- Angle: strip-suite storefront on Westport with heavy takeout foot
+  traffic — sidewalk staining at the entrance, plus shared dumpster pad
+  behind the strip. Deepest-in-the-corridor address in this batch.
+
+**4. El Nopal Mexican Restaurant (Westport)** — P2 (local KY franchise)
+9451 Westport Rd Ste 101, Louisville, KY 40241 · (502) 327-6551
+- No official website found to verify against (searches surface only
+  directory/review pages). Phone is from Yelp/TripAdvisor listings —
+  **confirm the number before calling.** **Phone-only.**
+- Independent-ish: El Nopal is a Kentucky family-grown local chain,
+  locations individually operated.
+- Angle: reviews highlight an outdoor patio with live music — patio
+  concrete is the specific hook, plus entrance and pad. Patio season
+  wind-down = good timing for a first clean.
+
+**5. The Charcoal Restaurant** — P2 (independent)
+2805 N Hurstbourne Pkwy #100, Louisville, KY 40223 · (502) 749-8888
+- No email: fetched `https://www.eatcharcoal.com/` (2026-08-25;
+  `thecharcoalrestaurant.com` 301s there) — phone and address only.
+  **Phone-only.**
+- Independent: single-location, Yelp Top-10-in-Louisville rotisserie.
+- Corridor note: sits at the Westport Rd/Hurstbourne corner — technically
+  40223, a few minutes down the corridor from Springhurst. Included as
+  borderline; strongest independent restaurant brand in the batch.
+- Angle: charcoal operation = soot + grease tracked at entrance and pad;
+  high-review-volume spot where curb appeal is actively photographed.
+
+**6. Bearno's Pizza (Westport Rd)** — P2 (local Louisville chain)
+9222 Westport Rd, Louisville, KY 40242 · (502) 423-1224
+- No email: fetched `http://bearnos.com/our-locations` and the contact
+  page (2026-08-25) — no email anywhere, location phone only.
+  **Phone-only.**
+- Local chain, franchised locations — the store operator is the target,
+  not a national corporate office.
+- Corridor note: 40242, just outside Springhurst but on Westport Rd.
+- Angle: pizza dumpster pads grease up fast; front sidewalk serves dine-in
+  + pickup traffic. Local-brand operator likely reachable in person.
+
+**7. McAlister's Deli Springhurst** — P2 (franchise, low-mid priority)
+4002 Towne Center Dr, Louisville, KY 40241 · (502) 384-7312
+- No email: fetched the official location page
+  `https://locations.mcalistersdeli.com/ky/louisville/4002-towne-center-dr.`
+  (2026-08-25) — phone only. **Phone-only.**
+- Franchise: KY McAlister's are operated by a large multi-unit franchisee —
+  facilities may route through the franchisee's ops office, so lower
+  priority than the true independents but not corporate-national.
+- Angle: Towne Center storefront two doors from daily anchor traffic —
+  sidewalk + entrance + patio tables out front.
+
+**8. Olive Garden Springhurst** — P2, **corporate — low priority**
+9730 Von Allmen Ct, Louisville, KY 40241 · (502) 425-3607 (from listing)
+- Darden corporate-owned — facilities go through corporate vendor systems,
+  not the GM. Logged so the corridor map is complete, **flagged low
+  priority rather than dropped** per the batch brief. No outreach draft;
+  only worth a walk-in ask for the local GM's facilities contact if we're
+  already on-site next door.
+
+### Retail
+
+**9. Karina's Jewelers** — P6 (independent)
+4231 Towne Center Dr, Louisville, KY 40241 · (502) 394-9122
+- No website of its own (Facebook/Instagram only). A hotmail address shows
+  up in search snippets — **not logged, per the standing
+  verified-source-only rule.** Phone is from directory listings (Yelp),
+  **confirm before calling.** **Phone-only.**
+- Independent: locally owned jeweler in Springhurst Towne Center.
+- Angle: high-value retail lives on trust and presentation — glass
+  storefront and entrance walk spotless is the pitch. Tiny square footage,
+  fast job, beachhead tenant inside the Towne Center itself.
+
+**10. Bowles Mattress Factory Direct (Springhurst)** — P6 (local
+family manufacturer)
+3545 Springhurst Blvd, Louisville, KY 40241 · (502) 425-4181
+- No email: fetched
+  `https://www.bowlesmattress.com/where-to-buy-bowles-factory-direct-stores.html`
+  (2026-08-25) — the company's own factory-store page lists this address
+  and phone, no email anywhere on it or the homepage. **Phone-only.**
+- Independent: family-owned Kentuckiana mattress maker, this is their own
+  retail store (not a licensed dealer).
+- Angle: big-ticket showroom — customers judge the product by the
+  storefront. Sidewalk + entrance, quarterly.
+
+**11. Feeders Pet Supply Springhurst** — P6 (local chain since 1959)
+9486 Brownsboro Rd, Louisville, KY 40241 · (502) 326-9404
+- No verifiable email: `feederspetsupply.com`'s Springhurst location page
+  currently geo-serves wrong-region (Cincinnati) content on every fetch
+  (tried twice, 2026-08-25), so nothing on their own site could be
+  verified; an `info@` address circulating in snippets is **not logged.**
+  Phone and address are from listings — **confirm before calling.**
+  **Phone-only.**
+- Local chain: Louisville institution, "The Pet Lovers Store."
+- Angle: pet-store entrances collect organic grime like nothing else in
+  retail — the cleanup case is visible from the parking lot. Sits at the
+  Brownsboro Rd/Snyder node of the same corridor.
+
+### Batch notes
+
+- **Credibility line for every draft:** "We did the entrance concrete and
+  pad areas at the Chipotle on Westport Rd this summer" — same shopping
+  corridor, several entries can see it from their door. Second reference
+  per Nicolas: **Cattleman's Roadhouse in La Grange is planned/upcoming**
+  — phrase as "and we're lined up to do Cattleman's Roadhouse in La
+  Grange," not as completed work, until it's actually done.
+- **Common-area play:** Springhurst Towne Center is leased/managed by
+  Kaden Companies — leasing contacts published on Kaden's own project page
+  (`https://kadencompanies.com/project/springhurst-towne-center/`, fetched
+  2026-08-25): Alexander Blieden `ablieden@kadencompanies.com`
+  (502.456.1999 x106), Quinn Andrews `qandrews@kadencompanies.com` (x107).
+  That's the property-management door for sidewalks/common areas across
+  the whole center — separate pitch lane from the tenant-by-tenant list
+  above, Nicolas's call whether to open it.
+- **Distance check:** Springhurst is roughly 12–14 miles from Crestwood —
+  inside the 25-mile radius, no flag needed.
+- **Dropped during vetting:** Tumbleweed Springhurst (3550 Springhurst
+  Commons Dr — permanently closed, confirmed via multiple 2026 listings);
+  Tea Station Asian Bistro (closed, and was Norton Commons anyway); CASK
+  Southern Kitchen (own site says 9980 Linn Station Rd, 40223 Plainview —
+  out of the corridor); Ntaba Coffee Haus (locations are Brownsboro Rd
+  40206 + Packerland Way, not 40241); Bricks & Minifigs (40220); Wild
+  Birds Unlimited Louisville (closed); Rainbow Blossom (no Springhurst
+  store on their own locations page); Liquor Barn Springhurst (Gopuff
+  corporate-owned since 2021 — skipped in favor of better retail).
+- Net: 11 prospects, 1 verified email (Clean Eatz), 10 phone-only. All:
+  **email draft pending** for Clean Eatz, call-scripts pending for the
+  rest. Nothing sent, nothing drafted — Nicolas sends per standing rules.
