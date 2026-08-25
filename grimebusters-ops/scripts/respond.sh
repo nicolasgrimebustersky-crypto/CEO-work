@@ -75,15 +75,8 @@ if [ "$LAST_REPLY_DAY" != "$TODAY" ] || [ $((NOW_EPOCH - LAST_REPLY_EPOCH)) -gt 
   echo "[$(date '+%F %T')] ack sent (last reply: $LAST_REPLY_DAY, gap $((NOW_EPOCH - LAST_REPLY_EPOCH))s)" >> "$LOG"
 fi
 
-# claude -p's own timeout, as a backstop against a true hang (a stuck tool
-# call, not normal delegation runtime) -- not a normal-duration cutoff. Real
-# delegated work has taken 8+ minutes in this system before, so this is
-# generous on purpose -- raised 600s -> 1800s on 2026-08-25 after a lead-gen
-# request (gather businesses, verify size on Maps, draft estimates) was killed
-# mid-delegation at exactly 600s on consecutive runs, so every retry burned ten
-# minutes and produced nothing. The task ExecutionTimeLimit is PT1H, so 1800s
-# still leaves headroom. The lock above is what actually prevents overlap;
-# this is only here so one wedged run can't block every future tick forever.
+# There is no hang backstop on this call any more -- see the note at the wait
+# below. The lock above is what prevents overlap; nothing bounds a single run.
 REPLY_FILE=$(mktemp)
 claude -p "You are Marcus. Nicolas just sent this via Telegram:
 
