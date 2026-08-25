@@ -16,6 +16,17 @@ Cole writes here. Reese reads it for campaign targeting.
 | 2026-08-22 | St. James Episcopal Church (Pewee Valley) | commercial prospecting | COMMERCIAL-P5 | pressure_washing | **email verified: parishadmin@stjamespewee.org** (Annie Casey, Parish Administrator) — draft ready for email | 2026-08-25 |
 | 2026-08-22 | Cherrywood Crossing Shopping Center (1208–1230 Market St, La Grange) | commercial prospecting | COMMERCIAL-P6 | pressure_washing (common area) | decision-maker still unidentified after re-check — no email, flagged below | 2026-08-25 |
 | 2026-08-22 | Commonwealth Dentistry (previously pitched, per ICP.md) | prior outreach, cold | COMMERCIAL-P1 | pressure_washing | **target unclear — no Oldham County dental practice by this name found online, see note below** | 2026-08-25 |
+| 2026-08-25 | Goshen Animal Clinic (13108 W US Hwy 42, Prospect) | commercial prospecting, small-rig batch | COMMERCIAL-P1 | pressure_washing | **email verified: services@goshenanimalclinic.net** — email draft pending | 2026-08-28 |
+| 2026-08-25 | LaGrange Coffee Roasters (110 E Main St, La Grange) | commercial prospecting, small-rig batch | COMMERCIAL-P2 | pressure_washing | **email verified: Coffee@SmellTheSmoke.net** — email draft pending | 2026-08-28 |
+| 2026-08-25 | Colonel Rooster's Scones & Bean Haus (Pewee Valley) | commercial prospecting, small-rig batch | COMMERCIAL-P2 | pressure_washing | no email published on site (verified) — phone-only, (502) 550-3591; draft pending as call script | 2026-08-28 |
+| 2026-08-25 | Couture Closet Bridal (123 E Main St, La Grange) | commercial prospecting, small-rig batch | COMMERCIAL-P6 | pressure_washing | **email verified: info@coutureclosetboutique.com** — email draft pending | 2026-08-28 |
+| 2026-08-25 | The Crestwood Agency (insurance, 6537 W Hwy 22, Crestwood) | commercial prospecting, small-rig batch | COMMERCIAL-P7 | pressure_washing | **email verified: thecrestwoodagency@gmail.com** — email draft pending | 2026-08-28 |
+| 2026-08-25 | SNA Insurance (6317 W Hwy 146 Ste 2, Crestwood) | commercial prospecting, small-rig batch | COMMERCIAL-P7 | pressure_washing | **email verified: info@snainsurance.com** — email draft pending | 2026-08-28 |
+| 2026-08-25 | Noteworthy Creative Group (213 S 1st Ave, La Grange) | commercial prospecting, small-rig batch | COMMERCIAL-P7 | pressure_washing | **email verified: info@noteworthycreative.com** — email draft pending | 2026-08-28 |
+| 2026-08-25 | Crestwood Barber Shop (6338 W Hwy 146, Crestwood) | commercial prospecting, small-rig batch | COMMERCIAL-P7 | pressure_washing | **email verified: dshunnarah.ds@gmail.com** — email draft pending | 2026-08-28 |
+| 2026-08-25 | Blooms Boutique (111 W Main St, La Grange) | commercial prospecting, small-rig batch | COMMERCIAL-P6 | pressure_washing + light landscaping | no email published on site (verified) — phone-only, (502) 222-1626; draft pending as call script | 2026-08-28 |
+| 2026-08-25 | Friends & Fiber (106 E Main St, La Grange) | commercial prospecting, small-rig batch | COMMERCIAL-P6 | pressure_washing | no email published on site (verified) — phone-only, (502) 222-0658; draft pending as call script | 2026-08-28 |
+| 2026-08-25 | The Fine Print Shop (4725 W Hwy 146, Buckner) | commercial prospecting, small-rig batch | COMMERCIAL-P7 | pressure_washing | no email published anywhere found (verified via BBB) — phone-only, (502) 222-8700; draft pending as call script | 2026-08-28 |
 
 Score key for this batch: standard HOT/WARM/COLD is the social-lead scale
 (see Social lead triage in Cole's brief). Commercial prospects are scored by
@@ -380,3 +391,172 @@ Cardinal Harbour, St. James). 6 of 10 confirmed to have no email published
 anywhere, checked multiple pages each — those stay on the phone/in-person
 scripts already drafted. 1 of 10 (Commonwealth Dentistry) can't be resolved
 without Nicolas confirming which practice he means.
+
+---
+
+## 2026-08-25 — Small-rig commercial batch (11 new prospects)
+
+Constraint for this batch, per Nicolas: **small jobs only.** The crew runs a
+small residential pressure washer — no trailer, no water tank — so every
+prospect below was screened for scale: single storefronts, small standalone
+offices, suites in small buildings. No large lots, no complex facades. Each
+entry notes why it fits.
+
+Email standard: same as the 2026-08-22 verification pass. An email is logged
+**only** if it was fetched directly from the business's own site or an
+official directory page actually loaded (URL cited per entry, all fetched
+2026-08-25). No search-snippet addresses. Prospects with no published email
+are marked phone-only — no pattern guesses, after two bounces burned trust.
+
+Scoring note: this batch spans categories the P1–P6 ICP tiers don't fully
+cover. Closest tier used where one exists (vet ≈ medical P1, cafés ≈
+restaurants P2, storefront retail ≈ P6); small service offices (insurance,
+design, barber, print) are logged **P7** — not in the ICP list, but ideal
+for the small-rig constraint: tiny footprint, owner on site, one decision
+maker. None of these duplicate the 2026-08-22 batch.
+
+### Verified email (7)
+
+**1. Goshen Animal Clinic** — P1 (medical-adjacent)
+13108 W US Hwy 42, Prospect, KY 40059 · (502) 228-1827
+- **Email verified: `services@goshenanimalclinic.net`** — fetched from
+  `https://goshenanimalclinic.net/` (2026-08-25).
+- Small-rig fit: single standalone clinic building with a walk-up entrance
+  and small client parking pad — one-visit scale, no lot work.
+- Angle: pet clinics fight organic grime — client entrance and walkways
+  collect paw traffic, mud, and worse; a clean entrance is part of the
+  first impression for anxious pet owners. Recurring quarterly fit.
+
+**2. LaGrange Coffee Roasters** — P2
+110 E Main St, La Grange, KY 40031 · (502) 265-0563
+- **Email verified: `Coffee@SmellTheSmoke.net`** — fetched from the shop
+  site's own contact-information page,
+  `https://a20200-25.myshopify.com/policies/contact-information`
+  (2026-08-25; `lagrangecoffeeroasters.com` 301-redirects to that Shopify
+  store, so the odd domain is their own site — SmellTheSmoke.net is their
+  roasting brand, use the address exactly as spelled including capitals).
+- Small-rig fit: single Main Street storefront — sidewalk frontage and
+  entrance only, minutes of surface area.
+- Angle: coffee drips, gum, and foot traffic stain the sidewalk out front
+  of a café faster than any other Main Street storefront; morning-rush curb
+  appeal is their whole business. Offer an early-morning clean before 7am
+  open.
+
+**3. Couture Closet Bridal** — P6
+123 E Main St, La Grange, KY 40031 · (502) 225-0305
+- **Email verified: `info@coutureclosetboutique.com`** — fetched from
+  `http://coutureclosetboutique.squarespace.com/` (2026-08-25; their own
+  site, `coutureclosetboutique.com` 301s there).
+- Small-rig fit: single upscale storefront on Main Street — entrance and
+  sidewalk frontage only.
+- Angle: brides photograph everything, including the storefront — an
+  appointment-based, award-chasing bridal boutique has the clearest
+  image-per-square-foot case on the whole street for a spotless entrance.
+
+**4. The Crestwood Agency** — P7 (small office)
+6537 W Hwy 22, Crestwood, KY 40014 · (502) 241-0288
+- **Email verified: `thecrestwoodagency@gmail.com`** — fetched from
+  `https://www.thecrestwoodagency.com/` (2026-08-25). Note their site is
+  mid-redesign ("BIG changes are coming") — the email and phone are what
+  the page itself displays. Address confirmed via their Progressive agent
+  directory page (fetched same day).
+- Small-rig fit: small standalone insurance office — entrance, walk, and a
+  few parking spaces at most.
+- Angle: an insurance office sells trust and tidiness; they're also mid
+  rebrand — "freshening up the building to match the new look" is a timely,
+  specific hook.
+
+**5. SNA Insurance** — P7 (small office)
+6317 W Highway 146, Suite #2, Crestwood, KY 40014 · (502) 243-2234
+- **Email verified: `info@snainsurance.com`** — fetched from
+  `https://www.snainsurance.com/` (2026-08-25).
+- Small-rig fit: suite in a small Hwy 146 office building — shared entrance
+  walk and signage, small-rig scale even if the neighbor suites join in.
+- Angle: independent agency since 1999, local pride positioning — pitch the
+  entrance/walkway and building signage clean, and note we insure-friendly
+  neighbors could split a same-day visit (two suites, one setup).
+
+**6. Noteworthy Creative Group & The County Press** — P7 (small office)
+213 S 1st Ave, La Grange, KY 40031 · (502) 222-1073
+- **Email verified: `info@noteworthycreative.com`** — fetched from
+  `https://noteworthycreative.com/` (2026-08-25).
+- Small-rig fit: small downtown office building one block off Main —
+  entrance and frontage only.
+- Angle: they're a design/branding shop — their own curb is part of their
+  portfolio. Also a relationship play: they build sites and signage for
+  the same local businesses we're pitching; worth knowing them regardless.
+
+**7. Crestwood Barber Shop** — P7 (small storefront)
+6338 W Hwy 146, Crestwood, KY 40014 · (502) 241-0998
+- **Email verified: `dshunnarah.ds@gmail.com`** — fetched from
+  `https://www.crestwoodbarber.com/contact-us` (2026-08-25). Personal-style
+  Gmail, presumably the owner's — address to the shop, not the name.
+- Small-rig fit: small storefront unit (shares the 6338 building with
+  Salon 146) — entrance and walk only.
+- Angle: in business since 1996, walk-in trade — a clean entrance is cheap
+  and visible; if it lands, Salon 146 next door sees the result the same
+  day. Beachhead for the whole small building.
+
+### Phone-only (4) — no published email, verified
+
+**8. Colonel Rooster's Scones & Bean Haus** — P2
+220 Mount Mercy Drive, C1, Pewee Valley, KY 40056 · (502) 550-3591
+- No email: fetched `https://colonelroosterssconesnbeanhaus.com/`
+  (2026-08-25) — contact form and "call or text" only, no address published
+  for email. **Phone-only.**
+- Small-rig fit: small café unit (suite C1) in a tiny Pewee Valley
+  building — entrance, patio slab, and walk.
+- Angle: cozy-café aesthetic is their brand; coffee and pastry foot traffic
+  stains concrete fast. Only café in Pewee Valley — a before/after here is
+  visible to the whole town.
+
+**9. Blooms Boutique** — P6
+111 W Main Street, La Grange, KY 40031 · (502) 222-1626
+- No email: fetched `https://bloomsboutiqueky.com/` (2026-08-25) — phone
+  and address only. **Phone-only.**
+- Small-rig fit: single Main Street storefront, florist + lifestyle
+  mercantile — frontage only.
+- Angle: a florist's storefront IS the product display — green algae under
+  the flower displays undercuts the whole look. Light landscaping bundle
+  fits too (they'd get bed-edging/planter cleanup instantly).
+
+**10. Friends & Fiber** — P6
+106 E Main St, La Grange, KY 40031 · (502) 222-0658
+- No email: fetched `https://friendsandfiber.com/` (2026-08-25) — no email
+  anywhere on the homepage; `/pages/contact` 404s. **Phone-only.**
+- Small-rig fit: single small yarn-shop storefront — frontage only.
+- Angle: destination shop (knitters drive in for it) — sidewalk and entrance
+  clean before their fall class season starts. Small, friendly, likely a
+  quick yes at Main Street group rates.
+
+**11. The Fine Print Shop** — P7 (small commercial)
+4725 W Highway 146, Buckner, KY 40010 · (502) 222-8700
+- No email: business has no website of its own (Facebook page only). BBB
+  profile fetched directly (2026-08-25),
+  `https://www.bbb.org/us/ky/buckner/profile/commercial-blueprints/the-fine-print-shop-0402-18000502`
+  — displays phone and address, no email. **Phone-only.**
+- Small-rig fit: small standalone print shop on Hwy 146 — storefront,
+  entrance walk, small customer parking pad.
+- Angle: B2B print shop — their customers are exactly the local businesses
+  who judge a vendor by the state of their shop. Also the only Buckner
+  prospect in the pipeline, fills the geographic gap.
+
+### Batch notes
+
+- **Main Street cluster play:** prospects 2, 3, 9, 10 (plus existing
+  interest downtown) sit within two blocks of each other in La Grange.
+  One scheduled morning covers several storefronts with one setup —
+  worth pitching a shared "Main Street rate" if any single one bites.
+  The La Grange Main Street Program directory
+  (`https://www.lagrangemainstreet.org/shop`, fetched 2026-08-25) lists
+  every downtown storefront if this cluster is worth expanding later.
+- **Dropped during vetting:** Simply Blessed Boutique (100 E Main St) —
+  own site says the physical store closed, online-only now; Mainly
+  Creative Gifts — site is an empty shell, no contact info; "Buckner
+  Chiropractic" — the practice at bucknerchiropractic.com is in Alabama,
+  not Buckner KY (confirmed by fetching its contact page), and the actual
+  local Buckner Chiropractics (4201 W Hwy 146) has no site to verify
+  against, so it was left out rather than logged with a guessed contact.
+- All 11: **email draft pending** (call-script pending for the four
+  phone-only). Nothing sent, nothing drafted yet — Nicolas drafts/sends
+  per standing rules.
