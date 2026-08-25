@@ -48,7 +48,13 @@ for u in d.get("result", []):
         ts = datetime.datetime.fromtimestamp(m["date"]).strftime("%F %H:%M")
         lines.append("- [%s] %s" % (ts, t))
 if lines:
-    with open(DIR + "/work/inbox.md", "a") as f:
+    # Explicit UTF-8: Windows Python defaults to cp1252, which wrote a curly
+    # apostrophe as the single byte 0x92. That is not valid UTF-8, so the
+    # marking step in respond.sh could no longer match the line and the same
+    # message got answered again every five minutes.
+    # newline="" stops Windows Python turning "\n" into "\r\n"; the stray \r
+    # ends up inside the line text and stops respond.sh matching it later.
+    with open(DIR + "/work/inbox.md", "a", encoding="utf-8", newline="") as f:
         f.write("\n" + "\n".join(lines) + "\n")
     print("%d new message(s)" % len(lines))
 if last:

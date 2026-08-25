@@ -62,7 +62,13 @@ case "$LAST_REPLY_EPOCH" in (*[!0-9]*|"") LAST_REPLY_EPOCH=0 ;; esac
 # Nicolas's spec (2026-08-24): the ack fires on the first contact of a
 # calendar day, or when the conversation has sat quiet for more than an
 # hour. Inside an active conversation it stays out of the way.
-LAST_REPLY_DAY=$(date -r "$LAST_REPLY_EPOCH" '+%F' 2>/dev/null || echo "never")
+# `date -r <epoch>` is a BSD/macOS spelling. GNU date (Git Bash on the Windows
+# box) reads -r as "use this file's mtime" and fails on a bare number, which
+# silently fell through to "never" -- making the ack fire on every single
+# message instead of the first of the day. Try GNU form first, then BSD.
+LAST_REPLY_DAY=$(date -d "@$LAST_REPLY_EPOCH" '+%F' 2>/dev/null \
+  || date -r "$LAST_REPLY_EPOCH" '+%F' 2>/dev/null \
+  || echo "never")
 TODAY=$(date '+%F')
 if [ "$LAST_REPLY_DAY" != "$TODAY" ] || [ $((NOW_EPOCH - LAST_REPLY_EPOCH)) -gt 3600 ]; then
   "$DIR/scripts/notify.sh" "👀 on it" >> "$LOG" 2>&1
@@ -72,7 +78,11 @@ fi
 # claude -p's own timeout, as a backstop against a true hang (a stuck tool
 # call, not normal delegation runtime) -- not a normal-duration cutoff. Real
 # delegated work has taken 8+ minutes in this system before, so this is
-# generous on purpose. The lock above is what actually prevents overlap;
+# generous on purpose -- raised 600s -> 1800s on 2026-08-25 after a lead-gen
+# request (gather businesses, verify size on Maps, draft estimates) was killed
+# mid-delegation at exactly 600s on consecutive runs, so every retry burned ten
+# minutes and produced nothing. The task ExecutionTimeLimit is PT1H, so 1800s
+# still leaves headroom. The lock above is what actually prevents overlap;
 # this is only here so one wedged run can't block every future tick forever.
 REPLY_FILE=$(mktemp)
 claude -p "You are Marcus. Nicolas just sent this via Telegram:
@@ -93,6 +103,18 @@ reply naming who contributed -- never hide the machinery. Only skip
 delegation for something you can answer directly: a quick status check, a
 yes/no on something already logged, a simple question.
 
+Hard honesty rule -- this one is why it exists: on 2026-08-25 a reply
+claimed drafts that did not exist, and Nicolas went looking for them.
+Never say you created, drafted, sent, or scheduled anything unless a tool
+call in THIS run actually did it and you saw it succeed. This headless
+environment has NO Gmail access -- you cannot create email drafts here,
+ever. If he asks for email outreach: gather and verify leads per the
+DECISIONS.md verification rule, log them to work/leads.md, put the email
+TEXT in your reply for his approval, and say plainly that loading drafts
+into his Gmail needs the interactive session. CRM draft estimates you CAN
+create, via scripts/create-estimate.ts -- but only claim one exists after
+the script prints 'Created draft estimate'.
+
 Then answer him directly like you are texting him right now -- not a
 report, not a recap of what you did. Nicolas wants texts, not paragraphs:
 short, summarized, main details only, bullet points over prose. If there's
@@ -105,12 +127,19 @@ Output ONLY the reply text (with '---MSG---' between messages if you're
 sending more than one). No preamble, no meta-commentary about what you're
 doing." > "$REPLY_FILE" 2>>"$LOG" &
 CLAUDE_PID=$!
-( sleep 600 && kill -TERM "$CLAUDE_PID" 2>/dev/null ) &
-WATCHER_PID=$!
+# No timeout. Removed on Nicolas's instruction 2026-08-25: delegated work
+# (lead gathering, Maps verification, estimate drafting) was being killed
+# mid-run at 600s and every retry produced nothing. Marcus now runs to
+# completion, however long that takes.
+#
+# Trade-off this accepts: a wedged claude holds $LOCK indefinitely and every
+# later message goes unanswered with no error. Marcus-RespondFallback is still
+# capped by its PT1H ExecutionTimeLimit, but Marcus-Watch is PT0S (no limit),
+# so a hang on the watcher path persists until it is killed by hand. Recovery:
+# kill the claude process under the pid in /tmp/gb-respond.lock, or run
+# marcus-runtime/disable-tasks.ps1 then enable-tasks.ps1.
 wait "$CLAUDE_PID" 2>/dev/null
 CLAUDE_STATUS=$?
-kill "$WATCHER_PID" 2>/dev/null
-wait "$WATCHER_PID" 2>/dev/null
 REPLY=$(cat "$REPLY_FILE")
 rm -f "$REPLY_FILE"
 
@@ -126,15 +155,35 @@ fi
 # the whole reply as undelivered so the retry logic re-sends everything
 # rather than leaving a partial answer marked complete.
 PARTS_DIR=$(mktemp -d)
-printf '%s' "$REPLY" | python3 -c "
-import sys, re
+# Git Bash hands python a POSIX path like /tmp/tmp.XXXX, but python here is a
+# native Windows build and reads that as C:\tmp\tmp.XXXX, which does not exist.
+# Every part file failed to open, the loop below found nothing to send, and the
+# message got marked answered with no reply ever going out. cygpath gives python
+# a path it can actually open; passing it through the environment avoids
+# escaping backslashes into the source. The explicit UTF-8 matters too: Windows
+# Python defaults to cp1252 and would fail on any emoji in the reply.
+PARTS_NATIVE=$(cygpath -w "$PARTS_DIR" 2>/dev/null || printf '%s' "$PARTS_DIR")
+printf '%s' "$REPLY" | PARTS_DIR="$PARTS_NATIVE" python3 -c "
+import sys, re, os
+d = os.environ['PARTS_DIR']
 parts = re.split(r'\n---MSG---\n', sys.stdin.read().strip())
 for i, p in enumerate(parts):
     p = p.strip()
     if p:
-        with open('$PARTS_DIR/%03d' % i, 'w') as f:
+        with open(os.path.join(d, '%03d' % i), 'w', encoding='utf-8') as f:
             f.write(p)
 "
+
+# A reply that exists but produced no part files must not be treated as sent.
+# Falling through would mark the message answered having sent nothing, which is
+# the one failure this system is not allowed to have.
+if ! ls "$PARTS_DIR"/* >/dev/null 2>&1; then
+  echo "[$(date '+%F %T')] reply split produced no parts; inbox left unmarked" >> "$LOG"
+  FORCE=1 "$DIR/scripts/notify.sh" "⚠️ Reply generated but could not be split for sending. Your message is still unanswered in work/inbox.md." >> "$LOG" 2>&1
+  rm -rf "$PARTS_DIR"
+  exit 1
+fi
+
 SENT_STATUS=0
 for PART_FILE in "$PARTS_DIR"/*; do
   [ -f "$PART_FILE" ] || continue
@@ -163,21 +212,50 @@ date +%s > "$LAST_REPLY_FILE"
 # runs on its own cron, so a message can land in inbox.md while claude -p is
 # still thinking -- marking every unmarked line would stamp that one answered
 # without it ever having been read.
-MARK_LOG=$(ANSWERED="$NEW" python3 -c "
+# surrogateescape on both read and write so a byte that is not valid UTF-8 --
+# anything cp1252 wrote into this file before the encoding was pinned -- round
+# trips unchanged instead of raising or being replaced. A line that cannot be
+# matched is a line that never gets marked, and an unmarked line is answered
+# again on the next run.
+# The answered lines go through a file, not the environment. Passing them as an
+# env var re-decoded them with a different codec than the file read used, so any
+# byte that was not valid UTF-8 came out as a different string on each side and
+# the line never matched. Same file, same codec, both sides -- bytes round trip.
+#
+# newline='' stops Windows Python translating '\n' into '\r\n' on write, which
+# left a stray '\r' on every line and broke the match on the *next* run.
+ANSWERED_FILE=$(mktemp)
+printf '%s\n' "$NEW" > "$ANSWERED_FILE"
+ANSWERED_NATIVE=$(cygpath -w "$ANSWERED_FILE" 2>/dev/null || printf '%s' "$ANSWERED_FILE")
+MARK_LOG=$(ANSWERED_FILE="$ANSWERED_NATIVE" python3 -c "
 import os
-answered = {l for l in os.environ['ANSWERED'].splitlines() if l.strip()}
+enc = dict(encoding='utf-8', errors='surrogateescape')
+with open(os.environ['ANSWERED_FILE'], newline='', **enc) as f:
+    answered = {l.rstrip('\r\n') for l in f if l.strip()}
 marked = 0
 if answered:
-    with open('work/inbox.md') as f:
+    with open('work/inbox.md', newline='', **enc) as f:
         lines = f.readlines()
-    with open('work/inbox.md', 'w') as f:
+    with open('work/inbox.md', 'w', newline='', **enc) as f:
         for line in lines:
-            if line.rstrip('\n') in answered:
-                line = line.rstrip('\n') + ' [replied]\n'
+            stripped = line.rstrip('\r\n')
+            if stripped in answered:
+                line = stripped + ' [replied]\n'
                 marked += 1
             f.write(line)
 print(f'marked {marked} line(s)')
 " 2>&1)
+rm -f "$ANSWERED_FILE"
 echo "$MARK_LOG" >> "$LOG"
+
+# Replies went out but nothing got marked: the next run will answer the exact
+# same message again, and keep doing it every five minutes. Say so loudly rather
+# than quietly spamming Nicolas.
+case "$MARK_LOG" in
+  "marked 0 line"*)
+    echo "[$(date '+%F %T')] WARNING: replies sent but 0 lines marked -- duplicate replies will follow" >> "$LOG"
+    FORCE=1 "$DIR/scripts/notify.sh" "⚠️ Replied, but could not mark your message answered in work/inbox.md. You will get duplicate replies every 5 min until that line is marked [replied] by hand." >> "$LOG" 2>&1
+    ;;
+esac
 
 exit 0
