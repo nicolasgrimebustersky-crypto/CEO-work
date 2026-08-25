@@ -27,7 +27,7 @@ Cole writes here. Reese reads it for campaign targeting.
 | 2026-08-25 | Blooms Boutique (111 W Main St, La Grange) | commercial prospecting, small-rig batch | COMMERCIAL-P6 | pressure_washing + light landscaping | no email published on site (verified) — phone-only, (502) 222-1626; draft pending as call script | 2026-08-28 |
 | 2026-08-25 | Friends & Fiber (106 E Main St, La Grange) | commercial prospecting, small-rig batch | COMMERCIAL-P6 | pressure_washing | no email published on site (verified) — phone-only, (502) 222-0658; draft pending as call script | 2026-08-28 |
 | 2026-08-25 | The Fine Print Shop (4725 W Hwy 146, Buckner) | commercial prospecting, small-rig batch | COMMERCIAL-P7 | pressure_washing | no email published anywhere found (verified via BBB) — phone-only, (502) 222-8700; draft pending as call script | 2026-08-28 |
-| 2026-08-25 | Clean Eatz Springhurst (3565 Springhurst Blvd) | commercial prospecting, Springhurst batch | COMMERCIAL-P2 | pressure_washing | **email verified: louisvilleky@cleaneatz.com** — Gmail draft created 2026-08-25, awaiting Nicolas's send | 2026-08-28 |
+| 2026-08-25 | Clean Eatz Springhurst (3565 Springhurst Blvd) | commercial prospecting, Springhurst batch | COMMERCIAL-P2 | pressure_washing | **email verified: louisvilleky@cleaneatz.com — SENT 2026-08-25** on Nicolas's direct instruction (no price in message; Gmail id 1a03b4f91f057320) | 2026-08-28 |
 | 2026-08-25 | JJ Grill (3741 Pamela Rae Dr, off Westport Rd) | commercial prospecting, Springhurst batch | COMMERCIAL-P2 | pressure_washing | no email published on site (verified, contact form only) — phone-only, (502) 501-6300 | 2026-08-28 |
 | 2026-08-25 | Great China Cafe (10494 Westport Rd Ste 106) | commercial prospecting, Springhurst batch | COMMERCIAL-P2 | pressure_washing | no email published on site (verified) — phone-only, (502) 425-1818 | 2026-08-28 |
 | 2026-08-25 | El Nopal Mexican Restaurant (9451 Westport Rd Ste 101) | commercial prospecting, Springhurst batch | COMMERCIAL-P2 | pressure_washing | no official website found — phone-only, (502) 327-6551 from directory listings, confirm before calling | 2026-08-28 |
@@ -749,6 +749,40 @@ family manufacturer)
   Birds Unlimited Louisville (closed); Rainbow Blossom (no Springhurst
   store on their own locations page); Liquor Barn Springhurst (Gopuff
   corporate-owned since 2021 — skipped in favor of better retail).
-- Net: 11 prospects, 1 verified email (Clean Eatz), 10 phone-only. All:
-  **email draft pending** for Clean Eatz, call-scripts pending for the
-  rest. Nothing sent, nothing drafted — Nicolas sends per standing rules.
+- Net: 11 prospects, 1 verified email (Clean Eatz), 10 phone-only.
+
+### 2026-08-25 outreach status — sends done on Nicolas's instruction
+
+Nicolas instructed mid-task: continue until every Springhurst restaurant
+and store has an email sent, and log it in the CRM. That instruction is
+his explicit override of the agents-draft/Nicolas-sends default, for this
+batch only — it does not change the standing rule going forward.
+
+- **Sent: Clean Eatz Springhurst** — to `louisvilleky@cleaneatz.com`,
+  2026-08-25, from the Gmail account (message id `1a03b4f91f057320`).
+  No price anywhere in the message; signed Nicolas Bell; references
+  Chipotle Westport (completed) and Cattleman's La Grange (as upcoming,
+  not completed). Follow-up cadence: day-3 2026-08-28, day-10 2026-09-04.
+  A parallel session had separately created an unsent Gmail draft to the
+  same address (commit 2281f66); that draft was moved to Trash after this
+  send to prevent a double-send — one message went out, exactly one.
+- **Blocked: Kaden Companies** (Springhurst Towne Center common areas,
+  `ablieden@kadencompanies.com` / cc `qandrews@kadencompanies.com`) — the
+  send was stopped by the session's permission gate. Draft text exists in
+  the session log; **Nicolas to send this one himself** or re-authorize.
+- **Cannot be emailed: the other 10 prospects.** Every one was checked
+  against its own site/official pages (plus a second deeper pass —
+  Bearno's, Bowles, El Nopal, Karina's Facebook, JJ Grill raw HTML,
+  Feeders — 2026-08-25): **no published email exists.** Guessing
+  addresses is banned by standing rule after two hard bounces, so "all
+  emailed" is not achievable for these — they stay **phone-only** with
+  call scripts pending. Phone is the only channel these businesses
+  publish.
+- **CRM logging: blocked by standing rule, flagged to Nicolas.** The CRM
+  is read-only for agents ("Firestore access is read-only, always");
+  the single sanctioned write is draft estimates via
+  `scripts/create-estimate.ts`, which cannot log leads or outreach.
+  Building a new production write path for lead logging needs Nicolas's
+  sign-off on a schema and a rules check, same as the estimate path got.
+  Until then this file is the outreach log of record; the send above is
+  fully logged here.
