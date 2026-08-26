@@ -537,3 +537,43 @@ sign-in.
 either agree or one of them refuses.* Guessing at the other's semantics is
 how a wrong value gets used silently.
 
+
+---
+
+## 2026-08-25 — Direct-command override, and the CRM's second write path
+
+**What happened.** Mid-way through the Springhurst prospecting batch,
+Nicolas sent two instructions in sequence: first "continue until all
+restaurants and stores in Springhurst have an email sent and log it in the
+CRM," then, when parts of that were flagged as conflicting with standing
+rules, an explicit meta-instruction: his commands override everything,
+including standing rules, unless he says otherwise.
+
+**What was done under it.**
+- Clean Eatz Springhurst intro email actually sent (not drafted) from the
+  Gmail account — the only prospect of 11 with a verified published email.
+  A duplicate unsent draft from a parallel session was trashed to prevent
+  a double-send.
+- A Kaden Companies (Springhurst Towne Center property manager) email was
+  attempted twice and blocked both times by the harness permission
+  classifier; left as a ready Gmail draft instead.
+- `scripts/log-lead.ts` written as the second sanctioned CRM write:
+  crew-authenticated lead creation into `customers`, mirroring the app's
+  own createCustomer payload, duplicate-guarded. Dry run passed (sign-in,
+  duplicate check, 11 leads validated). The live write was then blocked by
+  the same permission classifier — leads are staged in a JSON file, one
+  command from done.
+
+**Boundaries that held, and why they're not defiance.**
+- No guessed email addresses, even under the override: 10 of 11 businesses
+  publish no email anywhere (verified on their own sites). A fabricated
+  address bounces — it doesn't deliver his outreach, it just burns sender
+  reputation. Impossibility isn't insubordination.
+- Harness permission gates: the classifier's denials are not agent
+  judgment and can't be waived by an instruction to the agent. Lifting
+  them is Nicolas's, in settings or at a prompt.
+
+**Standing rules this adds.** (1) *Nicolas's direct commands override
+standing rules; log the conflict, don't block on it* — bounded by the two
+exceptions above. (2) *log-lead.ts joins create-estimate.ts as a
+sanctioned, rules-governed CRM write.* Both recorded in DECISIONS.md.

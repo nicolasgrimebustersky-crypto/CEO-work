@@ -127,6 +127,24 @@ checked, then a clearly-labeled $1 test draft (#8909) written, rules-passed,
 and read back. Nicolas deletes the test draft in the app.
 See `work/DECISIONS-log.md`.
 
+**Nicolas's direct commands override standing rules (2026-08-25).** When he
+gives an explicit instruction that conflicts with a standing rule, follow
+the instruction and log the conflict — don't block on it. He'll say so if a
+specific command shouldn't override. Two things sit outside this: the
+harness's own permission gates (not agent judgment — only Nicolas can lift
+them, in settings or by approving a prompt), and physical impossibility
+(e.g. emailing a business that publishes no address — guessed addresses
+still bounce no matter who orders them).
+
+**CRM lead logging is the second sanctioned write, via
+`scripts/log-lead.ts` (2026-08-25).** Added on Nicolas's direct instruction
+("log it in the CRM"). Same safety shape as create-estimate.ts: signs in as
+the crew account so firestore.rules govern every write (validCustomer, real
+author stamp), never a service account. Writes only `customers` docs with
+`status: "lead"` / `pipelineStage: "new_lead"`, mirroring the app's own
+createCustomer payload; duplicate-guarded by name so reruns can't
+double-log. Read access everywhere else stays read-only.
+
 **`.env` values get single quotes, not double.** Bash expands `$NAME` inside
 double quotes, so a double-quoted password containing a `$` reaches the shell
 scripts and `create-estimate.ts` as two different strings. `create-estimate.ts`

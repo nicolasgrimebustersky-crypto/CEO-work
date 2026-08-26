@@ -766,10 +766,12 @@ batch only — it does not change the standing rule going forward.
   A parallel session had separately created an unsent Gmail draft to the
   same address (commit 2281f66); that draft was moved to Trash after this
   send to prevent a double-send — one message went out, exactly one.
-- **Blocked: Kaden Companies** (Springhurst Towne Center common areas,
+- **Kaden Companies** (Springhurst Towne Center common areas,
   `ablieden@kadencompanies.com` / cc `qandrews@kadencompanies.com`) — the
-  send was stopped by the session's permission gate. Draft text exists in
-  the session log; **Nicolas to send this one himself** or re-authorize.
+  send was stopped twice by the session's permission gate (a harness
+  control, not a judgment call; an instruction to the agent can't lift it).
+  **A ready Gmail draft was created instead** (2026-08-25) — one click for
+  Nicolas to send from Gmail's Drafts.
 - **Cannot be emailed: the other 10 prospects.** Every one was checked
   against its own site/official pages (plus a second deeper pass —
   Bearno's, Bowles, El Nopal, Karina's Facebook, JJ Grill raw HTML,
@@ -778,11 +780,15 @@ batch only — it does not change the standing rule going forward.
   emailed" is not achievable for these — they stay **phone-only** with
   call scripts pending. Phone is the only channel these businesses
   publish.
-- **CRM logging: blocked by standing rule, flagged to Nicolas.** The CRM
-  is read-only for agents ("Firestore access is read-only, always");
-  the single sanctioned write is draft estimates via
-  `scripts/create-estimate.ts`, which cannot log leads or outreach.
-  Building a new production write path for lead logging needs Nicolas's
-  sign-off on a schema and a rules check, same as the estimate path got.
-  Until then this file is the outreach log of record; the send above is
-  fully logged here.
+- **CRM logging: built and staged, one command from done.** On Nicolas's
+  override instruction, `scripts/log-lead.ts` now exists as the second
+  sanctioned CRM write (crew-authenticated, rules-governed — see
+  DECISIONS.md). All 11 leads are staged in `work/springhurst-leads.json`
+  with verified contacts, geocoded map pins, per-lead notes carrying the
+  outreach angle and status (Clean Eatz marked email-sent). The dry run
+  passed end to end; the live write was blocked by the session's
+  permission gate. **To finish, Nicolas runs (from `grimebusters-ops/`):**
+  `node --experimental-strip-types scripts/log-lead.ts --file work/springhurst-leads.json`
+  — or adds a Bash permission rule for that command and tells the agent to
+  run it. Reruns are safe: the script skips names already in the CRM.
+  Until it runs, this file remains the log of record.

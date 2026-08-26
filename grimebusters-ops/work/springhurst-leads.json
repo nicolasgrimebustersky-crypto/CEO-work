@@ -1,0 +1,123 @@
+[
+  {
+    "name": "Clean Eatz Springhurst",
+    "phone": "(502) 653-7865",
+    "email": "louisvilleky@cleaneatz.com",
+    "address": "3565 Springhurst Blvd, Louisville, KY 40241",
+    "lat": 38.2982325,
+    "lng": -85.5589984,
+    "note": "Springhurst restaurant batch 2026-08-25 (Cole). Franchise cafe, locally operated. Email verified from official location page (locations.cleaneatz.com). INTRO EMAIL SENT 2026-08-25 from Gmail on Nicolas's instruction — no price in message. Follow-up: day-3 08-28, day-10 09-04. Angle: clean-eating brand, stained sidewalk contradicts it; sidewalks/entrance monthly. Chipotle Westport Rd reference. Map pin geocoded from address, approximate.",
+    "tags": ["commercial", "springhurst-batch", "restaurant"],
+    "serviceTypes": ["pressure_washing"]
+  },
+  {
+    "name": "JJ Grill",
+    "phone": "(502) 501-6300",
+    "email": "",
+    "address": "3741 Pamela Rae Dr, Louisville, KY 40241",
+    "lat": 38.3013038,
+    "lng": -85.5428517,
+    "note": "Springhurst restaurant batch 2026-08-25 (Cole). Independent Mediterranean, standalone building off Westport Rd — owns its whole exterior, no landlord routing. No email published (site has contact form only, verified) — phone-first. Angle: entrance walk, curb, dumpster pad; grease + foot traffic. Chipotle Westport Rd reference. Map pin geocoded from address, approximate.",
+    "tags": ["commercial", "springhurst-batch", "restaurant"],
+    "serviceTypes": ["pressure_washing"]
+  },
+  {
+    "name": "Great China Cafe",
+    "phone": "(502) 425-1818",
+    "email": "",
+    "address": "10494 Westport Rd Ste 106, Louisville, KY 40241",
+    "lat": 38.2933942,
+    "lng": -85.5581023,
+    "note": "Springhurst restaurant batch 2026-08-25 (Cole). Independent takeout/dine-in. No email anywhere on their own site (verified in page source) — phone-first. Angle: strip-suite storefront, takeout foot traffic stains the entrance; shared dumpster pad behind the strip. Chipotle Westport Rd reference. Map pin geocoded from address, approximate.",
+    "tags": ["commercial", "springhurst-batch", "restaurant"],
+    "serviceTypes": ["pressure_washing"]
+  },
+  {
+    "name": "El Nopal Mexican Restaurant (Westport)",
+    "phone": "(502) 327-6551",
+    "email": "",
+    "address": "9451 Westport Rd Ste 101, Louisville, KY 40241",
+    "lat": 38.2936102,
+    "lng": -85.5595063,
+    "note": "Springhurst restaurant batch 2026-08-25 (Cole). Local KY family franchise chain, no official website exists — phone is from Yelp/TripAdvisor listings, CONFIRM NUMBER BEFORE CALLING. Angle: outdoor patio (reviews mention live music) — patio concrete is the hook, plus entrance and pad. Chipotle Westport Rd reference. Map pin geocoded from address, approximate.",
+    "tags": ["commercial", "springhurst-batch", "restaurant"],
+    "serviceTypes": ["pressure_washing"]
+  },
+  {
+    "name": "The Charcoal Restaurant",
+    "phone": "(502) 749-8888",
+    "email": "",
+    "address": "2805 N Hurstbourne Pkwy #100, Louisville, KY 40223",
+    "lat": 38.2860337,
+    "lng": -85.5702684,
+    "note": "Springhurst restaurant batch 2026-08-25 (Cole). Independent, Yelp top-10-in-Louisville rotisserie, Westport Rd/Hurstbourne corner — just outside 40241 but on the corridor. No email on own site (verified, eatcharcoal.com). Angle: charcoal operation means soot + grease at entrance and pad; heavily photographed storefront. Chipotle Westport Rd reference. Map pin geocoded from address, approximate.",
+    "tags": ["commercial", "springhurst-batch", "restaurant"],
+    "serviceTypes": ["pressure_washing"]
+  },
+  {
+    "name": "Bearno's Pizza (Westport Rd)",
+    "phone": "(502) 423-1224",
+    "email": "",
+    "address": "9222 Westport Rd, Louisville, KY 40242",
+    "lat": 38.2808093,
+    "lng": -85.5893285,
+    "note": "Springhurst restaurant batch 2026-08-25 (Cole). Local Louisville chain, franchised store — pitch the operator, not corporate. No email on own site (verified, bearnos.com). 40242, corridor-adjacent. Angle: pizza dumpster pad greases up fast; dine-in + pickup sidewalk. Chipotle Westport Rd reference. Map pin geocoded from address, approximate.",
+    "tags": ["commercial", "springhurst-batch", "restaurant"],
+    "serviceTypes": ["pressure_washing"]
+  },
+  {
+    "name": "McAlister's Deli Springhurst",
+    "phone": "(502) 384-7312",
+    "email": "",
+    "address": "4002 Towne Center Dr, Louisville, KY 40241",
+    "lat": 38.2975563,
+    "lng": -85.5547962,
+    "note": "Springhurst restaurant batch 2026-08-25 (Cole). Franchise (large multi-unit operator runs KY stores) — facilities may route through the franchisee's ops office; lower priority than true independents. No email on official location page (verified). Angle: Towne Center storefront, sidewalk + entrance + patio tables. Map pin geocoded from address, approximate.",
+    "tags": ["commercial", "springhurst-batch", "restaurant", "franchise"],
+    "serviceTypes": ["pressure_washing"]
+  },
+  {
+    "name": "Olive Garden Springhurst",
+    "phone": "(502) 425-3607",
+    "email": "",
+    "address": "9730 Von Allmen Ct, Louisville, KY 40241",
+    "lat": 38.3111412,
+    "lng": -85.5719292,
+    "note": "Springhurst restaurant batch 2026-08-25 (Cole). CORPORATE (Darden) — LOW PRIORITY: facilities route through corporate vendor systems, not the GM. Kept so the corridor map is complete. Phone from directory listing. Only worth a walk-in ask for the facilities contact if already on-site nearby. Map pin geocoded from address, approximate.",
+    "tags": ["commercial", "springhurst-batch", "restaurant", "corporate-low-priority"],
+    "serviceTypes": ["pressure_washing"]
+  },
+  {
+    "name": "Karina's Jewelers",
+    "phone": "(502) 394-9122",
+    "email": "",
+    "address": "4231 Towne Center Dr, Louisville, KY 40241",
+    "lat": 38.2990013,
+    "lng": -85.5577051,
+    "note": "Springhurst retail batch 2026-08-25 (Cole). Independent jeweler in Springhurst Towne Center, no website (social only). Phone from directory listings — CONFIRM NUMBER BEFORE CALLING. A hotmail address circulating in search snippets was NOT logged per the verified-source-only rule. Angle: high-value retail sells on presentation — spotless glass storefront and entrance walk; small fast job, beachhead inside the center. Map pin geocoded from address, approximate.",
+    "tags": ["commercial", "springhurst-batch", "retail"],
+    "serviceTypes": ["pressure_washing"]
+  },
+  {
+    "name": "Bowles Mattress Factory Direct (Springhurst)",
+    "phone": "(502) 425-4181",
+    "email": "",
+    "address": "3545 Springhurst Blvd, Louisville, KY 40241",
+    "lat": 38.2974221,
+    "lng": -85.5589432,
+    "note": "Springhurst retail batch 2026-08-25 (Cole). Local family-owned Kentuckiana mattress maker, own retail store. Address/phone verified on bowlesmattress.com factory-stores page; no email published. Angle: big-ticket showroom, storefront is the product display — sidewalk + entrance quarterly. Map pin geocoded from address, approximate.",
+    "tags": ["commercial", "springhurst-batch", "retail"],
+    "serviceTypes": ["pressure_washing"]
+  },
+  {
+    "name": "Feeders Pet Supply Springhurst",
+    "phone": "(502) 326-9404",
+    "email": "",
+    "address": "9486 Brownsboro Rd, Louisville, KY 40241",
+    "lat": 38.3064723,
+    "lng": -85.5736535,
+    "note": "Springhurst retail batch 2026-08-25 (Cole). Local Louisville chain since 1959. Their own site's location page geo-serves wrong-region content, so nothing was verifiable there; phone/address from listings — CONFIRM BEFORE CALLING. An info@ address seen only in snippets was NOT logged per the verified-source-only rule. Angle: pet-store entrances collect organic grime visibly; sidewalk + entrance quarterly. Brownsboro Rd/Snyder node of the corridor. Map pin geocoded from address, approximate.",
+    "tags": ["commercial", "springhurst-batch", "retail"],
+    "serviceTypes": ["pressure_washing"]
+  }
+]
