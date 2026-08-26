@@ -2,7 +2,10 @@
 
 ## What we are
 Pressure washing, landscaping, and snow removal. Oldham County, Kentucky.
-Owner: Nicolas Bell. Partner: Noah.
+Owner: Nicolas Timmons. Partner: Noah.
+(Corrected 2026-08-25 by Nicolas directly — this file previously said
+"Nicolas Bell," which is wrong and signed several outreach emails before
+being caught. Every signature is "Nicolas Timmons" or just "Nicolas.")
 
 ## Service area
 25 miles from Crestwood / Oldham County.

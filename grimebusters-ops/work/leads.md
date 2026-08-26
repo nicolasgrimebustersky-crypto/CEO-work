@@ -843,18 +843,29 @@ the segment that actually publishes email addresses, and property types
 (walkways, patios, event pads, historic masonry = soft-wash pitch) that fit
 recurring work.
 
-| # | business | email | draft (Gmail message id) |
+**2026-08-25 late correction (from Nicolas): the owner's name is Nicolas
+TIMMONS, not "Nicolas Bell" — BRAND.md had it wrong and is now fixed.**
+All 10 drafts below were rewritten with the correct signature (updating a
+draft assigns a new Gmail message id — table shows the current ids). The
+two already-sent Springhurst emails (Clean Eatz, Kaden) and the earlier
+batches went out signed "Nicolas Bell"; nothing to do about sent mail, but
+any reply addressed to "Nicolas Bell" is explained by this.
+
+| # | business | email | draft (Gmail message id, current) |
 |---|---|---|---|
-| 1 | Hermitage Farm (Goshen) | management@hermitagefarm.com | 1a03bcb974a263d5 |
-| 2 | Kentucky Artisan Distillery (Crestwood) | tours@kentuckyartisandistillery.com | 1a03bcba6c469b5c |
-| 3 | Creasey Mahan Nature Preserve (Goshen) | info@creaseymahannaturepreserve.org | 1a03bcbb7ff382c0 |
-| 4 | Captain's Quarters Riverside Grille (Prospect) | info@cqriverside.com | 1a03bcbdbaa27038 |
-| 5 | Commonwealth Tap (Norton Commons) | info@commonwealthtap.com | 1a03bcbedf53c3aa |
-| 6 | The Resident House (La Grange Main St) | mercantileonmain@yahoo.com | 1a03bcbfaaa69023 |
-| 7 | Gallery 104 / AAOC (La Grange Main St) | execdir@aaooc.org | 1a03bcc1ccbff2bb |
-| 8 | Foxhollow Farm (Crestwood) | grassfedbeef@foxhollow.com | 1a03bcc2a4753180 |
-| 9 | Oldham County History Center (La Grange) | info@oldhamkyhistory.com | 1a03bcc3b7d00bca |
-| 10 | Historic Locust Grove (Louisville 40207) | marketing@locustgrove.org | 1a03bcc4a904853d |
+| 1 | Hermitage Farm (Goshen) | management@hermitagefarm.com | 1a03be56b2d46ea0 |
+| 2 | Kentucky Artisan Distillery (Crestwood) | tours@kentuckyartisandistillery.com | 1a03be576b18f327 |
+| 3 | Creasey Mahan Nature Preserve (Goshen) | info@creaseymahannaturepreserve.org | 1a03be585a0f22ab |
+| 4 | Captain's Quarters Riverside Grille (Prospect) | info@cqriverside.com | 1a03be5901da39cd |
+| 5 | Commonwealth Tap (Norton Commons) | info@commonwealthtap.com | 1a03be5b967b2ca2 |
+| 6 | The Resident House (La Grange Main St) | mercantileonmain@yahoo.com | 1a03be5c4eb38c87 — **label re-apply blocked by permission gate; Marcus labels this one at send** |
+| 7 | Gallery 104 / AAOC (La Grange Main St) | execdir@aaooc.org | 1a03be5e0ce13547 |
+| 8 | Foxhollow Farm (Crestwood) | grassfedbeef@foxhollow.com | 1a03be5fe3a0cb8b |
+| 9 | Oldham County History Center (La Grange) | info@oldhamkyhistory.com | 1a03be60ba5d7de9 |
+| 10 | Historic Locust Grove (Louisville 40207) | marketing@locustgrove.org | 1a03be6140a5d68c |
+
+All except #6 re-labeled AVERY EMAILS after the rewrite (verified by the
+label calls succeeding); #6 needs the label applied at send.
 
 **Send plan.** All 10 drafts created 8/25 evening, no prices, signed
 Nicolas, each already labeled AVERY EMAILS. The 10:30am trigger is a
