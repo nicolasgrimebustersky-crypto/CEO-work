@@ -5,3 +5,5 @@ firebase-readonly.json
 *.log
 work/queued-texts.log
 node_modules/
+.venv/
+venv/
