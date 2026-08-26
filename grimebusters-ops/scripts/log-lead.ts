@@ -28,8 +28,14 @@
  *     "lat": 38.3, "lng": -85.57,          // required numbers (rules)
  *     "note": "how this lead was sourced / outreach status",
  *     "tags": ["commercial"],
- *     "serviceTypes": ["pressure_washing"]
+ *     "serviceTypes": ["pressure_washing"],
+ *     "contacted": false                   // true ONLY if someone has actually
+ *                                          // spoken to or emailed them
  *   }
+ *
+ * `contacted` defaults to false, which stores `lastContactedAt: null` — the
+ * value this CRM uses to mean "never worked". Set it true only for a lead a
+ * real message has already gone out to; see the note at the write below.
  *
  * Standing contact rule applies upstream: `email` may only be a value
  * verified against the organization's own site or an official page. This
@@ -143,6 +149,7 @@ interface LeadInput {
   note: string;
   tags: string[];
   serviceTypes: string[];
+  contacted: boolean;
 }
 
 const leads: LeadInput[] = parsed.map((entry, index) => {
@@ -168,6 +175,7 @@ const leads: LeadInput[] = parsed.map((entry, index) => {
       ? lead.tags.filter((t): t is string => typeof t === "string")
       : [],
     serviceTypes: serviceTypes.length > 0 ? serviceTypes : ["pressure_washing"],
+    contacted: lead.contacted === true,
   };
 });
 
@@ -243,9 +251,26 @@ for (const lead of leads) {
     createdAt: serverTimestamp(),
     createdBy: author.uid,
     createdByName: author.displayName,
-    lastContactedAt: serverTimestamp(),
-    lastContactedBy: author.uid,
-    lastContactedByName: author.displayName,
+    // null means never contacted, and this CRM means it literally.
+    // `lib/filters.ts` matches "never contacted" on null alone, and treats a
+    // set value as proof the record has been worked; `lib/knock/territory.ts`
+    // counts a null as unknocked and calls coverage "a genuine record of
+    // houses spoken to, not a checkbox somebody remembered to tick".
+    //
+    // The app's own createCustomer() stamps serverTimestamp() because it is
+    // called from the door-knock quick-entry sheet, where the conversation
+    // just happened. Prospecting is the opposite case: a business found on a
+    // map has not been contacted by anyone. The Meta lead-ad ingest
+    // (app/api/meta/leads/route.ts) writes null for exactly that reason, and
+    // this follows it. Stamping "contacted just now" on a prospect nobody has
+    // called would hide it from the one filter meant to surface it.
+    ...(lead.contacted
+      ? {
+          lastContactedAt: serverTimestamp(),
+          lastContactedBy: author.uid,
+          lastContactedByName: author.displayName,
+        }
+      : { lastContactedAt: null, lastContactedBy: null, lastContactedByName: null }),
     lifetimeValue: 0,
     pipelineStage: "new_lead",
     pipelineChangedAt: serverTimestamp(),
@@ -258,7 +283,10 @@ for (const lead of leads) {
   };
 
   if (dryRun) {
-    console.log(`DRY RUN — would create lead: ${lead.name} (${lead.address || "no address"})`);
+    console.log(
+      `DRY RUN — would create lead: ${lead.name} (${lead.address || "no address"})` +
+        ` — ${lead.contacted ? "marked contacted" : "never contacted"}`,
+    );
     created += 1;
     continue;
   }
