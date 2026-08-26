@@ -38,6 +38,16 @@ Cole writes here. Reese reads it for campaign targeting.
 | 2026-08-25 | Karina's Jewelers (4231 Towne Center Dr) | commercial prospecting, Springhurst batch | COMMERCIAL-P6 | pressure_washing | no website; a hotmail address appears only in search snippets — **not logged per standing rule**; phone-only, (502) 394-9122 from directory listings, confirm before calling | 2026-08-28 |
 | 2026-08-25 | Bowles Mattress Factory Direct (3545 Springhurst Blvd) | commercial prospecting, Springhurst batch | COMMERCIAL-P6 | pressure_washing | no email published on site (verified) — phone-only, (502) 425-4181 | 2026-08-28 |
 | 2026-08-25 | Feeders Pet Supply Springhurst (9486 Brownsboro Rd) | commercial prospecting, Springhurst batch | COMMERCIAL-P6 | pressure_washing | own site's location page geo-serves wrong-region content, no email verifiable — phone-only, (502) 326-9404 from listings, confirm before calling | 2026-08-28 |
+| 2026-08-25 | Hermitage Farm (10500 W Hwy 42, Goshen) | email batch 2026-08-26 | COMMERCIAL-P2/venue | pressure_washing | **email verified: management@hermitagefarm.com** — draft ready + labeled, queued 10:30am 8/26 | 2026-08-29 |
+| 2026-08-25 | Kentucky Artisan Distillery (6230 Old LaGrange Rd, Crestwood) | email batch 2026-08-26 | COMMERCIAL-P2/venue | pressure_washing | **email verified: tours@kentuckyartisandistillery.com** — draft ready + labeled, queued 10:30am 8/26 | 2026-08-29 |
+| 2026-08-25 | Creasey Mahan Nature Preserve (Goshen) | email batch 2026-08-26 | COMMERCIAL-P8/nonprofit | pressure_washing | **email verified: info@creaseymahannaturepreserve.org** — draft ready + labeled, queued 10:30am 8/26 | 2026-08-29 |
+| 2026-08-25 | Captain's Quarters Riverside Grille (5700 Captain's Quarters Rd, Prospect) | email batch 2026-08-26 | COMMERCIAL-P2 | pressure_washing | **email verified: info@cqriverside.com** — draft ready + labeled, queued 10:30am 8/26 | 2026-08-29 |
+| 2026-08-25 | Commonwealth Tap (Norton Commons, Prospect) | email batch 2026-08-26 | COMMERCIAL-P2 | pressure_washing | **email verified: info@commonwealthtap.com** — draft ready + labeled, queued 10:30am 8/26 | 2026-08-29 |
+| 2026-08-25 | The Resident House (127 E Main St, La Grange) | email batch 2026-08-26 | COMMERCIAL-P6 | pressure_washing | **email from official Main Street directory: mercantileonmain@yahoo.com** — draft ready + labeled, queued 10:30am 8/26 | 2026-08-29 |
+| 2026-08-25 | Gallery 104 / Arts Assoc. of Oldham County (104 E Main St, La Grange) | email batch 2026-08-26 | COMMERCIAL-P8/nonprofit | pressure_washing | **email verified: execdir@aaooc.org** — draft ready + labeled, queued 10:30am 8/26 | 2026-08-29 |
+| 2026-08-25 | Foxhollow Farm (8905 Hwy 329, Crestwood) | email batch 2026-08-26 | COMMERCIAL-P2/venue | pressure_washing | **email verified: grassfedbeef@foxhollow.com** — draft ready + labeled, queued 10:30am 8/26 | 2026-08-29 |
+| 2026-08-25 | Oldham County History Center (106 N 2nd Ave, La Grange) | email batch 2026-08-26 | COMMERCIAL-P8/nonprofit | pressure_washing | **email verified: info@oldhamkyhistory.com** — draft ready + labeled, queued 10:30am 8/26 | 2026-08-29 |
+| 2026-08-25 | Historic Locust Grove (561 Blankenbaker Ln, Louisville 40207) | email batch 2026-08-26 | COMMERCIAL-P8/venue | pressure_washing | **email verified: marketing@locustgrove.org** (site footer; asks routing to facilities) — draft ready + labeled, queued 10:30am 8/26 | 2026-08-29 |
 
 Score key for this batch: standard HOT/WARM/COLD is the social-lead scale
 (see Social lead triage in Cole's brief). Commercial prospects are scored by
@@ -817,3 +827,51 @@ Sent mail directly (2026-08-25):
   — or adds a Bash permission rule for that command and tells the agent to
   run it. Reruns are safe: the script skips names already in the CRM.
   Until it runs, this file remains the log of record.
+
+---
+
+## 2026-08-26 — 10:30am email batch (10 new prospects, all verified emails)
+
+Built 2026-08-25 evening on Nicolas's instruction: 10 businesses to email
+tomorrow, prepared to go out at 10:30am, Marcus to notify him when all is
+complete. Every email below was fetched from the business's own site or an
+official directory page (source in each CRM note in
+`work/email-batch-2026-08-26.json` — same staging format as the Springhurst
+batch, load with `scripts/log-lead.ts`). No duplicates with any prior batch.
+Theme of the batch: venues, farms, and destination spots inside the radius —
+the segment that actually publishes email addresses, and property types
+(walkways, patios, event pads, historic masonry = soft-wash pitch) that fit
+recurring work.
+
+| # | business | email | draft (Gmail message id) |
+|---|---|---|---|
+| 1 | Hermitage Farm (Goshen) | management@hermitagefarm.com | 1a03bcb974a263d5 |
+| 2 | Kentucky Artisan Distillery (Crestwood) | tours@kentuckyartisandistillery.com | 1a03bcba6c469b5c |
+| 3 | Creasey Mahan Nature Preserve (Goshen) | info@creaseymahannaturepreserve.org | 1a03bcbb7ff382c0 |
+| 4 | Captain's Quarters Riverside Grille (Prospect) | info@cqriverside.com | 1a03bcbdbaa27038 |
+| 5 | Commonwealth Tap (Norton Commons) | info@commonwealthtap.com | 1a03bcbedf53c3aa |
+| 6 | The Resident House (La Grange Main St) | mercantileonmain@yahoo.com | 1a03bcbfaaa69023 |
+| 7 | Gallery 104 / AAOC (La Grange Main St) | execdir@aaooc.org | 1a03bcc1ccbff2bb |
+| 8 | Foxhollow Farm (Crestwood) | grassfedbeef@foxhollow.com | 1a03bcc2a4753180 |
+| 9 | Oldham County History Center (La Grange) | info@oldhamkyhistory.com | 1a03bcc3b7d00bca |
+| 10 | Historic Locust Grove (Louisville 40207) | marketing@locustgrove.org | 1a03bcc4a904853d |
+
+**Send plan.** All 10 drafts created 8/25 evening, no prices, signed
+Nicolas, each already labeled AVERY EMAILS. The 10:30am trigger is a
+standing task in `work/inbox.md` for Marcus: send all 10, verify each in
+Sent mail, log bounces here, then notify Nicolas via `scripts/notify.sh`.
+(A one-shot cron nudge was attempted from this session but the sandbox
+blocks crontab writes — the inbox task plus tonight's Telegram heads-up
+carry it.) Fallback: Nicolas taps send on the 10 drafts in Gmail at 10:30.
+
+**Vetting notes.** Checked and dropped for no published/usable email:
+Yew Dell Botanical Gardens (forms only), 3rd Turn Oldham Gardens (phone
+only — strong prospect, move to phone list), Sleepy Hollow Golf (form
+only), Oldham County Country Club (emails Cloudflare-obfuscated,
+unverifiable), Irish Rover Too (phone only), Village Anchor (form only),
+Crestwood Baptist (phone only), Smith-Berry Winery (closed June 2026),
+Harmony Landing CC (domain parked), Hunting Creek CC (domain dead),
+Duncan Memorial Chapel (site unreachable), Old Stone Inn (consent-walled),
+One Nineteen West Main (DOMAIN HIJACKED — redirects to a gambling site;
+do not visit or email anything claiming to be them). Day-3 follow-up for
+the batch: 2026-08-29; day-10: 2026-09-05.

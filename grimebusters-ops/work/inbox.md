@@ -66,3 +66,15 @@ Marcus marks items `[handled]` once acted on.
 - [2026-08-25 07:40] I want more email outreach so gather leaked emails from different businesses around me and send them estimates. I don’t want commercial jobs to be too big. Just keep in mind. I have a small pressure washer not a trailer set up with the tank so it’s not ideal so when you ask for jobs verify online through the Maps if it’s big enough or if it’s small enough. [replied]
 
 - [2026-08-25 15:40] Their are no drafts because I just looked and their is none [replied]
+
+- [2026-08-25, from Nicolas via Claude Code session] STANDING TASK FOR MARCUS,
+  due 2026-08-26 10:30am: send the 10 Gmail drafts for the "email batch
+  2026-08-26" (all created 8/25 evening, all labeled AVERY EMAILS, all
+  addresses verified against each business's own site — list and draft ids
+  in work/leads.md under "2026-08-26 — 10:30am email batch"). Nicolas has
+  explicitly authorized these sends (his direct-command override, see
+  DECISIONS.md). At 10:30: send each draft, verify each shows in Sent mail
+  with the label, log any bounce to leads.md, then NOTIFY NICOLAS via
+  scripts/notify.sh that the batch is out — he asked to be told when all
+  is complete. If sending fails or is blocked, notify him immediately so
+  he can tap send from Gmail Drafts himself.
