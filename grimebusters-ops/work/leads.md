@@ -5,7 +5,7 @@ Cole writes here. Reese reads it for campaign targeting.
 | date | name/handle | source | score | service | status | next follow-up |
 |---|---|---|---|---|---|---|
 | 2026-08-22 | Dr. Janet Visanescu, DMD (Family & Cosmetic Dentistry) | commercial prospecting | COMMERCIAL-P1 | pressure_washing | no email published anywhere on site (verified) — phone/in-person only | 2026-08-25 |
-| 2026-08-22 | Pediatric Dentistry of Oldham County | commercial prospecting | COMMERCIAL-P1 | pressure_washing | **email verified: pediatricdentistyoc@gmail.com** — draft ready for email | 2026-08-25 |
+| 2026-08-22 | Pediatric Dentistry of Oldham County | commercial prospecting | COMMERCIAL-P1 | pressure_washing | **pediatricdentistyoc@gmail.com BOUNCED (550 5.1.1) on the 2026-08-25 send — despite being the address published on their own homepage footer. Their published email is dead. Switch to phone/in-person, (502) 222-8848 — see bounce note below** | 2026-08-28 |
 | 2026-08-22 | Hometown Pizza (Crestwood, since 1982) | commercial prospecting | COMMERCIAL-P2 | pressure_washing | no email published anywhere on site (verified) — phone/in-person only | 2026-08-25 |
 | 2026-08-22 | Gustavo's Mexican Grill (Cherrywood Crossing, La Grange) | commercial prospecting | COMMERCIAL-P2 | pressure_washing | no email published anywhere on site (verified) — phone/in-person only | 2026-08-25 |
 | 2026-08-22 | Green Valley Apartments (402 Lakewood Dr, La Grange) | commercial prospecting | COMMERCIAL-P3 | pressure_washing + landscaping bundle | no email published on site (verified) — phone/in-person only; note site phone (502) 222-1614 differs from previously logged (502) 443-1977 | 2026-08-25 |
@@ -768,10 +768,35 @@ batch only — it does not change the standing rule going forward.
   send to prevent a double-send — one message went out, exactly one.
 - **Kaden Companies** (Springhurst Towne Center common areas,
   `ablieden@kadencompanies.com` / cc `qandrews@kadencompanies.com`) — the
-  send was stopped twice by the session's permission gate (a harness
-  control, not a judgment call; an instruction to the agent can't lift it).
-  **A ready Gmail draft was created instead** (2026-08-25) — one click for
-  Nicolas to send from Gmail's Drafts.
+  agent send was stopped twice by the session's permission gate, so a
+  ready Gmail draft was created instead. **That draft went out on
+  2026-08-25 (evening)** — it shows in Sent mail (message
+  `1a03bb27103af76e`). Common-area pitch for the whole Towne Center is
+  now live.
+
+### 2026-08-25 evening — send/label sweep and one bounce
+
+Nicolas's instruction: every sent email carries the Gmail label
+"AVERY EMAILS" (now a standing rule in DECISIONS.md). Verified against
+Sent mail directly (2026-08-25):
+
+- **All 12 outreach sends of the last 7 days carry the label** — the seven
+  small-rig batch emails (Goshen Animal Clinic, LaGrange Coffee Roasters,
+  Couture Closet, Crestwood Agency, SNA Insurance, Noteworthy Creative,
+  Crestwood Barber Shop — all sent 2026-08-25 evening), Clean Eatz,
+  Kaden Companies, and the earlier St. James / Cardinal Harbour /
+  Pediatric Dentistry sends. Nothing sent is unlabeled.
+- **Bounce: Pediatric Dentistry of Oldham County.**
+  `pediatricdentistyoc@gmail.com` came back 550 5.1.1 (address not found)
+  on the 2026-08-25 send. This address WAS verified — it is what the
+  practice's own homepage footer publishes, spelling triple-checked on
+  2026-08-22. Their published address is simply dead. Lesson recorded:
+  "on their own site" proves provenance, not deliverability. Prospect
+  switches to phone/in-person, (502) 222-8848; do not re-send or guess
+  variants. Table row updated.
+- Small-rig batch table rows below still say "awaiting Nicolas's send" —
+  superseded by this note: those seven went out 2026-08-25 evening,
+  labeled. Day-3 follow-up for all of them: 2026-08-28.
 - **Cannot be emailed: the other 10 prospects.** Every one was checked
   against its own site/official pages (plus a second deeper pass —
   Bearno's, Bowles, El Nopal, Karina's Facebook, JJ Grill raw HTML,

@@ -127,6 +127,11 @@ checked, then a clearly-labeled $1 test draft (#8909) written, rules-passed,
 and read back. Nicolas deletes the test draft in the app.
 See `work/DECISIONS-log.md`.
 
+**Every outreach email sent gets the Gmail label "AVERY EMAILS"
+(2026-08-25, Nicolas's instruction).** Label at send time (or immediately
+after) with label id `Label_2038427261090036890`. A draft that later gets
+sent must end up labeled too — verify on the sent message, not the draft.
+
 **Nicolas's direct commands override standing rules (2026-08-25).** When he
 gives an explicit instruction that conflicts with a standing rule, follow
 the instruction and log the conflict — don't block on it. He'll say so if a
