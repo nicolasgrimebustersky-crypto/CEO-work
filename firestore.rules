@@ -479,6 +479,144 @@ service cloud.firestore {
       }
     }
 
+    // ----------------------------------------------------------------- ops
+    //
+    // The agent system's own state, published by grimebusters-ops and read by
+    // the Marcus command centre at /marcus.
+    //
+    // Those scripts sign in as a crew account, exactly as create-estimate.ts
+    // and log-lead.ts do, so every clause below applies to them. A service
+    // account was not used and must not be: rules do not apply to one, and a
+    // write key would bypass this whole file — including /users, which decides
+    // who counts as crew.
+    //
+    // Crew-only throughout. This is the business's internal working state:
+    // what is being worked on, what it costs, what is waiting on a decision.
+
+    function validAgentStatus(status) {
+      return status in ['working', 'waiting', 'idle'];
+    }
+
+    // The heartbeat is what the dashboard trusts, so it must be the server's
+    // clock. A client-supplied time would let a stopped agent look current —
+    // the one lie this screen exists not to tell.
+    function freshHeartbeat() {
+      return request.resource.data.heartbeatAt == request.time;
+    }
+
+    function validOpsAgent() {
+      let data = request.resource.data;
+      return validAgentStatus(data.status)
+        && data.task is string
+        && data.task.size() <= 300
+        && freshHeartbeat();
+    }
+
+    // Document id is the agent id, so a publish is an upsert and there is
+    // exactly one row per agent however many times it checks in.
+    match /opsAgents/{agentId} {
+      allow read: if isCrew();
+      allow create: if isCrew()
+        && agentId in ['marcus', 'grant', 'cole', 'reese', 'avery', 'tyler']
+        && stampedByCaller('updatedBy')
+        && validOpsAgent();
+      allow update: if isCrew() && refreshesAuthorStamp() && validOpsAgent();
+
+      // No delete. An agent that stops reporting goes stale on the screen,
+      // which is information; a row that vanishes just looks like it never was.
+      allow delete: if false;
+    }
+
+    function validFeedEntry() {
+      let data = request.resource.data;
+      return data.who in ['marcus', 'grant', 'cole', 'reese', 'avery', 'tyler']
+        && data.text is string
+        && data.text.size() > 0
+        && data.text.size() <= 2000
+        && data.createdAt == request.time;
+    }
+
+    // The comm log. Append-only, like the chat messages above and for the same
+    // reason: it is a record of what the agents reported doing, and a record
+    // that can be rewritten afterwards is not worth keeping.
+    match /opsFeed/{entryId} {
+      allow read: if isCrew();
+      allow create: if isCrew() && stampedByCaller('createdBy') && validFeedEntry();
+      allow update, delete: if false;
+    }
+
+    // A position in an escalation: who argued it, and what they argued.
+    function validPosition(field) {
+      let data = request.resource.data;
+      return !(field in data) || data[field] == null
+        || (data[field].who is string && data[field].position is string);
+    }
+
+    function validApproval() {
+      let data = request.resource.data;
+      return data.kind in ['money', 'content', 'escalation', 'legal']
+        && data.who in ['marcus', 'grant', 'cole', 'reese', 'avery', 'tyler']
+        && data.title is string
+        && data.title.size() > 0
+        && data.title.size() <= 200
+        && data.detail is string
+        && data.detail.size() <= 2000
+        && (data.cost == null || data.cost is string)
+        && data.status is string
+        && validPosition('positionA')
+        && validPosition('positionB');
+    }
+
+    // The fields that describe *what is being asked*. Pinned on update, so the
+    // agent that raised an item cannot change the price or the wording of a
+    // thing after Nicolas has looked at it — an approval has to still mean
+    // what it meant when it was read.
+    function approvalContentUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny([
+          'kind', 'who', 'title', 'detail', 'cost',
+          'positionA', 'positionB', 'marcusRead',
+          'approveLabel', 'altLabel',
+          'createdAt', 'createdBy', 'createdByName'
+        ]);
+    }
+
+    function recordsDecision() {
+      let data = request.resource.data;
+      return data.status in ['approved', 'alternate', 'rejected']
+        && data.decidedAt == request.time
+        && data.decidedBy == request.auth.uid
+        && data.decidedByName is string;
+    }
+
+    match /opsApprovals/{approvalId} {
+      allow read: if isCrew();
+
+      // Raised by an agent, and it lands pending. One created already approved
+      // would be an agent approving its own spend, which is hard rule 1 —
+      // never commit money, any amount — dressed up as a data write.
+      allow create: if isCrew()
+        && stampedByCaller('createdBy')
+        && validApproval()
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.decidedAt == null
+        && request.resource.data.decidedBy == null;
+
+      // The only permitted update is the decision itself, and only while the
+      // item is still pending. A decided row is closed: re-deciding one that
+      // has already been carried out would rewrite the record of what was
+      // authorised. Changing course means raising a new item, which leaves
+      // both the original and the reversal visible.
+      allow update: if isCrew()
+        && resource.data.status == 'pending'
+        && approvalContentUnchanged()
+        && recordsDecision();
+
+      // No delete. What was asked for and what was answered both stay.
+      allow delete: if false;
+    }
+
     // Anything not matched above is denied by default. Do not add a
     // catch-all `match /{document=**}` here: rules are OR'd, so a permissive
     // catch-all would widen access rather than restrict it.

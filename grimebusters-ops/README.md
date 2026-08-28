@@ -78,6 +78,26 @@ they sound like you.
 Standing business rules go in `work/DECISIONS.md`, not in one agent's file —
 otherwise the other five can't see them.
 
+## The command centre bridge
+
+`scripts/ops-publish.ts` publishes agent status, the comm log and approval
+requests into GrimelineCRM, where Nicolas watches them at `/marcus`. It signs
+in as the same crew account `create-estimate.ts` uses, so it needs
+`CREW_EMAIL` / `CREW_PASSWORD` in `.env` and nothing else. Without those the
+wrapper exits quietly and the board simply shows nothing reporting.
+
+```bash
+node --experimental-strip-types scripts/ops-publish.ts agent \
+  --id cole --status working --task "triaging overnight leads" --dry-run
+```
+
+`scripts/ops-publish.sh` is the same thing for calling from other scripts:
+25-second timeout, always exits 0, logs to `work/ops-publish.log`. `respond.sh`
+calls it after a reply has actually been delivered.
+
+It cannot approve anything — see `firestore.rules`, which accepts a decision
+only from a signed-in crew session on an item that is still pending.
+
 ## Open items
 See the conflicts section at the bottom of `context/CONFIG.md`. Conflict 4
 (Firestore) is resolved bar the key. The other three are business calls only

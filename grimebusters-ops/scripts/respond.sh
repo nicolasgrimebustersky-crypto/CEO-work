@@ -201,6 +201,15 @@ fi
 # skipped -- see the LAST_REPLY_FILE check above.
 date +%s > "$LAST_REPLY_FILE"
 
+# Tell the command centre at /marcus that this happened. Placed after the
+# delivery check on purpose: the feed is a record of replies that actually
+# went out, so a failed send leaves no line claiming one did. ops-publish.sh
+# never returns non-zero, so nothing below this depends on it working.
+"$DIR/scripts/ops-publish.sh" agent --id marcus --status working \
+  --task "answering Nicolas on Telegram"
+"$DIR/scripts/ops-publish.sh" feed --who marcus \
+  --text "replied to Nicolas on Telegram ($(printf '%s' "$REPLY" | wc -c | tr -d ' ') chars)"
+
 # Mark only the lines that were actually in the prompt. check-replies.sh also
 # runs on its own cron, so a message can land in inbox.md while claude -p is
 # still thinking -- marking every unmarked line would stamp that one answered

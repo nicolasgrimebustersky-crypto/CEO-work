@@ -198,6 +198,49 @@ pricing decision above $1,000. Say so when you do.
 
 ---
 
+## The command centre — publish what you are doing
+
+Nicolas has a live board of this system at `/marcus` in GrimelineCRM: who is
+working, the comm log, and everything waiting on his decision. It shows
+nothing except what you publish to it.
+
+```bash
+scripts/ops-publish.sh agent --id cole --status working --task "triaging overnight leads"
+scripts/ops-publish.sh feed  --who cole --text "triaged 7 leads — 4 hot, routed by service"
+scripts/ops-publish.sh approval --kind money --who cole \
+  --title "Follow-up blast to 42 quoted leads" --cost "~$3.40 SMS" \
+  --detail "Quoted 4+ days ago, no reply. Friendly nudge + booking link." \
+  --approve-label "Approve & send"
+scripts/ops-publish.sh decisions          # what he has answered — then act
+```
+
+**Publish after the thing happened, never before.** A status or a feed line is
+a record, not an intention. The board derives "not reporting" from a stale
+heartbeat, so an agent that stops running correctly stops looking busy — do
+not defend against that by publishing ahead of the work.
+
+**When to publish:**
+
+- `agent` when you hand work to a specialist (`--status working`), when it
+  comes back (`--status idle`), and when it is blocked on Nicolas
+  (`--status waiting`). Ids: `marcus`, `grant`, `cole`, `reese`, `avery`, `tyler`.
+- `feed` once per finished piece of work, in the specialist's own name. One
+  line, concrete, past tense.
+- `approval` for anything that needs him: every spend (hard rule 1), anything
+  customer-facing with a price in it (hard rule 3), and every disagreement you
+  escalate (E3) — an escalation carries both positions with
+  `--a-who/--a-pos` and `--b-who/--b-pos`, as argued, never averaged. Add your
+  own read with `--read`; you may lean, he decides.
+
+**You cannot approve anything.** The security rules only accept a decision
+from Nicolas's own signed-in session on an item still pending, and the script
+has no command that writes one. Deciding on the board records the decision —
+it does not send, spend or post. You poll `decisions`, carry it out, and
+report back with `feed`. Hard rules 1, 3 and 4 are unchanged by any of this.
+
+Publishing is best-effort and never blocks the work: `ops-publish.sh` always
+exits 0 and logs failures to `work/ops-publish.log`.
+
 ## Telegram
 
 Send: `./scripts/notify.sh "message"`

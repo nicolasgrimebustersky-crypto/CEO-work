@@ -146,6 +146,30 @@ function notificationDoc(actorUid, forUid, overrides = {}) {
   };
 }
 
+/** An approval as scripts/ops-publish.ts raises it: pending, undecided. */
+function opsApprovalDoc(uid, overrides = {}) {
+  return {
+    kind: "money",
+    who: "cole",
+    title: "Follow-up blast to 42 quoted leads",
+    detail: "Everyone quoted 4+ days ago with no reply.",
+    cost: "~$3.40 SMS",
+    positionA: null,
+    positionB: null,
+    marcusRead: null,
+    approveLabel: "Approve & send",
+    altLabel: null,
+    status: "pending",
+    decidedAt: null,
+    decidedBy: null,
+    decidedByName: null,
+    createdAt: serverTimestamp(),
+    createdBy: uid,
+    createdByName: uid,
+    ...overrides,
+  };
+}
+
 /** A write shaped exactly like what lib/db/* sends, stamps included. */
 function stampedUpdate(uid, fields) {
   return { ...fields, updatedBy: uid, updatedAt: serverTimestamp() };
@@ -239,6 +263,25 @@ beforeEach(async () => {
       token: "alice-device-token",
       label: "iPhone · Safari",
     });
+    // The agent system's own state, read by the command centre at /marcus.
+    await setDoc(doc(db, "opsAgents/cole"), {
+      status: "working",
+      task: "triaging overnight leads",
+      heartbeatAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      updatedBy: "alice",
+      updatedByName: "Alice",
+    });
+    await setDoc(doc(db, "opsApprovals/ap1"), opsApprovalDoc("alice"));
+    await setDoc(
+      doc(db, "opsApprovals/ap-done"),
+      opsApprovalDoc("alice", {
+        status: "approved",
+        decidedAt: serverTimestamp(),
+        decidedBy: "alice",
+        decidedByName: "Alice",
+      }),
+    );
   });
 });
 
@@ -1252,6 +1295,213 @@ describe("who may widen their own notifications", () => {
       updateDoc(doc(dana, "users/dana"), {
         displayName: "Dana B",
         mutedNotifications: ["money"],
+      }),
+    );
+  });
+});
+
+/* ------------------------------------------------- the agent system's state */
+
+describe("agent status", () => {
+  const agentDoc = (uid, over = {}) => ({
+    status: "working",
+    task: "deploying homepage speed fixes",
+    heartbeatAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    updatedBy: uid,
+    updatedByName: uid,
+    ...over,
+  });
+
+  test("crew publish and read the roster", async () => {
+    await assertSucceeds(setDoc(doc(alice, "opsAgents/grant"), agentDoc("alice")));
+    await assertSucceeds(getDocs(collection(bob, "opsAgents")));
+  });
+
+  test("a pending account sees none of it", async () => {
+    // This is the business's internal working state — what is being worked on,
+    // what it costs, what is waiting on a decision.
+    await assertFails(getDocs(collection(mallory, "opsAgents")));
+    await assertFails(setDoc(doc(mallory, "opsAgents/grant"), agentDoc("mallory")));
+  });
+
+  test("an agent that is not on the roster cannot be invented", async () => {
+    await assertFails(setDoc(doc(alice, "opsAgents/rogue"), agentDoc("alice")));
+  });
+
+  test("a made-up status is refused", async () => {
+    await assertFails(
+      setDoc(doc(alice, "opsAgents/grant"), agentDoc("alice", { status: "crushing it" })),
+    );
+  });
+
+  test("the heartbeat must be the server's clock, not the caller's", async () => {
+    // A client-supplied time is the whole failure this guards: a laptop that
+    // has been shut for a day could otherwise keep reporting itself current,
+    // and the board would show six agents working while nothing was running.
+    await assertFails(
+      setDoc(
+        doc(alice, "opsAgents/grant"),
+        agentDoc("alice", { heartbeatAt: new Date("2099-01-01") }),
+      ),
+    );
+  });
+
+  test("nobody can stamp somebody else's check-in", async () => {
+    await assertFails(setDoc(doc(alice, "opsAgents/grant"), agentDoc("bob")));
+  });
+
+  test("an agent row cannot be deleted", async () => {
+    // Going stale on screen is information. A row that vanishes is not.
+    await assertFails(deleteDoc(doc(alice, "opsAgents/cole")));
+  });
+});
+
+describe("the comm log", () => {
+  const feedDoc = (uid, over = {}) => ({
+    who: "cole",
+    text: "triaged 7 overnight leads",
+    createdAt: serverTimestamp(),
+    createdBy: uid,
+    createdByName: uid,
+    ...over,
+  });
+
+  test("crew append and read", async () => {
+    await assertSucceeds(addDoc(collection(alice, "opsFeed"), feedDoc("alice")));
+    await assertSucceeds(getDocs(collection(dana, "opsFeed")));
+  });
+
+  test("an entry cannot be edited or deleted afterwards", async () => {
+    // Same reason as chat messages: a record that can be rewritten is not a
+    // record of what the agents actually reported.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "opsFeed/f1"), feedDoc("alice"));
+    });
+    await assertFails(updateDoc(doc(alice, "opsFeed/f1"), { text: "something else" }));
+    await assertFails(deleteDoc(doc(alice, "opsFeed/f1")));
+  });
+
+  test("an empty entry is refused", async () => {
+    await assertFails(addDoc(collection(alice, "opsFeed"), feedDoc("alice", { text: "" })));
+  });
+
+  test("an entry cannot be attributed to an agent that does not exist", async () => {
+    await assertFails(addDoc(collection(alice, "opsFeed"), feedDoc("alice", { who: "ghost" })));
+  });
+
+  test("a pending account cannot read or write it", async () => {
+    await assertFails(getDocs(collection(mallory, "opsFeed")));
+    await assertFails(addDoc(collection(mallory, "opsFeed"), feedDoc("mallory")));
+  });
+});
+
+describe("approvals", () => {
+  test("an agent raises one, and it lands pending", async () => {
+    await assertSucceeds(
+      addDoc(collection(alice, "opsApprovals"), opsApprovalDoc("alice")),
+    );
+  });
+
+  test("an agent cannot raise one that is already approved", async () => {
+    // The escalation this clause exists to stop: an agent approving its own
+    // spend by writing the decision itself. Hard rule 1 — never commit money.
+    await assertFails(
+      addDoc(
+        collection(alice, "opsApprovals"),
+        opsApprovalDoc("alice", {
+          status: "approved",
+          decidedAt: serverTimestamp(),
+          decidedBy: "alice",
+          decidedByName: "Alice",
+        }),
+      ),
+    );
+  });
+
+  test("crew record a decision on a pending item", async () => {
+    await assertSucceeds(
+      updateDoc(doc(alice, "opsApprovals/ap1"), {
+        status: "approved",
+        decidedAt: serverTimestamp(),
+        decidedBy: "alice",
+        decidedByName: "Alice",
+      }),
+    );
+  });
+
+  test("the decision has to be stamped with whoever made it", async () => {
+    await assertFails(
+      updateDoc(doc(alice, "opsApprovals/ap1"), {
+        status: "approved",
+        decidedAt: serverTimestamp(),
+        decidedBy: "bob",
+        decidedByName: "Bob",
+      }),
+    );
+  });
+
+  test("what was asked for cannot change once it has been asked", async () => {
+    // Otherwise an agent could raise "$3.40 SMS", wait for the approval, and
+    // then edit the price — the approval has to still mean what it meant when
+    // it was read.
+    await assertFails(
+      updateDoc(doc(alice, "opsApprovals/ap1"), {
+        cost: "$3400",
+        status: "approved",
+        decidedAt: serverTimestamp(),
+        decidedBy: "alice",
+        decidedByName: "Alice",
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(alice, "opsApprovals/ap1"), {
+        title: "Something else entirely",
+        status: "approved",
+        decidedAt: serverTimestamp(),
+        decidedBy: "alice",
+        decidedByName: "Alice",
+      }),
+    );
+  });
+
+  test("a decided item cannot be quietly re-decided", async () => {
+    // Reversing a decision that has already been carried out would rewrite the
+    // record of what was authorised. Changing course means a new item.
+    await assertFails(
+      updateDoc(doc(alice, "opsApprovals/ap-done"), {
+        status: "rejected",
+        decidedAt: serverTimestamp(),
+        decidedBy: "alice",
+        decidedByName: "Alice",
+      }),
+    );
+  });
+
+  test("an item cannot be put back to pending", async () => {
+    await assertFails(
+      updateDoc(doc(alice, "opsApprovals/ap1"), {
+        status: "pending",
+        decidedAt: serverTimestamp(),
+        decidedBy: "alice",
+        decidedByName: "Alice",
+      }),
+    );
+  });
+
+  test("neither side of an escalation can be deleted", async () => {
+    await assertFails(deleteDoc(doc(alice, "opsApprovals/ap1")));
+    await assertFails(deleteDoc(doc(alice, "opsApprovals/ap-done")));
+  });
+
+  test("a pending account can neither see nor decide", async () => {
+    await assertFails(getDocs(collection(mallory, "opsApprovals")));
+    await assertFails(
+      updateDoc(doc(mallory, "opsApprovals/ap1"), {
+        status: "approved",
+        decidedAt: serverTimestamp(),
+        decidedBy: "mallory",
+        decidedByName: "Mallory",
       }),
     );
   });

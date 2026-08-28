@@ -34,6 +34,8 @@ export const routes = {
     `/chat/thread?id=${encodeURIComponent(conversationId)}`,
   newChat: "/chat?new=1",
   dashboard: "/dashboard",
+  /** The agent command centre. See components/marcus. */
+  marcus: "/marcus",
   reports: "/reports",
   account: "/account",
   privacy: "/privacy",

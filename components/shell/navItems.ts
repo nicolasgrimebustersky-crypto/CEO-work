@@ -1,5 +1,6 @@
 import { routes } from "@/lib/routes";
 import {
+  AgentIcon,
   CalendarIcon,
   ChartIcon,
   InvoiceIcon,
@@ -82,6 +83,12 @@ export const DRAWER_ONLY: NavItem[] = [
     label: "Messages",
     icon: MessageIcon,
     hint: "Texts to and from customers, and who is waiting",
+  },
+  {
+    href: routes.marcus,
+    label: "Agents",
+    icon: AgentIcon,
+    hint: "Marcus and the five specialists — what they're on, what needs you",
   },
   {
     href: routes.dashboard,

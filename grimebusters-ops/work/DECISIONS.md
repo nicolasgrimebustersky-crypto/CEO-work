@@ -13,6 +13,15 @@ both files, with a date.
 
 ## Standing rules
 
+**The command centre.** Every agent publishes its own status, work log and
+approval requests to GrimelineCRM with `scripts/ops-publish.sh`, and Nicolas
+watches them at `/marcus`. Publish *after* work happens, never ahead of it —
+a stale heartbeat is meant to read as "not reporting". No agent can decide an
+approval: the security rules accept a decision only from Nicolas's own
+session, and deciding records the decision rather than carrying it out.
+Added 2026-08-28 on his instruction ("wire this artifact into my AI systems").
+
+
 **Money.** No agent commits to any spend, any amount, ever. Ads, tools,
 subscriptions, materials. Draft the case, Nicolas authorizes. (A6, G5)
 

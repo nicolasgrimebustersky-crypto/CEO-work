@@ -577,3 +577,39 @@ including standing rules, unless he says otherwise.
 standing rules; log the conflict, don't block on it* — bounded by the two
 exceptions above. (2) *log-lead.ts joins create-estimate.ts as a
 sanctioned, rules-governed CRM write.* Both recorded in DECISIONS.md.
+
+## 2026-08-28 — the Marcus command centre, and the bridge to it
+
+Nicolas asked for the M.A.R.C.U.S dashboard artifact to be wired into the
+agent system rather than left as a design. Built as `/marcus` in the CRM,
+backed by three new Firestore collections the agents publish to:
+`opsAgents` (status + heartbeat), `opsFeed` (comm log, append-only) and
+`opsApprovals` (what is waiting on him).
+
+Decisions taken while building it:
+
+- **Crew sign-in, not a service account.** Same as create-estimate.ts and
+  log-lead.ts. Rules do not apply to service accounts, so a write key would
+  have bypassed every clause in firestore.rules including /users.
+- **Heartbeat, not a status string.** `heartbeatAt` must equal the server's
+  own clock (enforced in the rules), and the dashboard shows NOT REPORTING
+  past 15 minutes. Without this a laptop that had been shut for a day would
+  keep showing six agents "working".
+- **Approvals land pending and cannot be raised pre-approved.** An agent
+  writing its own approval is hard rule 1 dressed up as a data write.
+- **What was asked cannot change after it was asked.** Title, detail, cost
+  and both escalation positions are pinned on update, so an approval still
+  means what it meant when he read it.
+- **A decision is final and recorded, not executed.** The rules only accept a
+  decision while an item is pending; changing course means a new item, which
+  leaves both in the record. The dashboard has no send, spend or post path —
+  the agent polls `ops-publish.sh decisions` and carries it out. Hard rules 3
+  and 4 hold on this screen exactly as on Telegram.
+- **Telemetry comes from the CRM, not from the agents.** Revenue, close rate
+  and lead counts are computed from jobs, quotes and customers, so no agent
+  can report a number the book does not support.
+
+Verified: 21 new rules tests (135 total pass), `npm run typecheck`, `lint`,
+`test:meta` (400 pass) and `build` all green. Not verified: no publish has
+been run against production — the bridge needs CREW_EMAIL in the ops .env,
+and until an agent publishes, the board correctly shows nothing reporting.

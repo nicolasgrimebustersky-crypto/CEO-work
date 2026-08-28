@@ -216,6 +216,29 @@ export function PriceBookIcon({ active }: NavIconProps) {
   );
 }
 
+export function AgentIcon({ active }: NavIconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className="size-6" aria-hidden="true">
+      {/* A hub with four spokes: five agents reporting through one router. */}
+      <circle
+        cx="12"
+        cy="12"
+        r="3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={w(active)}
+      />
+      <path
+        d="M12 3v6m0 6v6M3 12h6m6 0h6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={w(active)}
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export function MenuIcon({ active }: NavIconProps) {
   return (
     <svg viewBox="0 0 24 24" className="size-6" aria-hidden="true">
