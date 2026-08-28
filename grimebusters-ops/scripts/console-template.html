@@ -1,0 +1,934 @@
+<title>M.A.R.C.U.S Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+
+<style>
+  /* Nocturne — the palette from the original canvas, kept as the source of
+     truth for this board's look. Deliberately single-theme: this is an
+     instrument panel, and it holds its own ground on any host. */
+  :root {
+    --bg: #161826;
+    --surface: #1d1f2e;
+    --raised: #232532;
+    --line: rgba(233, 233, 237, 0.14);
+    --line-strong: rgba(233, 233, 237, 0.26);
+    --text: #e9e9ed;
+    --muted: #9397ab;
+    --dim: #6f7386;
+    --accent: #9184d9;
+    --accent-200: #e7e5fe;
+    --accent-400: #b5abfc;
+    --accent-600: #796cbf;
+    --amber: #e0b15c;
+    --red: #d97b7b;
+    --green: #7fbf9a;
+
+    --step: clamp(0.75rem, 0.72rem + 0.15vw, 0.82rem);
+    --label: 0.625rem;
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: var(--step);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 16px 64px; }
+
+  /* ------------------------------------------------------------- masthead */
+
+  header.mast {
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, #1a1c2b 0%, var(--bg) 100%);
+  }
+
+  .mast-inner {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 26px 16px 18px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 16px 28px;
+  }
+
+  h1 {
+    margin: 0;
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: clamp(1.35rem, 1.1rem + 1.1vw, 1.9rem);
+    letter-spacing: 0.14em;
+    text-wrap: balance;
+  }
+
+  .expand {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 0.78rem;
+    max-width: 46ch;
+  }
+
+  .mast-stats { display: flex; gap: 22px; margin-left: auto; flex-wrap: wrap; }
+
+  .stat-val {
+    font-family: var(--mono);
+    font-size: 1.15rem;
+    font-variant-numeric: tabular-nums;
+    display: block;
+  }
+
+  .label {
+    font-family: var(--mono);
+    font-size: var(--label);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+
+  /* Freshness is a first-class fact on this board, not fine print: the page is
+     a snapshot baked at publish time, and it says so where it cannot be missed. */
+  .freshness {
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .freshness-inner {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 9px 16px;
+    display: flex;
+    gap: 10px 18px;
+    flex-wrap: wrap;
+    align-items: center;
+    font-family: var(--mono);
+    font-size: var(--label);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+
+  .freshness b { color: var(--muted); font-weight: 500; }
+
+  /* ------------------------------------------------------------------ nav */
+
+  nav.views {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: rgba(22, 24, 38, 0.94);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .views-inner {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 8px 16px;
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+  }
+
+  .tab {
+    flex: 0 0 auto;
+    background: none;
+    border: 0;
+    border-radius: 8px;
+    padding: 7px 13px;
+    color: var(--dim);
+    font-family: var(--mono);
+    font-size: var(--label);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: color .15s, background .15s;
+  }
+
+  .tab:hover { color: var(--muted); }
+  .tab[aria-selected="true"] { background: var(--raised); color: var(--accent-200); }
+  .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .tab .count { color: var(--amber); margin-left: 6px; }
+
+  /* --------------------------------------------------------------- panels */
+
+  .grid { display: grid; gap: 12px; margin-top: 16px; }
+  @media (min-width: 900px) { .split { grid-template-columns: 1.05fr 1fr; } }
+
+  .panel {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface);
+    padding: 16px;
+  }
+
+  .panel-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .note { color: var(--dim); font-size: 0.74rem; margin: 0; }
+
+  /* ---------------------------------------------------------------- roster */
+
+  .roster { display: grid; gap: 8px; }
+  @media (min-width: 560px) { .roster { grid-template-columns: 1fr 1fr; } }
+
+  .agent {
+    text-align: left;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    padding: 11px 12px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+
+  .agent:hover { background: var(--raised); }
+  .agent[aria-pressed="true"] { border-color: var(--accent-600); background: var(--raised); }
+  .agent:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .agent-top { display: flex; align-items: center; gap: 8px; }
+  .agent-name { font-weight: 600; }
+  .agent-role { color: var(--muted); font-size: 0.72rem; margin: 3px 0 0; }
+
+  .dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; }
+  .dot.working { background: var(--accent-400); }
+  .dot.waiting { background: var(--amber); }
+  .dot.idle { background: var(--dim); }
+  .dot.stale { background: var(--dim); opacity: .45; }
+
+  .pill {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: var(--label);
+    letter-spacing: 0.14em;
+    color: var(--dim);
+    white-space: nowrap;
+  }
+
+  .pill.working { color: var(--accent-200); }
+  .pill.waiting { color: var(--amber); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+
+  .chip {
+    font-family: var(--mono);
+    font-size: var(--label);
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 2px 6px;
+  }
+
+  /* ----------------------------------------------------------------- feed */
+
+  .empty {
+    border: 1px dashed var(--line-strong);
+    border-radius: 10px;
+    padding: 18px;
+    color: var(--dim);
+    font-size: 0.76rem;
+  }
+
+  .empty code {
+    font-family: var(--mono);
+    color: var(--accent-200);
+    background: var(--raised);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+  }
+
+  ul.log { list-style: none; margin: 0; padding: 0; display: grid; gap: 11px; }
+  .log-when { font-family: var(--mono); font-size: var(--label); color: var(--dim); }
+  .log-who { font-family: var(--mono); font-size: var(--label); letter-spacing: 0.14em; color: var(--accent-200); }
+  .log-text { margin: 2px 0 0; color: var(--muted); font-size: 0.78rem; }
+
+  /* -------------------------------------------------------------- routing */
+
+  .flow { display: grid; gap: 0; justify-items: center; }
+
+  .node {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px 16px;
+    text-align: center;
+    width: 100%;
+    max-width: 340px;
+    background: var(--raised);
+  }
+
+  .node.you { border-color: var(--accent-600); }
+  .stem { width: 1px; height: 22px; background: var(--line-strong); }
+
+  .specialists { display: grid; gap: 8px; width: 100%; margin-top: 0; }
+  @media (min-width: 720px) { .specialists { grid-template-columns: repeat(5, 1fr); } }
+
+  .spec {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 11px 10px;
+    text-align: center;
+  }
+
+  .spec-name { font-family: var(--mono); font-size: var(--label); letter-spacing: 0.16em; }
+  .spec-remit { color: var(--dim); font-size: 0.7rem; margin: 5px 0 0; }
+
+  /* ------------------------------------------------------------ telemetry */
+
+  .tiles { display: grid; gap: 8px; }
+  @media (min-width: 620px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 940px) { .tiles { grid-template-columns: repeat(4, 1fr); } }
+
+  .tile { border: 1px solid var(--line); border-radius: 10px; padding: 13px; }
+
+  .tile-val {
+    font-family: var(--mono);
+    font-size: 1.45rem;
+    font-variant-numeric: tabular-nums;
+    display: block;
+    margin: 4px 0 2px;
+  }
+
+  .tile-note { color: var(--dim); font-size: 0.7rem; }
+
+  .chart { display: flex; align-items: flex-end; gap: 10px; height: 190px; margin-top: 18px; }
+
+  .bar-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+  }
+
+  .bar-track { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
+
+  /* 4px rounded data-ends, anchored to the baseline; the most recent month is
+     the emphasised endpoint and the rest recede. */
+  .bar {
+    width: 100%;
+    max-width: 46px;
+    border-radius: 4px 4px 0 0;
+    background: linear-gradient(180deg, var(--accent-400), rgba(145, 132, 217, 0.16));
+    opacity: .55;
+    transition: opacity .15s;
+  }
+
+  .bar-col:last-child .bar { opacity: 1; }
+  .bar-col:hover .bar, .bar-col:focus-within .bar { opacity: 1; }
+
+  .bar-val {
+    font-family: var(--mono);
+    font-size: var(--label);
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+  }
+
+  .baseline { height: 1px; background: var(--line-strong); }
+
+  /* ------------------------------------------------------------ build log */
+
+  table.commits { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+  .scroll-x { overflow-x: auto; }
+  table.commits th {
+    text-align: left;
+    font-family: var(--mono);
+    font-size: var(--label);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--dim);
+    font-weight: 400;
+    padding: 0 12px 8px 0;
+    white-space: nowrap;
+  }
+  table.commits td {
+    padding: 7px 12px 7px 0;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    vertical-align: top;
+  }
+  table.commits td.sha { font-family: var(--mono); color: var(--accent-200); white-space: nowrap; }
+  table.commits td.when { font-family: var(--mono); color: var(--dim); white-space: nowrap; }
+
+  .hidden { display: none; }
+
+  footer.foot {
+    max-width: 1180px;
+    margin: 28px auto 0;
+    padding: 16px;
+    border-top: 1px solid var(--line);
+    color: var(--dim);
+    font-size: 0.72rem;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+
+<header class="mast">
+  <div class="mast-inner">
+    <div>
+      <h1>M.A.R.C.U.S</h1>
+      <p class="expand">Managing Agent · Routing · Command · Unified System — the
+        console for Grime Busters KY's agent system.</p>
+    </div>
+    <div class="mast-stats">
+      <div>
+        <span class="stat-val" id="stat-reporting">—</span>
+        <span class="label">Reporting</span>
+      </div>
+      <div>
+        <span class="stat-val" id="stat-pending">—</span>
+        <span class="label">Waiting on you</span>
+      </div>
+      <div>
+        <span class="stat-val" id="stat-revenue">—</span>
+        <span class="label">Completed revenue</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="freshness">
+  <div class="freshness-inner">
+    <span>State captured <b id="captured">—</b></span>
+    <span>·</span>
+    <span>Source <b>GrimelineCRM + agent definitions</b></span>
+    <span>·</span>
+    <span id="link-state">·</span>
+  </div>
+</div>
+
+<nav class="views" aria-label="Console views">
+  <div class="views-inner" role="tablist">
+    <button class="tab" role="tab" data-view="core" aria-selected="true">Core</button>
+    <button class="tab" role="tab" data-view="workshop" aria-selected="false">Workshop<span class="count" id="tab-pending"></span></button>
+    <button class="tab" role="tab" data-view="routing" aria-selected="false">Routing</button>
+    <button class="tab" role="tab" data-view="telemetry" aria-selected="false">Telemetry</button>
+    <button class="tab" role="tab" data-view="build" aria-selected="false">Build log</button>
+  </div>
+</nav>
+
+<main class="wrap">
+  <section id="view-core" class="grid split"></section>
+  <section id="view-workshop" class="grid hidden"></section>
+  <section id="view-routing" class="grid hidden"></section>
+  <section id="view-telemetry" class="grid hidden"></section>
+  <section id="view-build" class="grid hidden"></section>
+</main>
+
+<footer class="foot">
+  This board is a snapshot, not a live feed — a published page cannot reach
+  Firestore, so the state above was read on the machine that publishes it.
+  Agent status and the comm log come from what the agents publish with
+  <code>scripts/ops-publish.sh</code>; the money comes from the CRM's own
+  completed jobs and quotes. Nothing here is sample data: an agent that has
+  not reported is shown as not reporting.
+</footer>
+
+<script>
+  const STATE = __STATE__;
+
+  /* An agent's heartbeat is only believable for so long — the ops box is a
+     laptop that gets shut. Past this it reads as not reporting rather than
+     leaving a stopped agent looking busy. */
+  const STALE_MS = 15 * 60 * 1000;
+
+  const money = (n) =>
+    "$" + Math.round(n).toLocaleString("en-US");
+
+  const STATUS_LABEL = {
+    working: "Working",
+    waiting: "Needs you",
+    idle: "Idle",
+    stale: "Not reporting",
+  };
+
+  function agentStatus(id) {
+    const row = (STATE.firestore.opsAgents || []).find((a) => a.id === id);
+    if (!row || !row.heartbeatAt) return { key: "stale", task: null };
+    const age = Date.now() - new Date(row.heartbeatAt).getTime();
+    if (age > STALE_MS) return { key: "stale", task: row.task };
+    return { key: row.status || "idle", task: row.task };
+  }
+
+  function ago(iso) {
+    if (!iso) return "—";
+    const secs = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+    if (secs < 45) return "now";
+    const mins = Math.round(secs / 60);
+    if (mins < 60) return mins + "m";
+    const hrs = Math.round(mins / 60);
+    if (hrs < 24) return hrs + "h";
+    return Math.round(hrs / 24) + "d";
+  }
+
+  const el = (tag, cls, text) => {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+
+  function panel(title, meta) {
+    const p = el("section", "panel");
+    const head = el("div", "panel-head");
+    head.append(el("span", "label", title));
+    if (meta) head.append(el("span", "label", meta));
+    p.append(head);
+    return p;
+  }
+
+  /* ------------------------------------------------------------------ core */
+
+  let selected = STATE.agents[0].id;
+
+  function renderCore() {
+    const root = document.getElementById("view-core");
+    root.textContent = "";
+
+    const left = el("div", "grid");
+
+    const reporting = STATE.agents.filter(
+      (a) => agentStatus(a.id).key !== "stale",
+    ).length;
+
+    const rosterPanel = panel(
+      "Agents",
+      reporting + " of " + STATE.agents.length + " reporting",
+    );
+    const roster = el("div", "roster");
+
+    for (const agent of STATE.agents) {
+      const st = agentStatus(agent.id);
+      const btn = el("button", "agent");
+      btn.type = "button";
+      btn.setAttribute("aria-pressed", String(agent.id === selected));
+      btn.addEventListener("click", () => {
+        selected = agent.id;
+        renderCore();
+      });
+
+      const top = el("div", "agent-top");
+      top.append(el("span", "dot " + st.key));
+      top.append(el("span", "agent-name", agent.name));
+      top.append(el("span", "pill " + st.key, STATUS_LABEL[st.key]));
+      btn.append(top);
+      btn.append(el("p", "agent-role", st.task || agent.role));
+      roster.append(btn);
+    }
+
+    rosterPanel.append(roster);
+    left.append(rosterPanel);
+
+    // The selected agent, from its own definition file.
+    const agent = STATE.agents.find((a) => a.id === selected);
+    const st = agentStatus(agent.id);
+    const detail = panel(agent.name, STATUS_LABEL[st.key]);
+    detail.append(el("p", "note", agent.remit));
+
+    if (agent.triggers) {
+      const trig = el("p", "note");
+      trig.style.marginTop = "8px";
+      trig.append(el("span", "label", "Triggers on "));
+      trig.append(document.createTextNode(agent.triggers));
+      detail.append(trig);
+    }
+
+    const chips = el("div", "chips");
+    if (agent.model) chips.append(el("span", "chip", "model " + agent.model));
+    for (const tool of agent.tools) chips.append(el("span", "chip", tool));
+    if (!agent.tools.length) {
+      chips.append(el("span", "chip", "delegates — does no specialist work"));
+    }
+    detail.append(chips);
+
+    const entries = (STATE.firestore.opsFeed || []).filter(
+      (f) => f.who === agent.id,
+    );
+    const logHead = el("p", "note");
+    logHead.style.margin = "14px 0 8px";
+    logHead.append(el("span", "label", "Work log"));
+    detail.append(logHead);
+
+    if (!entries.length) {
+      detail.append(
+        el("div", "empty", "Nothing published. This agent has not reported work."),
+      );
+    } else {
+      const list = el("ul", "log");
+      for (const entry of entries.slice(0, 8)) {
+        const li = el("li");
+        li.append(el("span", "log-when", ago(entry.createdAt)));
+        li.append(el("p", "log-text", entry.text));
+        list.append(li);
+      }
+      detail.append(list);
+    }
+
+    left.append(detail);
+    root.append(left);
+
+    // Comm log
+    const feed = STATE.firestore.opsFeed || [];
+    const feedPanel = panel("Comm log", String(feed.length));
+    if (!feed.length) {
+      const empty = el("div", "empty");
+      empty.append(
+        document.createTextNode(
+          "No agent has published yet, so there is nothing to show. The log " +
+            "fills as the agents report finished work with ",
+        ),
+      );
+      empty.append(el("code", null, "scripts/ops-publish.sh feed"));
+      empty.append(
+        document.createTextNode(
+          ". Until then this stays empty rather than showing invented activity.",
+        ),
+      );
+      feedPanel.append(empty);
+    } else {
+      const list = el("ul", "log");
+      for (const entry of feed) {
+        const li = el("li");
+        const head = el("div");
+        head.append(el("span", "log-who", entry.who));
+        head.append(document.createTextNode(" "));
+        head.append(el("span", "log-when", "· " + ago(entry.createdAt)));
+        li.append(head);
+        li.append(el("p", "log-text", entry.text));
+        list.append(li);
+      }
+      feedPanel.append(list);
+    }
+    root.append(feedPanel);
+  }
+
+  /* -------------------------------------------------------------- workshop */
+
+  function renderWorkshop() {
+    const root = document.getElementById("view-workshop");
+    root.textContent = "";
+
+    const approvals = STATE.firestore.opsApprovals || [];
+    const pending = approvals.filter((a) => a.status === "pending");
+
+    const intro = panel("Waiting on you", pending.length + " pending");
+    intro.append(
+      el(
+        "p",
+        "note",
+        "Money and legal stop here — no agent can approve its own spend. " +
+          "Decisions are recorded in the CRM, where the agents read them and " +
+          "carry them out; nothing is sent, spent or posted from this page.",
+      ),
+    );
+    root.append(intro);
+
+    if (!pending.length) {
+      const clear = el("section", "panel");
+      clear.append(el("span", "label", "Queue clear — the agents keep working"));
+      root.append(clear);
+    }
+
+    for (const item of pending) {
+      const card = el("section", "panel");
+      const head = el("div", "panel-head");
+      head.append(el("span", "label", item.kind));
+      head.append(el("span", "label", item.who + " · " + ago(item.createdAt)));
+      card.append(head);
+      const title = el("p");
+      title.style.fontWeight = "600";
+      title.style.margin = "0";
+      title.textContent = item.title;
+      card.append(title);
+      if (item.detail) card.append(el("p", "note", item.detail));
+      if (item.cost) {
+        const cost = el("p", "note", item.cost);
+        cost.style.color = "var(--amber)";
+        cost.style.fontFamily = "var(--mono)";
+        card.append(cost);
+      }
+      for (const side of [item.positionA, item.positionB]) {
+        if (!side) continue;
+        const box = el("div", "empty");
+        box.style.borderStyle = "solid";
+        box.append(el("span", "label", side.who));
+        box.append(el("p", "log-text", side.position));
+        card.append(box);
+      }
+      if (item.marcusRead) {
+        const read = el("div", "empty");
+        read.style.borderStyle = "solid";
+        read.append(el("span", "label", "Marcus' read"));
+        read.append(el("p", "log-text", item.marcusRead));
+        card.append(read);
+      }
+      root.append(card);
+    }
+
+    const decided = approvals.filter((a) => a.status !== "pending");
+    if (decided.length) {
+      const past = panel("Decided", String(decided.length));
+      const list = el("ul", "log");
+      for (const item of decided) {
+        const li = el("li");
+        li.append(el("span", "log-who", item.status));
+        li.append(el("p", "log-text", item.title + " — " + (item.decidedByName || "")));
+        list.append(li);
+      }
+      past.append(list);
+      root.append(past);
+    }
+  }
+
+  /* --------------------------------------------------------------- routing */
+
+  function renderRouting() {
+    const root = document.getElementById("view-routing");
+    root.textContent = "";
+
+    const p = panel("Routing", "everything through Marcus");
+    p.append(
+      el(
+        "p",
+        "note",
+        "Five specialists report to Marcus. He routes, names who contributed, " +
+          "and escalates disagreements with both positions intact. Only money, " +
+          "legal and a real disagreement reach you.",
+      ),
+    );
+
+    const flow = el("div", "flow");
+    flow.style.marginTop = "16px";
+
+    const you = el("div", "node you");
+    you.append(el("span", "label", "You"));
+    you.append(el("p", "note", "decisions · direction"));
+    flow.append(you);
+    flow.append(el("div", "stem"));
+
+    const marcus = el("div", "node");
+    marcus.append(el("span", "label", "Marcus"));
+    marcus.append(el("p", "note", "routes everything · commits no money"));
+    flow.append(marcus);
+    flow.append(el("div", "stem"));
+
+    const specs = el("div", "specialists");
+    for (const agent of STATE.agents.filter((a) => a.id !== "marcus")) {
+      const st = agentStatus(agent.id);
+      const box = el("div", "spec");
+      const top = el("div");
+      top.style.display = "flex";
+      top.style.justifyContent = "center";
+      top.style.gap = "6px";
+      top.style.alignItems = "center";
+      top.append(el("span", "dot " + st.key));
+      top.append(el("span", "spec-name", agent.name));
+      box.append(top);
+      box.append(el("p", "spec-remit", agent.short));
+      box.append(el("p", "spec-remit", agent.role));
+      specs.append(box);
+    }
+    flow.append(specs);
+    p.append(flow);
+    root.append(p);
+  }
+
+  /* ------------------------------------------------------------- telemetry */
+
+  function renderTelemetry() {
+    const root = document.getElementById("view-telemetry");
+    root.textContent = "";
+    const t = STATE.firestore.telemetry;
+
+    if (!t) {
+      const p = panel("Business telemetry", "unavailable");
+      p.append(
+        el(
+          "div",
+          "empty",
+          "The CRM could not be read when this snapshot was taken: " +
+            (STATE.firestore.error || "unknown reason"),
+        ),
+      );
+      root.append(p);
+      return;
+    }
+
+    const closeRate = t.quotesTotal
+      ? Math.round((t.quotesAccepted / t.quotesTotal) * 100) + "%"
+      : "—";
+
+    const p = panel("Business telemetry", "from the CRM, not the agents");
+    p.append(
+      el(
+        "p",
+        "note",
+        "Completed work only. A quote is what was asked for, not what was earned.",
+      ),
+    );
+
+    const tiles = el("div", "tiles");
+    tiles.style.marginTop = "14px";
+    const stats = [
+      [money(t.lifetimeCompletedRevenue), "Completed revenue", t.jobsCompleted + " of " + t.jobsTotal + " jobs complete"],
+      [closeRate, "Quote → close", t.quotesAccepted + " of " + t.quotesTotal + " quotes accepted"],
+      [String(t.customers), "Customer records", "leads and customers in the book"],
+      [money(t.outstandingValue), "Quotes outstanding", t.quotesOutstanding + " unanswered"],
+    ];
+    for (const [value, label, note] of stats) {
+      const tile = el("div", "tile");
+      tile.append(el("span", "label", label));
+      tile.append(el("span", "tile-val", value));
+      tile.append(el("span", "tile-note", note));
+      tiles.append(tile);
+    }
+    p.append(tiles);
+    root.append(p);
+
+    const months = t.revenueByMonth || [];
+    const chartPanel = panel("Revenue by month", "completed jobs");
+    if (!months.length) {
+      chartPanel.append(el("div", "empty", "No completed jobs on record."));
+    } else {
+      const peak = Math.max(...months.map((m) => m.total), 1);
+      const chart = el("div", "chart");
+      for (const month of months) {
+        const col = el("div", "bar-col");
+        col.tabIndex = 0;
+        col.title = month.month + " — " + money(month.total);
+        const track = el("div", "bar-track");
+        const bar = el("div", "bar");
+        bar.style.height = Math.max(3, Math.round((month.total / peak) * 150)) + "px";
+        track.append(bar);
+        col.append(el("span", "bar-val", money(month.total)));
+        col.append(track);
+        const [year, mon] = month.month.split("-");
+        const name = new Date(Number(year), Number(mon) - 1, 1)
+          .toLocaleString("en-US", { month: "short" })
+          .toUpperCase();
+        col.append(el("span", "label", name));
+        chart.append(col);
+      }
+      chartPanel.append(chart);
+      chartPanel.append(el("div", "baseline"));
+    }
+    root.append(chartPanel);
+  }
+
+  /* ------------------------------------------------------------- build log */
+
+  function renderBuild() {
+    const root = document.getElementById("view-build");
+    root.textContent = "";
+    const commits = STATE.activity || [];
+    const p = panel("What the system has shipped", commits.length + " commits");
+    p.append(
+      el(
+        "p",
+        "note",
+        "Every change to grimebusters-ops, newest first — the one record of " +
+          "what the two sessions actually built.",
+      ),
+    );
+
+    const scroll = el("div", "scroll-x");
+    scroll.style.marginTop = "12px";
+    const table = el("table", "commits");
+    const thead = el("thead");
+    const hrow = el("tr");
+    for (const heading of ["When", "Commit", "Change"]) {
+      hrow.append(el("th", null, heading));
+    }
+    thead.append(hrow);
+    table.append(thead);
+
+    const tbody = el("tbody");
+    for (const commit of commits) {
+      const row = el("tr");
+      row.append(el("td", "when", commit.date.slice(0, 10)));
+      row.append(el("td", "sha", commit.sha));
+      row.append(el("td", null, commit.subject));
+      tbody.append(row);
+    }
+    table.append(tbody);
+    scroll.append(table);
+    p.append(scroll);
+    root.append(p);
+  }
+
+  /* ------------------------------------------------------------------ shell */
+
+  function renderMast() {
+    const reporting = STATE.agents.filter(
+      (a) => agentStatus(a.id).key !== "stale",
+    ).length;
+    const pending = (STATE.firestore.opsApprovals || []).filter(
+      (a) => a.status === "pending",
+    ).length;
+    const t = STATE.firestore.telemetry;
+
+    document.getElementById("stat-reporting").textContent =
+      reporting + " / " + STATE.agents.length;
+    document.getElementById("stat-pending").textContent = String(pending);
+    document.getElementById("stat-revenue").textContent = t
+      ? money(t.lifetimeCompletedRevenue)
+      : "—";
+    document.getElementById("tab-pending").textContent = pending ? String(pending) : "";
+
+    const captured = new Date(STATE.generatedAt);
+    document.getElementById("captured").textContent =
+      captured.toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      }) + " (" + ago(STATE.generatedAt) + " ago)";
+
+    document.getElementById("link-state").textContent = STATE.firestore.available
+      ? "CRM read OK"
+      : "CRM unreachable: " + (STATE.firestore.error || "unknown");
+  }
+
+  const VIEWS = ["core", "workshop", "routing", "telemetry", "build"];
+
+  function show(view) {
+    for (const name of VIEWS) {
+      document.getElementById("view-" + name).classList.toggle("hidden", name !== view);
+    }
+    for (const tab of document.querySelectorAll(".tab")) {
+      tab.setAttribute("aria-selected", String(tab.dataset.view === view));
+    }
+  }
+
+  for (const tab of document.querySelectorAll(".tab")) {
+    tab.addEventListener("click", () => show(tab.dataset.view));
+  }
+
+  renderMast();
+  renderCore();
+  renderWorkshop();
+  renderRouting();
+  renderTelemetry();
+  renderBuild();
+  show("core");
+</script>
