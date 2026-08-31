@@ -981,6 +981,18 @@ describe("only the admin hands out access", () => {
     await assertSucceeds(updateDoc(doc(bob, "users/bob"), { displayName: "Bob P" }));
   });
 
+  test("the admin is still the admin with a capitalised address", async () => {
+    // The app folds case before deciding who is admin; the rules must too.
+    // When only one side folds, an address stored as "Nicolas.G@..." shows the
+    // admin every one of their own screens and has the database refuse all of
+    // them — which reads as a broken app rather than a denied permission, and
+    // is a genuinely horrible thing to debug from the outside.
+    const shouty = testEnv
+      .authenticatedContext("nicolas-caps", { email: "Nicolas.Grimebustersky@Gmail.com" })
+      .firestore();
+    await assertSucceeds(getDoc(doc(shouty, "apiKeys/hash-one")));
+  });
+
   test("an impostor email does not make you admin", async () => {
     const nearly = testEnv
       .authenticatedContext("impostor", { email: "nicolas.grimebustersky@evil.com" })
