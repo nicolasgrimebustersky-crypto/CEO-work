@@ -61,17 +61,75 @@ jobs:
       # credential has to touch disk. It goes to the runner's temp directory —
       # never the workspace, where a later step could commit it — and is shredded
       # in the always() step below whether the deploy succeeded or not.
+      #
+      # The checks below exist because the first run of this workflow failed with
+      # "Failed to authenticate, have you run firebase login?" — which is what
+      # firebase-tools says for every credential problem there is. A step that only
+      # asked "is the secret non-empty?" could not tell a mangled paste from a
+      # deleted key from the wrong file, so it said nothing useful. These say which.
       - name: Write the deploy credential
         env:
           FIREBASE_DEPLOY_KEY: ${{ secrets.FIREBASE_DEPLOY_KEY }}
         run: |
           if [ -z "$FIREBASE_DEPLOY_KEY" ]; then
-            echo "FIREBASE_DEPLOY_KEY is not set. Add the rules-deployer service" >&2
-            echo "account JSON as a repository secret — see README." >&2
+            echo "::error::FIREBASE_DEPLOY_KEY is not set. Add the rules-deployer" \
+                 "service account JSON as a repository secret — see README."
             exit 1
           fi
           printf '%s' "$FIREBASE_DEPLOY_KEY" > "$RUNNER_TEMP/rules-deployer.json"
           chmod 600 "$RUNNER_TEMP/rules-deployer.json"
+
+      # Names what is wrong with the credential, and never prints the key itself.
+      # client_email and project_id are identifiers — they appear in any IAM
+      # listing — so echoing them is how you find out you pasted the wrong
+      # account's file. private_key is never touched beyond checking it is there.
+      - name: Check the credential is what it claims to be
+        env:
+          EXPECTED_PROJECT: grimeline-5e3d8
+        run: |
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            const path = process.env.RUNNER_TEMP + "/rules-deployer.json";
+            const raw = readFileSync(path, "utf8");
+            const fail = (m) => { console.log(`::error::${m}`); process.exit(1); };
+
+            let key;
+            try {
+              key = JSON.parse(raw);
+            } catch {
+              const head = raw.trimStart().slice(0, 1);
+              fail(
+                `FIREBASE_DEPLOY_KEY is ${raw.length} characters but is not JSON ` +
+                `(it starts with "${head}"). Paste the whole rules-deployer.json ` +
+                `file, from the opening { to the closing }, with nothing added.`,
+              );
+            }
+
+            if (key.type !== "service_account") {
+              fail(
+                `FIREBASE_DEPLOY_KEY parses as JSON but its "type" is ` +
+                `"${key.type ?? "missing"}", not "service_account". This is not a ` +
+                `service account key file.`,
+              );
+            }
+
+            const missing = ["client_email", "private_key", "project_id"]
+              .filter((field) => !key[field]);
+            if (missing.length) {
+              fail(`The service account JSON is missing: ${missing.join(", ")}.`);
+            }
+
+            if (key.project_id !== process.env.EXPECTED_PROJECT) {
+              fail(
+                `That key belongs to project "${key.project_id}", but this ` +
+                `workflow deploys to "${process.env.EXPECTED_PROJECT}". Generate ` +
+                `the key in the right project.`,
+              );
+            }
+
+            console.log(`Deploying as ${key.client_email}`);
+            console.log(`Project ${key.project_id}`);
+          '
 
       # Indexes are deliberately absent. An index deploy can propose deleting
       # indexes that exist in the project but not in the file, and silently
