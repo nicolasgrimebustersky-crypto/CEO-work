@@ -143,12 +143,23 @@ jobs:
       # indexes that exist in the project but not in the file, and silently
       # dropping an index turns a working query into a runtime error. That stays
       # a decision somebody makes on purpose.
+      #
+      # "storage" and not "storage:rules", which is the obvious-looking spelling
+      # and wrong. In --only, what follows the colon is a deploy *target* name,
+      # not a thing to deploy: firebase-tools reads "storage:rules" as the storage
+      # target called "rules", finds no such target in firebase.json, and fails
+      # with "Could not find rules for the following storage targets: rules".
+      # Only a bare "storage" deploys the storage rules — see
+      # firebase-tools/lib/deploy/storage/prepare.js, where split.includes(
+      # "storage") is what sets allStorage. Firestore is the exception that
+      # invites the mistake: "firestore:rules" is real, because firestore
+      # genuinely has rules and indexes to choose between.
       - name: Publish
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/rules-deployer.json
         run: |
           npx firebase deploy \
-            --only firestore:rules,storage:rules \
+            --only firestore:rules,storage \
             --project grimeline-5e3d8 \
             --non-interactive
 
