@@ -39,9 +39,15 @@ service cloud.firestore {
     // this cannot be claimed by registering either.
     //
     // Keep in step with ADMIN_EMAIL in lib/auth/roles.ts.
+    // Compared in lower case, because isAdmin() in lib/auth/roles.ts does. When
+    // one side folds case and the other does not, an address stored with a
+    // capital letter makes the app show the admin's own screens and the database
+    // refuse every one of them — which reads as a broken app, not a denied
+    // permission. Whichever way the address is spelled, both sides must agree.
     function isAdmin() {
       return request.auth != null
-        && request.auth.token.email == 'nicolas.grimebustersky@gmail.com';
+        && request.auth.token.email is string
+        && request.auth.token.email.lower() == 'nicolas.grimebustersky@gmail.com';
     }
 
     // Crew by uid, whatever the database says. The bootstrap.
