@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { useCustomers } from "@/components/providers/CustomersProvider";
+import { useDocuments } from "@/components/providers/DocumentsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { ScreenHeader } from "@/components/shell/ScreenHeader";
 import { UserChip } from "@/components/ui/Chips";
@@ -12,6 +13,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { fetchJobsBetween } from "@/lib/db/jobs";
 import { quoteCloseRate, subscribeAllQuotes } from "@/lib/db/quotes";
 import { formatMoney } from "@/lib/format";
+import { grossFor } from "@/lib/money/summary";
 import { zipFromAddress } from "@/lib/geocode";
 import { SERVICE_LABEL } from "@/lib/status";
 import { SERVICE_TYPES, type Job, type Quote, type ServiceType } from "@/lib/types";
@@ -20,6 +22,7 @@ const MONTHS_BACK = 12;
 
 export function ReportsScreen() {
   const { customers } = useCustomers();
+  const { documents } = useDocuments();
   const { users, colorFor } = useTeam();
 
   const [jobs, setJobs] = useState<Job[] | null>(null);
@@ -106,6 +109,17 @@ export function ReportsScreen() {
 
   const close = quoteCloseRate(quotes);
   const totalRevenue = completed.reduce((sum, job) => sum + job.price, 0);
+
+  /**
+   * Money that actually arrived this year — a different question from the
+   * Revenue stat beside it, which totals completed work whether or not anybody
+   * paid for it. Both are worth showing: one is what was earned, the other is
+   * what was banked, and the gap between them is the chasing still to do.
+   */
+  const thisYear = useMemo(() => {
+    const year = new Date().getFullYear();
+    return { year, ...grossFor(year, jobs ?? [], documents) };
+  }, [jobs, documents]);
   const maxMonth = Math.max(1, ...byMonth.map(([, value]) => value));
   const maxService = Math.max(1, ...byService.map(([, value]) => value));
 
@@ -127,6 +141,27 @@ export function ReportsScreen() {
           <Spinner label="Crunching numbers…" />
         ) : (
           <>
+            {/* Above the rest because it is the number somebody actually asks
+                for, and because the Revenue stat below means something
+                different — saying so here is what stops the two being
+                confused for one another. */}
+            <div className="mb-3 rounded-2xl border border-money/60 bg-money/10 p-3">
+              <p className="text-sm font-bold tracking-wide text-money uppercase">
+                Grossed in {thisYear.year}
+              </p>
+              <p className="mt-0.5 text-3xl font-extrabold text-money tabular-nums">
+                {formatMoney(thisYear.total)}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-muted">
+                {formatMoney(thisYear.fromJobs)} taken against jobs ·{" "}
+                {formatMoney(thisYear.fromInvoices)} against invoices
+              </p>
+              <p className="mt-1 text-sm font-semibold text-muted">
+                Money that arrived this year. &ldquo;Revenue&rdquo; below is work
+                completed, paid for or not.
+              </p>
+            </div>
+
             <div className="grid grid-cols-2 gap-2">
               <Stat label="Revenue" value={formatMoney(totalRevenue)} money />
               <Stat label="Jobs completed" value={String(completed.length)} />

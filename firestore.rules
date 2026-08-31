@@ -272,6 +272,26 @@ service cloud.firestore {
     // happened, so there is no author stamp to refresh on update — the whole
     // point is that using a service updates its price and its usage count
     // without anyone opening a form.
+    // API keys, for the MCP server the Ops Agent connects through.
+    //
+    // Admin only, and not merely for writes — crew cannot *read* this
+    // collection either. That is unusual here and deliberate: the documents
+    // carry each key's scopes and last-used time, which is a map of what can
+    // reach the database and how recently something did. It is also the one
+    // collection whose document id is derived from a secret, so listing it
+    // hands over the set of ids to test against.
+    //
+    // The keys themselves are stored hashed and the plaintext is never written,
+    // so even the admin cannot read a key back out — only revoke it and issue
+    // another. See lib/server/apiKeyAuth.ts.
+    //
+    // Nothing enforced here protects the MCP route itself: that runs on the
+    // Admin SDK and bypasses these rules entirely. This block guards the
+    // management surface, and requireApiKey guards the door.
+    match /apiKeys/{keyHash} {
+      allow read, write: if isAdmin();
+    }
+
     match /services/{serviceId} {
       allow read: if isCrew();
       allow create: if isCrew() && stampedByCaller('createdBy') && validService();

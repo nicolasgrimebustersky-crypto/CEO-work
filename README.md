@@ -44,6 +44,8 @@ live, and every note, text and job carries the name of whoever did it.
 | Territories: draw an area on the map, claim it, see what's inside | Drag a loop freehand; coverage counts pins actually spoken to |
 | Four on-site buttons on every job: en route, starting, finished, mark complete | The first three text the customer a fixed message; the fourth asks whether the money was collected and tells the owner |
 | Draft an estimate from a spoken description, a price and up to four photos | Claude writes the wording only; the price you type is split across the lines to the cent. Needs `ANTHROPIC_API_KEY`; without it the builder still works by hand |
+| MCP server at `/api/mcp`, so an agent can drive the CRM | Scoped API keys you generate and revoke on the Account screen |
+| "Grossed this year" on Reports — money received, not work completed | Counts payments when they arrive; never counts a job twice when it was also invoiced |
 | A percentage discount on each line, not just the whole document | Discount the labour and leave the materials alone; the customer's copy strikes the old price through and totals what they saved |
 | An old deployment link says so, and says who to ask for the current one | Compares its own commit against production's `/api/version`; silent unless certain. Needs `NEXT_PUBLIC_SITE_URL` set |
 
@@ -252,6 +254,42 @@ The SMS routes and the nightly cron run server-side with the Firebase Admin SDK.
 5. For business texting to US numbers you also need
    [A2P 10DLC registration](https://www.twilio.com/docs/messaging/compliance/a2p-10dlc).
    Start it early — approval takes days.
+
+### 8. The Ops Agent (optional)
+
+The CRM speaks MCP at `/api/mcp`, so an agent — in the Claude Console or
+anywhere else — can read the book, log leads, draft estimates, book jobs and
+text customers.
+
+1. **Account → API keys → Create key.** Name it and pick what it may do:
+
+   | Scope | What a leaked key could do |
+   |---|---|
+   | Read everything | Expose your customer list. Cannot change anything. |
+   | Add leads, notes and drafts | Add junk you can delete. Cannot alter what exists. |
+   | Text customers and book jobs | Text real people. **A text cannot be unsent.** |
+
+2. The key is shown **once**. Only its hash is stored, so nobody — including you
+   — can read it back. A lost key is replaced, not recovered.
+
+3. In the Claude Console, add a remote MCP server pointing at
+   `https://your-app.vercel.app/api/mcp`, with the key as a bearer token.
+
+Three things worth knowing before issuing one:
+
+- **The MCP route runs on the Admin SDK, which bypasses every Firestore rule.**
+  The key check in `lib/server/apiKeyAuth.ts` is the entire boundary between the
+  internet and the customer book. It is tested against a running server in
+  `tests/api.mcp.test.mjs`.
+- **Whatever the agent reads enters its model context**, and so reaches whichever
+  provider runs it. That is inherent to connecting an agent to a customer
+  database rather than a flaw — but these are real people's home addresses.
+- **Issue the texting scope separately and deliberately.** Agent traffic is
+  capped at 240 calls an hour and 20 customer messages an hour, but the real
+  protection is not handing out that scope until you have watched the agent work.
+
+Every write an agent makes is stamped as the agent rather than as a person, so
+the timeline shows what it did apart from what you did.
 
 These variables have **no** `NEXT_PUBLIC_` prefix, deliberately: they are only
 read server-side inside `/api/*` route handlers. Never add the prefix — it would

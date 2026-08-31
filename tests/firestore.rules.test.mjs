@@ -1256,3 +1256,91 @@ describe("who may widen their own notifications", () => {
     );
   });
 });
+
+describe("API keys", () => {
+  // These documents are a map of what can reach the database without signing
+  // in: each one's scopes, and when something last used it. Crew cannot read
+  // them at all, which is stricter than anywhere else in these rules and
+  // deliberate — the document id is derived from the secret itself, so listing
+  // the collection hands over the set of ids to test against.
+  //
+  // None of this protects the MCP route. That runs on the Admin SDK and
+  // bypasses every rule here; its own key check is the boundary, and
+  // tests/api.mcp.test.mjs is where that is proved. This block guards the
+  // management surface only.
+
+  test("the admin can issue a key", async () => {
+    await assertSucceeds(
+      setDoc(doc(admin, "apiKeys", "hash-one"), {
+        hash: "hash-one",
+        label: "Ops Agent",
+        scopes: ["read"],
+        revokedAt: null,
+      }),
+    );
+  });
+
+  // Each test starts from a cleared database, so anything that needs an
+  // existing key seeds its own.
+  async function seedKey(id = "hash-one") {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "apiKeys", id), {
+        hash: id,
+        label: "Ops Agent",
+        scopes: ["read"],
+        revokedAt: null,
+      });
+    });
+  }
+
+  test("the admin can read the keys back", async () => {
+    await seedKey();
+    await assertSucceeds(getDoc(doc(admin, "apiKeys", "hash-one")));
+  });
+
+  test("the admin can revoke one", async () => {
+    await seedKey();
+    await assertSucceeds(
+      updateDoc(doc(admin, "apiKeys", "hash-one"), { revokedAt: new Date() }),
+    );
+  });
+
+  test("ordinary crew cannot read them", async () => {
+    await seedKey();
+    await assertFails(getDoc(doc(alice, "apiKeys", "hash-one")));
+  });
+
+  test("ordinary crew cannot list them", async () => {
+    await assertFails(getDocs(collection(alice, "apiKeys")));
+  });
+
+  test("ordinary crew cannot mint one", async () => {
+    // The escalation this stops: a crew member issuing themselves a key with
+    // the send scope would have a permanent credential that texts customers,
+    // outside every check on the rest of the app.
+    await assertFails(
+      setDoc(doc(alice, "apiKeys", "hash-two"), {
+        hash: "hash-two",
+        label: "mine",
+        scopes: ["read", "write", "send"],
+        revokedAt: null,
+      }),
+    );
+  });
+
+  test("crew cannot un-revoke a key the admin killed", async () => {
+    await seedKey();
+    await assertFails(updateDoc(doc(alice, "apiKeys", "hash-one"), { revokedAt: null }));
+  });
+
+  test("crew cannot delete the record of one", async () => {
+    await seedKey();
+    // Deleting the document would erase the evidence of what had access.
+    await assertFails(deleteDoc(doc(alice, "apiKeys", "hash-one")));
+  });
+
+  test("a signed-out stranger gets nothing", async () => {
+    await seedKey();
+    await assertFails(getDoc(doc(anon, "apiKeys", "hash-one")));
+  });
+});
