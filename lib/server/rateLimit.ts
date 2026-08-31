@@ -65,6 +65,30 @@ export const ESTIMATE_DRAFT_LIMIT: RateLimitRule = {
   label: "drafted estimates",
 };
 
+/**
+ * The agent's ordinary budget. Generous — an agent answering a question may
+ * legitimately make a handful of calls — but bounded, because a looping agent
+ * with a valid key would otherwise read the whole book repeatedly.
+ */
+export const MCP_LIMIT: RateLimitRule = {
+  max: 240,
+  windowMs: 60 * 60 * 1000,
+  label: "agent requests",
+};
+
+/**
+ * And a much tighter one for anything that reaches a customer.
+ *
+ * Twenty texts an hour is more than an agent should ever need and few enough
+ * that a stuck loop is an embarrassment rather than a catastrophe. A text
+ * cannot be unsent.
+ */
+export const MCP_SEND_LIMIT: RateLimitRule = {
+  max: 20,
+  windowMs: 60 * 60 * 1000,
+  label: "agent messages to customers",
+};
+
 function minutesUntil(resetAt: number): number {
   return Math.max(1, Math.ceil((resetAt - Date.now()) / 60000));
 }

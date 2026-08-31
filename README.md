@@ -44,6 +44,8 @@ live, and every note, text and job carries the name of whoever did it.
 | Territories: draw an area on the map, claim it, see what's inside | Drag a loop freehand; coverage counts pins actually spoken to |
 | Four on-site buttons on every job: en route, starting, finished, mark complete | The first three text the customer a fixed message; the fourth asks whether the money was collected and tells the owner |
 | Draft an estimate from a spoken description, a price and up to four photos | Claude writes the wording only; the price you type is split across the lines to the cent. Needs `ANTHROPIC_API_KEY`; without it the builder still works by hand |
+| MCP server at `/api/mcp`, so an agent can drive the CRM | Scoped API keys you generate and revoke on the Account screen |
+| "Grossed this year" on Reports — money received, not work completed | Counts payments when they arrive; never counts a job twice when it was also invoiced |
 | A percentage discount on each line, not just the whole document | Discount the labour and leave the materials alone; the customer's copy strikes the old price through and totals what they saved |
 | An old deployment link says so, and says who to ask for the current one | Compares its own commit against production's `/api/version`; silent unless certain. Needs `NEXT_PUBLIC_SITE_URL` set |
 
@@ -158,6 +160,16 @@ npx firebase use --add          # pick the project you just created
 npx firebase deploy --only firestore:rules,firestore:indexes,storage:rules
 ```
 
+That first deploy is by hand because there is no repository yet to deploy from.
+Afterwards it is automatic: **`.github/workflows/deploy-rules.yml` republishes
+`firestore.rules` and `storage.rules` on every merge to `main` that changes them**,
+and only after `npm run test:rules` passes. It needs one repository secret,
+`FIREBASE_DEPLOY_KEY` — see [Publishing rules automatically](#publishing-rules-automatically).
+
+Rules that live in git but were never published are the failure this prevents. It is
+invisible until the app is refused by its own database, and then it looks like a bug
+in the app.
+
 The allowlist is the entire access model — no roles, no permission tiers. An
 account that exists in Firebase Auth but is missing from the list can sign in and
 will then fail every read, which surfaces as an error banner on the Account tab.
@@ -172,6 +184,43 @@ That boots the Firestore emulator and runs `tests/firestore.rules.test.mjs`,
 which asserts a non-allowlisted account gets nothing, anonymous callers get
 nothing, one crew member cannot overwrite the other's GPS position, and no write
 can be attributed to the wrong person.
+
+#### Publishing rules automatically
+
+`.github/workflows/deploy-rules.yml` republishes the rules on every merge to `main`
+that touches `firestore.rules`, `storage.rules` or `firebase.json` — and only if
+`npm run test:rules` passes first. That gate is the reason to publish from CI rather
+than the console: the console ships anything that parses, this ships only what the
+tests agree is correct. It never runs on a pull request, so no branch can rewrite
+what the database enforces.
+
+It needs one credential, and deliberately not the Admin SDK service account — that
+one can read every customer record, and a CI credential has no business being able
+to. Create a service account that can do nothing but publish rules:
+
+```bash
+gcloud iam service-accounts create rules-deployer \
+  --display-name="GitHub Actions rules deployer" --project=YOUR_PROJECT_ID
+
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+  --member="serviceAccount:rules-deployer@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/firebaserules.admin"
+
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+  --member="serviceAccount:rules-deployer@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/firebase.viewer"
+
+gcloud iam service-accounts keys create rules-deployer.json \
+  --iam-account=rules-deployer@YOUR_PROJECT_ID.iam.gserviceaccount.com
+```
+
+Paste the whole of `rules-deployer.json` into **GitHub → Settings → Secrets and
+variables → Actions → New repository secret**, named `FIREBASE_DEPLOY_KEY`, then
+`rm rules-deployer.json`. The workflow writes it to the runner's temp directory,
+never the workspace, and shreds it whether the deploy succeeded or not.
+
+Without the secret the workflow fails on its first step with a message saying so,
+rather than failing obscurely inside `firebase deploy`.
 
 ### 5. Google Maps API key
 
@@ -253,12 +302,48 @@ The SMS routes and the nightly cron run server-side with the Firebase Admin SDK.
    [A2P 10DLC registration](https://www.twilio.com/docs/messaging/compliance/a2p-10dlc).
    Start it early — approval takes days.
 
+### 8. The Ops Agent (optional)
+
+The CRM speaks MCP at `/api/mcp`, so an agent — in the Claude Console or
+anywhere else — can read the book, log leads, draft estimates, book jobs and
+text customers.
+
+1. **Account → API keys → Create key.** Name it and pick what it may do:
+
+   | Scope | What a leaked key could do |
+   |---|---|
+   | Read everything | Expose your customer list. Cannot change anything. |
+   | Add leads, notes and drafts | Add junk you can delete. Cannot alter what exists. |
+   | Text customers and book jobs | Text real people. **A text cannot be unsent.** |
+
+2. The key is shown **once**. Only its hash is stored, so nobody — including you
+   — can read it back. A lost key is replaced, not recovered.
+
+3. In the Claude Console, add a remote MCP server pointing at
+   `https://your-app.vercel.app/api/mcp`, with the key as a bearer token.
+
+Three things worth knowing before issuing one:
+
+- **The MCP route runs on the Admin SDK, which bypasses every Firestore rule.**
+  The key check in `lib/server/apiKeyAuth.ts` is the entire boundary between the
+  internet and the customer book. It is tested against a running server in
+  `tests/api.mcp.test.mjs`.
+- **Whatever the agent reads enters its model context**, and so reaches whichever
+  provider runs it. That is inherent to connecting an agent to a customer
+  database rather than a flaw — but these are real people's home addresses.
+- **Issue the texting scope separately and deliberately.** Agent traffic is
+  capped at 240 calls an hour and 20 customer messages an hour, but the real
+  protection is not handing out that scope until you have watched the agent work.
+
+Every write an agent makes is stamped as the agent rather than as a person, so
+the timeline shows what it did apart from what you did.
+
 These variables have **no** `NEXT_PUBLIC_` prefix, deliberately: they are only
 read server-side inside `/api/*` route handlers. Never add the prefix — it would
 ship a sending credential to every browser that loads the app, and anyone who
 viewed source could text your customers on your bill.
 
-### 8. Push notifications
+### 9. Push notifications
 
 The bell inside the app works with no setup. Getting a notification onto a phone
 that is in a pocket with the app closed needs one key.
@@ -284,7 +369,7 @@ Two things worth knowing:
   `FIREBASE_SERVICE_ACCOUNT_KEY` and `CREW_UIDS` from step 6. A client that
   could send push to another account could send it anything.
 
-### 9. Run it
+### 10. Run it
 
 ```bash
 npm run dev          # http://localhost:3000
