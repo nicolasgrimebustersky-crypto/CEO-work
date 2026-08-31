@@ -57,59 +57,65 @@ jobs:
       - name: Test the rules before publishing them
         run: npm run test:rules
 
-      # firebase-tools authenticates from a file, not an env var, so the
-      # credential has to touch disk. It goes to the runner's temp directory —
-      # never the workspace, where a later step could commit it — and is shredded
-      # in the always() step below whether the deploy succeeded or not.
+      # The credential reaches firebase-tools as a file, so it has to touch disk.
+      # It goes to the runner's temp directory — never the workspace, where a
+      # later step could commit it — and is shredded in the always() step below
+      # whether the deploy succeeded or not.
       #
-      # The checks below exist because the first run of this workflow failed with
-      # "Failed to authenticate, have you run firebase login?" — which is what
-      # firebase-tools says for every credential problem there is. A step that only
-      # asked "is the secret non-empty?" could not tell a mangled paste from a
-      # deleted key from the wrong file, so it said nothing useful. These say which.
+      # It is read by lib/serviceAccountKey.ts, the same parser the app uses for
+      # FIREBASE_SERVICE_ACCOUNT_KEY, so base64 and raw JSON both work and the
+      # ways a paste arrives mangled — wrapping quotes, a newline a textarea
+      # added, whitespace through the middle of a base64 line — are already
+      # handled and already tested. Base64 is the form to prefer: one line, no
+      # quotes, no backslashes, nothing for a terminal copy to mangle.
+      #
+      # The checks exist because the first two runs failed on the credential and
+      # firebase-tools said only "Failed to authenticate, have you run firebase
+      # login?" — which is what it says for a mangled paste, a deleted key, the
+      # wrong file and the wrong project alike.
       - name: Write the deploy credential
         env:
           FIREBASE_DEPLOY_KEY: ${{ secrets.FIREBASE_DEPLOY_KEY }}
-        run: |
-          if [ -z "$FIREBASE_DEPLOY_KEY" ]; then
-            echo "::error::FIREBASE_DEPLOY_KEY is not set. Add the rules-deployer" \
-                 "service account JSON as a repository secret — see README."
-            exit 1
-          fi
-          printf '%s' "$FIREBASE_DEPLOY_KEY" > "$RUNNER_TEMP/rules-deployer.json"
-          chmod 600 "$RUNNER_TEMP/rules-deployer.json"
-
-      # Names what is wrong with the credential, and never prints the key itself.
-      # client_email and project_id are identifiers — they appear in any IAM
-      # listing — so echoing them is how you find out you pasted the wrong
-      # account's file. private_key is never touched beyond checking it is there.
-      - name: Check the credential is what it claims to be
-        env:
           EXPECTED_PROJECT: grimeline-5e3d8
+          CREDENTIAL_PATH: ${{ runner.temp }}/rules-deployer.json
         run: |
-          node --input-type=module -e '
-            import { readFileSync } from "node:fs";
-            const path = process.env.RUNNER_TEMP + "/rules-deployer.json";
-            const raw = readFileSync(path, "utf8");
+          node --experimental-strip-types --input-type=module -e '
+            import { writeFileSync } from "node:fs";
+            const { serviceAccountJson } = await import("./lib/serviceAccountKey.ts");
+
+            const raw = process.env.FIREBASE_DEPLOY_KEY ?? "";
             const fail = (m) => { console.log(`::error::${m}`); process.exit(1); };
+
+            if (!raw.trim()) {
+              fail(
+                "FIREBASE_DEPLOY_KEY is not set. Add the rules-deployer service " +
+                "account key as a repository secret — see README.",
+              );
+            }
+
+            // Length and first character only. Never the value: it is a private key.
+            const json = serviceAccountJson(raw);
+            if (!json) {
+              fail(
+                `FIREBASE_DEPLOY_KEY is ${raw.trim().length} characters but is ` +
+                `neither the service account JSON nor a base64 copy of it (it ` +
+                `starts with "${raw.trim()[0]}"). In Cloud Shell run ` +
+                `"base64 -w0 rules-deployer.json" and paste that one line, which ` +
+                `has no quotes or backslashes for a copy to mangle.`,
+              );
+            }
 
             let key;
             try {
-              key = JSON.parse(raw);
+              key = JSON.parse(json);
             } catch {
-              const head = raw.trimStart().slice(0, 1);
-              fail(
-                `FIREBASE_DEPLOY_KEY is ${raw.length} characters but is not JSON ` +
-                `(it starts with "${head}"). Paste the whole rules-deployer.json ` +
-                `file, from the opening { to the closing }, with nothing added.`,
-              );
+              fail("The credential decoded but is not valid JSON. It was cut short.");
             }
 
             if (key.type !== "service_account") {
               fail(
-                `FIREBASE_DEPLOY_KEY parses as JSON but its "type" is ` +
-                `"${key.type ?? "missing"}", not "service_account". This is not a ` +
-                `service account key file.`,
+                `The credential is JSON but its "type" is "${key.type ?? "missing"}", ` +
+                `not "service_account". This is not a service account key file.`,
               );
             }
 
@@ -121,12 +127,14 @@ jobs:
 
             if (key.project_id !== process.env.EXPECTED_PROJECT) {
               fail(
-                `That key belongs to project "${key.project_id}", but this ` +
-                `workflow deploys to "${process.env.EXPECTED_PROJECT}". Generate ` +
-                `the key in the right project.`,
+                `That key belongs to project "${key.project_id}", but this workflow ` +
+                `deploys to "${process.env.EXPECTED_PROJECT}".`,
               );
             }
 
+            // The decoded document, not a rebuild from its fields: firebase-tools
+            // reads token_uri and the rest, which a rebuild would drop.
+            writeFileSync(process.env.CREDENTIAL_PATH, json, { mode: 0o600 });
             console.log(`Deploying as ${key.client_email}`);
             console.log(`Project ${key.project_id}`);
           '

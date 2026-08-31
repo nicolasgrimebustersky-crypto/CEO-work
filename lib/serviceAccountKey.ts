@@ -53,6 +53,20 @@ function decode(value: string): string | null {
   }
 }
 
+/**
+ * The credential's JSON text, however it was pasted — or null.
+ *
+ * Exported because a caller sometimes needs the original document rather than
+ * the three fields below. The publish workflow is one: it hands the file to
+ * `firebase deploy`, which reads `token_uri` and the rest, so re-serialising
+ * from a ServiceAccount would quietly drop what it needs.
+ */
+export function serviceAccountJson(raw: string | undefined): string | null {
+  const value = clean(raw ?? "");
+  if (!value) return null;
+  return decode(value);
+}
+
 export function parseServiceAccountKey(raw: string | undefined): ServiceAccount | null {
   const value = clean(raw ?? "");
   if (!value) return null;
