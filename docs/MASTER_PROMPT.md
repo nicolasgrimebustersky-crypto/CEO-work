@@ -194,8 +194,13 @@ Dashboard, reports, PWA offline shell, demo mode.
 # Deployment
 
 Vercel, from the `main` branch of nicolasgrimebustersky-crypto/CEO-work.
-Firebase project holds Auth, Firestore and Storage. Rules deploy with
-`npx firebase deploy --only firestore:rules,firestore:indexes,storage:rules`.
+Firebase project holds Auth, Firestore and Storage. Rules publish themselves:
+`.github/workflows/deploy-rules.yml` runs `npm run test:rules` and then deploys
+`firestore.rules` and `storage.rules` on every merge to `main` that changes them.
+Publishing by hand — `npx firebase deploy --only firestore:rules,storage:rules` from
+the repo root — is the fallback, and the only way to move indexes, which the
+workflow deliberately leaves alone.
+
 The two crew accounts are created by hand in the Firebase console — there is no
 sign-up screen and there must not be one.
 

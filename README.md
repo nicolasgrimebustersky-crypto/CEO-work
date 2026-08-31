@@ -160,6 +160,16 @@ npx firebase use --add          # pick the project you just created
 npx firebase deploy --only firestore:rules,firestore:indexes,storage:rules
 ```
 
+That first deploy is by hand because there is no repository yet to deploy from.
+Afterwards it is automatic: **`.github/workflows/deploy-rules.yml` republishes
+`firestore.rules` and `storage.rules` on every merge to `main` that changes them**,
+and only after `npm run test:rules` passes. It needs one repository secret,
+`FIREBASE_DEPLOY_KEY` — see [Publishing rules automatically](#publishing-rules-automatically).
+
+Rules that live in git but were never published are the failure this prevents. It is
+invisible until the app is refused by its own database, and then it looks like a bug
+in the app.
+
 The allowlist is the entire access model — no roles, no permission tiers. An
 account that exists in Firebase Auth but is missing from the list can sign in and
 will then fail every read, which surfaces as an error banner on the Account tab.
@@ -174,6 +184,43 @@ That boots the Firestore emulator and runs `tests/firestore.rules.test.mjs`,
 which asserts a non-allowlisted account gets nothing, anonymous callers get
 nothing, one crew member cannot overwrite the other's GPS position, and no write
 can be attributed to the wrong person.
+
+#### Publishing rules automatically
+
+`.github/workflows/deploy-rules.yml` republishes the rules on every merge to `main`
+that touches `firestore.rules`, `storage.rules` or `firebase.json` — and only if
+`npm run test:rules` passes first. That gate is the reason to publish from CI rather
+than the console: the console ships anything that parses, this ships only what the
+tests agree is correct. It never runs on a pull request, so no branch can rewrite
+what the database enforces.
+
+It needs one credential, and deliberately not the Admin SDK service account — that
+one can read every customer record, and a CI credential has no business being able
+to. Create a service account that can do nothing but publish rules:
+
+```bash
+gcloud iam service-accounts create rules-deployer \
+  --display-name="GitHub Actions rules deployer" --project=YOUR_PROJECT_ID
+
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+  --member="serviceAccount:rules-deployer@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/firebaserules.admin"
+
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+  --member="serviceAccount:rules-deployer@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/firebase.viewer"
+
+gcloud iam service-accounts keys create rules-deployer.json \
+  --iam-account=rules-deployer@YOUR_PROJECT_ID.iam.gserviceaccount.com
+```
+
+Paste the whole of `rules-deployer.json` into **GitHub → Settings → Secrets and
+variables → Actions → New repository secret**, named `FIREBASE_DEPLOY_KEY`, then
+`rm rules-deployer.json`. The workflow writes it to the runner's temp directory,
+never the workspace, and shreds it whether the deploy succeeded or not.
+
+Without the secret the workflow fails on its first step with a message saying so,
+rather than failing obscurely inside `firebase deploy`.
 
 ### 5. Google Maps API key
 
@@ -296,7 +343,7 @@ read server-side inside `/api/*` route handlers. Never add the prefix — it wou
 ship a sending credential to every browser that loads the app, and anyone who
 viewed source could text your customers on your bill.
 
-### 8. Push notifications
+### 9. Push notifications
 
 The bell inside the app works with no setup. Getting a notification onto a phone
 that is in a pocket with the app closed needs one key.
@@ -322,7 +369,7 @@ Two things worth knowing:
   `FIREBASE_SERVICE_ACCOUNT_KEY` and `CREW_UIDS` from step 6. A client that
   could send push to another account could send it anything.
 
-### 9. Run it
+### 10. Run it
 
 ```bash
 npm run dev          # http://localhost:3000
