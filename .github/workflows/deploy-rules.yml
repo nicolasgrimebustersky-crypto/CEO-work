@@ -1,0 +1,91 @@
+# Publishing the security rules, so the repo and the live project cannot drift.
+#
+# Before this existed, `firestore.rules` in git and the rules actually running in
+# Firebase were two different things kept in sync by somebody remembering. They
+# drifted, and the first anyone noticed was the app being refused by its own
+# database.
+#
+# Two properties matter more than the convenience:
+#
+#   1. It never runs on a pull request. A branch — from a fork or otherwise —
+#      must not be able to rewrite the rules protecting real customer records.
+#      Only a commit that reached `main` publishes.
+#   2. The emulator tests are the gate. Publishing from the Firebase console
+#      will ship anything that parses; this ships only what 123 tests agree is
+#      correct. That gate, not the automation, is the point.
+name: Publish security rules
+
+on:
+  push:
+    branches: [main]
+    # Nothing else changes what the database enforces, so nothing else needs a
+    # publish. Merges that touch only application code skip this entirely.
+    paths:
+      - firestore.rules
+      - storage.rules
+      - firebase.json
+      - .github/workflows/deploy-rules.yml
+  # For republishing after a failed run without having to push an empty commit.
+  workflow_dispatch:
+
+# One publish at a time, and never cancel one halfway: an interrupted deploy
+# leaves the question of which ruleset is live, which is worse than waiting.
+concurrency:
+  group: publish-rules
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish rules to Firebase
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # The Firestore and Storage emulators are Java processes.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+
+      # The gate. If a rule would lock the crew out of their own jobs, or let
+      # one customer's record be read by an unapproved account, it fails here
+      # and nothing reaches the live project.
+      - name: Test the rules before publishing them
+        run: npm run test:rules
+
+      # firebase-tools authenticates from a file, not an env var, so the
+      # credential has to touch disk. It goes to the runner's temp directory —
+      # never the workspace, where a later step could commit it — and is shredded
+      # in the always() step below whether the deploy succeeded or not.
+      - name: Write the deploy credential
+        env:
+          FIREBASE_DEPLOY_KEY: ${{ secrets.FIREBASE_DEPLOY_KEY }}
+        run: |
+          if [ -z "$FIREBASE_DEPLOY_KEY" ]; then
+            echo "FIREBASE_DEPLOY_KEY is not set. Add the rules-deployer service" >&2
+            echo "account JSON as a repository secret — see README." >&2
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_DEPLOY_KEY" > "$RUNNER_TEMP/rules-deployer.json"
+          chmod 600 "$RUNNER_TEMP/rules-deployer.json"
+
+      # Indexes are deliberately absent. An index deploy can propose deleting
+      # indexes that exist in the project but not in the file, and silently
+      # dropping an index turns a working query into a runtime error. That stays
+      # a decision somebody makes on purpose.
+      - name: Publish
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/rules-deployer.json
+        run: |
+          npx firebase deploy \
+            --only firestore:rules,storage:rules \
+            --project grimeline-5e3d8 \
+            --non-interactive
+
+      - name: Remove the credential
+        if: always()
+        run: rm -f "$RUNNER_TEMP/rules-deployer.json"

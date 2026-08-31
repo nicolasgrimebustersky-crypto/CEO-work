@@ -15,6 +15,7 @@ import { routes } from "@/lib/routes";
 import { DeleteAccountSheet } from "./DeleteAccountSheet";
 import { NotificationSettings } from "./NotificationSettings";
 import { PendingAccounts } from "./PendingAccounts";
+import { ApiKeys } from "./ApiKeys";
 import { TextingStatus } from "./TextingStatus";
 import { useOpenMenu } from "@/components/shell/menu";
 import { MenuIcon } from "@/components/shell/navIcons";
@@ -148,6 +149,8 @@ export function AccountScreen() {
         <NotificationSettings />
 
         <TextingStatus />
+
+        <ApiKeys />
 
         {/* Location controls live here, not buried in Settings. Apple expects
             background location to be visibly under the user's control, and it
