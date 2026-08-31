@@ -12,9 +12,8 @@
 import assert from "node:assert/strict";
 import { test, describe } from "node:test";
 
-const { describeServiceAccountKey, parseServiceAccountKey } = await import(
-  "../lib/serviceAccountKey.ts"
-);
+const { describeServiceAccountKey, parseServiceAccountKey, serviceAccountJson } =
+  await import("../lib/serviceAccountKey.ts");
 
 const GOOD = {
   type: "service_account",
@@ -46,6 +45,33 @@ describe("the forms that must work", () => {
     assert.ok(key.includes("\n"), "no real newlines");
     assert.ok(!key.includes("\\n"), "escaped newlines survived");
     assert.ok(key.startsWith("-----BEGIN PRIVATE KEY-----"));
+  });
+});
+
+describe("handing back the document itself", () => {
+  // The publish workflow writes this to disk for `firebase deploy`, which reads
+  // token_uri and the rest. Rebuilding the file from the three fields
+  // parseServiceAccountKey returns would drop them, and the failure would land
+  // at authentication time rather than here.
+  test("base64 in, the original JSON out", () => {
+    assert.equal(serviceAccountJson(B64), JSON_TEXT);
+  });
+
+  test("raw JSON passes through unchanged", () => {
+    assert.equal(serviceAccountJson(JSON_TEXT), JSON_TEXT);
+  });
+
+  test("every field survives, not just the three that are parsed", () => {
+    const back = JSON.parse(serviceAccountJson(B64) ?? "{}");
+    assert.equal(back.private_key_id, GOOD.private_key_id);
+    assert.equal(back.client_id, GOOD.client_id);
+    assert.equal(back.type, "service_account");
+  });
+
+  test("nothing usable in, null out", () => {
+    assert.equal(serviceAccountJson(undefined), null);
+    assert.equal(serviceAccountJson(""), null);
+    assert.equal(serviceAccountJson("0fafcc110527a29a205fef2430b805093728de73"), null);
   });
 });
 
