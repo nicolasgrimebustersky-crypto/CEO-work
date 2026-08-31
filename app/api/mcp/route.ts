@@ -7,6 +7,15 @@ import { consumeRateLimit, MCP_LIMIT, MCP_SEND_LIMIT } from "@/lib/server/rateLi
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// The tools here read whole collections — money_summary walks every job and
+// every document to work out what was actually received — and the Admin SDK
+// initialises on a cold start before any of that begins. Vercel's default
+// ceiling is ten seconds, which the lighter tools clear easily and the heavy
+// ones may not, so the agent sees some calls answer and others fail as a
+// transport error it can only retry. The four other routes in this app that do
+// real work already set this; /api/mcp was the one that did not.
+export const maxDuration = 60;
+
 /**
  * The MCP server the Ops Agent connects to.
  *
