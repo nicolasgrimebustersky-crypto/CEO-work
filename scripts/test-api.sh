@@ -152,6 +152,20 @@ TEST_PROJECT="$PROJECT" \
   node --test tests/api.mcp.test.mjs
 
 # ---------------------------------------------------------------------------
+# The customer's link.
+#
+# The one page in the app that answers without a session. Worth testing against
+# a running server for the same reason as the MCP route: the auth wall is a
+# client component and the page is a server one, so the failure that matters —
+# the two disagreeing about whether this path is public — cannot be seen from
+# either side alone. These requests carry no credentials whatsoever.
+echo "==> running customer share link tests"
+TEST_BASE_URL="http://localhost:$PORT" \
+FIRESTORE_EMULATOR_HOST="127.0.0.1:$FIRESTORE_PORT" \
+TEST_PROJECT="$PROJECT" \
+  node --test tests/api.shareLink.test.mjs
+
+# ---------------------------------------------------------------------------
 # The half-configured deployment.
 #
 # Same build, same everything, minus FIREBASE_SERVICE_ACCOUNT_KEY. Worth its own

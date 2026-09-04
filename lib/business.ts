@@ -30,6 +30,15 @@ export const BRAND = {
   cream: "#f1e3cd",
 } as const;
 
+/**
+ * The one timezone the business works in.
+ *
+ * Dates a customer picks are compared against "today" here, not in UTC. At
+ * 01:00 UTC it is still yesterday evening in Louisville, and a customer tapping
+ * today's date in that hour must not be told it is in the past.
+ */
+export const BUSINESS_TIMEZONE = "America/New_York";
+
 export const BUSINESS = {
   name: process.env.NEXT_PUBLIC_BUSINESS_NAME || "Grime Busters KY LLC",
   tagline:

@@ -48,6 +48,10 @@ live, and every note, text and job carries the name of whoever did it.
 | "Grossed this year" on Reports — money received, not work completed | Counts payments when they arrive; never counts a job twice when it was also invoiced |
 | A percentage discount on each line, not just the whole document | Discount the labour and leave the materials alone; the customer's copy strikes the old price through and totals what they saved |
 | An old deployment link says so, and says who to ask for the current one | Compares its own commit against production's `/api/version`; silent unless certain. Needs `NEXT_PUBLIC_SITE_URL` set |
+| A customer link for an estimate or invoice — no login, no account | `/v/<token>`, server-rendered. The token is minted per document and revocable; a voided document stops answering |
+| The customer approves or declines on that page | Approve asks for a typed name, a drawn signature and a date — weekends included. Decline offers a question box instead of a dead end |
+| Either answer lands in the CRM | Status moves to accepted or declined, the signature and requested date are stored on the document, a note joins the customer's timeline, and the crew are notified |
+| The link can be on your own domain, not the CRM's | `NEXT_PUBLIC_QUOTE_URL` — point a domain at the same Vercel project |
 
 **Phase 3 — SMS and automation**
 

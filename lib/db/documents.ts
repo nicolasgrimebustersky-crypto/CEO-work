@@ -2,6 +2,7 @@ import {
   addDoc,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDocs,
   onSnapshot,
@@ -17,6 +18,7 @@ import {
 } from "firebase/firestore";
 
 import { isDemoMode } from "@/lib/demo/enabled";
+import { SHARE_TOKEN_BYTES } from "@/lib/shareLinks";
 import * as demo from "@/lib/demo/store";
 import {
   computeTotals,
@@ -26,6 +28,8 @@ import {
   statusAfterPayment,
   sumPayments,
   type BusinessDocument,
+  type DocumentAcceptance,
+  type DocumentDecline,
   type DocumentKind,
   type DocumentStatus,
   type LineItem,
@@ -82,6 +86,30 @@ function asPayments(value: unknown): Payment[] {
     .sort((a, b) => b.receivedAt.toMillis() - a.receivedAt.toMillis());
 }
 
+/** The customer's approval, as written by /api/quote/[token]. */
+function asAcceptance(raw: unknown): DocumentAcceptance | null {
+  if (!raw || typeof raw !== "object") return null;
+  const value = raw as Record<string, unknown>;
+  const signedName = typeof value.signedName === "string" ? value.signedName : "";
+  if (!signedName) return null;
+  return {
+    signedName,
+    signature: typeof value.signature === "string" ? value.signature : "",
+    requestedDate: typeof value.requestedDate === "string" ? value.requestedDate : "",
+    message: typeof value.message === "string" ? value.message : "",
+    acceptedAt: value.acceptedAt instanceof Timestamp ? value.acceptedAt : null,
+  };
+}
+
+function asDecline(raw: unknown): DocumentDecline | null {
+  if (!raw || typeof raw !== "object") return null;
+  const value = raw as Record<string, unknown>;
+  return {
+    message: typeof value.message === "string" ? value.message : "",
+    declinedAt: value.declinedAt instanceof Timestamp ? value.declinedAt : null,
+  };
+}
+
 export function toDocument(snap: QueryDocumentSnapshot<DocumentData>): BusinessDocument {
   const data = snap.data();
   const serviceType = SERVICE_TYPES.includes(data.serviceType as ServiceType)
@@ -112,6 +140,9 @@ export function toDocument(snap: QueryDocumentSnapshot<DocumentData>): BusinessD
     settledAt: data.settledAt instanceof Timestamp ? data.settledAt : null,
     convertedFromId: typeof data.convertedFromId === "string" ? data.convertedFromId : null,
     convertedToId: typeof data.convertedToId === "string" ? data.convertedToId : null,
+    shareToken: typeof data.shareToken === "string" && data.shareToken ? data.shareToken : null,
+    acceptance: asAcceptance(data.acceptance),
+    decline: asDecline(data.decline),
     scheduledJobId:
       typeof data.scheduledJobId === "string" ? data.scheduledJobId : null,
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt : Timestamp.now(),
@@ -451,6 +482,55 @@ export async function convertToInvoice(
   await batch.commit();
 
   return invoiceRef.id;
+}
+
+/**
+ * The customer's link to this document, made on first ask and reused after.
+ *
+ * Minted in the browser from `crypto.getRandomValues`, the same source the API
+ * keys use — 24 bytes, so guessing one is not a thing that happens. It is
+ * stored in the clear, unlike an API key, because unlike an API key it has to
+ * be readable again: the crew send the same quote twice, and a link that
+ * changed each time would leave the customer holding a dead one.
+ *
+ * Reused rather than rotated for the same reason. A second tap on Copy link is
+ * somebody sending the quote again, not somebody revoking it.
+ */
+export async function ensureShareToken(document: BusinessDocument): Promise<string> {
+  if (document.shareToken) return document.shareToken;
+
+  const bytes = new Uint8Array(SHARE_TOKEN_BYTES);
+  crypto.getRandomValues(bytes);
+  // base64url, so the token survives a URL, a text message and a copy-paste
+  // without being escaped into something else.
+  const token = btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+
+  if (isDemoMode) {
+    demo.update(COLLECTION, document.id, { shareToken: token });
+    return token;
+  }
+
+  await updateDoc(doc(getDb(), COLLECTION, document.id), { shareToken: token });
+  return token;
+}
+
+/**
+ * Takes the link back.
+ *
+ * The page 404s the moment this lands, which is the point: a quote sent to the
+ * wrong number is not fixed by an apology, it is fixed by the link going dead.
+ * Anyone still holding the old URL gets the same answer as somebody who made
+ * one up.
+ */
+export async function revokeShareToken(documentId: string): Promise<void> {
+  if (isDemoMode) {
+    demo.update(COLLECTION, documentId, { shareToken: null });
+    return;
+  }
+  await updateDoc(doc(getDb(), COLLECTION, documentId), { shareToken: deleteField() });
 }
 
 export async function deleteDocument(id: string): Promise<void> {

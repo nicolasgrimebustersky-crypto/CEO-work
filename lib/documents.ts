@@ -115,6 +115,29 @@ export interface Payment {
   recordedByName: string;
 }
 
+/**
+ * A customer's approval, taken on the public link.
+ *
+ * Kept on the document rather than in the timeline because it is evidence: the
+ * name they typed, the line they drew, and the moment they did it, alongside
+ * the prices they were looking at when they did. A timeline note can be edited
+ * in a way this deliberately cannot.
+ */
+export interface DocumentAcceptance {
+  signedName: string;
+  /** PNG data URL of the drawn line. */
+  signature: string;
+  /** yyyy-mm-dd they asked for. Weekends included. */
+  requestedDate: string;
+  message: string;
+  acceptedAt: Timestamp | null;
+}
+
+export interface DocumentDecline {
+  message: string;
+  declinedAt: Timestamp | null;
+}
+
 export interface BusinessDocument {
   id: string;
   /** Human-facing number, continuing the Invoice Fly sequence. */
@@ -163,6 +186,19 @@ export interface BusinessDocument {
    * issues a second invoice for the same work under a second number.
    */
   convertedToId: string | null;
+
+  /**
+   * The customer's link to this document, once one has been made.
+   *
+   * Absent until somebody asks for it, so a quote that was never shared never
+   * carries a way in. Clearing it revokes the link — see lib/shareLinks.ts.
+   */
+  shareToken: string | null;
+
+  /** What the customer said when they approved it, if they did. */
+  acceptance: DocumentAcceptance | null;
+  /** What they said when they declined it, if they did. */
+  decline: DocumentDecline | null;
 
   /**
    * The job this estimate was scheduled as, once somebody put it on the

@@ -89,6 +89,20 @@ export const MCP_SEND_LIMIT: RateLimitRule = {
   label: "agent messages to customers",
 };
 
+/**
+ * A customer answering their own quote.
+ *
+ * Low, because there is nothing legitimate past a handful: approve, or decline
+ * and maybe fix a typo in the question. It is keyed on the document rather than
+ * the caller, since there is no caller — which also means a leaked link cannot
+ * be used to bury the crew in notifications about one quote.
+ */
+export const QUOTE_RESPONSE_LIMIT: RateLimitRule = {
+  max: 12,
+  windowMs: 60 * 60 * 1000,
+  label: "answers to this quote",
+};
+
 function minutesUntil(resetAt: number): number {
   return Math.max(1, Math.ceil((resetAt - Date.now()) / 60000));
 }
