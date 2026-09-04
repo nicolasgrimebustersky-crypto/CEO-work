@@ -28,6 +28,8 @@ import {
   statusAfterPayment,
   sumPayments,
   type BusinessDocument,
+  type DocumentAcceptance,
+  type DocumentDecline,
   type DocumentKind,
   type DocumentStatus,
   type LineItem,
@@ -84,6 +86,30 @@ function asPayments(value: unknown): Payment[] {
     .sort((a, b) => b.receivedAt.toMillis() - a.receivedAt.toMillis());
 }
 
+/** The customer's approval, as written by /api/quote/[token]. */
+function asAcceptance(raw: unknown): DocumentAcceptance | null {
+  if (!raw || typeof raw !== "object") return null;
+  const value = raw as Record<string, unknown>;
+  const signedName = typeof value.signedName === "string" ? value.signedName : "";
+  if (!signedName) return null;
+  return {
+    signedName,
+    signature: typeof value.signature === "string" ? value.signature : "",
+    requestedDate: typeof value.requestedDate === "string" ? value.requestedDate : "",
+    message: typeof value.message === "string" ? value.message : "",
+    acceptedAt: value.acceptedAt instanceof Timestamp ? value.acceptedAt : null,
+  };
+}
+
+function asDecline(raw: unknown): DocumentDecline | null {
+  if (!raw || typeof raw !== "object") return null;
+  const value = raw as Record<string, unknown>;
+  return {
+    message: typeof value.message === "string" ? value.message : "",
+    declinedAt: value.declinedAt instanceof Timestamp ? value.declinedAt : null,
+  };
+}
+
 export function toDocument(snap: QueryDocumentSnapshot<DocumentData>): BusinessDocument {
   const data = snap.data();
   const serviceType = SERVICE_TYPES.includes(data.serviceType as ServiceType)
@@ -115,6 +141,8 @@ export function toDocument(snap: QueryDocumentSnapshot<DocumentData>): BusinessD
     convertedFromId: typeof data.convertedFromId === "string" ? data.convertedFromId : null,
     convertedToId: typeof data.convertedToId === "string" ? data.convertedToId : null,
     shareToken: typeof data.shareToken === "string" && data.shareToken ? data.shareToken : null,
+    acceptance: asAcceptance(data.acceptance),
+    decline: asDecline(data.decline),
     scheduledJobId:
       typeof data.scheduledJobId === "string" ? data.scheduledJobId : null,
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt : Timestamp.now(),

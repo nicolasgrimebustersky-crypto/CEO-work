@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import { QuoteActions } from "@/components/documents/QuoteActions";
 import { SharedDocument } from "@/components/documents/SharedDocument";
-import { BUSINESS } from "@/lib/business";
+import { BUSINESS, BUSINESS_TIMEZONE } from "@/lib/business";
+import { todayIn } from "@/lib/quoteResponse";
 import { findByShareToken } from "@/lib/server/publicDocument";
 
 export const runtime = "nodejs";
@@ -47,6 +49,15 @@ export default async function SharedDocumentPage({
   const { document, customer } = found;
   const isInvoice = document.kind === "invoice";
 
+  // An estimate is the only thing there is anything to decide about. An invoice
+  // is a bill; offering to "approve" one would be inviting a customer to think
+  // they had changed something.
+  const decidable = !isInvoice;
+  const answered =
+    document.status === "accepted" || document.status === "declined"
+      ? document.status
+      : null;
+
   return (
     <main className="min-h-dvh bg-canvas">
       <div className="mx-auto max-w-3xl px-4 pt-6 pb-3">
@@ -59,7 +70,11 @@ export default async function SharedDocumentPage({
         <p className="mt-1 text-sm font-semibold text-muted">
           {isInvoice
             ? "Below is your invoice. Any questions, just reply to our text."
-            : "Below is your estimate. Reply to our text to book it, or with any questions."}
+            : answered === "accepted"
+              ? "You have approved this estimate. We'll confirm the time with you."
+              : answered === "declined"
+                ? "You let us know this one wasn't right. We'll be in touch."
+                : "Have a read, then approve it at the bottom of this page — or tell us what you'd like to ask."}
         </p>
       </div>
 
@@ -67,11 +82,22 @@ export default async function SharedDocumentPage({
         <SharedDocument document={document} customer={customer} />
       </div>
 
-      <footer className="px-4 pb-10 text-center">
+      <footer className="px-4 pb-6 text-center">
         <p className="text-sm font-semibold text-muted">
           {BUSINESS.phone ? `Questions? Call ${BUSINESS.phone}.` : "Questions? Just reply to our text."}
         </p>
       </footer>
+
+      {decidable ? (
+        <QuoteActions
+          token={token}
+          // Decided on the server, in the one timezone the business works in.
+          // A phone set to another timezone must not be able to offer, or
+          // refuse, a different set of days than the server will accept.
+          today={todayIn(BUSINESS_TIMEZONE)}
+          alreadyAnswered={answered}
+        />
+      ) : null}
     </main>
   );
 }

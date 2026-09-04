@@ -34,10 +34,25 @@ export interface SerialPayment {
   recordedByName: string;
 }
 
-/** A BusinessDocument with every Timestamp flattened to milliseconds. */
+/**
+ * A BusinessDocument with every Timestamp flattened to milliseconds.
+ *
+ * `acceptance` and `decline` are dropped rather than serialised. The page has
+ * no use for them — the buttons already know from the status whether this was
+ * answered — and sending them would push a customer's own signature back down
+ * the wire on every load of a link that may sit in a forwarded text thread.
+ */
 export type SerialDocument = Omit<
   BusinessDocument,
-  "issuedAt" | "dueAt" | "sentAt" | "settledAt" | "createdAt" | "updatedAt" | "payments"
+  | "issuedAt"
+  | "dueAt"
+  | "sentAt"
+  | "settledAt"
+  | "createdAt"
+  | "updatedAt"
+  | "payments"
+  | "acceptance"
+  | "decline"
 > & {
   issuedAtMs: number | null;
   dueAtMs: number | null;

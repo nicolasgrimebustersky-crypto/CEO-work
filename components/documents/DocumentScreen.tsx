@@ -79,12 +79,20 @@ const INPUT =
 /**
  * Where a customer link should point.
  *
- * NEXT_PUBLIC_SITE_URL first, and the current origin only as a fallback. The
- * order matters: a link built on a preview deployment works when the crew test
- * it and 404s weeks later when that deployment is cleaned up — long after the
- * quote was sent and with nothing to explain why the customer cannot open it.
+ * NEXT_PUBLIC_QUOTE_URL first, and it exists so the customer's link does not
+ * have to be the CRM's address. A quote arriving from something that reads as
+ * an internal tool invites the question of what else is on it; a domain the
+ * business already owns does not. Both hosts serve the same deployment — only
+ * the name differs — so nothing has to be deployed twice for this.
+ *
+ * Then NEXT_PUBLIC_SITE_URL, then the current origin, in that order. A link
+ * built from whatever host the crew happen to be on works when they test it
+ * and 404s weeks later when that preview deployment is cleaned up, long after
+ * the quote was sent and with nothing to explain why it stopped opening.
  */
 function shareOrigin(): string {
+  const quote = (process.env.NEXT_PUBLIC_QUOTE_URL ?? "").trim();
+  if (quote) return quote;
   const configured = (process.env.NEXT_PUBLIC_SITE_URL ?? "").trim();
   if (configured) return configured;
   return typeof window === "undefined" ? "" : window.location.origin;
@@ -740,6 +748,70 @@ export function DocumentScreen() {
                 </p>
               ) : null}
             </section>
+
+            {/* What the customer said, where the crew already look. An
+                approval that only existed as a status pill would lose the
+                signature, the date they asked for and the gate code they
+                typed — which is most of what makes it useful. */}
+            {document.acceptance ? (
+              <section className="mb-4 rounded-2xl border border-ok/50 bg-ok/10 p-4">
+                <p className="text-sm font-bold tracking-wide text-muted uppercase">
+                  Approved by the customer
+                </p>
+                <p className="mt-1 text-base font-bold text-ink">
+                  Signed {document.acceptance.signedName}
+                  {document.acceptance.acceptedAt
+                    ? ` · ${formatDateOnly(document.acceptance.acceptedAt)}`
+                    : ""}
+                </p>
+                {document.acceptance.requestedDate ? (
+                  <p className="mt-1 text-base font-semibold text-ink">
+                    Asked for {document.acceptance.requestedDate}
+                  </p>
+                ) : null}
+                {document.acceptance.message ? (
+                  <p className="mt-1.5 text-base font-semibold text-muted">
+                    “{document.acceptance.message}”
+                  </p>
+                ) : null}
+                {document.acceptance.signature ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={document.acceptance.signature}
+                    alt={`Signature of ${document.acceptance.signedName}`}
+                    className="mt-3 h-24 w-full rounded-xl bg-white object-contain p-2"
+                  />
+                ) : null}
+              </section>
+            ) : null}
+
+            {document.decline ? (
+              <section className="mb-4 rounded-2xl border border-warn/50 bg-warn/10 p-4">
+                <p className="text-sm font-bold tracking-wide text-muted uppercase">
+                  Declined by the customer
+                </p>
+                {document.decline.declinedAt ? (
+                  <p className="mt-1 text-base font-bold text-ink">
+                    {formatDateOnly(document.decline.declinedAt)}
+                  </p>
+                ) : null}
+                <p className="mt-1.5 text-base font-semibold text-ink">
+                  {document.decline.message
+                    ? `“${document.decline.message}”`
+                    : "They did not leave a message."}
+                </p>
+                {customer?.phone ? (
+                  <Button
+                    variant="secondary"
+                    full
+                    className="mt-3"
+                    onClick={() => setTexting(true)}
+                  >
+                    Reply to them
+                  </Button>
+                ) : null}
+              </section>
+            ) : null}
 
             <section className="grid grid-cols-2 gap-2">
               {/* Opening the preview is the way out of this screen: it shows

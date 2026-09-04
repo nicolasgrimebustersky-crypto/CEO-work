@@ -37,6 +37,9 @@ const SURNAME = `Testerson${Date.now()}`;
 const shared = mintToken();
 const voided = mintToken();
 const unshared = mintToken();
+const toApprove = mintToken();
+const toDecline = mintToken();
+const alreadyDone = mintToken();
 
 async function seedDocument(id, token, status) {
   await writeDoc("documents", id, {
@@ -92,6 +95,9 @@ before(async () => {
     doNotKnock: { booleanValue: true },
   });
   await seedDocument(`share-doc-${Date.now()}`, shared, "sent");
+  await seedDocument(`share-yes-${Date.now()}`, toApprove, "sent");
+  await seedDocument(`share-no-${Date.now()}`, toDecline, "sent");
+  await seedDocument(`share-done-${Date.now()}`, alreadyDone, "accepted");
   await seedDocument(`share-void-${Date.now()}`, voided, "void");
   await seedDocument(`share-none-${Date.now()}`, null, "sent");
 });
@@ -155,5 +161,156 @@ describe("the customer's link", () => {
   test("the page tells crawlers to stay away", async () => {
     const html = await fetch(`${BASE}/v/${shared}`).then((r) => r.text());
     assert.match(html, /noindex/i, "the page is missing its noindex robots directive");
+  });
+});
+
+/** A 1x1 PNG, which is all the validator cares about. */
+const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
+function tomorrow() {
+  return new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+}
+
+async function respond(token, payload) {
+  const res = await fetch(`${BASE}/api/quote/${token}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return { status: res.status, body: await res.json().catch(() => ({})) };
+}
+
+async function findByToken(token) {
+  const res = await fetch(
+    `http://${FIRESTORE}/v1/projects/${PROJECT}/databases/(default)/documents:runQuery`,
+    {
+      method: "POST",
+      headers: OWNER,
+      body: JSON.stringify({
+        structuredQuery: {
+          from: [{ collectionId: "documents" }],
+          where: {
+            fieldFilter: {
+              field: { fieldPath: "shareToken" },
+              op: "EQUAL",
+              value: { stringValue: token },
+            },
+          },
+          limit: 1,
+        },
+      }),
+    },
+  );
+  const rows = await res.json();
+  const hit = rows.find((row) => row.document);
+  return hit ? hit.document : null;
+}
+
+describe("answering the quote", () => {
+  test("approving writes the signature, the date and the status back to the CRM", async () => {
+    const out = await respond(toApprove, {
+      decision: "accepted",
+      signedName: "Ada Lovelace",
+      signature: PNG,
+      requestedDate: tomorrow(),
+      message: "Gate code 1234",
+    });
+    assert.equal(out.status, 200, JSON.stringify(out.body));
+    assert.equal(out.body.decision, "accepted");
+
+    const doc = await findByToken(toApprove);
+    assert.ok(doc, "the document vanished");
+    assert.equal(doc.fields.status.stringValue, "accepted", "status did not move to accepted");
+
+    const acceptance = doc.fields.acceptance.mapValue.fields;
+    assert.equal(acceptance.signedName.stringValue, "Ada Lovelace");
+    assert.equal(acceptance.signature.stringValue, PNG, "the signature was not stored");
+    assert.equal(acceptance.requestedDate.stringValue, tomorrow());
+    assert.equal(acceptance.message.stringValue, "Gate code 1234");
+    assert.ok(acceptance.acceptedAt.timestampValue, "no time was recorded");
+
+    // Attribution is the point of a signature: this must not read as though a
+    // crew member marked it accepted.
+    assert.equal(doc.fields.updatedByName.stringValue, "Ada Lovelace");
+  });
+
+  test("the approval lands on the customer's timeline", async () => {
+    const res = await fetch(
+      `http://${FIRESTORE}/v1/projects/${PROJECT}/databases/(default)/documents/customers/${CUSTOMER_ID}`,
+      { headers: OWNER },
+    );
+    const notes = (await res.json()).fields.notes.arrayValue.values ?? [];
+    const text = notes.map((n) => n.mapValue.fields.text.stringValue).join("\n");
+    assert.match(text, /Approved/, "nothing about the approval reached the timeline");
+    assert.match(text, /Ada Lovelace/);
+  });
+
+  test("declining records the question and moves the status", async () => {
+    const out = await respond(toDecline, {
+      decision: "declined",
+      message: "Is the back patio included at that price?",
+    });
+    assert.equal(out.status, 200, JSON.stringify(out.body));
+
+    const doc = await findByToken(toDecline);
+    assert.equal(doc.fields.status.stringValue, "declined");
+    assert.match(
+      doc.fields.decline.mapValue.fields.message.stringValue,
+      /back patio/,
+    );
+  });
+
+  test("a quote already answered cannot be answered again", async () => {
+    // The link keeps working — a customer may re-read what they agreed to —
+    // but a second tap must not silently overwrite the first decision.
+    const out = await respond(alreadyDone, {
+      decision: "declined",
+      message: "changed my mind",
+    });
+    assert.equal(out.status, 409);
+    assert.match(out.body.error, /already/i);
+  });
+
+  test("approving without a signature is refused", async () => {
+    const out = await respond(shared, {
+      decision: "accepted",
+      signedName: "Ada",
+      requestedDate: tomorrow(),
+    });
+    assert.equal(out.status, 400);
+    assert.match(out.body.error, /signature/i);
+  });
+
+  test("a past date is refused", async () => {
+    const out = await respond(shared, {
+      decision: "accepted",
+      signedName: "Ada",
+      signature: PNG,
+      requestedDate: "2020-01-01",
+    });
+    assert.equal(out.status, 400);
+    assert.match(out.body.error, /date/i);
+  });
+
+  test("an SVG signature is refused", async () => {
+    // It would be a script rendered on the crew's own screen.
+    const out = await respond(shared, {
+      decision: "accepted",
+      signedName: "Ada",
+      signature: "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=",
+      requestedDate: tomorrow(),
+    });
+    assert.equal(out.status, 400);
+    assert.match(out.body.error, /signature/i);
+  });
+
+  test("a made-up token cannot answer anything", async () => {
+    const out = await respond(mintToken(), { decision: "accepted" });
+    assert.equal(out.status, 404);
+  });
+
+  test("an unshared document cannot be answered", async () => {
+    const out = await respond(unshared, { decision: "declined" });
+    assert.equal(out.status, 404);
   });
 });

@@ -44,6 +44,11 @@ export function SharedDocument({
 
   const hydrated: BusinessDocument = {
     ...rest,
+    // Never sent to this page — see SerialDocument. The paper does not print
+    // them, and a customer's own signature has no business being pushed back
+    // down a link that may be sitting in a forwarded text thread.
+    acceptance: null,
+    decline: null,
     // Every date the record carries, not only the two this page prints. A
     // rebuild that quietly drops the rest would be a trap for whoever renders
     // something else from it later.

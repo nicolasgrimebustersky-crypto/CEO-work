@@ -648,6 +648,8 @@ function demoDoc(
     convertedFromId: options.convertedFromId ?? null,
     convertedToId: options.convertedToId ?? null,
     shareToken: null,
+    acceptance: null,
+    decline: null,
     scheduledJobId: null,
     createdAt: ago(options.issuedDaysAgo),
     createdBy: DEMO_NICK,

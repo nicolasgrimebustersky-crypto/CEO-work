@@ -104,6 +104,11 @@ export const NOTIFICATION_EVENTS = {
     destination: "document",
   },
   invoice_sent: { category: "money", title: "Invoice sent", destination: "document" },
+  estimate_declined: {
+    category: "money",
+    title: "Estimate declined",
+    destination: "document",
+  },
   estimate_accepted: {
     category: "money",
     title: "Estimate accepted",
