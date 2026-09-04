@@ -32,15 +32,22 @@ export function documentText(
   service: string,
   total: number,
   balanceDue: number,
+  link?: string | null,
 ): string {
   const money = `$${total.toFixed(2)}`;
+  // On its own line and last, so it stays a tappable link in every messages
+  // app. Punctuation immediately after a URL is the usual way one arrives
+  // broken — a trailing full stop gets swallowed into the href by some
+  // clients and the customer taps through to a 404.
+  const tail = link ? `\n\n${link}` : "";
+
   if (kind === "estimate") {
-    return `${BUSINESS_NAME}: here's your estimate for ${service.toLowerCase()} — ${money}. Reply YES to book it, or with any questions.`;
+    return `${BUSINESS_NAME}: here's your estimate for ${service.toLowerCase()} — ${money}. Reply YES to book it, or with any questions.${tail}`;
   }
   if (balanceDue > 0 && balanceDue < total) {
-    return `${BUSINESS_NAME}: thanks for the payment. ${`$${balanceDue.toFixed(2)}`} is still outstanding on your ${service.toLowerCase()} invoice.`;
+    return `${BUSINESS_NAME}: thanks for the payment. ${`$${balanceDue.toFixed(2)}`} is still outstanding on your ${service.toLowerCase()} invoice.${tail}`;
   }
-  return `${BUSINESS_NAME}: your invoice for ${service.toLowerCase()} is ${money}. Thanks for your business — reply here with any questions.`;
+  return `${BUSINESS_NAME}: your invoice for ${service.toLowerCase()} is ${money}. Thanks for your business — reply here with any questions.${tail}`;
 }
 
 export function quoteFollowUpText(

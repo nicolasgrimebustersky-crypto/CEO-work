@@ -165,6 +165,14 @@ export interface BusinessDocument {
   convertedToId: string | null;
 
   /**
+   * The customer's link to this document, once one has been made.
+   *
+   * Absent until somebody asks for it, so a quote that was never shared never
+   * carries a way in. Clearing it revokes the link — see lib/shareLinks.ts.
+   */
+  shareToken: string | null;
+
+  /**
    * The job this estimate was scheduled as, once somebody put it on the
    * calendar. Same shape and same reasoning as `convertedToId`: it is what
    * turns the button into a link and what stops one accepted estimate becoming

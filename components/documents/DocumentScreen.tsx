@@ -19,6 +19,7 @@ import {
   convertToInvoice,
   createDocument,
   deleteDocument,
+  ensureShareToken,
   removePayment,
   setDocumentStatus,
   updateDocument,
@@ -39,6 +40,7 @@ import {
 } from "@/lib/format";
 import { rememberServices } from "@/lib/db/services";
 import { documentText } from "@/lib/messages";
+import { shareUrl } from "@/lib/shareLinks";
 import { downloadPdf } from "@/lib/pdf/share";
 import { routes } from "@/lib/routes";
 import { SERVICE_LABEL } from "@/lib/status";
@@ -74,6 +76,20 @@ const INPUT =
  * accidentally change one. The id comes from the query string for the same
  * reason the customer page does — see lib/routes.ts.
  */
+/**
+ * Where a customer link should point.
+ *
+ * NEXT_PUBLIC_SITE_URL first, and the current origin only as a fallback. The
+ * order matters: a link built on a preview deployment works when the crew test
+ * it and 404s weeks later when that deployment is cleaned up — long after the
+ * quote was sent and with nothing to explain why the customer cannot open it.
+ */
+function shareOrigin(): string {
+  const configured = (process.env.NEXT_PUBLIC_SITE_URL ?? "").trim();
+  if (configured) return configured;
+  return typeof window === "undefined" ? "" : window.location.origin;
+}
+
 export function DocumentScreen() {
   const params = useSearchParams();
   const documentId = params.get("id") ?? "";
@@ -101,6 +117,10 @@ export function DocumentScreen() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [scheduling, setScheduling] = useState(false);
   const [drafting, setDrafting] = useState(false);
+  // The customer's link, once it has been asked for. Held here rather than
+  // read straight off the document so the Copy button can mint one on first
+  // press without the screen having to re-render from Firestore first.
+  const [linkNote, setLinkNote] = useState<string | null>(null);
 
   // A new document starts as local state and is not written until Save, so
   // backing out of one leaves nothing behind.
@@ -290,6 +310,47 @@ export function DocumentScreen() {
    * at it, and it moves to Accepted: billing for the work is the clearest
    * statement there is that the customer said yes.
    */
+  /**
+   * Puts the customer's link on the clipboard, making one if there isn't one.
+   *
+   * Copy rather than share-sheet because the crew paste it wherever the
+   * conversation already is — the app's own text screen, their thumb-typed
+   * message, an email. A share sheet would decide that for them.
+   */
+  async function onCopyLink() {
+    if (!document) return;
+    setBusy(true);
+    setLinkNote(null);
+    setError(null);
+    try {
+      const token = await ensureShareToken(document);
+      const url = shareUrl(shareOrigin(), token);
+      if (!url) {
+        // Only reachable with no configured site URL and no window, which in
+        // practice means a misconfigured deployment rather than a user error.
+        setError("This deployment has no site URL set, so a customer link cannot be built.");
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setLinkNote("Link copied. Anyone with it can view this — no login needed.");
+    } catch (err) {
+      // A clipboard write can be refused outright (an insecure origin, or a
+      // browser that wants a fresher user gesture). The link still exists, so
+      // showing it beats reporting a failure the crew can do nothing with.
+      const token = document.shareToken;
+      const url = token ? shareUrl(shareOrigin(), token) : null;
+      setError(
+        url
+          ? `Could not reach the clipboard. The link is: ${url}`
+          : err instanceof Error
+            ? err.message
+            : "Could not make a link.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function onConvert() {
     if (!document || !author) return;
     setBusy(true);
@@ -700,6 +761,28 @@ export function DocumentScreen() {
               >
                 Text a message
               </Button>
+              {/* The link a customer can actually open. The PDF and the share
+                  sheet both hand over a file; this hands over a page, which is
+                  what survives being forwarded and read on a phone that will
+                  not open a 200KB attachment. No login, by design — asking a
+                  customer to make an account to read their own quote is how a
+                  quote goes unread. */}
+              <Button
+                variant="secondary"
+                className="col-span-2"
+                disabled={busy}
+                onClick={() => void onCopyLink()}
+              >
+                {document.shareToken ? "Copy customer link" : "Create customer link"}
+              </Button>
+              {linkNote ? (
+                <p
+                  role="status"
+                  className="col-span-2 rounded-xl border border-accent/50 bg-accent/10 px-3 py-2 text-sm font-semibold text-ink"
+                >
+                  {linkNote}
+                </p>
+              ) : null}
               {/* One estimate, one invoice. Once it has produced one, the
                   button becomes the way back to it — tapping again a week
                   later, having forgotten, would otherwise bill the same work
@@ -813,6 +896,7 @@ export function DocumentScreen() {
           <DocumentPreview
             document={document}
             customer={customer}
+            shareLink={shareUrl(shareOrigin(), document.shareToken)}
             open={previewing}
             onClose={() => setPreviewing(false)}
           />
@@ -829,6 +913,10 @@ export function DocumentScreen() {
             SERVICE_LABEL[document.serviceType],
             document.total,
             document.balanceDue,
+            // Only once a link exists. Making one as a side effect of opening
+            // the text sheet would publish the document because somebody
+            // tapped to look at the wording.
+            shareUrl(shareOrigin(), document.shareToken),
           )}
         />
       ) : null}

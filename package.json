@@ -13,7 +13,7 @@
     "test:api": "bash scripts/test-api.sh",
     "seed": "node scripts/seed-test-data.mjs",
     "test": "npm run typecheck && npm run lint && npm run test:meta && npm run test:rules",
-    "test:meta": "node --experimental-strip-types --test tests/meta.parse.test.mjs tests/theme.test.mjs tests/userColor.test.mjs tests/notifications.test.mjs tests/pushWorker.test.mjs tests/documents.test.mjs tests/threads.test.mjs tests/quietHours.test.mjs tests/knockPlan.test.mjs tests/territory.test.mjs tests/twilioCredentials.test.mjs tests/roles.test.mjs tests/conversation.test.mjs tests/errors.test.mjs tests/maps.test.mjs tests/jobFlow.test.mjs tests/serviceAccountKey.test.mjs tests/estimateDraft.test.mjs tests/customerEntry.test.mjs tests/buildVersion.test.mjs tests/apiKeys.test.mjs tests/moneySummary.test.mjs tests/mcpTools.test.mjs"
+    "test:meta": "node --experimental-strip-types --test tests/meta.parse.test.mjs tests/theme.test.mjs tests/userColor.test.mjs tests/notifications.test.mjs tests/pushWorker.test.mjs tests/documents.test.mjs tests/threads.test.mjs tests/quietHours.test.mjs tests/knockPlan.test.mjs tests/territory.test.mjs tests/twilioCredentials.test.mjs tests/roles.test.mjs tests/conversation.test.mjs tests/errors.test.mjs tests/maps.test.mjs tests/jobFlow.test.mjs tests/serviceAccountKey.test.mjs tests/estimateDraft.test.mjs tests/customerEntry.test.mjs tests/buildVersion.test.mjs tests/shareLinks.test.mjs tests/publicRoutes.test.mjs tests/apiKeys.test.mjs tests/moneySummary.test.mjs tests/mcpTools.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
