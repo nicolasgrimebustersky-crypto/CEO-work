@@ -32,6 +32,7 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  deleteField,
   where,
 } from "firebase/firestore";
 
@@ -434,6 +435,27 @@ describe("estimates and invoices", () => {
     await assertFails(updateDoc(doc(bob, "documents/d1"), { status: "sent" }));
     await assertFails(
       updateDoc(doc(bob, "documents/d1"), stampedUpdate("alice", { status: "sent" })),
+    );
+  });
+
+  test("minting a share token has to refresh the stamp like any other edit", async () => {
+    // The Copy customer link button writes one field. The first version of it
+    // wrote only that field, which the rules refused — correctly, and silently
+    // from the crew's side: the button simply did nothing. Nothing in the test
+    // suite covered the write, because the customer-facing tests seeded tokens
+    // straight into Firestore instead of pressing the button.
+    await assertFails(
+      updateDoc(doc(bob, "documents/d1"), { shareToken: "a".repeat(32) }),
+    );
+    await assertSucceeds(
+      updateDoc(doc(bob, "documents/d1"), stampedUpdate("bob", { shareToken: "a".repeat(32) })),
+    );
+  });
+
+  test("revoking a share token is an edit too", async () => {
+    await assertFails(updateDoc(doc(bob, "documents/d1"), { shareToken: deleteField() }));
+    await assertSucceeds(
+      updateDoc(doc(bob, "documents/d1"), stampedUpdate("bob", { shareToken: deleteField() })),
     );
   });
 

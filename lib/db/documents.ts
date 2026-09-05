@@ -496,7 +496,10 @@ export async function convertToInvoice(
  * Reused rather than rotated for the same reason. A second tap on Copy link is
  * somebody sending the quote again, not somebody revoking it.
  */
-export async function ensureShareToken(document: BusinessDocument): Promise<string> {
+export async function ensureShareToken(
+  document: BusinessDocument,
+  author: Author,
+): Promise<string> {
   if (document.shareToken) return document.shareToken;
 
   const bytes = new Uint8Array(SHARE_TOKEN_BYTES);
@@ -513,7 +516,16 @@ export async function ensureShareToken(document: BusinessDocument): Promise<stri
     return token;
   }
 
-  await updateDoc(doc(getDb(), COLLECTION, document.id), { shareToken: token });
+  // Stamped like every other edit. The rules require it — refreshesAuthorStamp
+  // insists on updatedBy matching the caller and updatedAt appearing in the
+  // diff — and the first version of this wrote the token alone, which Firestore
+  // refused. From the crew's side that looked like a button that did nothing.
+  await updateDoc(doc(getDb(), COLLECTION, document.id), {
+    shareToken: token,
+    updatedAt: serverTimestamp(),
+    updatedBy: author.uid,
+    updatedByName: author.displayName,
+  });
   return token;
 }
 
@@ -525,12 +537,17 @@ export async function ensureShareToken(document: BusinessDocument): Promise<stri
  * Anyone still holding the old URL gets the same answer as somebody who made
  * one up.
  */
-export async function revokeShareToken(documentId: string): Promise<void> {
+export async function revokeShareToken(documentId: string, author: Author): Promise<void> {
   if (isDemoMode) {
     demo.update(COLLECTION, documentId, { shareToken: null });
     return;
   }
-  await updateDoc(doc(getDb(), COLLECTION, documentId), { shareToken: deleteField() });
+  await updateDoc(doc(getDb(), COLLECTION, documentId), {
+    shareToken: deleteField(),
+    updatedAt: serverTimestamp(),
+    updatedBy: author.uid,
+    updatedByName: author.displayName,
+  });
 }
 
 export async function deleteDocument(id: string): Promise<void> {
