@@ -326,12 +326,14 @@ export function DocumentScreen() {
    * message, an email. A share sheet would decide that for them.
    */
   async function onCopyLink() {
-    if (!document) return;
+    // Without an author there is no stamp to write, and the rules refuse an
+    // unstamped edit — better to do nothing than to fail opaquely.
+    if (!document || !author) return;
     setBusy(true);
     setLinkNote(null);
     setError(null);
     try {
-      const token = await ensureShareToken(document);
+      const token = await ensureShareToken(document, author);
       const url = shareUrl(shareOrigin(), token);
       if (!url) {
         // Only reachable with no configured site URL and no window, which in
