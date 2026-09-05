@@ -128,7 +128,13 @@ export function DocumentScreen() {
   // The customer's link, once it has been asked for. Held here rather than
   // read straight off the document so the Copy button can mint one on first
   // press without the screen having to re-render from Firestore first.
+  // The link itself, shown rather than only copied. A link that goes to the
+  // clipboard and nowhere else is a link nobody looks at until a customer says
+  // it does not work — which is exactly how a wrong NEXT_PUBLIC_QUOTE_URL
+  // reached a real quote: the token was fine, the host did not exist, and
+  // nothing on screen said so.
   const [linkNote, setLinkNote] = useState<string | null>(null);
+  const [linkUrl, setLinkUrl] = useState<string | null>(null);
 
   // A new document starts as local state and is not written until Save, so
   // backing out of one leaves nothing behind.
@@ -331,6 +337,7 @@ export function DocumentScreen() {
     if (!document || !author) return;
     setBusy(true);
     setLinkNote(null);
+    setLinkUrl(null);
     setError(null);
     try {
       const token = await ensureShareToken(document, author);
@@ -341,6 +348,7 @@ export function DocumentScreen() {
         setError("This deployment has no site URL set, so a customer link cannot be built.");
         return;
       }
+      setLinkUrl(url);
       await navigator.clipboard.writeText(url);
       setLinkNote("Link copied. Anyone with it can view this — no login needed.");
     } catch (err) {
@@ -349,9 +357,10 @@ export function DocumentScreen() {
       // showing it beats reporting a failure the crew can do nothing with.
       const token = document.shareToken;
       const url = token ? shareUrl(shareOrigin(), token) : null;
+      if (url) setLinkUrl(url);
       setError(
         url
-          ? `Could not reach the clipboard. The link is: ${url}`
+          ? "Could not reach the clipboard — the link is below, copy it by hand."
           : err instanceof Error
             ? err.message
             : "Could not make a link.",
@@ -849,13 +858,34 @@ export function DocumentScreen() {
               >
                 {document.shareToken ? "Copy customer link" : "Create customer link"}
               </Button>
-              {linkNote ? (
-                <p
+              {linkNote || linkUrl ? (
+                <div
                   role="status"
-                  className="col-span-2 rounded-xl border border-accent/50 bg-accent/10 px-3 py-2 text-sm font-semibold text-ink"
+                  className="col-span-2 rounded-xl border border-accent/50 bg-accent/10 px-3 py-2"
                 >
-                  {linkNote}
-                </p>
+                  {linkNote ? (
+                    <p className="text-sm font-semibold text-ink">{linkNote}</p>
+                  ) : null}
+                  {linkUrl ? (
+                    <>
+                      {/* Shown in full, and selectable. Reading the address is
+                          the only way to catch a link built from a host that
+                          does not exist, which is a configuration mistake the
+                          app cannot detect for itself. */}
+                      <p className="mt-1 font-mono text-xs break-all text-ink select-all">
+                        {linkUrl}
+                      </p>
+                      <a
+                        href={linkUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1.5 inline-block text-sm font-bold text-accent underline"
+                      >
+                        Open it yourself to check
+                      </a>
+                    </>
+                  ) : null}
+                </div>
               ) : null}
               {/* One estimate, one invoice. Once it has produced one, the
                   button becomes the way back to it — tapping again a week
