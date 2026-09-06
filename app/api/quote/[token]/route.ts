@@ -3,6 +3,9 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { appendNote } from "@/lib/server/customerNotes";
 import { adminDb } from "@/lib/server/admin";
 import { notifyCrew } from "@/lib/server/notify";
+import { sendEmail } from "@/lib/server/email";
+import { acceptedEmail } from "@/lib/emailNotice";
+import { routes } from "@/lib/routes";
 import { findByShareToken } from "@/lib/server/publicDocument";
 import { consumeRateLimit, QUOTE_RESPONSE_LIMIT } from "@/lib/server/rateLimit";
 import { formatMoneyExact } from "@/lib/format";
@@ -38,6 +41,19 @@ export const maxDuration = 60;
 
 function bad(status: number, error: string): Response {
   return Response.json({ error }, { status });
+}
+
+/**
+ * An absolute link to the document, for the approval email.
+ *
+ * Absolute or nothing. A relative path is useless in an inbox, and guessing an
+ * origin from the request would put whatever host the customer happened to
+ * open — a preview deployment, say — into a mail that outlives it.
+ */
+function documentLink(documentId: string): string {
+  const site = (process.env.NEXT_PUBLIC_SITE_URL ?? "").trim().replace(/\/+$/, "");
+  if (!/^https?:\/\//i.test(site)) return "";
+  return `${site}${routes.document(documentId)}`;
 }
 
 /** Statuses a customer may still answer from. */
@@ -130,6 +146,22 @@ export async function POST(
       documentId: document.id,
       actorName: signedName || "Customer",
     });
+
+    // Email as well as push, and only for this event. An approval is the one
+    // thing here that is worth money and cannot wait for somebody to open the
+    // app — a missed buzz is a customer who signed and heard nothing back.
+    await sendEmail(
+      acceptedEmail({
+        customerName: document.customerName,
+        number: document.number,
+        service,
+        total: money,
+        requestedDate,
+        signedName,
+        message,
+        documentUrl: documentLink(document.id),
+      }),
+    );
 
     return Response.json({ ok: true, decision, requestedDate });
   }

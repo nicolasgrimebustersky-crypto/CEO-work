@@ -347,6 +347,46 @@ read server-side inside `/api/*` route handlers. Never add the prefix — it wou
 ship a sending credential to every browser that loads the app, and anyone who
 viewed source could text your customers on your bill.
 
+### 8b. Approval emails (optional)
+
+When a customer signs and approves an estimate on their own link, the crew get a
+push notification. That covers the phone in your pocket. It does not cover the
+case that actually loses work — the phone was face down, the buzz was missed, and
+somebody is sitting there having signed something, wondering if anyone saw.
+
+An email covers that. It is opt-in and off until you set two variables.
+
+1. **resend.com → API Keys → Create.** Sending permission is enough. Free tier is
+   3,000 emails a month; this sends one per approval.
+2. Set `RESEND_API_KEY` and `NOTIFY_EMAIL_TO` (comma-separated for more than one
+   address), then redeploy.
+
+Optionally set `NOTIFY_EMAIL_FROM` as well. Left unset, mail comes from Resend's
+shared onboarding address, which **only ever delivers to the address that owns
+the API key**. That is fine when you are emailing yourself and useless for
+anything else, so verify your own domain (Resend → Domains → Add) and set
+`NOTIFY_EMAIL_FROM` to something at it before sending anywhere else. Mail from a
+stranger's domain is also likelier to be filed as spam.
+
+Three things worth knowing:
+
+- **The signature is not attached.** It is a 200 KB data URL, mail clients strip
+  those, and the estimate in the CRM is where it belongs. The email links to it —
+  provided `NEXT_PUBLIC_SITE_URL` is set, since a relative path is useless in an
+  inbox and guessing an origin from the request would embed whatever host the
+  customer happened to open into mail that outlives it.
+- **The customer's typed name and message end up inside an HTML document**, and
+  they come from a page with no login on it. Everything is escaped and nothing is
+  interpolated as markup. That escaping is a security boundary, so it is tested
+  directly in `tests/emailNotice.test.mjs` rather than assumed.
+- **Sending never blocks the approval.** By the time it runs the signature is
+  already written, the timeline note filed and the push sent. A mail provider
+  having a bad minute must not hand a customer an error and make them wonder
+  whether their signature counted, so a failure is logged and swallowed.
+
+Only approvals are emailed, not declines — a decline already raises a push and
+sits in the app with whatever question the customer asked.
+
 ### 9. Push notifications
 
 The bell inside the app works with no setup. Getting a notification onto a phone
@@ -405,6 +445,8 @@ Vercel preview and open that.
    | `TWILIO_API_KEY_SID` / `TWILIO_API_KEY_SECRET` | **no — server only** |
    | `TWILIO_AUTH_TOKEN` | **no — server only** |
    | `TWILIO_PHONE_NUMBER` | **no — server only** |
+   | `RESEND_API_KEY` | **no — server only** |
+   | `NOTIFY_EMAIL_TO` / `NOTIFY_EMAIL_FROM` | **no — server only** |
 
    Leave `NEXT_PUBLIC_USE_FIREBASE_EMULATORS` unset in every Vercel environment.
 
