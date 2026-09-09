@@ -7,12 +7,12 @@ import { appendNote } from "@/lib/server/customerNotes";
 import { adminDb } from "@/lib/server/admin";
 import { notifyCrew } from "@/lib/server/notify";
 import { sendEmail } from "@/lib/server/email";
-import { acceptedEmail } from "@/lib/emailNotice";
+import { acceptedEmail, customerApprovalEmail, readRecipients } from "@/lib/emailNotice";
 import { routes } from "@/lib/routes";
-import type { SerialDocument } from "@/lib/server/publicDocument";
+import { customerFor, type SerialDocument } from "@/lib/server/publicDocument";
 import { formatMoneyExact } from "@/lib/format";
 import { SERVICE_LABEL } from "@/lib/status";
-import { BUSINESS_TIMEZONE } from "@/lib/business";
+import { BUSINESS, BUSINESS_TIMEZONE } from "@/lib/business";
 import { todayIn, validateQuoteResponse, type QuoteResponseInput } from "@/lib/quoteResponse";
 
 /**
@@ -112,18 +112,46 @@ export async function respondToDocument(
       actorName: signedName || "Customer",
     });
 
-    await sendEmail(
-      acceptedEmail({
-        customerName: document.customerName,
-        number: document.number,
-        service,
-        total: money,
-        requestedDate,
-        signedName,
-        message,
-        documentUrl: documentLink(document.id),
-      }),
-    );
+    const emailSends = [
+      sendEmail(
+        acceptedEmail({
+          customerName: document.customerName,
+          number: document.number,
+          service,
+          total: money,
+          requestedDate,
+          signedName,
+          message,
+          documentUrl: documentLink(document.id),
+        }),
+      ),
+    ];
+
+    // A receipt for the customer too, when there is an address on file to send
+    // it to. Best-effort like the crew notice above — a bad address, a missing
+    // customer record or an unconfigured mailer must not turn a signed approval
+    // into an error, so the lookup swallows its own failure.
+    const customer = await customerFor(document.customerId).catch(() => null);
+    const [customerAddress] = readRecipients(customer?.email);
+    if (customerAddress) {
+      emailSends.push(
+        sendEmail(
+          customerApprovalEmail({
+            customerName: document.customerName,
+            number: document.number,
+            service,
+            total: money,
+            requestedDate,
+            businessName: BUSINESS.name,
+            businessPhone: BUSINESS.phone,
+            businessEmail: BUSINESS.email,
+          }),
+          { to: [customerAddress] },
+        ),
+      );
+    }
+
+    await Promise.all(emailSends);
 
     await audit({
       action: "quote.answered",
