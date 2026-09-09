@@ -4,13 +4,13 @@ import { appendNote } from "@/lib/server/customerNotes";
 import { adminDb } from "@/lib/server/admin";
 import { notifyCrew } from "@/lib/server/notify";
 import { sendEmail } from "@/lib/server/email";
-import { acceptedEmail } from "@/lib/emailNotice";
+import { acceptedEmail, customerApprovalEmail, readRecipients } from "@/lib/emailNotice";
 import { routes } from "@/lib/routes";
 import { findByShareToken } from "@/lib/server/publicDocument";
 import { consumeRateLimit, QUOTE_RESPONSE_LIMIT } from "@/lib/server/rateLimit";
 import { formatMoneyExact } from "@/lib/format";
 import { SERVICE_LABEL } from "@/lib/status";
-import { BUSINESS_TIMEZONE } from "@/lib/business";
+import { BUSINESS, BUSINESS_TIMEZONE } from "@/lib/business";
 import { todayIn, validateQuoteResponse, type QuoteResponseInput } from "@/lib/quoteResponse";
 
 export const runtime = "nodejs";
@@ -70,7 +70,7 @@ export async function POST(
   // confirm the token is real to somebody guessing.
   if (!found) return bad(404, "That link is no longer valid.");
 
-  const { document } = found;
+  const { document, customer } = found;
 
   try {
     await consumeRateLimit(`quote:${document.id}`, "quote_response", QUOTE_RESPONSE_LIMIT);
@@ -150,18 +150,44 @@ export async function POST(
     // Email as well as push, and only for this event. An approval is the one
     // thing here that is worth money and cannot wait for somebody to open the
     // app — a missed buzz is a customer who signed and heard nothing back.
-    await sendEmail(
-      acceptedEmail({
-        customerName: document.customerName,
-        number: document.number,
-        service,
-        total: money,
-        requestedDate,
-        signedName,
-        message,
-        documentUrl: documentLink(document.id),
-      }),
-    );
+    const emailSends = [
+      sendEmail(
+        acceptedEmail({
+          customerName: document.customerName,
+          number: document.number,
+          service,
+          total: money,
+          requestedDate,
+          signedName,
+          message,
+          documentUrl: documentLink(document.id),
+        }),
+      ),
+    ];
+
+    // A receipt for the customer too, when there is an address on file to
+    // send it to. Best-effort like the crew notice above — a bad address or
+    // an unconfigured mailer must not turn a signed approval into an error.
+    const [customerAddress] = readRecipients(customer?.email);
+    if (customerAddress) {
+      emailSends.push(
+        sendEmail(
+          customerApprovalEmail({
+            customerName: document.customerName,
+            number: document.number,
+            service,
+            total: money,
+            requestedDate,
+            businessName: BUSINESS.name,
+            businessPhone: BUSINESS.phone,
+            businessEmail: BUSINESS.email,
+          }),
+          [customerAddress],
+        ),
+      );
+    }
+
+    await Promise.all(emailSends);
 
     return Response.json({ ok: true, decision, requestedDate });
   }

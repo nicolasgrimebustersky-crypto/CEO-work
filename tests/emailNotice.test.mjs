@@ -18,6 +18,7 @@ const {
   escapeHtml,
   spellDate,
   acceptedEmail,
+  customerApprovalEmail,
 } = await import("../lib/emailNotice.ts");
 
 const NOTICE = {
@@ -212,5 +213,77 @@ describe("what the notice actually says", () => {
     const email = acceptedEmail(NOTICE);
     assert.match(email.text, /signature is on the estimate in the CRM/);
     assert.ok(!email.html.includes("data:image"));
+  });
+});
+
+describe("the customer's own receipt", () => {
+  const RECEIPT = {
+    customerName: "Marta Oakley",
+    number: "EST-1042",
+    service: "Pressure washing",
+    total: "$420.00",
+    requestedDate: "2026-09-12",
+    businessName: "Grime Busters KY LLC",
+    businessPhone: "(502) 555-0100",
+    businessEmail: "hello@grimebusterskyllc.com",
+  };
+
+  test("the subject alone is enough to act on", () => {
+    const email = customerApprovalEmail(RECEIPT);
+    assert.equal(email.subject, "You approved EST-1042 — $420.00");
+  });
+
+  test("greets by first name only", () => {
+    const email = customerApprovalEmail(RECEIPT);
+    assert.match(email.text, /^Hi Marta,/);
+    assert.ok(!email.text.includes("Hi Marta Oakley"));
+  });
+
+  test("a nameless customer still gets a sentence that reads", () => {
+    const email = customerApprovalEmail({ ...RECEIPT, customerName: "" });
+    assert.match(email.text, /^Hi there,/);
+  });
+
+  test("the facts all appear in both parts", () => {
+    const email = customerApprovalEmail(RECEIPT);
+    for (const part of [email.text, email.html]) {
+      assert.match(part, /EST-1042/);
+      assert.match(part, /Pressure washing/);
+      assert.match(part, /\$420\.00/);
+      assert.match(part, /September 12, 2026/);
+    }
+  });
+
+  test("names a way to reach the business when one is set", () => {
+    const email = customerApprovalEmail(RECEIPT);
+    assert.match(email.text, /call \(502\) 555-0100/);
+    assert.match(email.text, /email hello@grimebusterskyllc\.com/);
+  });
+
+  test("drops the contact line rather than printing it empty", () => {
+    const email = customerApprovalEmail({ ...RECEIPT, businessPhone: "", businessEmail: "" });
+    assert.ok(!email.text.includes("Questions before then"));
+    assert.ok(!email.html.includes("Questions before then"));
+  });
+
+  test("only one of phone or email still reads", () => {
+    const email = customerApprovalEmail({ ...RECEIPT, businessEmail: "" });
+    assert.match(email.text, /You can call \(502\) 555-0100\./);
+  });
+
+  test("no CRM link, no mention of a signature — this is the customer's copy", () => {
+    const email = customerApprovalEmail(RECEIPT);
+    assert.ok(!email.html.includes("<a href"));
+    assert.ok(!/signature/i.test(email.text));
+  });
+
+  test("customer-typed text cannot break out of the HTML", () => {
+    const email = customerApprovalEmail({
+      ...RECEIPT,
+      customerName: `<script>alert(1)</script>`,
+      businessName: `Grime Busters" onmouseover="alert(1)`,
+    });
+    assert.ok(!email.html.includes("<script>"));
+    assert.ok(!email.html.includes(`onmouseover="alert(1)"`));
   });
 });

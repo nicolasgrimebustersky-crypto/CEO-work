@@ -28,7 +28,13 @@ const SKIPPED: EmailResult = { sent: false, problem: "" };
 /** Resend rejects a request that hangs around; ten seconds is generous for it. */
 const TIMEOUT_MS = 10_000;
 
-export async function sendEmail(built: BuiltEmail): Promise<EmailResult> {
+/**
+ * @param to Overrides the configured crew address. For mail to somebody the
+ *   env has no idea about — a customer, at the address on their own record —
+ *   so that send does not need NOTIFY_EMAIL_TO set to go anywhere. Omitted,
+ *   this is the crew notice and keeps its existing address.
+ */
+export async function sendEmail(built: BuiltEmail, to?: string[]): Promise<EmailResult> {
   // Named one by one rather than handing over process.env whole. Next replaces
   // these at build time by literal name, so a dynamic lookup is not guaranteed
   // to find them — and it keeps the reader's list of what this touches honest.
@@ -37,9 +43,10 @@ export async function sendEmail(built: BuiltEmail): Promise<EmailResult> {
     NOTIFY_EMAIL_TO: process.env.NOTIFY_EMAIL_TO,
     NOTIFY_EMAIL_FROM: process.env.NOTIFY_EMAIL_FROM,
   });
+  const recipients = to ?? config.to;
   // Not configured is not a failure. This feature is opt-in: an install with no
   // mail key should be quiet about it rather than logging an error per approval.
-  if (!config.canSend) return SKIPPED;
+  if (!config.apiKey || recipients.length === 0) return SKIPPED;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -53,7 +60,7 @@ export async function sendEmail(built: BuiltEmail): Promise<EmailResult> {
       },
       body: JSON.stringify({
         from: config.from,
-        to: config.to,
+        to: recipients,
         subject: built.subject,
         text: built.text,
         html: built.html,
