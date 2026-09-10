@@ -72,6 +72,7 @@ const JSON_LD = {
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
+  alternates: { canonical: SITE_URL },
   title: {
     default: "Grime Bustersky | Pressure Washing & Landscaping in Louisville, KY",
     template: "%s | Grime Bustersky",
