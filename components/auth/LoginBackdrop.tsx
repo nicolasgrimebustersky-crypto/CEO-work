@@ -1,5 +1,5 @@
 /**
- * The gold-on-black ribbons behind the login card.
+ * The green-on-black ribbons behind the login card.
  *
  * Decorative and nothing else — hidden from assistive tech, no pointer events,
  * and painted entirely by the `.gb-ribbon*` rules in globals.css so the

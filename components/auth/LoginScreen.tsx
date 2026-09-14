@@ -161,7 +161,7 @@ function ShowPasswordToggle({ shown, onToggle }: { shown: boolean; onToggle: () 
  * the only shape an open sign-up can take over a database of real people's
  * home addresses. The card says so in as many words, under the button.
  *
- * On the look: glass over drifting gold, one yellow button, the accent word
+ * On the look: glass over drifting green, one green button, the accent word
  * in the heading picked out. Two things the reference design has are left off
  * on purpose. "Remember me" — the session already persists for everybody,
  * because a re-login prompt at a stranger's front door is not acceptable, so
@@ -387,7 +387,7 @@ export function LoginScreen() {
           <button
             type="submit"
             disabled={busy}
-            className="tap-target mt-1 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-login-accent py-3.5 text-base font-semibold text-login-accent-ink shadow-[0_14px_34px_-12px_rgba(250,204,21,0.65)] transition hover:brightness-105 active:brightness-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+            className="tap-target mt-1 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-login-accent py-3.5 text-base font-semibold text-login-accent-ink shadow-[0_14px_34px_-12px_rgba(6,161,67,0.65)] transition hover:brightness-105 active:brightness-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
           >
             {busy
               ? registering
