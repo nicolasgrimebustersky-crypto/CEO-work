@@ -152,8 +152,14 @@ Done in code:
 - Every refusal above lands in `auditLog` with an IP.
 
 Yours:
-- Vercel → project → **Firewall**: enable Attack Challenge Mode, and add a
-  rate-limit rule on `/api/*` as a layer in front of the application limits.
+- Vercel → project → **Firewall**: add a rate-limit rule on `/api/*` as a
+  layer in front of the application limits, and enable the managed **Bot
+  Protection** ruleset, which challenges only traffic it recognises as
+  automation. **Not Attack Challenge Mode** — an earlier version of this
+  line recommended it, wrongly. It challenges every request with a browser
+  JavaScript test, so the Twilio webhook, the Ops Agent and every other
+  non-browser caller are blocked while it is on. Reserve it for an attack in
+  progress, and turn it off afterwards.
 - Vercel → **Logs**: runtime errors are aggregated per route; the two crons
   and every route log failures with `console.error`.
 
