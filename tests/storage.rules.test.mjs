@@ -28,6 +28,9 @@ const IMAGE_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x
 const IMAGE = { contentType: "image/jpeg" };
 
 let testEnv;
+/** A sign-in that has entered its code — see the same constant in the Firestore tests. */
+const SIGNED_IN_AT = 1_700_000_000;
+const VERIFIED = { auth_time: SIGNED_IN_AT, otpAuths: [SIGNED_IN_AT] };
 let alice;
 let bob;
 let mallory;
@@ -43,8 +46,8 @@ before(async () => {
 
   await testEnv.clearStorage();
 
-  alice = testEnv.authenticatedContext("alice").storage();
-  bob = testEnv.authenticatedContext("bob").storage();
+  alice = testEnv.authenticatedContext("alice", VERIFIED).storage();
+  bob = testEnv.authenticatedContext("bob", VERIFIED).storage();
   mallory = testEnv.authenticatedContext("mallory").storage();
   anon = testEnv.unauthenticatedContext().storage();
 });
@@ -62,6 +65,21 @@ describe("job photos", () => {
     // Delete is a separate rule because request.resource is null on a delete;
     // folding it into the upload rule would fail the size check every time.
     await assertSucceeds(deleteObject(ref(bob, path)));
+  });
+
+  test("a crew sign-in that has not entered its code cannot upload or read", async () => {
+    // Same person, same allowlist, a fresh password sign-in with no code yet.
+    // Photos are customers' houses; the second step applies here too.
+    const path = "jobs/j1/before-1.jpg";
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await uploadBytes(ref(ctx.storage(), path), IMAGE_BYTES, IMAGE);
+    });
+    const aliceFresh = testEnv
+      .authenticatedContext("alice", { auth_time: SIGNED_IN_AT + 5000 })
+      .storage();
+    await assertFails(uploadBytes(ref(aliceFresh, "jobs/j1/after-1.jpg"), IMAGE_BYTES, IMAGE));
+    await assertFails(getDownloadURL(ref(aliceFresh, path)));
+    await assertFails(deleteObject(ref(aliceFresh, path)));
   });
 
   test("an account off the allowlist cannot upload or read", async () => {

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { isAdmin, isBootstrapCrew } from "@/lib/auth/roles";
+import { sessionIsVerified } from "@/lib/otp";
 import {
   adminAuth,
   adminDb,
@@ -40,7 +41,22 @@ export interface CrewCaller {
   uid: string;
   displayName: string;
   email: string | null;
+  /** When this session typed its password, in seconds. What the code verifies. */
+  authTime: number;
 }
+
+export interface RequireCrewOptions {
+  /**
+   * Let a session through that has not yet passed the sign-in code. Only the
+   * two routes that issue and check the code may set this — everything else
+   * gets the default, which is the whole point of having a code.
+   */
+  beforeCode?: boolean;
+}
+
+/** What a crew session that has not passed the code is told. Matched by the client. */
+export const CODE_REQUIRED_MESSAGE =
+  "This sign-in still needs its code. Enter the six digits we emailed you.";
 
 export class ApiError extends Error {
   constructor(
@@ -73,7 +89,10 @@ async function isApprovedCrew(uid: string): Promise<boolean> {
   }
 }
 
-export async function requireCrew(request: Request): Promise<CrewCaller> {
+export async function requireCrew(
+  request: Request,
+  options: RequireCrewOptions = {},
+): Promise<CrewCaller> {
   const allowlist = crewUids();
 
   const header = request.headers.get("authorization") ?? "";
@@ -118,11 +137,20 @@ export async function requireCrew(request: Request): Promise<CrewCaller> {
     );
   }
 
+  // The second step. Firestore enforces the same check in its rules, and the
+  // Admin SDK bypasses those — so it has to be repeated here or every API
+  // route would be reachable with the password alone. Same claim, same rule,
+  // one shared function: `sessionIsVerified` in lib/otp.ts.
+  if (!options.beforeCode && !sessionIsVerified(decoded)) {
+    throw new ApiError(403, CODE_REQUIRED_MESSAGE);
+  }
+
   return {
     uid: decoded.uid,
     displayName:
       typeof decoded.name === "string" && decoded.name ? decoded.name : "Unknown",
     email: typeof decoded.email === "string" ? decoded.email : null,
+    authTime: decoded.auth_time,
   };
 }
 

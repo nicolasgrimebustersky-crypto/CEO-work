@@ -39,6 +39,14 @@ import {
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 let testEnv;
+/**
+ * A sign-in that has entered its code: auth_time is in the otpAuths claim.
+ * Every crew context below carries this, because without it the rules refuse
+ * them everything — which tests/firestore.rules.test.mjs proves further down,
+ * in "the sign-in code". Outsiders and pending accounts deliberately do not.
+ */
+const SIGNED_IN_AT = 1_700_000_000;
+const VERIFIED = { auth_time: SIGNED_IN_AT, otpAuths: [SIGNED_IN_AT] };
 let alice;
 let bob;
 let mallory;
@@ -160,18 +168,18 @@ before(async () => {
     firestore: { rules, host: "127.0.0.1", port: 8080 },
   });
 
-  alice = testEnv.authenticatedContext("alice").firestore();
-  bob = testEnv.authenticatedContext("bob").firestore();
+  alice = testEnv.authenticatedContext("alice", VERIFIED).firestore();
+  bob = testEnv.authenticatedContext("bob", VERIFIED).firestore();
   mallory = testEnv.authenticatedContext("mallory").firestore();
   // Registered and approved — crew by role rather than by uid.
-  dana = testEnv.authenticatedContext("dana").firestore();
+  dana = testEnv.authenticatedContext("dana", VERIFIED).firestore();
   // Signed in with no profile document at all: the instant after registering.
   newbie = testEnv.authenticatedContext("newbie").firestore();
   // The one account that can grant access. Identified by the email on its
   // token, which is what the rules check — not by uid, and not by anything
   // stored in the database.
   admin = testEnv
-    .authenticatedContext("nicolas", { email: "nicolas.grimebustersky@gmail.com" })
+    .authenticatedContext("nicolas", { email: "nicolas.grimebustersky@gmail.com", ...VERIFIED })
     .firestore();
   anon = testEnv.unauthenticatedContext().firestore();
 });
@@ -1010,7 +1018,7 @@ describe("only the admin hands out access", () => {
     // them — which reads as a broken app rather than a denied permission, and
     // is a genuinely horrible thing to debug from the outside.
     const shouty = testEnv
-      .authenticatedContext("nicolas-caps", { email: "Nicolas.Grimebustersky@Gmail.com" })
+      .authenticatedContext("nicolas-caps", { email: "Nicolas.Grimebustersky@Gmail.com", ...VERIFIED })
       .firestore();
     await assertSucceeds(getDoc(doc(shouty, "apiKeys/hash-one")));
   });
@@ -1376,5 +1384,68 @@ describe("API keys", () => {
   test("a signed-out stranger gets nothing", async () => {
     await seedKey();
     await assertFails(getDoc(doc(anon, "apiKeys", "hash-one")));
+  });
+});
+
+
+/* ------------------------------------------------------- the sign-in code */
+
+/**
+ * The second step. Every crew context above carries a claim saying its
+ * sign-in entered its code; these tests are the ones without it.
+ *
+ * The one that matters most is "another sign-in's code does not count". A
+ * single verified flag on the account would let a thief through while the
+ * owner's phone is verified. The claim is a list of sign-in moments so that it
+ * cannot.
+ */
+describe("the sign-in code", () => {
+  const LATER = SIGNED_IN_AT + 5000;
+  const fresh = (uid, extra = {}) =>
+    testEnv.authenticatedContext(uid, { auth_time: LATER, ...extra }).firestore();
+
+  test("a crew sign-in that has not entered its code can read its own profile and nothing else", async () => {
+    const aliceFresh = fresh("alice");
+    await assertSucceeds(getDoc(doc(aliceFresh, "users/alice")));
+    await assertFails(getDoc(doc(aliceFresh, "customers/c1")));
+    await assertFails(addDoc(collection(aliceFresh, "customers"), customerDoc("alice")));
+    await assertFails(getDoc(doc(aliceFresh, "users/bob")));
+  });
+
+  test("a code entered on another sign-in does not count for this one", async () => {
+    const aliceElsewhere = fresh("alice", { otpAuths: [SIGNED_IN_AT] });
+    await assertFails(getDoc(doc(aliceElsewhere, "customers/c1")));
+  });
+
+  test("the admin owes a code too", async () => {
+    const adminFresh = fresh("nicolas", { email: "nicolas.grimebustersky@gmail.com" });
+    await assertFails(getDoc(doc(adminFresh, "customers/c1")));
+    await assertFails(updateDoc(doc(adminFresh, "users/newbie"), { role: "crew" }));
+    await assertFails(getDoc(doc(adminFresh, "apiKeys/hash-one")));
+  });
+
+  test("a claim of the wrong shape is a no, whatever it says", async () => {
+    await assertFails(
+      getDoc(doc(fresh("alice", { otpAuths: String(LATER) }), "customers/c1")),
+    );
+    await assertFails(
+      getDoc(doc(fresh("alice", { otpAuths: [String(LATER)] }), "customers/c1")),
+    );
+    await assertFails(
+      getDoc(doc(fresh("alice", { otpAuths: { 0: LATER } }), "customers/c1")),
+    );
+  });
+
+  test("with the right claim the same sign-in is let in", async () => {
+    await assertSucceeds(
+      getDoc(doc(fresh("alice", { otpAuths: [SIGNED_IN_AT, LATER] }), "customers/c1")),
+    );
+  });
+
+  test("nobody reads or writes the codes — not crew, not the admin", async () => {
+    await assertFails(getDoc(doc(alice, "otpCodes/alice")));
+    await assertFails(getDoc(doc(admin, "otpCodes/alice")));
+    await assertFails(setDoc(doc(alice, "otpCodes/alice"), { hash: "x", attempts: 0 }));
+    await assertFails(deleteDoc(doc(admin, "otpCodes/alice")));
   });
 });

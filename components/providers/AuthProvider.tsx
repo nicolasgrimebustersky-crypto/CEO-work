@@ -22,6 +22,7 @@ import {
 } from "react";
 
 import { isCrew as roleIsCrew } from "@/lib/auth/roles";
+import { OTP_CLAIM, sessionIsVerified } from "@/lib/otp";
 import { isDemoMode } from "@/lib/demo/enabled";
 import { DEMO_NICK } from "@/lib/demo/fixtures";
 import { getFirebaseAuth, isFirebaseConfigured } from "@/lib/firebase";
@@ -35,12 +36,18 @@ const DEMO_SESSION_KEY = "gb:demo-session";
  * "pending" is signed in but not approved. It is a separate status rather than
  * a flag on "signed-in" so that no screen can forget to check it — AuthGate
  * switches on this one value, and a pending account never reaches the app.
+ *
+ * "code" is approved crew whose sign-in has not yet entered its emailed code.
+ * Same reasoning: the database rules refuse such a session everything, so the
+ * app must not open underneath it and collect a screen full of permission
+ * errors — it shows the six boxes instead.
  */
 export type AuthStatus =
   | "loading"
   | "unconfigured"
   | "signed-out"
   | "pending"
+  | "code"
   | "signed-in";
 
 interface AuthContextValue {
@@ -51,6 +58,12 @@ interface AuthContextValue {
   signUp: (name: string, email: string, password: string) => Promise<void>;
   /** Emails a reset link. Firebase answers the same whether or not the address exists. */
   resetPassword: (email: string) => Promise<void>;
+  /**
+   * After the server has accepted a code: fetch a fresh token carrying the
+   * claim and move on to the app. The status changes by itself — callers
+   * await this and render nothing special.
+   */
+  confirmCode: () => Promise<void>;
   signOutNow: () => Promise<void>;
 }
 
@@ -117,6 +130,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  /**
+   * Crew, yes — but has THIS sign-in entered its code? Read from the ID token,
+   * which is where the server puts the answer and where the rules read it.
+   *
+   * `force` fetches a new token first. Needed straight after a code is
+   * accepted: the claim is on the account, but the token in hand is the one
+   * minted before it was.
+   */
+  const settleCode = useCallback(async (current: User, force = false) => {
+    try {
+      if (force) await current.getIdToken(true);
+      const { claims } = await current.getIdTokenResult();
+      // The SDK types auth_time as a string; the decoded payload is a number.
+      // Normalised so the one shared rule sees what the rules and the server
+      // see, rather than a type quirk deciding who gets in.
+      const authTime =
+        typeof claims.auth_time === "string" ? Number(claims.auth_time) : claims.auth_time;
+      setStatus(
+        sessionIsVerified({ auth_time: authTime, [OTP_CLAIM]: claims[OTP_CLAIM] })
+          ? "signed-in"
+          : "code",
+      );
+    } catch {
+      // Cannot read our own token: ask for the code. Refusing is the direction
+      // a failure here has to fail in.
+      setStatus("code");
+    }
+  }, []);
+
   // Watch our own profile for the role. A live subscription rather than a
   // one-off read so that being approved takes effect on the pending person's
   // phone immediately, without them knowing to reload.
@@ -125,19 +167,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return subscribeOwnProfile(
       user.uid,
       (profile) => {
-        setStatus(
-          roleIsCrew(user.uid, profile?.role, user.email) ? "signed-in" : "pending",
-        );
+        if (!roleIsCrew(user.uid, profile?.role, user.email)) {
+          setStatus("pending");
+          return;
+        }
+        void settleCode(user);
       },
       () => {
         // Cannot even read our own profile: the rules are older than this
         // feature, or Firestore is unreachable. Fail closed for everyone
         // except the admin, who would otherwise be locked out of the only
-        // screen that can fix it.
-        setStatus(roleIsCrew(user.uid, undefined, user.email) ? "signed-in" : "pending");
+        // screen that can fix it — and the admin still owes a code.
+        if (roleIsCrew(user.uid, undefined, user.email)) void settleCode(user);
+        else setStatus("pending");
       },
     );
-  }, [user]);
+  }, [user, settleCode]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     if (isDemoMode) {
@@ -181,6 +226,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await sendPasswordResetEmail(getFirebaseAuth(), email.trim());
   }, []);
 
+  const confirmCode = useCallback(async () => {
+    if (isDemoMode || !user) return;
+    await settleCode(user, true);
+  }, [user, settleCode]);
+
   const signOutNow = useCallback(async () => {
     if (isDemoMode) {
       window.sessionStorage.removeItem(DEMO_SESSION_KEY);
@@ -200,6 +250,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signIn,
         signUp,
         resetPassword,
+        confirmCode,
         signOutNow,
       };
     }
@@ -216,9 +267,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signIn,
       signUp,
       resetPassword,
+      confirmCode,
       signOutNow,
     };
-  }, [status, user, demoEmail, signIn, signUp, resetPassword, signOutNow]);
+  }, [status, user, demoEmail, signIn, signUp, resetPassword, confirmCode, signOutNow]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

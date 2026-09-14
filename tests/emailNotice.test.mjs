@@ -18,6 +18,7 @@ const {
   escapeHtml,
   spellDate,
   acceptedEmail,
+  codeEmail,
 } = await import("../lib/emailNotice.ts");
 
 const NOTICE = {
@@ -212,5 +213,26 @@ describe("what the notice actually says", () => {
     const email = acceptedEmail(NOTICE);
     assert.match(email.text, /signature is on the estimate in the CRM/);
     assert.ok(!email.html.includes("data:image"));
+  });
+});
+
+describe("the sign-in code email", () => {
+  test("the code is in the subject, where a lock screen shows it", () => {
+    const email = codeEmail({ code: "204815", minutes: 10 });
+    assert.equal(email.subject, "204815 is your Grime Busters sign-in code");
+  });
+
+  test("the code is split for reading, in both parts", () => {
+    const email = codeEmail({ code: "204815", minutes: 10 });
+    assert.match(email.text, /204 815/);
+    assert.match(email.html, /204 815/);
+  });
+
+  test("the expiry and the warning are both there", () => {
+    const email = codeEmail({ code: "204815", minutes: 10 });
+    for (const part of [email.text, email.html]) {
+      assert.match(part, /10 minutes/);
+      assert.match(part, /somebody has your password/);
+    }
   });
 });

@@ -97,6 +97,29 @@ export const MCP_SEND_LIMIT: RateLimitRule = {
  * the caller, since there is no caller — which also means a leaked link cannot
  * be used to bury the crew in notifications about one quote.
  */
+/**
+ * Sign-in codes. Each one is an email, and each one invalidates the last, so
+ * a caller hammering this is not spending money — they are making sure the
+ * code that finally arrives is one the person did not ask for. A handful an
+ * hour covers a mail delay, a typo'd address fixed, and a resend or two.
+ */
+export const OTP_SEND_LIMIT: RateLimitRule = {
+  max: 6,
+  windowMs: 60 * 60 * 1000,
+  label: "sign-in codes",
+};
+
+/**
+ * Guesses at a code. A million possibilities and five tries per code already
+ * make guessing hopeless; this stops somebody requesting a fresh code every
+ * five guesses to reset the counter.
+ */
+export const OTP_VERIFY_LIMIT: RateLimitRule = {
+  max: 15,
+  windowMs: 15 * 60 * 1000,
+  label: "code attempts",
+};
+
 export const QUOTE_RESPONSE_LIMIT: RateLimitRule = {
   max: 12,
   windowMs: 60 * 60 * 1000,

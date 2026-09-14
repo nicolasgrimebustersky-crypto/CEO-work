@@ -50,6 +50,26 @@ service cloud.firestore {
         && request.auth.token.email.lower() == 'nicolas.grimebustersky@gmail.com';
     }
 
+    // Has THIS sign-in entered its emailed code?
+    //
+    // Every token carries auth_time, the moment of the password sign-in. When
+    // a code is verified the server records that auth_time in the account's
+    // custom claim `otpAuths` — a short list of sign-ins that have passed. So
+    // a session is verified only if its own sign-in moment is in the list:
+    // every fresh password sign-in needs a code, a phone that passed stays
+    // passed, and one device passing never unlocks another that has not.
+    //
+    // Guarded step by step. Reading a claim that is absent is an error, and
+    // an error in a rule is a deny — the right direction, but a silent one.
+    // Keep in step with sessionIsVerified() in lib/otp.ts and storage.rules.
+    function hasVerifiedSession() {
+      return request.auth != null
+        && request.auth.token.auth_time is int
+        && 'otpAuths' in request.auth.token
+        && request.auth.token.otpAuths is list
+        && request.auth.token.auth_time in request.auth.token.otpAuths;
+    }
+
     // Crew by uid, whatever the database says. The bootstrap.
     function isBootstrapCrew() {
       return request.auth != null
@@ -77,8 +97,12 @@ service cloud.firestore {
 
     // The admin is always crew — an admin locked out by their own profile
     // could never reach the screen that fixes it.
+    //
+    // And every one of them, admin included, owes a code for this sign-in.
+    // Being crew says who you are; the code says it is really you today.
     function isCrew() {
-      return isAdmin() || isBootstrapCrew() || isApprovedCrew();
+      return hasVerifiedSession()
+        && (isAdmin() || isBootstrapCrew() || isApprovedCrew());
     }
 
     // True when this write touches neither of the fields the admin owns.
@@ -141,6 +165,7 @@ service cloud.firestore {
       allow update: if request.auth != null && (
         (request.auth.uid == uid && keepsAdminGrants())
         || (isAdmin()
+            && hasVerifiedSession()
             && request.auth.uid != uid
             && request.resource.data.diff(resource.data).affectedKeys()
                  .hasOnly(['role', 'notificationScopes']))
@@ -294,8 +319,15 @@ service cloud.firestore {
     // Nothing enforced here protects the MCP route itself: that runs on the
     // Admin SDK and bypasses these rules entirely. This block guards the
     // management surface, and requireApiKey guards the door.
+    // Sign-in codes — salted hashes with an expiry, one per account. Written
+    // and read by the Admin SDK only. No match would deny this too; it is
+    // spelled out so the denial is a decision, and so a test can pin it.
+    match /otpCodes/{uid} {
+      allow read, write: if false;
+    }
+
     match /apiKeys/{keyHash} {
-      allow read, write: if isAdmin();
+      allow read, write: if isAdmin() && hasVerifiedSession();
     }
 
     match /services/{serviceId} {
