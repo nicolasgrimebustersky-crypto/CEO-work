@@ -407,8 +407,25 @@ a session only if its own `auth_time` is in that list. Consequences:
 - The password alone opens nothing, even for somebody talking to Firestore
   directly with the SDK. The rules check the claim, not the screen.
 
-**What it needs.** `RESEND_API_KEY` (step 8b). Nothing else — the code goes to
-the account's own email, so `NOTIFY_EMAIL_TO` is not consulted.
+**What it needs.** `RESEND_API_KEY` (step 8b) — the code goes to the
+account's own email, so `NOTIFY_EMAIL_TO` is not consulted. And one thing
+that is easy to miss: **the service account in `FIREBASE_SERVICE_ACCOUNT_KEY`
+must be allowed to administer Firebase Authentication**, not only Firestore.
+Every crew route verifies the session with `checkRevoked`, which calls the
+Auth API, and the code routes write a custom claim on the account. A service
+account with only Firestore roles makes every one of those routes answer
+**401** with nothing else wrong — the log line says `auth/insufficient-
+permission`. The project's own `firebase-adminsdk-…@` account has the role
+already; any other account needs it granted:
+
+```bash
+gcloud projects add-iam-policy-binding grimeline-5e3d8 \
+  --member="serviceAccount:<the account whose key is in Vercel>" \
+  --role="roles/firebaseauth.admin"
+```
+
+The account is the `client_email` inside the key. No redeploy is needed;
+IAM changes apply within a minute.
 
 **Read this twice.** Until you verify your domain in Resend and set
 `NOTIFY_EMAIL_FROM`, Resend's shared sender delivers **only to the address that
