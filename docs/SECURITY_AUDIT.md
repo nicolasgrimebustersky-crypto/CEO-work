@@ -43,7 +43,13 @@ runtime code.
 
 Done:
 - `next` 15.5.22 → 15.5.25 (the critical, patched within 15.x).
-- `firebase-admin` 13 → 14.4.0.
+- `firebase-admin` **stays on 13.10.0.** It was taken to 14 in the first
+  pass and reverted the same evening: 14 depends on `jwks-rsa@4`, which
+  `require()`s the ESM-only `jose@6`, and Vercel's function runtime refuses
+  that (`ERR_REQUIRE_ESM`). Every route that touches the Admin SDK — which
+  is every server route — crashed at module load in production while all
+  local tests passed, because Node's own `require` handles ESM and Vercel's
+  loader does not. The moderates 14 would have fixed are accepted below.
 - `firebase-tools` 14 → 15.30.1 (dev only, but it carried a `tar` critical).
 - `next-pwa` 5.6.0 (unmaintained since 2022) replaced by the maintained fork
   `@ducanh2912/next-pwa` 10.2.9. Same options; the workbox ones moved under
@@ -52,7 +58,7 @@ Done:
   `npm audit --omit=dev --audit-level=critical`. A future critical in a
   production dependency fails the build.
 
-Accepted (9 remaining in production dependencies, none critical):
+Accepted (15 remaining in production dependencies, none critical):
 - `postcss` (high, ×4) via `next`. Source-map and `</style>` handling in
   PostCSS's *stringifier* — runs at **build time** on this repository's own
   CSS. No user input reaches PostCSS. Fixed only in Next 16, which is a major
@@ -60,9 +66,10 @@ Accepted (9 remaining in production dependencies, none critical):
 - `serialize-javascript` (high) via `@rollup/plugin-terser` via
   `workbox-build`. Runs at **build time** to minify the service worker. No
   attacker-controlled input.
-- 7 moderates (`uuid`, `gaxios`, `stream-json`, `@opentelemetry/core`,
-  `csv-parse`, and the workbox pair) — transitive, mostly through
-  `firebase-tools`, which is a dev tool. Re-checked on each `npm ci` in CI.
+- 13 moderates — `uuid`, `gaxios`, `stream-json`, `@opentelemetry/core`,
+  `csv-parse`, the workbox pair, and six under `firebase-admin@13`
+  (`google-gax`, `retry-request`, `teeny-request`, `@google-cloud/*`) that
+  only its unusable 14 would fix. Transitive; re-checked on each `npm ci`.
 
 ## 38. Malicious packages
 
