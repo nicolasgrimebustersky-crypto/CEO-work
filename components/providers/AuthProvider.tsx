@@ -4,6 +4,7 @@ import {
   browserLocalPersistence,
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   setPersistence,
   signInWithEmailAndPassword,
   signOut,
@@ -48,6 +49,8 @@ interface AuthContextValue {
   email: string | null;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (name: string, email: string, password: string) => Promise<void>;
+  /** Emails a reset link. Firebase answers the same whether or not the address exists. */
+  resetPassword: (email: string) => Promise<void>;
   signOutNow: () => Promise<void>;
 }
 
@@ -171,6 +174,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const resetPassword = useCallback(async (email: string) => {
+    if (isDemoMode) {
+      throw new Error("This is the demo — there is no real account to reset.");
+    }
+    await sendPasswordResetEmail(getFirebaseAuth(), email.trim());
+  }, []);
+
   const signOutNow = useCallback(async () => {
     if (isDemoMode) {
       window.sessionStorage.removeItem(DEMO_SESSION_KEY);
@@ -189,6 +199,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: demoEmail,
         signIn,
         signUp,
+        resetPassword,
         signOutNow,
       };
     }
@@ -204,9 +215,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: user?.email ?? null,
       signIn,
       signUp,
+      resetPassword,
       signOutNow,
     };
-  }, [status, user, demoEmail, signIn, signUp, signOutNow]);
+  }, [status, user, demoEmail, signIn, signUp, resetPassword, signOutNow]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
