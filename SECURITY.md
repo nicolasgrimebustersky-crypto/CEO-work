@@ -104,8 +104,12 @@ why is in the audit document.
    Storage. Already wired in `lib/firebase.ts`.
 5. **Firebase Auth.** Authorised domains: only yours. Email enumeration
    protection on.
-6. **Vercel.** Deployment Protection is on (verified). Turn on the Firewall's
-   Attack Challenge Mode and a `/api/*` rate-limit rule.
+6. **Vercel.** Deployment Protection is on (verified). In the Firewall, add
+   a rate-limit rule on `/api/*` and turn on the managed **Bot Protection**
+   ruleset. **Do not leave Attack Challenge Mode on.** It serves a browser
+   JavaScript challenge to *every* request, which silently blocks the Twilio
+   webhook (inbound texts stop landing), the Ops Agent's MCP calls, and any
+   other non-browser client. It is for the duration of an attack, then off.
 7. **Twilio.** Set a spending limit.
 8. **IAM.** Remove `claude-session-readonly-371@…` if no longer needed.
 9. **Two-factor** on GitHub, Vercel, Google Cloud, Resend and Twilio.

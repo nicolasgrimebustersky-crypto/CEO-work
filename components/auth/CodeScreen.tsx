@@ -18,18 +18,32 @@ import { LoginBackdrop } from "./LoginBackdrop";
 
 type Stage = "sending" | "ready" | "checking" | "verified" | "failed";
 
-async function bearer(): Promise<string> {
+async function bearer(force = false): Promise<string> {
   const user = getFirebaseAuth().currentUser;
   if (!user) throw new Error("You are signed out. Sign in again.");
-  return user.getIdToken();
+  return user.getIdToken(force);
 }
 
-async function call(path: string, body: unknown): Promise<{ ok: boolean; error: string }> {
-  const response = await fetch(apiUrl(path), {
+async function post(path: string, body: unknown, force: boolean): Promise<Response> {
+  return fetch(apiUrl(path), {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${await bearer()}` },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${await bearer(force)}` },
     body: JSON.stringify(body),
   });
+}
+
+/**
+ * One call, with one retry on a refused token.
+ *
+ * The SDK hands back its cached ID token until shortly before expiry. A phone
+ * that sat open across a long outage can hold one the server has since
+ * stopped accepting — expired, or minted before a revocation. A 401 from the
+ * server is the one signal that the cache is stale, so it is answered by
+ * fetching a fresh token and trying exactly once more. A second 401 is real.
+ */
+async function call(path: string, body: unknown): Promise<{ ok: boolean; error: string }> {
+  let response = await post(path, body, false);
+  if (response.status === 401) response = await post(path, body, true);
   const json = (await response.json().catch(() => ({}))) as { error?: unknown };
   return {
     ok: response.ok,
