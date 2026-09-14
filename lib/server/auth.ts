@@ -121,7 +121,18 @@ export async function requireCrew(
     // checkRevoked: a signed-out or disabled account must stop working
     // immediately, not when its hour-long token happens to expire.
     decoded = await adminAuth().verifyIdToken(token, true);
-  } catch {
+  } catch (error) {
+    // The reason is logged, the token never is. A refusal here used to be
+    // silent, and a silent 401 on the sign-in code route is indistinguishable
+    // from a dozen other faults from the outside. The Admin SDK's codes name
+    // the fault precisely: auth/id-token-expired, auth/argument-error (wrong
+    // project), auth/id-token-revoked, auth/insufficient-permission.
+    const code =
+      typeof (error as { code?: unknown })?.code === "string"
+        ? (error as { code: string }).code
+        : "unknown";
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`verifyIdToken refused a session: ${code} — ${message.slice(0, 300)}`);
     throw new ApiError(401, "Invalid or expired session. Sign out and back in.");
   }
 
