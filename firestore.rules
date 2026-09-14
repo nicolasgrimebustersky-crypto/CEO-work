@@ -326,6 +326,15 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // The audit log — what the server did, for whom, whether it worked.
+    // Written by the Admin SDK only; read by the admin only, and only from a
+    // sign-in that has entered its code. The people it records cannot edit
+    // it, which is the property that makes it an audit log.
+    match /auditLog/{entryId} {
+      allow read: if isAdmin() && hasVerifiedSession();
+      allow write: if false;
+    }
+
     match /apiKeys/{keyHash} {
       allow read, write: if isAdmin() && hasVerifiedSession();
     }

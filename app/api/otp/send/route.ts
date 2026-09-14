@@ -1,5 +1,6 @@
 import { codeEmail } from "@/lib/emailNotice";
 import { OTP_TTL_MS, maskEmail } from "@/lib/otp";
+import { audit } from "@/lib/server/audit";
 import { ApiError, errorResponse, requireCrew } from "@/lib/server/auth";
 import { preflight, withCors } from "@/lib/server/cors";
 import { sendEmail } from "@/lib/server/email";
@@ -40,6 +41,14 @@ export async function POST(request: Request): Promise<Response> {
       codeEmail({ code, minutes: Math.round(OTP_TTL_MS / 60_000) }),
       { to: [caller.email] },
     );
+    await audit({
+      action: "otp.sent",
+      actorUid: caller.uid,
+      actorName: caller.displayName,
+      ok: result.sent,
+      detail: result.sent ? "" : result.problem,
+      request,
+    });
     if (!result.sent) {
       throw new ApiError(503, `Could not email the code. ${result.problem}`.trim());
     }

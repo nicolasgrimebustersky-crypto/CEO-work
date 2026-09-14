@@ -1,6 +1,7 @@
 import { listToolsPayload } from "@/lib/mcp/tools";
 import { runTool, scopeForTool } from "@/lib/mcp/handlers";
 import { requireApiKey, requireScope } from "@/lib/server/apiKeyAuth";
+import { audit } from "@/lib/server/audit";
 import { ApiError } from "@/lib/server/auth";
 import { consumeRateLimit, MCP_LIMIT, MCP_SEND_LIMIT } from "@/lib/server/rateLimit";
 
@@ -141,6 +142,16 @@ export async function POST(request: Request): Promise<Response> {
         );
 
         const result = await runTool(name, args, key);
+        // Every tool call, by key. This is the record a leaked key leaves —
+        // lastUsedAt on the key says *that* it was used; this says *for what*.
+        await audit({
+          action: "mcp.call",
+          actorUid: `key:${key.id}`,
+          actorName: key.label,
+          target: name,
+          ok: true,
+          request,
+        });
         return rpcResult(id, {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           structuredContent: result,
@@ -158,6 +169,19 @@ export async function POST(request: Request): Promise<Response> {
     // as a tool failure it can read and act on rather than a transport error it
     // can only retry.
     if (error instanceof ApiError) {
+      if (error.status === 403) {
+        // A key asking for a scope it was not issued. Bounded by the key
+        // being valid, so a scanner cannot use this to fill the log.
+        await audit({
+          action: "mcp.denied",
+          actorUid: `key:${key.id}`,
+          actorName: key.label,
+          target: typeof params.name === "string" ? params.name : method,
+          ok: false,
+          detail: error.message,
+          request,
+        });
+      }
       if (error.status === 403 || error.status === 400 || error.status === 404) {
         return toolFailure(id, error.message);
       }

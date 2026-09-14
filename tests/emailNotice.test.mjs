@@ -19,6 +19,7 @@ const {
   spellDate,
   acceptedEmail,
   codeEmail,
+  lockoutEmail,
 } = await import("../lib/emailNotice.ts");
 
 const NOTICE = {
@@ -234,5 +235,23 @@ describe("the sign-in code email", () => {
       assert.match(part, /10 minutes/);
       assert.match(part, /somebody has your password/);
     }
+  });
+});
+
+describe("the lockout email", () => {
+  test("says what happened, when, and what to do either way", () => {
+    const email = lockoutEmail({ when: "Mon, 14 Sep 2026 22:10:00 GMT" });
+    assert.match(email.subject, /Wrong sign-in codes/);
+    for (const part of [email.text, email.html]) {
+      assert.match(part, /five times/);
+      assert.match(part, /14 Sep 2026/);
+      assert.match(part, /Forgot password/);
+      assert.match(part, /somebody has your password/);
+    }
+  });
+
+  test("the timestamp is escaped like everything else", () => {
+    const email = lockoutEmail({ when: "<script>x</script>" });
+    assert.ok(!email.html.includes("<script>"));
   });
 });

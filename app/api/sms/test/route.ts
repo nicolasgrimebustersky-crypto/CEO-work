@@ -1,3 +1,4 @@
+import { audit } from "@/lib/server/audit";
 import { errorResponse, requireCrew, ApiError } from "@/lib/server/auth";
 import { adminDb } from "@/lib/server/admin";
 import { preflight, withCors } from "@/lib/server/cors";
@@ -112,6 +113,15 @@ export async function POST(request: Request): Promise<Response> {
     // button asks, and Twilio's own message ("unverified number", "A2P
     // campaign not approved") is the most useful thing on the screen — far
     // better than a bare 502 with the detail swallowed.
+    await audit({
+      action: "sms.test",
+      actorUid: caller.uid,
+      actorName: caller.displayName,
+      ok: result.ok,
+      detail: result.error ?? "",
+      request,
+    });
+
     return withCors(request, {
       ...status,
       sent: result.ok,

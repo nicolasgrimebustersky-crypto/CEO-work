@@ -1449,3 +1449,34 @@ describe("the sign-in code", () => {
     await assertFails(deleteDoc(doc(admin, "otpCodes/alice")));
   });
 });
+
+
+/* ---------------------------------------------------------- the audit log */
+
+describe("the audit log", () => {
+  test("the admin can read it, from a verified sign-in", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "auditLog/e1"), { action: "otp.wrong", ok: false });
+    });
+    await assertSucceeds(getDoc(doc(admin, "auditLog/e1")));
+  });
+
+  test("crew cannot read it — it records them", async () => {
+    await assertFails(getDoc(doc(alice, "auditLog/e1")));
+    await assertFails(getDocs(collection(bob, "auditLog")));
+  });
+
+  test("nobody can write it, not even the admin", async () => {
+    await assertFails(setDoc(doc(admin, "auditLog/forged"), { action: "otp.verified", ok: true }));
+    await assertFails(updateDoc(doc(admin, "auditLog/e1"), { ok: true }));
+    await assertFails(deleteDoc(doc(admin, "auditLog/e1")));
+    await assertFails(setDoc(doc(alice, "auditLog/forged"), { action: "x" }));
+  });
+
+  test("the admin without a code cannot read it either", async () => {
+    const adminFresh = testEnv
+      .authenticatedContext("nicolas", { email: "nicolas.grimebustersky@gmail.com", auth_time: SIGNED_IN_AT + 9000 })
+      .firestore();
+    await assertFails(getDoc(doc(adminFresh, "auditLog/e1")));
+  });
+});

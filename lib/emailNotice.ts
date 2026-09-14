@@ -268,3 +268,28 @@ export function codeEmail(notice: CodeNotice): BuiltEmail {
 
   return { subject, text, html };
 }
+
+/**
+ * Somebody entered the wrong sign-in code too many times for this account.
+ *
+ * The one sign-in event worth an unprompted email. Five wrong codes is not a
+ * typo — it is somebody with the password and without the mailbox, which is
+ * exactly the situation the code exists for. The person who owns the account
+ * should hear about it from the app before they hear about it any other way.
+ */
+export function lockoutEmail(notice: { when: string }): BuiltEmail {
+  const subject = "Wrong sign-in codes entered for your Grime Busters account";
+  const body =
+    "Somebody signed in to your Grime Busters CRM account with your password and then entered the wrong six-digit code five times, so the code was cancelled.";
+  const advice =
+    "If that was you, ask for a new code and check the email carefully. If it was not you, somebody has your password: change it now from the sign-in screen (\"Forgot password?\"), and sign out of any device you do not recognise.";
+
+  const text = [body, "", `When: ${notice.when}`, "", advice].join("\n");
+  const html =
+    `<div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;font-size:15px;line-height:1.5;color:#111">` +
+    `<p style="margin:0 0 16px">${escapeHtml(body)}</p>` +
+    `<p style="margin:0 0 16px;color:#666">When: ${escapeHtml(notice.when)}</p>` +
+    `<p style="margin:0">${escapeHtml(advice)}</p>` +
+    `</div>`;
+  return { subject, text, html };
+}

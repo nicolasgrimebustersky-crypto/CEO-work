@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import withPWAInit from "next-pwa";
+import withPWAInit from "@ducanh2912/next-pwa";
 import type { NextConfig } from "next";
 
 /**
@@ -161,15 +161,25 @@ const nextConfig: NextConfig = {
   },
 };
 
+/**
+ * The maintained fork of next-pwa. The original stopped at 5.6.0 in 2022 and
+ * drags a workbox-build with known-vulnerable build-time dependencies; the
+ * fork tracks current workbox and Next. Same options, except that the
+ * workbox-specific ones — skipWaiting, runtimeCaching — live under
+ * `workboxOptions`, and our runtime caches replace the defaults rather than
+ * extend them, which is what the old plugin did too.
+ */
 const withPWA = withPWAInit({
   dest: "public",
   register: true,
-  skipWaiting: true,
   // A service worker in dev intercepts HMR and serves stale bundles.
   disable: process.env.NODE_ENV === "development",
   reloadOnOnline: false,
   cacheOnFrontEndNav: true,
   fallbacks: { document: "/offline" },
+  extendDefaultRuntimeCaching: false,
+  workboxOptions: {
+  skipWaiting: true,
   runtimeCaching: [
     {
       // App shell. Network-first with a short timeout so a live version wins
@@ -216,6 +226,7 @@ const withPWA = withPWAInit({
   // Firestore runs its own IndexedDB cache and write queue, which handles
   // offline far better than an HTTP cache could; and the Maps terms of service
   // forbid pre-caching or storing tiles, so the map needs signal.
+  },
 });
 
 export default withPWA(nextConfig);

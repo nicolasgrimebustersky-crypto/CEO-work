@@ -1,3 +1,4 @@
+import { audit } from "@/lib/server/audit";
 import { ApiError, errorResponse, requireCrew } from "@/lib/server/auth";
 import { preflight, withCors } from "@/lib/server/cors";
 import { appendNote, getCustomer } from "@/lib/server/customerNotes";
@@ -100,6 +101,15 @@ export async function POST(request: Request): Promise<Response> {
 
       if (index < customerIds.length - 1) await wait(SEND_INTERVAL_MS);
     }
+
+    await audit({
+      action: "sms.blast",
+      actorUid: caller.uid,
+      actorName: caller.displayName,
+      ok: true,
+      detail: `${sent} of ${customerIds.length} sent, ${failed.length} failed`,
+      request,
+    });
 
     return withCors(request, {
       ok: true,

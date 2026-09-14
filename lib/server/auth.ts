@@ -2,6 +2,7 @@ import "server-only";
 
 import { isAdmin, isBootstrapCrew } from "@/lib/auth/roles";
 import { sessionIsVerified } from "@/lib/otp";
+import { audit } from "./audit";
 import {
   adminAuth,
   adminDb,
@@ -131,6 +132,16 @@ export async function requireCrew(
     (await isApprovedCrew(decoded.uid));
 
   if (!allowed) {
+    // A valid Firebase session that is not crew, knocking on an API route. Rare
+    // in normal use — the app never sends a pending account here — so worth
+    // a line each time it happens.
+    await audit({
+      action: "auth.denied",
+      actorUid: decoded.uid,
+      ok: false,
+      detail: "not crew",
+      request,
+    });
     throw new ApiError(
       403,
       "This account has not been approved yet. Ask one of the crew to let you in from their Account screen.",
@@ -142,6 +153,15 @@ export async function requireCrew(
   // route would be reachable with the password alone. Same claim, same rule,
   // one shared function: `sessionIsVerified` in lib/otp.ts.
   if (!options.beforeCode && !sessionIsVerified(decoded)) {
+    // Crew, with the password, without the code, reaching past the screen.
+    // The app itself never does this; a script with a stolen password would.
+    await audit({
+      action: "auth.denied",
+      actorUid: decoded.uid,
+      ok: false,
+      detail: "code required",
+      request,
+    });
     throw new ApiError(403, CODE_REQUIRED_MESSAGE);
   }
 

@@ -698,6 +698,17 @@ that everyone gets wrong — is in `docs/META_LEADS.md`.
 
 ## Security
 
+Start with [`SECURITY.md`](SECURITY.md). Two companion documents:
+
+- [`docs/SECURITY_AUDIT.md`](docs/SECURITY_AUDIT.md) — a line-by-line pass over
+  a published checklist (vulnerable dependencies, prompt injection, audit
+  logs, mass assignment, and so on), each item marked done in code, yours to
+  configure, or accepted with reasons.
+- [`docs/BACKUPS.md`](docs/BACKUPS.md) — Firestore is not backed up by
+  default. Point-in-time recovery, a daily schedule, and how a restore
+  actually gets back into `(default)`.
+
+
 `SECURITY.md` is the full picture: what the app enforces, what it deliberately
 does not, and the console-side steps that no amount of code in this repo can do
 for you. The short version of that last part, in priority order:
