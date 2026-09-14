@@ -4,6 +4,7 @@ import {
   draftProblem,
   isAllowedImageType,
 } from "@/lib/estimateDraft";
+import { audit } from "@/lib/server/audit";
 import { ApiError, errorResponse, requireCrew } from "@/lib/server/auth";
 import { preflight, withCors } from "@/lib/server/cors";
 import { draftEstimate, isEstimateAIConfigured } from "@/lib/server/estimateAI";
@@ -87,6 +88,17 @@ export async function POST(request: Request): Promise<Response> {
     await consumeRateLimit(caller.uid, "estimate_draft", ESTIMATE_DRAFT_LIMIT);
 
     const result = await draftEstimate({ description, total, serviceType, photos });
+
+    // What was asked of the model, not what it said: the description is the
+    // operator's own words and lands on the estimate if they accept it.
+    await audit({
+      action: "estimate.drafted",
+      actorUid: caller.uid,
+      actorName: caller.displayName,
+      ok: result.items.length > 0,
+      detail: `${photos.length} photos, ${result.items.length} lines`,
+      request,
+    });
 
     if (result.items.length === 0) {
       throw new ApiError(

@@ -23,12 +23,19 @@ export interface EmailResult {
   problem: string;
 }
 
-const SKIPPED: EmailResult = { sent: false, problem: "" };
-
 /** Resend rejects a request that hangs around; ten seconds is generous for it. */
 const TIMEOUT_MS = 10_000;
 
-export async function sendEmail(built: BuiltEmail): Promise<EmailResult> {
+export interface SendOptions {
+  /**
+   * Who gets it, when not the crew. The sign-in code goes to the account that
+   * asked for it, so that caller names the address and NOTIFY_EMAIL_TO is not
+   * consulted — nor required.
+   */
+  to?: string[];
+}
+
+export async function sendEmail(built: BuiltEmail, options: SendOptions = {}): Promise<EmailResult> {
   // Named one by one rather than handing over process.env whole. Next replaces
   // these at build time by literal name, so a dynamic lookup is not guaranteed
   // to find them — and it keeps the reader's list of what this touches honest.
@@ -37,9 +44,18 @@ export async function sendEmail(built: BuiltEmail): Promise<EmailResult> {
     NOTIFY_EMAIL_TO: process.env.NOTIFY_EMAIL_TO,
     NOTIFY_EMAIL_FROM: process.env.NOTIFY_EMAIL_FROM,
   });
-  // Not configured is not a failure. This feature is opt-in: an install with no
-  // mail key should be quiet about it rather than logging an error per approval.
-  if (!config.canSend) return SKIPPED;
+  const to = options.to ?? config.to;
+
+  // Not configured is not logged. Approval mail is opt-in, and an install with
+  // no key should be quiet about it rather than writing an error per approval.
+  // The problem is still returned in words, because the sign-in code is not
+  // optional and its caller has to tell the person on the screen what is wrong.
+  if (!config.apiKey) {
+    return { sent: false, problem: "RESEND_API_KEY is not set on this deployment." };
+  }
+  if (to.length === 0) {
+    return { sent: false, problem: "No address to send to — NOTIFY_EMAIL_TO is not set." };
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -53,7 +69,7 @@ export async function sendEmail(built: BuiltEmail): Promise<EmailResult> {
       },
       body: JSON.stringify({
         from: config.from,
-        to: config.to,
+        to,
         subject: built.subject,
         text: built.text,
         html: built.html,

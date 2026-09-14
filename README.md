@@ -387,6 +387,50 @@ Three things worth knowing:
 Only approvals are emailed, not declines — a decline already raises a push and
 sits in the app with whatever question the customer asked.
 
+### 8c. The sign-in code
+
+Signing in takes a password and then a six-digit code, emailed to the address
+on the account. **This is not optional and it is enforced in the database
+rules**, so read this before deploying it.
+
+**How it works.** Every Firebase token carries `auth_time`, the moment of the
+password sign-in. When a code is verified, the server records that `auth_time`
+in a custom claim on the account (`otpAuths`, a short list of sign-ins that
+have passed). `firestore.rules`, `storage.rules` and every API route then allow
+a session only if its own `auth_time` is in that list. Consequences:
+
+- Every fresh password sign-in needs a code. A phone that passed stays passed —
+  `auth_time` does not change when the hourly token refreshes.
+- One device passing never unlocks another that has not. A single "verified
+  within 30 days" flag would have exactly that hole; a list of sign-in moments
+  does not.
+- The password alone opens nothing, even for somebody talking to Firestore
+  directly with the SDK. The rules check the claim, not the screen.
+
+**What it needs.** `RESEND_API_KEY` (step 8b). Nothing else — the code goes to
+the account's own email, so `NOTIFY_EMAIL_TO` is not consulted.
+
+**Read this twice.** Until you verify your domain in Resend and set
+`NOTIFY_EMAIL_FROM`, Resend's shared sender delivers **only to the address that
+owns the API key**. Anybody else on the crew will ask for a code and get
+nothing, and the screen will show them Resend's refusal in words. Verify the
+domain before a second person needs to sign in.
+
+**On the day this deploys**, every existing session — including yours — is
+asked for a code the next time it opens the app. No re-login, no lost data;
+the six boxes appear, the code arrives, and the app opens. If mail is broken
+that day, nobody gets in. Set the key first.
+
+**If mail breaks later**, devices that have already passed keep working; only
+new sign-ins are stuck. Fix Resend before signing out anywhere.
+
+Codes expire in ten minutes, allow five wrong guesses, and are stored only as a
+salted hash in `otpCodes/{uid}`, which no client can read. Requests are
+rate-limited per account. The whole rule is one function, `sessionIsVerified`
+in `lib/otp.ts`, and it is tested from four sides: unit (`tests/otp.test.mjs`),
+Firestore rules, Storage rules, and against a running server
+(`tests/api.auth.test.mjs`).
+
 ### 9. Push notifications
 
 The bell inside the app works with no setup. Getting a notification onto a phone
@@ -653,6 +697,17 @@ and get an acknowledgement text. Setup — including the long-lived Page token
 that everyone gets wrong — is in `docs/META_LEADS.md`.
 
 ## Security
+
+Start with [`SECURITY.md`](SECURITY.md). Two companion documents:
+
+- [`docs/SECURITY_AUDIT.md`](docs/SECURITY_AUDIT.md) — a line-by-line pass over
+  a published checklist (vulnerable dependencies, prompt injection, audit
+  logs, mass assignment, and so on), each item marked done in code, yours to
+  configure, or accepted with reasons.
+- [`docs/BACKUPS.md`](docs/BACKUPS.md) — Firestore is not backed up by
+  default. Point-in-time recovery, a daily schedule, and how a restore
+  actually gets back into `(default)`.
+
 
 `SECURITY.md` is the full picture: what the app enforces, what it deliberately
 does not, and the console-side steps that no amount of code in this repo can do

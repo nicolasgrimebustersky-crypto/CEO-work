@@ -21,19 +21,63 @@ const AUTH_EMULATOR =
   process.env.TEST_AUTH_EMULATOR ?? "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1";
 const CRON_SECRET = process.env.CRON_SECRET ?? "test-cron-secret";
 
+const SECURE_TOKEN = `${AUTH_EMULATOR.replace(/\/identitytoolkit\.googleapis\.com\/v1$/, "")}/securetoken.googleapis.com/v1`;
+
 let crewToken;
+/** The same crew account, before its sign-in has entered a code. */
+let freshCrewToken;
 let outsiderToken;
 
-async function idToken(email, password) {
+async function session(email, password) {
   for (const path of ["accounts:signInWithPassword", "accounts:signUp"]) {
     const res = await fetch(`${AUTH_EMULATOR}/${path}?key=fake-api-key`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password, returnSecureToken: true }),
     });
-    if (res.ok) return (await res.json()).idToken;
+    if (res.ok) return res.json();
   }
   throw new Error(`could not get a token for ${email}`);
+}
+
+async function idToken(email, password) {
+  return (await session(email, password)).idToken;
+}
+
+function authTimeOf(token) {
+  const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
+  return payload.auth_time;
+}
+
+/**
+ * Marks a sign-in as having entered its code, the way the server does after
+ * /api/otp/verify: the session's auth_time goes into the account's `otpAuths`
+ * claim, and a fresh token is minted so the claim is actually in hand.
+ *
+ * Done through the emulator's admin endpoint rather than the route, because
+ * the route emails the code and there is no mail here to read it from. What
+ * this proves is the same thing the rules tests prove from the other side:
+ * with the claim, everything works; without it, nothing does.
+ */
+async function verifiedToken(email, password) {
+  const fresh = await session(email, password);
+  const update = await fetch(`${AUTH_EMULATOR}/accounts:update?key=fake-api-key`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer owner" },
+    body: JSON.stringify({
+      localId: fresh.localId,
+      customAttributes: JSON.stringify({ otpAuths: [authTimeOf(fresh.idToken)] }),
+    }),
+  });
+  if (!update.ok) throw new Error(`could not set the claim: ${await update.text()}`);
+
+  const refreshed = await fetch(`${SECURE_TOKEN}/token?key=fake-api-key`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(fresh.refreshToken)}`,
+  });
+  if (!refreshed.ok) throw new Error(`could not refresh: ${await refreshed.text()}`);
+  return { verified: (await refreshed.json()).id_token, fresh: fresh.idToken };
 }
 
 async function post(path, body, token) {
@@ -49,8 +93,46 @@ async function post(path, body, token) {
 }
 
 before(async () => {
-  crewToken = await idToken("nick@grimebusters.test", "test1234");
+  const nick = await verifiedToken("nick@grimebusters.test", "test1234");
+  crewToken = nick.verified;
+  freshCrewToken = nick.fresh;
   outsiderToken = await idToken("mallory@example.test", "test1234");
+});
+
+describe("the sign-in code", () => {
+  test("a crew session that has not entered its code is refused everywhere", async () => {
+    // Real account, real signature, on the allowlist — and still no. The
+    // Admin SDK bypasses the Firestore rules, so this check in requireCrew()
+    // is the only thing standing between a stolen password and every route.
+    const res = await post("/api/sms/send", { customerId: "cust-oak", body: "hi" }, freshCrewToken);
+    assert.equal(res.status, 403);
+    assert.match(res.json.error, /code/i);
+  });
+
+  test("but may ask for a code, and is told plainly when mail is not set up", async () => {
+    // Past the crew check (not 401/403). No Resend key on the test server,
+    // and the answer names the variable rather than blaming the login.
+    const res = await post("/api/otp/send", {}, freshCrewToken);
+    assert.equal(res.status, 503);
+    assert.match(res.json.error, /RESEND_API_KEY/);
+  });
+
+  test("and may try a code, which is checked rather than assumed", async () => {
+    const res = await post("/api/otp/verify", { code: "000000" }, freshCrewToken);
+    assert.equal(res.status, 400);
+  });
+
+  test("a half-typed code is refused before anything is looked up", async () => {
+    const res = await post("/api/otp/verify", { code: "12" }, freshCrewToken);
+    assert.equal(res.status, 400);
+    assert.match(res.json.error, /six/i);
+  });
+
+  test("an outsider cannot even ask for a code", async () => {
+    assert.equal((await post("/api/otp/send", {}, outsiderToken)).status, 403);
+    assert.equal((await post("/api/otp/verify", { code: "123456" }, outsiderToken)).status, 403);
+    assert.equal((await post("/api/otp/send", {})).status, 401);
+  });
 });
 
 describe("POST /api/sms/send", () => {

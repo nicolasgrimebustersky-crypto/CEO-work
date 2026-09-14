@@ -96,7 +96,7 @@ export function readEmailConfig(env: EmailEnv): EmailConfig {
 /** One sentence naming what to go and set. */
 export function emailSetupHint(config: EmailConfig): string {
   if (config.missing.length === 0) return "";
-  return `Approval emails are not configured. Missing: ${config.missing.join(", ")}.`;
+  return `Email is not configured. Missing: ${config.missing.join(", ")}.`;
 }
 
 /**
@@ -223,5 +223,73 @@ export function acceptedEmail(notice: AcceptedNotice): BuiltEmail {
     `<p style="margin:24px 0 0;color:#666;font-size:13px">The signature is on the estimate in the CRM — it is not attached here.</p>` +
     `</div>`;
 
+  return { subject, text, html };
+}
+
+export interface CodeNotice {
+  /** Six digits. Not customer text, but escaped anyway — nothing here is interpolated raw. */
+  code: string;
+  /** How long it is good for, in minutes, as a number for the sentence. */
+  minutes: number;
+}
+
+/**
+ * The sign-in code.
+ *
+ * The code is in the subject line on purpose: it is what a lock-screen
+ * notification shows, and a person standing on a porch should not have to
+ * open the mail to read six digits. It is only ever sent to the address on
+ * the account that just typed the password, so the subject leaking it to a
+ * notification is leaking it to the phone in their own hand.
+ *
+ * The last sentence is the important one. A code arriving that you did not
+ * ask for means somebody else has your password, and the mail says so.
+ */
+export function codeEmail(notice: CodeNotice): BuiltEmail {
+  const code = notice.code.trim();
+  const spaced = `${code.slice(0, 3)} ${code.slice(3)}`;
+  const subject = `${code} is your Grime Busters sign-in code`;
+
+  const text = [
+    `Your sign-in code is ${spaced}`,
+    "",
+    `It expires in ${notice.minutes} minutes and works once.`,
+    "",
+    "If you didn't just sign in to the Grime Busters CRM, somebody has your password. Change it, and don't enter this code anywhere.",
+  ].join("\n");
+
+  const html =
+    `<div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;font-size:15px;line-height:1.5;color:#111">` +
+    `<p style="margin:0 0 12px;color:#666">Your sign-in code</p>` +
+    `<p style="margin:0 0 20px;font-size:34px;font-weight:700;letter-spacing:0.28em;font-family:ui-monospace,SFMono-Regular,Menlo,monospace">${escapeHtml(spaced)}</p>` +
+    `<p style="margin:0 0 20px">It expires in ${escapeHtml(String(notice.minutes))} minutes and works once.</p>` +
+    `<p style="margin:0;color:#666;font-size:13px">If you didn't just sign in to the Grime Busters CRM, somebody has your password. Change it, and don't enter this code anywhere.</p>` +
+    `</div>`;
+
+  return { subject, text, html };
+}
+
+/**
+ * Somebody entered the wrong sign-in code too many times for this account.
+ *
+ * The one sign-in event worth an unprompted email. Five wrong codes is not a
+ * typo — it is somebody with the password and without the mailbox, which is
+ * exactly the situation the code exists for. The person who owns the account
+ * should hear about it from the app before they hear about it any other way.
+ */
+export function lockoutEmail(notice: { when: string }): BuiltEmail {
+  const subject = "Wrong sign-in codes entered for your Grime Busters account";
+  const body =
+    "Somebody signed in to your Grime Busters CRM account with your password and then entered the wrong six-digit code five times, so the code was cancelled.";
+  const advice =
+    "If that was you, ask for a new code and check the email carefully. If it was not you, somebody has your password: change it now from the sign-in screen (\"Forgot password?\"), and sign out of any device you do not recognise.";
+
+  const text = [body, "", `When: ${notice.when}`, "", advice].join("\n");
+  const html =
+    `<div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;font-size:15px;line-height:1.5;color:#111">` +
+    `<p style="margin:0 0 16px">${escapeHtml(body)}</p>` +
+    `<p style="margin:0 0 16px;color:#666">When: ${escapeHtml(notice.when)}</p>` +
+    `<p style="margin:0">${escapeHtml(advice)}</p>` +
+    `</div>`;
   return { subject, text, html };
 }

@@ -15,6 +15,7 @@ import {
   type StoredKey,
 } from "@/lib/apiKeys";
 import { adminDb } from "./admin";
+import { audit } from "./audit";
 import { ApiError } from "./auth";
 
 /**
@@ -94,7 +95,19 @@ export async function requireApiKey(request: Request): Promise<AuthorisedKey> {
   if (!sameHash(typeof data.hash === "string" ? data.hash : "", hash)) {
     throw new ApiError(401, "That API key is not valid.");
   }
-  if (data.revokedAt != null) throw new ApiError(401, "That API key has been revoked.");
+  if (data.revokedAt != null) {
+    // The one refusal recorded here. A made-up key is noise a scanner can
+    // generate for free; a *real* key that was revoked and is still being
+    // presented is a leaked key in somebody's hands, and worth a line.
+    await audit({
+      action: "mcp.denied",
+      actorUid: `key:${typeof data.id === "string" ? data.id : snap.id.slice(0, 12)}`,
+      ok: false,
+      detail: "revoked key presented",
+      request,
+    });
+    throw new ApiError(401, "That API key has been revoked.");
+  }
 
   // Fire and forget: a failed bookkeeping write must never refuse a valid key.
   // It is how an unexpectedly active key becomes visible on the Account screen,

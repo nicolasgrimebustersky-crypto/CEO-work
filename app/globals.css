@@ -59,6 +59,15 @@
   --color-cream: #f1e3cd;
   --color-gold: #a37d39;
 
+  /* The login screen's own accent: the brand green, on black. Its own token
+     rather than a reuse of --color-money so the cyan/green rule inside the app
+     stays intact — that rule is about what a colour MEANS, and the login is
+     the one screen with nothing to mean yet. Same value as --color-money, on
+     purpose: the button is the green on the truck. The near-black on it is
+     the contrast the logo itself uses, 5.97:1 (see --color-money-ink). */
+  --color-login-accent: #06a143;
+  --color-login-accent-ink: #050607;
+
   /* Customer pin colours — fixed by the status model, do not repurpose. */
   --color-status-lead: #9aa7b4;
   --color-status-quoted: #facc15;
@@ -197,6 +206,79 @@ button {
     transform: translateY(0);
     opacity: 1;
   }
+}
+
+/* ---------------------------------------------------------------- login
+   The backdrop is three blurred bands of green on black, drifting slowly.
+   Painted in CSS rather than shipped as an image so it renders at any size
+   with nothing to download, and so the colour is the theme's own green. The
+   drift uses the `translate` property, which composes with the rotation set
+   in `transform` instead of fighting it; the reduced-motion block below
+   freezes it along with everything else. */
+.gb-ribbon {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 170vmax;
+  height: 16vmax;
+  border-radius: 999px;
+  filter: blur(26px);
+  opacity: 0.55;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    #06200f 18%,
+    var(--color-money) 42%,
+    #5ef08a 50%,
+    var(--color-money) 58%,
+    #06200f 82%,
+    transparent 100%
+  );
+  will-change: translate;
+}
+.gb-ribbon-1 {
+  transform: translate(-50%, -50%) rotate(-27deg) translateY(-15vmax);
+  animation: gb-ribbon-drift 28s ease-in-out infinite alternate;
+}
+.gb-ribbon-2 {
+  height: 9vmax;
+  opacity: 0.38;
+  transform: translate(-50%, -50%) rotate(-31deg) translateY(9vmax);
+  animation: gb-ribbon-drift 36s ease-in-out infinite alternate-reverse;
+}
+.gb-ribbon-3 {
+  height: 30vmax;
+  opacity: 0.22;
+  filter: blur(54px);
+  transform: translate(-50%, -50%) rotate(-22deg) translateY(30vmax);
+  animation: gb-ribbon-drift 44s ease-in-out infinite alternate;
+}
+/* The bright specular edge that makes a blurred band read as metal. */
+.gb-ribbon-edge {
+  height: 0.45vmax;
+  opacity: 0.55;
+  filter: blur(1.5px);
+  background: linear-gradient(90deg, transparent 20%, #c6ffd9 50%, transparent 80%);
+  transform: translate(-50%, -50%) rotate(-27deg) translateY(-19vmax);
+  animation: gb-ribbon-drift 28s ease-in-out infinite alternate;
+}
+@keyframes gb-ribbon-drift {
+  from {
+    translate: -3vmax 1vmax;
+  }
+  to {
+    translate: 3vmax -2vmax;
+  }
+}
+
+/* Chrome paints an autofilled field pale yellow with black text, which on a
+   dark glass card is a white block with invisible text. The inset shadow is
+   the only reliable way to repaint it. */
+.gb-glass-input:-webkit-autofill,
+.gb-glass-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--color-ink);
+  box-shadow: 0 0 0 1000px #0a150e inset;
+  caret-color: var(--color-ink);
 }
 
 @media (prefers-reduced-motion: reduce) {

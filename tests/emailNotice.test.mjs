@@ -18,6 +18,8 @@ const {
   escapeHtml,
   spellDate,
   acceptedEmail,
+  codeEmail,
+  lockoutEmail,
 } = await import("../lib/emailNotice.ts");
 
 const NOTICE = {
@@ -212,5 +214,44 @@ describe("what the notice actually says", () => {
     const email = acceptedEmail(NOTICE);
     assert.match(email.text, /signature is on the estimate in the CRM/);
     assert.ok(!email.html.includes("data:image"));
+  });
+});
+
+describe("the sign-in code email", () => {
+  test("the code is in the subject, where a lock screen shows it", () => {
+    const email = codeEmail({ code: "204815", minutes: 10 });
+    assert.equal(email.subject, "204815 is your Grime Busters sign-in code");
+  });
+
+  test("the code is split for reading, in both parts", () => {
+    const email = codeEmail({ code: "204815", minutes: 10 });
+    assert.match(email.text, /204 815/);
+    assert.match(email.html, /204 815/);
+  });
+
+  test("the expiry and the warning are both there", () => {
+    const email = codeEmail({ code: "204815", minutes: 10 });
+    for (const part of [email.text, email.html]) {
+      assert.match(part, /10 minutes/);
+      assert.match(part, /somebody has your password/);
+    }
+  });
+});
+
+describe("the lockout email", () => {
+  test("says what happened, when, and what to do either way", () => {
+    const email = lockoutEmail({ when: "Mon, 14 Sep 2026 22:10:00 GMT" });
+    assert.match(email.subject, /Wrong sign-in codes/);
+    for (const part of [email.text, email.html]) {
+      assert.match(part, /five times/);
+      assert.match(part, /14 Sep 2026/);
+      assert.match(part, /Forgot password/);
+      assert.match(part, /somebody has your password/);
+    }
+  });
+
+  test("the timestamp is escaped like everything else", () => {
+    const email = lockoutEmail({ when: "<script>x</script>" });
+    assert.ok(!email.html.includes("<script>"));
   });
 });

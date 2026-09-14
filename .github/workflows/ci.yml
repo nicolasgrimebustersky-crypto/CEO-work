@@ -30,6 +30,22 @@ jobs:
       # fresh clone.
       - run: npm run build
 
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Production dependencies only, and only a critical fails the build. The
+      # point is a tripwire for the next unauthenticated-RCE class advisory in
+      # the framework, not a gate that goes red on every transitive moderate;
+      # those are reviewed by hand — see docs/SECURITY_AUDIT.md.
+      - run: npm audit --omit=dev --audit-level=critical
+
   rules:
     name: Security rules
     runs-on: ubuntu-latest

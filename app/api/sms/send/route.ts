@@ -1,4 +1,5 @@
 import { appendNote, getCustomer } from "@/lib/server/customerNotes";
+import { audit } from "@/lib/server/audit";
 import { errorResponse, requireCrew, ApiError } from "@/lib/server/auth";
 import { preflight, withCors } from "@/lib/server/cors";
 import { consumeRateLimit, SMS_SEND_LIMIT } from "@/lib/server/rateLimit";
@@ -66,6 +67,15 @@ export async function POST(request: Request): Promise<Response> {
         },
         { markContacted: false },
       );
+      await audit({
+        action: "sms.sent",
+        actorUid: caller.uid,
+        actorName: caller.displayName,
+        target: customerId,
+        ok: false,
+        detail: result.error ?? "Twilio rejected the message.",
+        request,
+      });
       throw new ApiError(502, result.error ?? "Twilio rejected the message.");
     }
 
@@ -74,6 +84,19 @@ export async function POST(request: Request): Promise<Response> {
       kind: "sms_out",
       authorUid: caller.uid,
       authorName: caller.displayName,
+    });
+
+    // The body is deliberately not recorded: the timeline note already holds
+    // it, and the audit log is for who did what, not for a second copy of
+    // every customer conversation.
+    await audit({
+      action: "sms.sent",
+      actorUid: caller.uid,
+      actorName: caller.displayName,
+      target: customerId,
+      ok: true,
+      detail: reason,
+      request,
     });
 
     return withCors(request, { ok: true, sid: result.sid, to: result.to });

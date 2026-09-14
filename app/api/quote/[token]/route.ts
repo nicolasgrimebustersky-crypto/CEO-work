@@ -1,5 +1,6 @@
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
+import { audit } from "@/lib/server/audit";
 import { appendNote } from "@/lib/server/customerNotes";
 import { adminDb } from "@/lib/server/admin";
 import { notifyCrew } from "@/lib/server/notify";
@@ -163,6 +164,15 @@ export async function POST(
       }),
     );
 
+    await audit({
+      action: "quote.answered",
+      actorUid: "customer",
+      actorName: signedName,
+      target: document.id,
+      ok: true,
+      detail: "accepted",
+      request,
+    });
     return Response.json({ ok: true, decision, requestedDate });
   }
 
@@ -196,5 +206,13 @@ export async function POST(
     actorName: document.customerName || "Customer",
   });
 
+  await audit({
+    action: "quote.answered",
+    actorUid: "customer",
+    target: document.id,
+    ok: true,
+    detail: "declined",
+    request,
+  });
   return Response.json({ ok: true, decision });
 }

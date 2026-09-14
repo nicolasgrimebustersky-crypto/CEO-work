@@ -6,8 +6,19 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
+    // Same second step as firestore.rules: this sign-in must have entered its
+    // emailed code. See hasVerifiedSession() there for the reasoning.
+    function hasVerifiedSession() {
+      return request.auth != null
+        && request.auth.token.auth_time is int
+        && 'otpAuths' in request.auth.token
+        && request.auth.token.otpAuths is list
+        && request.auth.token.auth_time in request.auth.token.otpAuths;
+    }
+
     function isCrew() {
       return request.auth != null
+        && hasVerifiedSession()
         && request.auth.uid in [
              'Bzo7rclax4SdT7PaAua1monNxXG3',
              'QLMsTAHbbceHBAWBXPqtScGdGon2'

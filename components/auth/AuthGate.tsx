@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { isPublicRoute } from "@/lib/publicRoutes";
 import { Spinner } from "@/components/ui/Spinner";
+import { CodeScreen } from "./CodeScreen";
 import { LoginScreen } from "./LoginScreen";
 import { PendingScreen } from "./PendingScreen";
 import { SetupScreen } from "./SetupScreen";
@@ -38,6 +39,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
   // provider stack below would otherwise mount and start firing reads the
   // database is going to refuse.
   if (status === "pending") return <PendingScreen />;
+  // Approved, but this sign-in has not entered its code. Held here for the
+  // same reason: the rules refuse it everything until it does.
+  if (status === "code") return <CodeScreen />;
 
   return <>{children}</>;
 }

@@ -1,3 +1,4 @@
+import { audit } from "@/lib/server/audit";
 import { ApiError, errorResponse, requireCrew } from "@/lib/server/auth";
 import { preflight, withCors } from "@/lib/server/cors";
 import { sendPush } from "@/lib/server/push";
@@ -36,7 +37,7 @@ function text(value: unknown, field: string, required = true): string {
 
 export async function POST(request: Request): Promise<Response> {
   try {
-    await requireCrew(request);
+    const caller = await requireCrew(request);
 
     const payload = (await request.json().catch(() => ({}))) as Record<string, unknown>;
 
@@ -58,6 +59,16 @@ export async function POST(request: Request): Promise<Response> {
       body: text(payload.body, "body", false),
       url,
       tag: text(payload.tag, "tag", false) || "grime-busters",
+    });
+
+    await audit({
+      action: "push.sent",
+      actorUid: caller.uid,
+      actorName: caller.displayName,
+      target: forUids.join(","),
+      ok: true,
+      detail: `${result.sent} of ${result.devices} devices`,
+      request,
     });
 
     return withCors(request, { ok: true, ...result });
