@@ -52,12 +52,60 @@ export function avatarColor(name: string): string {
   return AVATAR_COLORS[hash % AVATAR_COLORS.length];
 }
 
+/**
+ * What the imports left on the customer record itself.
+ *
+ * The Flyra and Invoice Fly histories were not modelled as documents; each
+ * import folded them into two numbers on the customer — `lifetimeValue` for
+ * what was paid, and `pipelineValue` for what was still owed, with the
+ * record parked in `awaiting_payment` — and wrote the invoice list into a
+ * timeline note. So a client's lifetime figures are those two numbers plus
+ * whatever has been raised in the app since. Nothing here is double counted:
+ * the app never adds to `lifetimeValue`, so it is only ever history.
+ */
+export interface ClientHistory {
+  lifetimeValue: number;
+  pipelineStage: string;
+  pipelineValue: number;
+  notes?: readonly { text: string }[];
+}
+
+/**
+ * The outstanding balance the imports recorded, when it is not already
+ * represented by an open invoice in the app. A record parked in
+ * awaiting_payment by hand *with* an open invoice is the same debt twice, so
+ * the invoice wins and the pipeline figure is left out.
+ */
+export function legacyOwed(history: ClientHistory, openInvoiceBalance: number): number {
+  if (history.pipelineStage !== "awaiting_payment") return 0;
+  if (openInvoiceBalance > 0) return 0;
+  const owed = history.pipelineValue;
+  return typeof owed === "number" && Number.isFinite(owed) && owed > 0 ? owed : 0;
+}
+
+/**
+ * How many invoices the imports recorded, read back out of the note each one
+ * left. Both formats are this repository's own scripts', so the text is
+ * stable: "(3 invoices, $…" from the Invoice Fly import and "2 invoice(s)."
+ * from the Flyra one. Anything else counts as none.
+ */
+export function importedInvoiceCount(notes: readonly { text: string }[] | undefined): number {
+  let count = 0;
+  for (const note of notes ?? []) {
+    const legacy = /^Legacy invoice history imported .*?\((\d+) invoice/.exec(note.text);
+    if (legacy) count += Number(legacy[1]);
+    const flyra = /^Imported from Flyra .*?(\d+) invoice\(s\)/.exec(note.text);
+    if (flyra) count += Number(flyra[1]);
+  }
+  return count;
+}
+
 export interface ClientMoney {
-  /** Invoices raised, void ones left out. */
+  /** Invoices raised in the app plus the ones the imports recorded, void ones left out. */
   invoiceCount: number;
-  /** What those invoices come to. */
+  /** Everything ever billed: history paid, history still owed, and the app's invoices. */
   invoiced: number;
-  /** What has arrived against them. */
+  /** Everything that has arrived, history included. */
   paid: number;
   /** 0–100, whole number; 0 when nothing has been invoiced. */
   paidPct: number;
@@ -65,12 +113,22 @@ export interface ClientMoney {
 
 const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
-export function clientMoney(documents: readonly ClientDocument[]): ClientMoney {
+export function clientMoney(
+  documents: readonly ClientDocument[],
+  history?: ClientHistory,
+): ClientMoney {
   const invoices = documents.filter((d) => d.kind === "invoice" && d.status !== "void");
-  const invoiced = round2(invoices.reduce((sum, d) => sum + d.total, 0));
-  const paid = round2(invoices.reduce((sum, d) => sum + Math.min(d.amountPaid, d.total), 0));
+  const appInvoiced = invoices.reduce((sum, d) => sum + d.total, 0);
+  const appPaid = invoices.reduce((sum, d) => sum + Math.min(d.amountPaid, d.total), 0);
+
+  const historyPaid =
+    history && Number.isFinite(history.lifetimeValue) ? Math.max(0, history.lifetimeValue) : 0;
+  const historyOwed = history ? legacyOwed(history, round2(appInvoiced - appPaid)) : 0;
+
+  const invoiced = round2(appInvoiced + historyPaid + historyOwed);
+  const paid = round2(appPaid + historyPaid);
   return {
-    invoiceCount: invoices.length,
+    invoiceCount: invoices.length + importedInvoiceCount(history?.notes),
     invoiced,
     paid,
     paidPct: invoiced > 0 ? Math.min(100, Math.round((paid / invoiced) * 100)) : 0,

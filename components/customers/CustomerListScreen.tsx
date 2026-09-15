@@ -97,7 +97,7 @@ export function CustomerListScreen() {
   const [adding, setAdding] = useState(false);
 
   const money = useMemo(
-    () => new Map(customers.map((c) => [c.id, clientMoney(forCustomer(c.id))])),
+    () => new Map(customers.map((c) => [c.id, clientMoney(forCustomer(c.id), c)])),
     [customers, forCustomer],
   );
 
@@ -206,7 +206,7 @@ export function CustomerListScreen() {
                 <li key={customer.id} className="border-b border-line last:border-b-0">
                   <ClientRow
                     customer={customer}
-                    money={money.get(customer.id) ?? clientMoney([])}
+                    money={money.get(customer.id) ?? clientMoney([], customer)}
                   />
                 </li>
               ))}

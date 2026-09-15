@@ -2,13 +2,12 @@
 
 import { AdvancedMarker } from "@vis.gl/react-google-maps";
 
-import { STATUS_COLOR } from "@/lib/status";
 import type { Customer } from "@/lib/types";
+import { customerPinGlyph, PinMark, PLUS_GLYPH } from "./pinGlyphs";
 
 /**
- * Pins sit on satellite imagery, which is visually noisy and can be any colour.
- * The white outline plus dark drop shadow is what keeps a yellow "quoted" pin
- * legible over a sunlit roof and a black "do not knock" pin legible over asphalt.
+ * A customer on the map: the status colour, and inside it what they are
+ * interested in. See pinGlyphs.tsx for the pictures and the reasoning.
  */
 export function CustomerPin({
   customer,
@@ -19,8 +18,6 @@ export function CustomerPin({
   selected: boolean;
   onSelect: (customer: Customer) => void;
 }) {
-  const color = STATUS_COLOR[customer.status];
-
   return (
     <AdvancedMarker
       position={{ lat: customer.lat, lng: customer.lng }}
@@ -28,45 +25,38 @@ export function CustomerPin({
       zIndex={selected ? 20 : 5}
       onClick={() => onSelect(customer)}
     >
-      {/* Padding gives the 44px touch target without inflating the pin art. */}
-      <div className="flex size-11 items-end justify-center">
-        <svg
-          viewBox="0 0 24 32"
-          className="h-8 w-6 drop-shadow-[0_2px_3px_rgba(0,0,0,0.85)]"
-          aria-hidden="true"
+      {/* An AdvancedMarker hangs its content above the coordinate; a round
+          badge wants to sit *on* it, so the box is pushed down by half its
+          height. The box is the 44px touch target; the badge inside it grows
+          from its centre when selected, so it never drifts off the house. */}
+      <div className="flex size-11 translate-y-1/2 items-center justify-center">
+        <div
+          className="transition-transform duration-200"
+          style={{ transform: selected ? "scale(1.2)" : "scale(1)" }}
         >
-          <path
-            d="M12 1c-5.5 0-10 4.3-10 9.7C2 18.2 12 31 12 31s10-12.8 10-20.3C22 5.3 17.5 1 12 1Z"
-            fill={color}
-            stroke={selected ? "#00d9ff" : "#ffffff"}
-            strokeWidth={selected ? 3 : 2}
+          <PinMark
+            status={customer.status}
+            glyph={customerPinGlyph(customer)}
+            selected={selected}
           />
-          <circle cx="12" cy="10.5" r="3.4" fill="#ffffff" opacity={0.92} />
-        </svg>
+        </div>
       </div>
     </AdvancedMarker>
   );
 }
 
-/** The pin being placed right now — not saved yet, so it reads as provisional. */
+/**
+ * The pin being placed right now. Not saved yet, so it reads as provisional:
+ * cyan (the tap colour, not a status), a dashed ring, and a drop-in so the
+ * eye goes to it.
+ */
 export function DraftPin({ position }: { position: google.maps.LatLngLiteral }) {
   return (
     <AdvancedMarker position={position} zIndex={30}>
-      <div className="flex size-11 items-end justify-center">
-        <svg
-          viewBox="0 0 24 32"
-          className="h-8 w-6 drop-shadow-[0_2px_3px_rgba(0,0,0,0.85)]"
-          aria-hidden="true"
-        >
-          <path
-            d="M12 1c-5.5 0-10 4.3-10 9.7C2 18.2 12 31 12 31s10-12.8 10-20.3C22 5.3 17.5 1 12 1Z"
-            fill="#00d9ff"
-            stroke="#050607"
-            strokeWidth={2}
-            strokeDasharray="3 2"
-          />
-          <circle cx="12" cy="10.5" r="3.4" fill="#050607" />
-        </svg>
+      <div className="flex size-11 translate-y-1/2 items-center justify-center">
+        <div style={{ animation: "gb-pin-drop 420ms cubic-bezier(0.2, 0.9, 0.3, 1.2)" }}>
+          <PinMark status="draft" glyph={PLUS_GLYPH} draft />
+        </div>
       </div>
     </AdvancedMarker>
   );

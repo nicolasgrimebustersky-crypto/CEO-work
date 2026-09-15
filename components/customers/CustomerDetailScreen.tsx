@@ -25,6 +25,7 @@ import {
 } from "@/lib/db/customers";
 import { completedRevenue, subscribeJobsForCustomer } from "@/lib/db/jobs";
 import { setQuoteStatus, subscribeQuotesForCustomer } from "@/lib/db/quotes";
+import { clientMoney } from "@/lib/clientList";
 import { isOutstanding } from "@/lib/documents";
 import {
   customerName,
@@ -97,6 +98,16 @@ export function CustomerDetailScreen() {
    * sorting the list view, this is the number of record.
    */
   const revenue = useMemo(() => completedRevenue(jobs), [jobs]);
+
+  /**
+   * Everything ever billed and paid, history included. The imports folded the
+   * Flyra and Invoice Fly books into the customer record rather than into
+   * documents, and this is the one figure that reads both.
+   */
+  const lifetime = useMemo(
+    () => (customer ? clientMoney(documents, customer) : clientMoney(documents)),
+    [documents, customer],
+  );
 
   /** What is still owed across this person's open invoices. */
   const owed = useMemo(
@@ -364,16 +375,23 @@ export function CustomerDetailScreen() {
         <section>
           <h2 className="mb-2 text-lg font-bold text-ink">Revenue</h2>
           <div className="grid grid-cols-2 gap-2">
-            <Stat label="Total revenue" value={formatMoney(revenue)} />
+            <Stat label="Invoiced, lifetime" value={formatMoney(lifetime.invoiced)} />
+            <Stat
+              label="Paid, lifetime"
+              value={`${formatMoney(lifetime.paid)}${
+                lifetime.invoiced > 0 ? ` · ${lifetime.paidPct}%` : ""
+              }`}
+            />
+            <Stat label="Job revenue" value={formatMoney(revenue)} />
             <Stat
               label="Jobs completed"
               value={String(jobs.filter((job) => job.status === "complete").length)}
             />
-            {owed > 0 ? (
+            {lifetime.invoiced - lifetime.paid > 0.005 ? (
               <div className="col-span-2 rounded-xl border border-warn/70 bg-warn/20 px-3 py-3">
                 <p className="text-sm font-bold text-ink">Still owes</p>
                 <p className="mt-0.5 text-2xl font-extrabold text-ink">
-                  {formatMoneyExact(owed)}
+                  {formatMoneyExact(Math.max(owed, lifetime.invoiced - lifetime.paid))}
                 </p>
               </div>
             ) : null}
