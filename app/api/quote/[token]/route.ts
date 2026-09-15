@@ -1,24 +1,9 @@
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
-
-import { audit } from "@/lib/server/audit";
-import { appendNote } from "@/lib/server/customerNotes";
-import { adminDb } from "@/lib/server/admin";
-import { notifyCrew } from "@/lib/server/notify";
-import { sendEmail } from "@/lib/server/email";
-import { acceptedEmail } from "@/lib/emailNotice";
-import { routes } from "@/lib/routes";
 import { findByShareToken } from "@/lib/server/publicDocument";
+import { respondToDocument } from "@/lib/server/quoteRespond";
 import { consumeRateLimit, QUOTE_RESPONSE_LIMIT } from "@/lib/server/rateLimit";
-import { formatMoneyExact } from "@/lib/format";
-import { SERVICE_LABEL } from "@/lib/status";
-import { BUSINESS_TIMEZONE } from "@/lib/business";
-import { todayIn, validateQuoteResponse, type QuoteResponseInput } from "@/lib/quoteResponse";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-// Signature payloads are small but the write fans out to the document, the
-// customer timeline and every crew notification. Sixty seconds, matching every
-// other route here that does real work.
 export const maxDuration = 60;
 
 /**
@@ -44,22 +29,6 @@ function bad(status: number, error: string): Response {
   return Response.json({ error }, { status });
 }
 
-/**
- * An absolute link to the document, for the approval email.
- *
- * Absolute or nothing. A relative path is useless in an inbox, and guessing an
- * origin from the request would put whatever host the customer happened to
- * open — a preview deployment, say — into a mail that outlives it.
- */
-function documentLink(documentId: string): string {
-  const site = (process.env.NEXT_PUBLIC_SITE_URL ?? "").trim().replace(/\/+$/, "");
-  if (!/^https?:\/\//i.test(site)) return "";
-  return `${site}${routes.document(documentId)}`;
-}
-
-/** Statuses a customer may still answer from. */
-const ANSWERABLE = new Set(["draft", "sent"]);
-
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ token: string }> },
@@ -79,140 +48,6 @@ export async function POST(
     return bad(429, "Too many attempts on this quote. Please try again shortly.");
   }
 
-  if (!ANSWERABLE.has(document.status)) {
-    // Not an error the customer caused, and worth saying plainly: somebody who
-    // taps an old link twice should be told it already went through.
-    return bad(
-      409,
-      document.status === "accepted"
-        ? "This quote has already been approved. We will be in touch."
-        : "This quote has already been answered.",
-    );
-  }
-
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return bad(400, "That did not arrive properly. Please try again.");
-  }
-
-  const raw = (body ?? {}) as Partial<QuoteResponseInput>;
-  const checked = validateQuoteResponse(
-    { ...raw, decision: typeof raw.decision === "string" ? raw.decision : "" },
-    todayIn(BUSINESS_TIMEZONE),
-  );
-  if (!checked.ok) return bad(400, checked.problem);
-
-  const { decision, signedName, signature, requestedDate, message } = checked.value;
-  const now = Timestamp.now();
-  const service = SERVICE_LABEL[document.serviceType];
-  const money = formatMoneyExact(document.total);
-
-  if (decision === "accepted") {
-    await adminDb()
-      .collection("documents")
-      .doc(document.id)
-      .update({
-        status: "accepted",
-        acceptance: {
-          signedName,
-          signature,
-          requestedDate,
-          message,
-          acceptedAt: now,
-        },
-        updatedAt: FieldValue.serverTimestamp(),
-        // Attributed to the customer, not to a crew member. Three weeks later
-        // the difference between "Nicolas marked this accepted" and "the
-        // customer signed it" is the whole point of having a signature.
-        updatedBy: "customer",
-        updatedByName: signedName,
-      });
-
-    await appendNote(document.customerId, {
-      text:
-        `Approved ${document.number} (${service}, ${money}) online. ` +
-        `Signed "${signedName}". Asked for ${requestedDate}.` +
-        (message ? ` They said: ${message}` : ""),
-      kind: "quote",
-      authorUid: "customer",
-      authorName: signedName,
-    });
-
-    await notifyCrew({
-      type: "estimate_accepted",
-      body: `${document.customerName} approved ${document.number} — ${money}. Wants ${requestedDate}.`,
-      customerId: document.customerId,
-      documentId: document.id,
-      actorName: signedName || "Customer",
-    });
-
-    // Email as well as push, and only for this event. An approval is the one
-    // thing here that is worth money and cannot wait for somebody to open the
-    // app — a missed buzz is a customer who signed and heard nothing back.
-    await sendEmail(
-      acceptedEmail({
-        customerName: document.customerName,
-        number: document.number,
-        service,
-        total: money,
-        requestedDate,
-        signedName,
-        message,
-        documentUrl: documentLink(document.id),
-      }),
-    );
-
-    await audit({
-      action: "quote.answered",
-      actorUid: "customer",
-      actorName: signedName,
-      target: document.id,
-      ok: true,
-      detail: "accepted",
-      request,
-    });
-    return Response.json({ ok: true, decision, requestedDate });
-  }
-
-  await adminDb()
-    .collection("documents")
-    .doc(document.id)
-    .update({
-      status: "declined",
-      decline: { message, declinedAt: now },
-      updatedAt: FieldValue.serverTimestamp(),
-      updatedBy: "customer",
-      updatedByName: document.customerName || "Customer",
-    });
-
-  await appendNote(document.customerId, {
-    text:
-      `Declined ${document.number} (${service}, ${money}) online.` +
-      (message ? ` They asked: ${message}` : " No message left."),
-    kind: "quote",
-    authorUid: "customer",
-    authorName: document.customerName || "Customer",
-  });
-
-  await notifyCrew({
-    type: "estimate_declined",
-    body: message
-      ? `${document.customerName} declined ${document.number} and asked: ${message}`
-      : `${document.customerName} declined ${document.number} — ${money}.`,
-    customerId: document.customerId,
-    documentId: document.id,
-    actorName: document.customerName || "Customer",
-  });
-
-  await audit({
-    action: "quote.answered",
-    actorUid: "customer",
-    target: document.id,
-    ok: true,
-    detail: "declined",
-    request,
-  });
-  return Response.json({ ok: true, decision });
+  const result = await respondToDocument(document, request);
+  return Response.json(result.body, { status: result.status });
 }
