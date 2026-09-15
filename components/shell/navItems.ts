@@ -57,9 +57,9 @@ export const TABS: NavItem[] = [
   },
   {
     href: routes.customers,
-    label: "People",
+    label: "Clients",
     icon: PeopleIcon,
-    hint: "Every customer, their history and their notes",
+    hint: "Every client, what they have paid, and their history",
   },
 ];
 
