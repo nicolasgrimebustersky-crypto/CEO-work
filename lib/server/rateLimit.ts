@@ -184,3 +184,21 @@ export async function consumeRateLimit(
     );
   }
 }
+
+/**
+ * The account portal. Reads are cheap and a customer refreshing their list
+ * should never hit this; answering an estimate is a write with side effects
+ * (notes, notifications, an email) and gets the same kind of ceiling the
+ * share-token link has.
+ */
+export const PORTAL_READ_LIMIT: RateLimitRule = {
+  label: "portal reads",
+  max: 240,
+  windowMs: 60 * 60 * 1000,
+};
+
+export const PORTAL_RESPOND_LIMIT: RateLimitRule = {
+  label: "estimate answers from the portal",
+  max: 10,
+  windowMs: 60 * 60 * 1000,
+};
