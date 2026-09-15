@@ -79,6 +79,14 @@ export function CustomerPreviewSheet({
               Call
             </a>
           ) : null}
+          {/* A price from the driveway: a blank estimate for this house,
+              which the customer's link is one tap from once it is written. */}
+          <Link
+            href={routes.newDocument("estimate", customer.id)}
+            className="tap-target inline-flex flex-1 items-center justify-center rounded-xl border border-accent/50 bg-accent/10 px-4 py-3 text-base font-semibold text-ink"
+          >
+            Estimate
+          </Link>
           <Link
             href={routes.customer(customer.id)}
             className="tap-target inline-flex flex-1 items-center justify-center rounded-xl bg-accent px-4 py-3 text-base font-semibold text-accent-ink"
