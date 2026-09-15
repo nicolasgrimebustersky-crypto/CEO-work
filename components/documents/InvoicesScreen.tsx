@@ -144,6 +144,7 @@ export function InvoicesScreen() {
 
       {/* ------------------------------------------------------------ top */}
       <header className="pt-safe relative z-10 shrink-0 px-4 pb-2">
+        <div className="mx-auto max-w-3xl">
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-[2rem] leading-none font-extrabold tracking-tight text-ink">
             {title}
@@ -206,6 +207,7 @@ export function InvoicesScreen() {
             className="tap-target mt-3 w-full rounded-full border border-line bg-surface-2 px-4 py-3 text-base text-ink placeholder:text-muted/70 focus:border-accent focus:outline-none"
           />
         ) : null}
+        </div>
       </header>
 
       {/* --------------------------------------------------------- scroll */}
