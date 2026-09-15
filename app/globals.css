@@ -69,7 +69,7 @@
   --color-login-accent-ink: #050607;
 
   /* Customer pin colours — fixed by the status model, do not repurpose. */
-  --color-status-lead: #9aa7b4;
+  --color-status-lead: #f97316;
   --color-status-quoted: #facc15;
   --color-status-customer: #22c55e;
   --color-status-not-interested: #ef4444;
@@ -300,6 +300,26 @@ button {
 .gb-cta-money {
   background: linear-gradient(100deg, #078a3a 0%, var(--color-money) 55%, #4fd97f 100%);
   box-shadow: 0 12px 32px -10px color-mix(in srgb, var(--color-money) 70%, transparent);
+}
+
+/* A pin being placed drops in from just above its spot and settles. Short,
+   because it plays every time a house is tapped; the reduced-motion rule
+   below still freezes it. */
+@keyframes gb-pin-drop {
+  0% {
+    translate: 0 -18px;
+    opacity: 0;
+  }
+  55% {
+    translate: 0 3px;
+    opacity: 1;
+  }
+  80% {
+    translate: 0 -2px;
+  }
+  100% {
+    translate: 0 0;
+  }
 }
 
 /* Chrome paints an autofilled field pale yellow with black text, which on a
