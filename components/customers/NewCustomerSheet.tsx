@@ -6,12 +6,13 @@ import { useNotify } from "@/components/providers/NotificationsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chips";
+import { StatusPicker } from "./StatusPicker";
 import { TextAreaField, TextField } from "@/components/ui/Field";
 import { Sheet } from "@/components/ui/Sheet";
 import { customerEntryProblem, willGeocode } from "@/lib/customerEntry";
 import { createCustomer } from "@/lib/db/customers";
 import { SERVICE_LABEL, STATUS_LABEL } from "@/lib/status";
-import { CUSTOMER_STATUSES, SERVICE_TYPES } from "@/lib/types";
+import { SERVICE_TYPES } from "@/lib/types";
 import type { CustomerStatus, ServiceType } from "@/lib/types";
 
 /**
@@ -146,14 +147,8 @@ export function NewCustomerSheet({
     >
       <div className="flex flex-col gap-4">
         <div>
-          <p className="mb-1.5 text-sm font-semibold text-muted">Status</p>
-          <div className="flex flex-wrap gap-2">
-            {CUSTOMER_STATUSES.map((value) => (
-              <Chip key={value} active={status === value} onClick={() => setStatus(value)}>
-                {STATUS_LABEL[value]}
-              </Chip>
-            ))}
-          </div>
+          <p className="mb-2 text-sm font-semibold text-muted">Status</p>
+          <StatusPicker selected={[status]} onSelect={setStatus} />
         </div>
 
         <div className="grid grid-cols-2 gap-3">

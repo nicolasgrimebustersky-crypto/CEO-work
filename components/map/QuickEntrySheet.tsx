@@ -1,6 +1,7 @@
 "use client";
 
 import { useMapsLibrary } from "@vis.gl/react-google-maps";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { useNotify } from "@/components/providers/NotificationsProvider";
@@ -10,10 +11,12 @@ import { Sheet } from "@/components/ui/Sheet";
 import { createCustomer } from "@/lib/db/customers";
 import { formatCoords } from "@/lib/geo";
 import { reverseGeocode } from "@/lib/geocode";
-import { SERVICE_SHORT_LABEL, STATUS_COLOR, STATUS_INK, STATUS_LABEL } from "@/lib/status";
+import { routes } from "@/lib/routes";
+import { SERVICE_SHORT_LABEL, STATUS_LABEL } from "@/lib/status";
 import { CUSTOMER_STATUSES, SERVICE_TYPES } from "@/lib/types";
 import type { CustomerStatus, LatLng, ServiceType } from "@/lib/types";
-import { Glyph, PinMark, pinGlyphFor, SERVICE_GLYPH, STATUS_GLYPH } from "./pinGlyphs";
+import { StatusPicker } from "@/components/customers/StatusPicker";
+import { Glyph, PinMark, pinGlyphFor, QUOTE_GLYPH, SERVICE_GLYPH } from "./pinGlyphs";
 
 interface QuickEntrySheetProps {
   position: LatLng | null;
@@ -30,10 +33,16 @@ interface QuickEntrySheetProps {
  * The pin at the top of the sheet is the pin that will land on the map,
  * drawn live from the status and service chosen below it. What you see is
  * what the map gets.
+ *
+ * Two ways out: save the pin, or save it and go straight to a blank estimate
+ * for this house. The second is for the door where they said "how much?" —
+ * the price gets written on the driveway with the house in front of you,
+ * and the customer link is one more tap from there.
  */
 export function QuickEntrySheet({ position, onClose, onCreated }: QuickEntrySheetProps) {
   const { author } = useTeam();
   const notify = useNotify();
+  const router = useRouter();
   const geocodingLib = useMapsLibrary("geocoding");
 
   const [firstName, setFirstName] = useState("");
@@ -88,7 +97,7 @@ export function QuickEntrySheet({ position, onClose, onCreated }: QuickEntryShee
     );
   }
 
-  async function save() {
+  async function save(thenEstimate = false) {
     if (!position || !author) return;
     setSaving(true);
     setError(null);
@@ -115,6 +124,9 @@ export function QuickEntrySheet({ position, onClose, onCreated }: QuickEntryShee
         customerId: id,
       });
       onCreated(id);
+      // The pin is saved either way; the estimate is just where the next
+      // screen opens. A failed navigation cannot lose the pin.
+      if (thenEstimate) router.push(routes.newDocument("estimate", id));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save this pin.");
       setSaving(false);
@@ -127,22 +139,33 @@ export function QuickEntrySheet({ position, onClose, onCreated }: QuickEntryShee
       title="New pin"
       onClose={onClose}
       footer={
-        <div className="flex gap-3">
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="tap-target rounded-full border border-line bg-surface-2 px-5 text-base font-bold text-ink disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void save(false)}
+              disabled={saving || !author}
+              className="gb-cta-accent tap-target flex h-12 flex-1 items-center justify-center gap-2 rounded-full text-base font-extrabold tracking-wide text-accent-ink uppercase transition hover:brightness-110 active:brightness-95 disabled:opacity-50 disabled:shadow-none"
+            >
+              {saving ? "Saving…" : "Save pin"}
+            </button>
+          </div>
           <button
             type="button"
-            onClick={onClose}
-            disabled={saving}
-            className="tap-target rounded-full border border-line bg-surface-2 px-5 text-base font-bold text-ink disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={save}
+            onClick={() => void save(true)}
             disabled={saving || !author}
-            className="gb-cta-accent tap-target flex h-12 flex-1 items-center justify-center gap-2 rounded-full text-base font-extrabold tracking-wide text-accent-ink uppercase transition hover:brightness-110 active:brightness-95 disabled:opacity-50 disabled:shadow-none"
+            className="tap-target flex h-12 w-full items-center justify-center gap-2 rounded-full border border-accent/50 bg-accent/10 text-base font-bold text-ink transition hover:bg-accent/15 disabled:opacity-50"
           >
-            {saving ? "Saving…" : "Save pin"}
+            <Glyph path={QUOTE_GLYPH} className="size-5 text-accent" />
+            Save and write an estimate
           </button>
         </div>
       }
@@ -171,42 +194,10 @@ export function QuickEntrySheet({ position, onClose, onCreated }: QuickEntryShee
           </div>
         </div>
 
-        {/* Status: one tap, each in its own colour, the same colour the pin
-            will be. */}
+        {/* Status: one tap, the same badge the map will draw. */}
         <fieldset>
           <legend className="mb-2 text-sm font-bold text-muted">Status</legend>
-          <div className="grid grid-cols-3 gap-2">
-            {CUSTOMER_STATUSES.map((value) => {
-              const active = status === value;
-              const color = STATUS_COLOR[value];
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => setStatus(value)}
-                  className={`tap-target flex flex-col items-center gap-2 rounded-2xl border px-2 py-3 text-center text-sm font-bold transition ${
-                    active
-                      ? "bg-surface-3 text-ink"
-                      : "border-line bg-surface text-muted hover:bg-surface-2"
-                  }`}
-                  style={active ? { borderColor: color, boxShadow: `inset 0 0 0 1px ${color}` } : undefined}
-                >
-                  <span
-                    className="flex size-10 items-center justify-center rounded-full"
-                    style={{
-                      backgroundColor: color,
-                      color: STATUS_INK[value],
-                      boxShadow: value === "do_not_knock" ? "inset 0 0 0 1.5px #6b7785" : undefined,
-                    }}
-                  >
-                    <Glyph path={STATUS_GLYPH[value]} className="size-5" />
-                  </span>
-                  <span className="leading-tight">{STATUS_LABEL[value]}</span>
-                </button>
-              );
-            })}
-          </div>
+          <StatusPicker selected={[status]} onSelect={setStatus} />
         </fieldset>
 
         {/* What they want. */}

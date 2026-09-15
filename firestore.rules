@@ -182,7 +182,7 @@ service cloud.firestore {
     // in a two-device app looks like data loss.
     function validCustomer() {
       let data = request.resource.data;
-      return data.status in ['lead', 'quoted', 'customer', 'not_interested', 'do_not_knock']
+      return data.status in ['lead', 'not_home', 'callback', 'interested', 'quoted', 'customer', 'not_interested', 'do_not_knock']
         && data.pipelineStage in [
              'new_lead', 'estimate_sent', 'estimate_accepted', 'job_scheduled',
              'awaiting_payment', 'paid', 'lost'

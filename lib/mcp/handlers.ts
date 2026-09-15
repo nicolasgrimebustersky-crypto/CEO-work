@@ -12,6 +12,9 @@ import { isTwilioConfigured, sendSms } from "@/lib/server/twilio";
 import type { AuthorisedKey } from "@/lib/server/apiKeyAuth";
 import { findTool } from "./tools";
 
+/** Doors still in play for the leads tool: everything short of a sale or a no. */
+const OPEN_LEAD_STATUSES = new Set(["lead", "not_home", "callback", "interested", "quoted"]);
+
 /**
  * What the tools actually do.
  *
@@ -194,7 +197,7 @@ async function listLeadsTool(args: Args) {
   const now = Date.now();
   const leads = snap.docs
     .map(rowOf)
-    .filter((row) => row.status === "lead" || row.status === "quoted")
+    .filter((row) => OPEN_LEAD_STATUSES.has(String(row.status)))
     .filter((row) => !stage || row.pipelineStage === stage)
     .map((row) => {
       const changed = (row.pipelineChangedAt as Timestamp | undefined)?.toMillis() ?? now;
