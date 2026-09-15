@@ -61,7 +61,7 @@ export const PIPELINE_HINT: Record<PipelineStage, string> = {
  * identical on two screens. This runs cool-to-warm as the deal progresses.
  */
 export const PIPELINE_COLOR: Record<PipelineStage, string> = {
-  new_lead: "#9aa7b4",
+  new_lead: "#f97316",
   estimate_sent: "#38bdf8",
   estimate_accepted: "#818cf8",
   job_scheduled: "#00d9ff",

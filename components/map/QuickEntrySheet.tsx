@@ -5,16 +5,15 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useNotify } from "@/components/providers/NotificationsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
-import { Button } from "@/components/ui/Button";
-import { Chip } from "@/components/ui/Chips";
 import { SelectField, TextAreaField, TextField } from "@/components/ui/Field";
 import { Sheet } from "@/components/ui/Sheet";
 import { createCustomer } from "@/lib/db/customers";
 import { formatCoords } from "@/lib/geo";
 import { reverseGeocode } from "@/lib/geocode";
-import { SERVICE_LABEL, STATUS_LABEL } from "@/lib/status";
+import { SERVICE_SHORT_LABEL, STATUS_COLOR, STATUS_INK, STATUS_LABEL } from "@/lib/status";
 import { CUSTOMER_STATUSES, SERVICE_TYPES } from "@/lib/types";
 import type { CustomerStatus, LatLng, ServiceType } from "@/lib/types";
+import { Glyph, PinMark, pinGlyphFor, SERVICE_GLYPH, STATUS_GLYPH } from "./pinGlyphs";
 
 interface QuickEntrySheetProps {
   position: LatLng | null;
@@ -27,6 +26,10 @@ interface QuickEntrySheetProps {
  * driveway: the address fills itself in, status is one tap, and nothing but a
  * status is actually required — you can save "black pin, do not knock" in two
  * taps and keep walking.
+ *
+ * The pin at the top of the sheet is the pin that will land on the map,
+ * drawn live from the status and service chosen below it. What you see is
+ * what the map gets.
  */
 export function QuickEntrySheet({ position, onClose, onCreated }: QuickEntrySheetProps) {
   const { author } = useTeam();
@@ -125,38 +128,115 @@ export function QuickEntrySheet({ position, onClose, onCreated }: QuickEntryShee
       onClose={onClose}
       footer={
         <div className="flex gap-3">
-          <Button variant="secondary" onClick={onClose} disabled={saving}>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="tap-target rounded-full border border-line bg-surface-2 px-5 text-base font-bold text-ink disabled:opacity-50"
+          >
             Cancel
-          </Button>
-          <Button full onClick={save} disabled={saving || !author}>
+          </button>
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving || !author}
+            className="gb-cta-accent tap-target flex h-12 flex-1 items-center justify-center gap-2 rounded-full text-base font-extrabold tracking-wide text-accent-ink uppercase transition hover:brightness-110 active:brightness-95 disabled:opacity-50 disabled:shadow-none"
+          >
             {saving ? "Saving…" : "Save pin"}
-          </Button>
+          </button>
         </div>
       }
     >
-      <div className="flex flex-col gap-4">
-        <div>
-          <p className="mb-1.5 text-sm font-semibold text-muted">Status</p>
-          <div className="flex flex-wrap gap-2">
-            {CUSTOMER_STATUSES.map((value) => (
-              <Chip
-                key={value}
-                active={status === value}
-                onClick={() => setStatus(value)}
-              >
-                {STATUS_LABEL[value]}
-              </Chip>
-            ))}
+      <div className="flex flex-col gap-5">
+        {/* Where. The pin preview is live: it is the exact mark that will
+            land on the map once this is saved. */}
+        <div className="flex items-center gap-3 rounded-3xl border border-line bg-surface-2 p-3 pr-4">
+          <div className="flex size-14 shrink-0 items-center justify-center">
+            <PinMark status={status} glyph={pinGlyphFor(status)} className="size-12" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <label htmlFor="pin-address" className="sr-only">
+              Address
+            </label>
+            <input
+              id="pin-address"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder={lookingUp ? "Looking up the address…" : "Street address"}
+              className="w-full bg-transparent text-lg leading-tight font-bold text-ink placeholder:font-semibold placeholder:text-muted/80 focus:outline-none"
+            />
+            <p className="mt-0.5 text-sm font-semibold text-muted tabular-nums">
+              {position ? formatCoords(position) : ""}
+            </p>
           </div>
         </div>
 
-        <TextField
-          label="Address"
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-          placeholder={lookingUp ? "Looking up address…" : "Street address"}
-          hint={position ? formatCoords(position) : undefined}
-        />
+        {/* Status: one tap, each in its own colour, the same colour the pin
+            will be. */}
+        <fieldset>
+          <legend className="mb-2 text-sm font-bold text-muted">Status</legend>
+          <div className="grid grid-cols-3 gap-2">
+            {CUSTOMER_STATUSES.map((value) => {
+              const active = status === value;
+              const color = STATUS_COLOR[value];
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setStatus(value)}
+                  className={`tap-target flex flex-col items-center gap-2 rounded-2xl border px-2 py-3 text-center text-sm font-bold transition ${
+                    active
+                      ? "bg-surface-3 text-ink"
+                      : "border-line bg-surface text-muted hover:bg-surface-2"
+                  }`}
+                  style={active ? { borderColor: color, boxShadow: `inset 0 0 0 1px ${color}` } : undefined}
+                >
+                  <span
+                    className="flex size-10 items-center justify-center rounded-full"
+                    style={{
+                      backgroundColor: color,
+                      color: STATUS_INK[value],
+                      boxShadow: value === "do_not_knock" ? "inset 0 0 0 1.5px #6b7785" : undefined,
+                    }}
+                  >
+                    <Glyph path={STATUS_GLYPH[value]} className="size-5" />
+                  </span>
+                  <span className="leading-tight">{STATUS_LABEL[value]}</span>
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+
+        {/* What they want. */}
+        <fieldset>
+          <legend className="mb-2 text-sm font-bold text-muted">Interested in</legend>
+          <div className="grid grid-cols-3 gap-2">
+            {SERVICE_TYPES.map((service) => {
+              const active = serviceTypes.includes(service);
+              return (
+                <button
+                  key={service}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => toggleService(service)}
+                  className={`tap-target flex items-center justify-center gap-2 rounded-2xl border px-2 py-3 text-sm font-bold transition ${
+                    active
+                      ? "border-accent bg-accent/15 text-ink"
+                      : "border-line bg-surface text-muted hover:bg-surface-2"
+                  }`}
+                >
+                  <Glyph
+                    path={SERVICE_GLYPH[service]}
+                    className={`size-5 shrink-0 ${active ? "text-accent" : ""}`}
+                  />
+                  <span>{SERVICE_SHORT_LABEL[service]}</span>
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
 
         <div className="grid grid-cols-2 gap-3">
           <TextField
@@ -181,21 +261,6 @@ export function QuickEntrySheet({ position, onClose, onCreated }: QuickEntryShee
           onChange={(e) => setPhone(e.target.value)}
         />
 
-        <div>
-          <p className="mb-1.5 text-sm font-semibold text-muted">Interested in</p>
-          <div className="flex flex-wrap gap-2">
-            {SERVICE_TYPES.map((service) => (
-              <Chip
-                key={service}
-                active={serviceTypes.includes(service)}
-                onClick={() => toggleService(service)}
-              >
-                {SERVICE_LABEL[service]}
-              </Chip>
-            ))}
-          </div>
-        </div>
-
         <TextAreaField
           label="Notes"
           value={note}
@@ -206,7 +271,7 @@ export function QuickEntrySheet({ position, onClose, onCreated }: QuickEntryShee
         {error ? (
           <p
             role="alert"
-            className="rounded-xl border border-danger/60 bg-danger/15 px-3 py-2.5 text-base font-semibold text-ink"
+            className="rounded-2xl border border-danger/60 bg-danger/15 px-3 py-2.5 text-base font-semibold text-ink"
           >
             {error}
           </p>

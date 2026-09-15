@@ -1,13 +1,17 @@
 import type { CustomerStatus, JobStatus, QuoteStatus, ServiceType } from "./types";
 
 /**
- * Pin colours are part of the spec, not a theme choice: gray=lead,
+ * Pin colours are part of the spec, not a theme choice: orange=lead,
  * yellow=quoted, green=customer, red=not interested, black=do not knock.
  * These hex values are duplicated as CSS custom properties in globals.css —
  * they are needed here as literals because map markers are drawn inline.
+ *
+ * Lead was grey until the owner pointed at the map they wanted: a street of
+ * fresh doors should look warm and worth walking, not like the pins nobody
+ * has got to. Grey now means nothing on the map, which is the point.
  */
 export const STATUS_COLOR: Record<CustomerStatus, string> = {
-  lead: "#9aa7b4",
+  lead: "#f97316",
   quoted: "#facc15",
   customer: "#22c55e",
   not_interested: "#ef4444",
