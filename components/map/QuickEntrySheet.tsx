@@ -10,10 +10,11 @@ import { Sheet } from "@/components/ui/Sheet";
 import { createCustomer } from "@/lib/db/customers";
 import { formatCoords } from "@/lib/geo";
 import { reverseGeocode } from "@/lib/geocode";
-import { SERVICE_SHORT_LABEL, STATUS_COLOR, STATUS_INK, STATUS_LABEL } from "@/lib/status";
+import { SERVICE_SHORT_LABEL, STATUS_LABEL } from "@/lib/status";
 import { CUSTOMER_STATUSES, SERVICE_TYPES } from "@/lib/types";
 import type { CustomerStatus, LatLng, ServiceType } from "@/lib/types";
-import { Glyph, PinMark, pinGlyphFor, SERVICE_GLYPH, STATUS_GLYPH } from "./pinGlyphs";
+import { StatusPicker } from "@/components/customers/StatusPicker";
+import { Glyph, PinMark, pinGlyphFor, SERVICE_GLYPH } from "./pinGlyphs";
 
 interface QuickEntrySheetProps {
   position: LatLng | null;
@@ -171,42 +172,10 @@ export function QuickEntrySheet({ position, onClose, onCreated }: QuickEntryShee
           </div>
         </div>
 
-        {/* Status: one tap, each in its own colour, the same colour the pin
-            will be. */}
+        {/* Status: one tap, the same badge the map will draw. */}
         <fieldset>
           <legend className="mb-2 text-sm font-bold text-muted">Status</legend>
-          <div className="grid grid-cols-3 gap-2">
-            {CUSTOMER_STATUSES.map((value) => {
-              const active = status === value;
-              const color = STATUS_COLOR[value];
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => setStatus(value)}
-                  className={`tap-target flex flex-col items-center gap-2 rounded-2xl border px-2 py-3 text-center text-sm font-bold transition ${
-                    active
-                      ? "bg-surface-3 text-ink"
-                      : "border-line bg-surface text-muted hover:bg-surface-2"
-                  }`}
-                  style={active ? { borderColor: color, boxShadow: `inset 0 0 0 1px ${color}` } : undefined}
-                >
-                  <span
-                    className="flex size-10 items-center justify-center rounded-full"
-                    style={{
-                      backgroundColor: color,
-                      color: STATUS_INK[value],
-                      boxShadow: value === "do_not_knock" ? "inset 0 0 0 1.5px #6b7785" : undefined,
-                    }}
-                  >
-                    <Glyph path={STATUS_GLYPH[value]} className="size-5" />
-                  </span>
-                  <span className="leading-tight">{STATUS_LABEL[value]}</span>
-                </button>
-              );
-            })}
-          </div>
+          <StatusPicker selected={[status]} onSelect={setStatus} />
         </fieldset>
 
         {/* What they want. */}

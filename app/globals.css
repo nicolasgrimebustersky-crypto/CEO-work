@@ -70,6 +70,9 @@
 
   /* Customer pin colours — fixed by the status model, do not repurpose. */
   --color-status-lead: #f97316;
+  --color-status-not-home: #2563eb;
+  --color-status-callback: #14b8a6;
+  --color-status-interested: #7c3aed;
   --color-status-quoted: #facc15;
   --color-status-customer: #22c55e;
   --color-status-not-interested: #ef4444;

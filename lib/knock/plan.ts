@@ -197,6 +197,9 @@ export function nextStop<T extends { id: string }>(
  */
 export const KNOCKABLE_STATUSES: readonly string[] = [
   "lead",
+  "not_home",
+  "callback",
+  "interested",
   "quoted",
   "not_interested",
 ];

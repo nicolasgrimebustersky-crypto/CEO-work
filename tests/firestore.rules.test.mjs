@@ -327,6 +327,25 @@ describe("customer author stamps", () => {
     );
   });
 
+  test("every status the picker offers is accepted", async () => {
+    // The rules mirror CUSTOMER_STATUSES by hand. A status added to the app
+    // and not here would let a phone save a pin the database then refuses.
+    for (const status of [
+      "lead",
+      "not_home",
+      "callback",
+      "interested",
+      "quoted",
+      "customer",
+      "not_interested",
+      "do_not_knock",
+    ]) {
+      await assertSucceeds(
+        setDoc(doc(alice, "customers", `status-${status}`), customerDoc("alice", { status })),
+      );
+    }
+  });
+
   test("a customer with a bogus status or coordinates is rejected", async () => {
     await assertFails(
       addDoc(collection(alice, "customers"), customerDoc("alice", { status: "vip" })),

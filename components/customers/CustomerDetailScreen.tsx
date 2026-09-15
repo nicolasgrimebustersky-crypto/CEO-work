@@ -47,6 +47,7 @@ import { CUSTOMER_STATUSES, QUOTE_STATUSES } from "@/lib/types";
 import type { Job, Photo, Quote } from "@/lib/types";
 import { JobSheet } from "@/components/schedule/JobSheet";
 import { EditCustomerSheet } from "./EditCustomerSheet";
+import { StatusPicker } from "./StatusPicker";
 import { NotesTimeline } from "./NotesTimeline";
 import { QuoteSheet } from "./QuoteSheet";
 import { SendTextSheet } from "./SendTextSheet";
@@ -400,17 +401,11 @@ export function CustomerDetailScreen() {
 
         <section>
           <h2 className="mb-2 text-lg font-bold text-ink">Status</h2>
-          <div className="flex flex-wrap gap-2">
-            {CUSTOMER_STATUSES.map((status) => (
-              <Chip
-                key={status}
-                active={customer.status === status}
-                onClick={busy ? undefined : () => void onStatusChange(status)}
-              >
-                {STATUS_LABEL[status]}
-              </Chip>
-            ))}
-          </div>
+          <StatusPicker
+            selected={[customer.status]}
+            disabled={busy}
+            onSelect={(status) => void onStatusChange(status)}
+          />
         </section>
 
         <section>

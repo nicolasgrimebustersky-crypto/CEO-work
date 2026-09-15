@@ -119,7 +119,12 @@ export function syncStatusToStage(
 
   switch (stage) {
     case "estimate_sent":
-      return status === "lead" ? "quoted" : null;
+      return status === "lead" ||
+        status === "not_home" ||
+        status === "callback" ||
+        status === "interested"
+        ? "quoted"
+        : null;
     case "estimate_accepted":
     case "job_scheduled":
     case "awaiting_payment":
