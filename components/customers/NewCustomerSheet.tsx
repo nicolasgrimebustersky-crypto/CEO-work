@@ -115,7 +115,8 @@ export function NewCustomerSheet({
         },
         author,
       );
-      await notify({
+      // Behind the closing sheet, not in front of it — see QuickEntrySheet.
+      void notify({
         type: "customer_added",
         body: `${[firstName, lastName].filter(Boolean).join(" ") || address || "New lead"} · added by hand · ${STATUS_LABEL[status]}`,
         customerId: id,

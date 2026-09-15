@@ -61,7 +61,9 @@ export function QuickEntrySheet({ position, onClose, onCreated }: QuickEntryShee
     [geocodingLib],
   );
 
-  // Reset and re-look-up whenever a new pin is dropped.
+  // Reset and re-look-up whenever a new pin is dropped. `saving` is reset
+  // here as well as after each save: this component stays mounted between
+  // pins, so anything not cleared is what the next house starts with.
   useEffect(() => {
     if (!position) return;
     setFirstName("");
@@ -72,6 +74,7 @@ export function QuickEntrySheet({ position, onClose, onCreated }: QuickEntryShee
     setServiceTypes([]);
     setNote("");
     setError(null);
+    setSaving(false);
   }, [position]);
 
   useEffect(() => {
@@ -98,7 +101,7 @@ export function QuickEntrySheet({ position, onClose, onCreated }: QuickEntryShee
   }
 
   async function save(thenEstimate = false) {
-    if (!position || !author) return;
+    if (!position || !author || saving) return;
     setSaving(true);
     setError(null);
     try {
@@ -118,7 +121,11 @@ export function QuickEntrySheet({ position, onClose, onCreated }: QuickEntryShee
         },
         author,
       );
-      await notify({
+      // The pin is on the map the moment the write lands. Telling the crew
+      // is a second round trip — a notification record plus a push call —
+      // and nobody standing at the next door should wait on it, so it runs
+      // behind the closing sheet. `notify` swallows its own failures.
+      void notify({
         type: "customer_added",
         body: `${[firstName, lastName].filter(Boolean).join(" ") || "New pin"} · ${address || "no address yet"} · ${STATUS_LABEL[status]}`,
         customerId: id,
@@ -129,6 +136,9 @@ export function QuickEntrySheet({ position, onClose, onCreated }: QuickEntryShee
       if (thenEstimate) router.push(routes.newDocument("estimate", id));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save this pin.");
+    } finally {
+      // Always. This component stays mounted between pins, and a flag left
+      // true here is a Save button that never comes back for the next house.
       setSaving(false);
     }
   }
