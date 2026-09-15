@@ -271,6 +271,37 @@ button {
   }
 }
 
+/* ------------------------------------------------------------- money
+   The wash of colour at the top of the Money screen, and its one big
+   button. Cyan for invoices and green for estimates — the same two hues the
+   rest of the app uses, so switching kind visibly changes the screen without
+   introducing a third colour. The wash fades to nothing by the middle of the
+   screen so the list below sits on the plain canvas. */
+.gb-money-glow-accent {
+  background: radial-gradient(
+    120% 70% at 50% -10%,
+    color-mix(in srgb, var(--color-accent) 22%, transparent) 0%,
+    color-mix(in srgb, var(--color-accent) 8%, transparent) 45%,
+    transparent 100%
+  );
+}
+.gb-money-glow-money {
+  background: radial-gradient(
+    120% 70% at 50% -10%,
+    color-mix(in srgb, var(--color-money) 28%, transparent) 0%,
+    color-mix(in srgb, var(--color-money) 10%, transparent) 45%,
+    transparent 100%
+  );
+}
+.gb-cta-accent {
+  background: linear-gradient(100deg, #00b8e0 0%, var(--color-accent) 55%, #7deeff 100%);
+  box-shadow: 0 12px 32px -10px color-mix(in srgb, var(--color-accent) 70%, transparent);
+}
+.gb-cta-money {
+  background: linear-gradient(100deg, #078a3a 0%, var(--color-money) 55%, #4fd97f 100%);
+  box-shadow: 0 12px 32px -10px color-mix(in srgb, var(--color-money) 70%, transparent);
+}
+
 /* Chrome paints an autofilled field pale yellow with black text, which on a
    dark glass card is a white block with invisible text. The inset shadow is
    the only reliable way to repaint it. */

@@ -936,6 +936,117 @@ export const demoDocuments: BusinessDocument[] = [
     ],
     { issuedDaysAgo: 0, notes: "Still measuring the back border." },
   ),
+  // A few months of history behind the current ones, so the row of month
+  // cards on the Money screen has something to compare against. Statuses
+  // are what a month of real work looks like: mostly paid, one that was not.
+  demoDoc(
+    "dd-6",
+    "8900",
+    "invoice",
+    "paid",
+    "d-fb-hargrove",
+    "Tom Hargrove",
+    "pressure_washing",
+    [line("dd-6-a", "House wash", "Soft wash, all elevations.", 1, 425)],
+    {
+      issuedDaysAgo: 41,
+      dueInDays: 14,
+      payments: [
+        {
+          id: "dd-6-p1",
+          amount: 450.5,
+          receivedAt: ago(35),
+          method: "Zelle",
+          recordedBy: DEMO_NICK,
+          recordedByName: "Nick",
+        },
+      ],
+    },
+  ),
+  demoDoc(
+    "dd-7",
+    "8901",
+    "invoice",
+    "paid",
+    "d-vasquez",
+    "Lena Vasquez",
+    "landscaping",
+    [
+      line("dd-7-a", "Mulch, installed", "Brown hardwood, per cubic yard.", 8, 42),
+      line("dd-7-b", "Bed edging", "Fresh spade edge on every bed.", 1, 180, false),
+    ],
+    {
+      issuedDaysAgo: 48,
+      dueInDays: 14,
+      payments: [
+        {
+          id: "dd-7-p1",
+          amount: 536.16,
+          receivedAt: ago(40),
+          method: "Check 1180",
+          recordedBy: DEMO_DANA,
+          recordedByName: "Dana",
+        },
+      ],
+    },
+  ),
+  demoDoc(
+    "dd-8",
+    "8898",
+    "invoice",
+    "paid",
+    "d-ferris",
+    "Bill Ferris",
+    "pressure_washing",
+    [line("dd-8-a", "Driveway and walk", "Surface-cleaned and rinsed.", 1, 210)],
+    {
+      issuedDaysAgo: 75,
+      dueInDays: 14,
+      payments: [
+        {
+          id: "dd-8-p1",
+          amount: 222.6,
+          receivedAt: ago(70),
+          method: "Card",
+          recordedBy: DEMO_NICK,
+          recordedByName: "Nick",
+        },
+      ],
+    },
+  ),
+  demoDoc(
+    "dd-9",
+    "8899",
+    "estimate",
+    "accepted",
+    "d-okonkwo",
+    "Grace Okonkwo",
+    "landscaping",
+    [line("dd-9-a", "Spring cleanup", "Beds, shrubs, lawn, haul-away.", 1, 390)],
+    { issuedDaysAgo: 70, dueInDays: 30 },
+  ),
+  demoDoc(
+    "dd-10",
+    "8902",
+    "estimate",
+    "declined",
+    "d-tackett",
+    "Rhonda Tackett",
+    "pressure_washing",
+    [line("dd-10-a", "Roof wash", "Soft wash, asphalt shingle.", 1, 650)],
+    { issuedDaysAgo: 44, dueInDays: 30 },
+  ),
+  demoDoc(
+    "dd-11",
+    "8903",
+    "estimate",
+    "sent",
+    "d-mcabee",
+    "Joan McAbee",
+    "pressure_washing",
+    [line("dd-11-a", "Fence wash", "Both sides, 180 feet.", 1, 400)],
+    { issuedDaysAgo: 2, dueInDays: 30 },
+  ),
 ];
 
 /**
