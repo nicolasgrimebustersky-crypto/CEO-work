@@ -12,10 +12,11 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 
+import { apiUrl } from "@/lib/apiBase";
 import { isBootstrapCrew, SIGNUP_ROLE, type Role } from "@/lib/auth/roles";
 import { isDemoMode } from "@/lib/demo/enabled";
 import * as demo from "@/lib/demo/store";
-import { COLLECTIONS, getDb } from "@/lib/firebase";
+import { COLLECTIONS, getDb, getFirebaseAuth } from "@/lib/firebase";
 import {
   isNotificationCategory,
   type NotificationCategory,
@@ -214,23 +215,43 @@ export async function setUserRole(uid: string, role: Role): Promise<void> {
 }
 
 /**
- * Admin deletion of a user account. Removes both the Firestore document and
- * the Firebase Auth account. This is an API operation, not a direct Firestore
- * write, because it requires admin SDK access to delete the auth account.
+ * Admin removal of somebody else's account, profile and sign-in together.
+ *
+ * Goes through the API rather than writing Firestore directly, for a reason
+ * the rules make unavoidable: deleting a profile is allowed only for its own
+ * owner (see firestore.rules), and deleting the Firebase Auth account needs
+ * the Admin SDK, which exists only on the server. Leaving the sign-in behind
+ * would be the worst of both — the person is gone from the crew list and can
+ * still sign in, landing in the pending state with a fresh profile.
+ *
+ * Sends the caller's ID token, which is what `requireCrew` on the route reads
+ * to confirm this is the admin and not just anybody who found the endpoint.
  */
 export async function deleteUser(uid: string): Promise<void> {
-  const response = await fetch("/api/users/delete", {
+  if (isDemoMode) {
+    demo.remove(COLLECTIONS.users, uid);
+    return;
+  }
+
+  const current = getFirebaseAuth().currentUser;
+  if (!current) throw new Error("Not signed in.");
+
+  const response = await fetch(apiUrl("/api/users/delete"), {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${await current.getIdToken()}`,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({ uid }),
   });
 
   if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
+    const data: unknown = await response.json().catch(() => ({}));
+    const message = (data as { error?: unknown })?.error;
     throw new Error(
-      typeof (data as { error?: unknown })?.error === "string"
-        ? (data as { error: string }).error
-        : `Failed to delete account (${response.status})`,
+      typeof message === "string" && message
+        ? message
+        : `Could not delete that account (${response.status}).`,
     );
   }
 }

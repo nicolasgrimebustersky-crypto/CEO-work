@@ -1,4 +1,10 @@
-import type { CustomerStatus, JobStatus, QuoteStatus, ServiceType } from "./types";
+import type {
+  CustomerStatus,
+  JobStatus,
+  PropertyType,
+  QuoteStatus,
+  ServiceType,
+} from "./types";
 
 /**
  * Pin colours are part of the spec, not a theme choice: orange=lead,
@@ -67,6 +73,11 @@ export const SERVICE_SHORT_LABEL: Record<ServiceType, string> = {
   pressure_washing: "Wash",
   landscaping: "Lawn",
   snow_removal: "Snow",
+};
+
+export const PROPERTY_TYPE_LABEL: Record<PropertyType, string> = {
+  residential: "Residential",
+  commercial: "Commercial",
 };
 
 export const JOB_STATUS_LABEL: Record<JobStatus, string> = {

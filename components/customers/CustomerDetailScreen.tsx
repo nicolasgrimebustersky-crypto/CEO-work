@@ -38,6 +38,7 @@ import {
 } from "@/lib/format";
 import {
   JOB_STATUS_LABEL,
+  PROPERTY_TYPE_LABEL,
   QUOTE_STATUS_LABEL,
   SERVICE_LABEL,
   STATUS_LABEL,
@@ -354,6 +355,40 @@ export function CustomerDetailScreen() {
                 )}
               </dd>
             </div>
+
+            {/* Only worth a line when it is the unusual one. Almost every
+                record is a house, and a row that says "Residential" on all of
+                them is a row nobody reads. */}
+            {customer.propertyType === "commercial" ? (
+              <Row label="Property" value={PROPERTY_TYPE_LABEL.commercial} />
+            ) : null}
+
+            {/* The other sites of a commercial customer, each navigable in its
+                own right — the whole point of holding them on one record
+                instead of as separate customers nothing tied together. */}
+            {customer.addresses.map((site, index) => (
+              <div
+                key={`${site.address}-${index}`}
+                className="flex items-start justify-between gap-4 px-3 py-2.5"
+              >
+                <dt className="text-sm font-bold text-muted">
+                  {index === 0 ? "Other locations" : ""}
+                </dt>
+                <dd className="text-right text-base font-semibold break-words text-ink">
+                  {canNavigateTo(site) ? (
+                    <NavigateLink
+                      destination={site}
+                      label={`Directions to ${site.address}`}
+                      className="text-accent underline decoration-accent/40 underline-offset-4"
+                    >
+                      {site.address}
+                    </NavigateLink>
+                  ) : (
+                    site.address
+                  )}
+                </dd>
+              </div>
+            ))}
 
             <Row
               label="Services"

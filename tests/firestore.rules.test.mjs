@@ -321,6 +321,50 @@ describe("customer author stamps", () => {
     );
   });
 
+  test("every property type the picker offers is accepted", async () => {
+    // The rules mirror PROPERTY_TYPES in lib/types.ts by hand, same as the
+    // statuses below. A type added to the app and not here would let a phone
+    // save a customer the database then refuses.
+    for (const propertyType of ["residential", "commercial"]) {
+      await assertSucceeds(
+        addDoc(collection(alice, "customers"), customerDoc("alice", { propertyType })),
+      );
+    }
+  });
+
+  test("a customer with a bogus property type is rejected", async () => {
+    await assertFails(
+      addDoc(collection(alice, "customers"), customerDoc("alice", { propertyType: "industrial" })),
+    );
+  });
+
+  test("a customer written before property types existed is still editable", async () => {
+    // The guard is deliberately optional. Every record in the book predates
+    // the field, and a rule that required it would freeze all of them.
+    await assertSucceeds(addDoc(collection(alice, "customers"), customerDoc("alice")));
+    await assertSucceeds(
+      updateDoc(doc(alice, "customers/c1"), stampedUpdate("alice", { status: "interested" })),
+    );
+  });
+
+  test("the extra sites of a commercial customer must be a list", async () => {
+    await assertSucceeds(
+      addDoc(
+        collection(alice, "customers"),
+        customerDoc("alice", {
+          propertyType: "commercial",
+          addresses: [{ address: "410 Herr Ln", lat: 38.2718, lng: -85.6156 }],
+        }),
+      ),
+    );
+    await assertFails(
+      addDoc(
+        collection(alice, "customers"),
+        customerDoc("alice", { propertyType: "commercial", addresses: "410 Herr Ln" }),
+      ),
+    );
+  });
+
   test("a customer with a bogus pipeline stage is rejected", async () => {
     await assertFails(
       addDoc(collection(alice, "customers"), customerDoc("alice", { pipelineStage: "won" })),

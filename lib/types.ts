@@ -28,6 +28,15 @@ export const SERVICE_TYPES = [
 ] as const;
 export type ServiceType = (typeof SERVICE_TYPES)[number];
 
+/**
+ * A house or a business. The distinction earns its place by changing what a
+ * record can hold: a house is one front door, and a commercial customer is
+ * often one contact, one bill and several sites — the apartment company with
+ * four properties, the restaurant group with three patios. Those were being
+ * entered as separate customers that nothing tied together.
+ *
+ * Mirrored in firestore.rules — add here, add there.
+ */
 export const PROPERTY_TYPES = ["residential", "commercial"] as const;
 export type PropertyType = (typeof PROPERTY_TYPES)[number];
 
@@ -111,6 +120,15 @@ export interface AppUser {
   quietHours: boolean;
 }
 
+/**
+ * One more site belonging to a commercial customer.
+ *
+ * Coordinates are 0,0 when the address could not be geocoded, which is the
+ * same thing an un-geocoded import looks like and is handled the same way:
+ * lib/maps.ts treats 0,0 as no fix and navigates to the written address
+ * instead. A site that could not be placed on the map is still a site somebody
+ * has to drive to, so it is kept rather than refused.
+ */
 export interface CustomerLocation {
   address: string;
   lat: number;
@@ -131,10 +149,22 @@ export interface Customer {
   tags: string[];
   /** Service types this customer has been quoted for or bought. Drives map filtering. */
   serviceTypes: ServiceType[];
-  /** Residential or commercial. Defaults to residential. */
-  propertyType?: PropertyType;
-  /** Additional locations for commercial properties. */
-  addresses?: CustomerLocation[];
+  /**
+   * A house or a business. Absent on every record written before this existed,
+   * which reads back as 'residential' — the overwhelming majority, and the
+   * reading that changes nothing about how those records behave.
+   */
+  propertyType: PropertyType;
+  /**
+   * The *other* sites, for a commercial customer. `address`/`lat`/`lng` above
+   * stay the primary one, so every existing screen, the map pin and the
+   * directions link keep working without knowing this field exists.
+   *
+   * Always empty for a residential customer: one house, one address. See
+   * lib/db/customers.ts, which enforces that on write rather than trusting a
+   * caller to have cleared it.
+   */
+  addresses: CustomerLocation[];
   createdAt: Timestamp;
   createdBy: string;
   createdByName: string;

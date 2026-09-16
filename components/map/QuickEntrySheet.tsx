@@ -14,7 +14,8 @@ import { reverseGeocode } from "@/lib/geocode";
 import { routes } from "@/lib/routes";
 import { SERVICE_SHORT_LABEL, STATUS_LABEL } from "@/lib/status";
 import { CUSTOMER_STATUSES, SERVICE_TYPES } from "@/lib/types";
-import type { CustomerStatus, LatLng, ServiceType } from "@/lib/types";
+import type { CustomerStatus, LatLng, PropertyType, ServiceType } from "@/lib/types";
+import { PropertyTypePicker } from "@/components/customers/PropertyTypePicker";
 import { StatusPicker } from "@/components/customers/StatusPicker";
 import { Glyph, PinMark, pinGlyphFor, QUOTE_GLYPH, SERVICE_GLYPH } from "./pinGlyphs";
 
@@ -52,7 +53,7 @@ export function QuickEntrySheet({ position, onClose, onCreated }: QuickEntryShee
   const [status, setStatus] = useState<CustomerStatus>("lead");
   const [serviceTypes, setServiceTypes] = useState<ServiceType[]>([]);
   const [note, setNote] = useState("");
-  const [propertyType, setPropertyType] = useState<"residential" | "commercial">("residential");
+  const [propertyType, setPropertyType] = useState<PropertyType>("residential");
   const [lookingUp, setLookingUp] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -207,33 +208,13 @@ export function QuickEntrySheet({ position, onClose, onCreated }: QuickEntryShee
           </div>
         </div>
 
-        {/* Property type: residential or commercial. */}
+        {/* House or business. The other sites of a commercial customer are
+            added from the customer's own screen, not here: this sheet is for
+            the door in front of you, and a second address is something you
+            know back in the truck. */}
         <fieldset>
           <legend className="mb-2 text-sm font-bold text-muted">Property type</legend>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setPropertyType("residential")}
-              className={`tap-target flex-1 rounded-2xl border px-4 py-3 text-sm font-bold transition ${
-                propertyType === "residential"
-                  ? "border-accent bg-accent/15 text-ink"
-                  : "border-line bg-surface text-muted hover:bg-surface-2"
-              }`}
-            >
-              Residential
-            </button>
-            <button
-              type="button"
-              onClick={() => setPropertyType("commercial")}
-              className={`tap-target flex-1 rounded-2xl border px-4 py-3 text-sm font-bold transition ${
-                propertyType === "commercial"
-                  ? "border-accent bg-accent/15 text-ink"
-                  : "border-line bg-surface text-muted hover:bg-surface-2"
-              }`}
-            >
-              Commercial
-            </button>
-          </div>
+          <PropertyTypePicker value={propertyType} onChange={setPropertyType} />
         </fieldset>
 
         {/* Status: one tap, the same badge the map will draw. */}
