@@ -384,22 +384,27 @@ export async function changeStatus(
 }
 
 /**
- * Places a record that arrived without coordinates — an import, or a lead form
- * with an address but no pin. Deliberately narrower than updateCustomer: a
- * bulk backfill running over the whole book should not be able to write
- * anything except the position.
+ * Places a record that arrived without coordinates — an import, a lead form
+ * with an address but no pin, or a commercial customer typed in at a desk with
+ * four addresses and no map in sight.
+ *
+ * Deliberately narrower than updateCustomer: a bulk backfill running over the
+ * whole book should not be able to write anything except positions. The pin
+ * and the other sites move together or not at all, in one write, because a
+ * record with four addresses should cost one save rather than four.
  */
-export async function setCoordinates(
+export async function placeCustomer(
   id: string,
-  lat: number,
-  lng: number,
+  place: { lat?: number; lng?: number; addresses?: CustomerLocation[] },
   author: Author,
 ): Promise<void> {
   // The stamps are not optional: firestore.rules refuses any update that does
   // not carry a fresh updatedBy/updatedAt from the caller.
   await writeCustomer(id, {
-    lat,
-    lng,
+    ...(typeof place.lat === "number" && typeof place.lng === "number"
+      ? { lat: place.lat, lng: place.lng }
+      : {}),
+    ...(place.addresses ? { addresses: asLocations(place.addresses) } : {}),
     updatedAt: serverTimestamp(),
     updatedBy: author.uid,
     updatedByName: author.displayName,
