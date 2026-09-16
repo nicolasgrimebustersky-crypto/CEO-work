@@ -214,6 +214,28 @@ export async function setUserRole(uid: string, role: Role): Promise<void> {
 }
 
 /**
+ * Admin deletion of a user account. Removes both the Firestore document and
+ * the Firebase Auth account. This is an API operation, not a direct Firestore
+ * write, because it requires admin SDK access to delete the auth account.
+ */
+export async function deleteUser(uid: string): Promise<void> {
+  const response = await fetch("/api/users/delete", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ uid }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(
+      typeof (data as { error?: unknown })?.error === "string"
+        ? (data as { error: string }).error
+        : `Failed to delete account (${response.status})`,
+    );
+  }
+}
+
+/**
  * Which notification categories this person is allowed to receive at all.
  *
  * Admin-only, and enforced in the rules rather than merely hidden: a person

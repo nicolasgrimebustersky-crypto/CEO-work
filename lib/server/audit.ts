@@ -36,7 +36,8 @@ export type AuditAction =
   | "push.sent"
   | "mcp.call"
   | "mcp.denied"
-  | "quote.answered";
+  | "quote.answered"
+  | "admin.user.deleted";
 
 export interface AuditEntry {
   action: AuditAction;
