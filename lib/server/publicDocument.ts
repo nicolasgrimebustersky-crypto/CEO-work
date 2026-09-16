@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { DocumentSnapshot } from "firebase-admin/firestore";
+
 import { adminDb } from "@/lib/server/admin";
 import { looksLikeShareToken, normalizeShareToken } from "@/lib/shareLinks";
 import { DEFAULT_TAX_RATE_PCT, type BusinessDocument, type DocumentStatus } from "@/lib/documents";
@@ -107,6 +109,19 @@ export async function findByShareToken(
   const hit = snap.docs[0];
   if (!hit) return null;
 
+  const document = serializeDocument(hit);
+  if (!document) return null;
+
+  return { document, customer: await customerFor(document.customerId) };
+}
+
+/**
+ * One document, reduced to what a customer may see. Shared by the share-token
+ * link and the account portal, so "what a customer sees" is decided in exactly
+ * one place. Returns null for a document that should not be shown at all.
+ */
+export function serializeDocument(hit: DocumentSnapshot): SerialDocument | null {
+  if (!hit.exists) return null;
   const data = hit.data() ?? {};
   const status = text(data.status) as DocumentStatus;
 
@@ -178,7 +193,7 @@ export async function findByShareToken(
     updatedAtMs: millis(data.updatedAt),
   };
 
-  return { document, customer: await customerFor(document.customerId) };
+  return document;
 }
 
 /**
@@ -189,9 +204,7 @@ export async function findByShareToken(
  * do-not-knock flag, internal notes — and a link a stranger can open is the
  * last place to hand over a record that grew a field nobody reviewed.
  */
-async function customerFor(customerId: string): Promise<SerialCustomer | null> {
-  if (!customerId) return null;
-  const snap = await adminDb().collection("customers").doc(customerId).get();
+export function serializeCustomer(snap: DocumentSnapshot): SerialCustomer | null {
   if (!snap.exists) return null;
   const data = snap.data() ?? {};
   return {
@@ -202,4 +215,10 @@ async function customerFor(customerId: string): Promise<SerialCustomer | null> {
     email: text(data.email),
     address: text(data.address),
   };
+}
+
+export async function customerFor(customerId: string): Promise<SerialCustomer | null> {
+  if (!customerId) return null;
+  const snap = await adminDb().collection("customers").doc(customerId).get();
+  return serializeCustomer(snap);
 }

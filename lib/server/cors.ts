@@ -18,6 +18,10 @@ const ALLOWED_ORIGINS = new Set([
   // Local development of the native shell.
   "http://localhost",
   "http://localhost:3000",
+  // The marketing site hosts the customer account portal, which calls
+  // /api/portal/* here with a Firebase session.
+  "https://grimebusterskyllc.com",
+  "https://www.grimebusterskyllc.com",
 ]);
 
 function isAllowed(origin: string | null): origin is string {
