@@ -52,6 +52,7 @@ export function QuickEntrySheet({ position, onClose, onCreated }: QuickEntryShee
   const [status, setStatus] = useState<CustomerStatus>("lead");
   const [serviceTypes, setServiceTypes] = useState<ServiceType[]>([]);
   const [note, setNote] = useState("");
+  const [propertyType, setPropertyType] = useState<"residential" | "commercial">("residential");
   const [lookingUp, setLookingUp] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +74,7 @@ export function QuickEntrySheet({ position, onClose, onCreated }: QuickEntryShee
     setStatus("lead");
     setServiceTypes([]);
     setNote("");
+    setPropertyType("residential");
     setError(null);
     setSaving(false);
   }, [position]);
@@ -118,6 +120,7 @@ export function QuickEntrySheet({ position, onClose, onCreated }: QuickEntryShee
           serviceTypes,
           tags: [],
           note,
+          propertyType,
         },
         author,
       );
@@ -203,6 +206,35 @@ export function QuickEntrySheet({ position, onClose, onCreated }: QuickEntryShee
             </p>
           </div>
         </div>
+
+        {/* Property type: residential or commercial. */}
+        <fieldset>
+          <legend className="mb-2 text-sm font-bold text-muted">Property type</legend>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setPropertyType("residential")}
+              className={`tap-target flex-1 rounded-2xl border px-4 py-3 text-sm font-bold transition ${
+                propertyType === "residential"
+                  ? "border-accent bg-accent/15 text-ink"
+                  : "border-line bg-surface text-muted hover:bg-surface-2"
+              }`}
+            >
+              Residential
+            </button>
+            <button
+              type="button"
+              onClick={() => setPropertyType("commercial")}
+              className={`tap-target flex-1 rounded-2xl border px-4 py-3 text-sm font-bold transition ${
+                propertyType === "commercial"
+                  ? "border-accent bg-accent/15 text-ink"
+                  : "border-line bg-surface text-muted hover:bg-surface-2"
+              }`}
+            >
+              Commercial
+            </button>
+          </div>
+        </fieldset>
 
         {/* Status: one tap, the same badge the map will draw. */}
         <fieldset>

@@ -24,7 +24,7 @@ import {
   syncStatusToStage,
   type PipelineStage,
 } from "@/lib/pipeline";
-import { CUSTOMER_STATUSES, LEAD_SOURCES, SERVICE_TYPES } from "@/lib/types";
+import { CUSTOMER_STATUSES, LEAD_SOURCES, SERVICE_TYPES, PROPERTY_TYPES } from "@/lib/types";
 import type {
   Author,
   Customer,
@@ -32,6 +32,7 @@ import type {
   LeadSource,
   Note,
   NoteKind,
+  PropertyType,
   ServiceType,
 } from "@/lib/types";
 
@@ -65,6 +66,9 @@ function asNotes(value: unknown): Note[] {
 
 export function toCustomer(snap: QueryDocumentSnapshot<DocumentData>): Customer {
   const data = snap.data();
+  const propertyType = PROPERTY_TYPES.includes(data.propertyType as PropertyType)
+    ? (data.propertyType as PropertyType)
+    : "residential";
   return {
     id: snap.id,
     firstName: typeof data.firstName === "string" ? data.firstName : "",
@@ -78,6 +82,17 @@ export function toCustomer(snap: QueryDocumentSnapshot<DocumentData>): Customer 
     notes: asNotes(data.notes),
     tags: Array.isArray(data.tags) ? data.tags.filter((t) => typeof t === "string") : [],
     serviceTypes: asServiceTypes(data.serviceTypes),
+    propertyType,
+    addresses: Array.isArray(data.addresses)
+      ? data.addresses.filter(
+          (addr): addr is { address: string; lat: number; lng: number } =>
+            typeof addr === "object" &&
+            addr !== null &&
+            typeof addr.address === "string" &&
+            typeof addr.lat === "number" &&
+            typeof addr.lng === "number",
+        )
+      : undefined,
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt : Timestamp.now(),
     createdBy: typeof data.createdBy === "string" ? data.createdBy : "",
     createdByName: typeof data.createdByName === "string" ? data.createdByName : "Unknown",
@@ -163,6 +178,7 @@ export interface NewCustomerInput {
   serviceTypes: ServiceType[];
   tags: string[];
   note: string;
+  propertyType?: PropertyType;
   source?: LeadSource;
   sourceLeadId?: string | null;
 }
@@ -184,6 +200,7 @@ export async function createCustomer(
     notes,
     tags: input.tags,
     serviceTypes: input.serviceTypes,
+    propertyType: input.propertyType ?? "residential",
     createdAt: serverTimestamp(),
     createdBy: author.uid,
     createdByName: author.displayName,
