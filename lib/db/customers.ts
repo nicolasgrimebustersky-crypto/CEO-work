@@ -24,10 +24,12 @@ import {
   syncStatusToStage,
   type PipelineStage,
 } from "@/lib/pipeline";
-import { CUSTOMER_STATUSES, LEAD_SOURCES, SERVICE_TYPES, PROPERTY_TYPES } from "@/lib/types";
+import { asLocations, asPropertyType, propertyFields } from "@/lib/property";
+import { CUSTOMER_STATUSES, LEAD_SOURCES, SERVICE_TYPES } from "@/lib/types";
 import type {
   Author,
   Customer,
+  CustomerLocation,
   CustomerStatus,
   LeadSource,
   Note,
@@ -66,9 +68,7 @@ function asNotes(value: unknown): Note[] {
 
 export function toCustomer(snap: QueryDocumentSnapshot<DocumentData>): Customer {
   const data = snap.data();
-  const propertyType = PROPERTY_TYPES.includes(data.propertyType as PropertyType)
-    ? (data.propertyType as PropertyType)
-    : "residential";
+  const propertyType = asPropertyType(data.propertyType);
   return {
     id: snap.id,
     firstName: typeof data.firstName === "string" ? data.firstName : "",
@@ -83,16 +83,9 @@ export function toCustomer(snap: QueryDocumentSnapshot<DocumentData>): Customer 
     tags: Array.isArray(data.tags) ? data.tags.filter((t) => typeof t === "string") : [],
     serviceTypes: asServiceTypes(data.serviceTypes),
     propertyType,
-    addresses: Array.isArray(data.addresses)
-      ? data.addresses.filter(
-          (addr): addr is { address: string; lat: number; lng: number } =>
-            typeof addr === "object" &&
-            addr !== null &&
-            typeof addr.address === "string" &&
-            typeof addr.lat === "number" &&
-            typeof addr.lng === "number",
-        )
-      : undefined,
+    // A residential record has no extra sites even if a stale document still
+    // carries some — the type is what the app shows, so it decides.
+    addresses: propertyType === "commercial" ? asLocations(data.addresses) : [],
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt : Timestamp.now(),
     createdBy: typeof data.createdBy === "string" ? data.createdBy : "",
     createdByName: typeof data.createdByName === "string" ? data.createdByName : "Unknown",
@@ -179,6 +172,8 @@ export interface NewCustomerInput {
   tags: string[];
   note: string;
   propertyType?: PropertyType;
+  /** Extra sites, commercial only. Ignored for a residential record. */
+  addresses?: CustomerLocation[];
   source?: LeadSource;
   sourceLeadId?: string | null;
 }
@@ -200,7 +195,7 @@ export async function createCustomer(
     notes,
     tags: input.tags,
     serviceTypes: input.serviceTypes,
-    propertyType: input.propertyType ?? "residential",
+    ...propertyFields(input.propertyType ?? "residential", input.addresses ?? []),
     createdAt: serverTimestamp(),
     createdBy: author.uid,
     createdByName: author.displayName,
@@ -303,6 +298,8 @@ export type CustomerPatch = Partial<
     | "tags"
     | "serviceTypes"
     | "lifetimeValue"
+    | "propertyType"
+    | "addresses"
   >
 >;
 
@@ -320,6 +317,11 @@ export async function updateCustomer(
     ...patch,
     // Stored lowercase so the account portal's exact-match lookup finds it.
     ...(typeof patch.email === "string" ? { email: patch.email.trim().toLowerCase() } : {}),
+    // Only when the type is part of this edit: a patch that touches neither
+    // field must not reach in and clear the sites of a commercial customer.
+    ...(patch.propertyType
+      ? propertyFields(patch.propertyType, patch.addresses ?? [])
+      : {}),
     updatedAt: serverTimestamp(),
     updatedBy: author.uid,
     updatedByName: author.displayName,

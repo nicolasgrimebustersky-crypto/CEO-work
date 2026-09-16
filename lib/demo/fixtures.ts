@@ -128,6 +128,10 @@ interface Seed {
   contactedDays: number | null;
   lifetime: number;
   source?: Customer["source"];
+  /** Absent means a house, which is what nearly every seed is. */
+  property?: Customer["propertyType"];
+  /** Commercial only: the customer's other sites. */
+  sites?: Customer["addresses"];
   /** Overrides the derived creation time, for pins logged this week. */
   createdAt?: Timestamp;
   notes: Note[];
@@ -413,6 +417,40 @@ const seeds: Seed[] = [
     notes: [note("Asked us not to call again. Marked do not knock.", "status_change", DEMO_DANA, "Dana", 20)],
   },
   {
+    // The case the property type exists for: one contact, one bill, four
+    // sites. Before this, these were four customers with no way to tell they
+    // were the same company.
+    id: "d-brookfield",
+    first: "Alicia",
+    last: "Reyes",
+    address: "2200 Brookfield Commons Dr, Louisville, KY 40245",
+    lat: 38.2896,
+    lng: -85.5134,
+    status: "customer",
+    stage: "paid",
+    value: 2400,
+    services: ["pressure_washing", "landscaping"],
+    by: DEMO_NICK,
+    byName: "Nick",
+    contactedDays: 5,
+    lifetime: 7200,
+    property: "commercial",
+    sites: [
+      { address: "1815 Shelbyville Rd, Middletown, KY 40243", lat: 38.2447, lng: -85.5389 },
+      { address: "410 Herr Ln, Louisville, KY 40222", lat: 38.2718, lng: -85.6156 },
+      { address: "9200 Westport Rd, Louisville, KY 40242", lat: 38.2891, lng: -85.5972 },
+    ],
+    notes: [
+      note(
+        "Property manager for four buildings. One invoice for all of them, sidewalks quarterly.",
+        "note",
+        DEMO_NICK,
+        "Nick",
+        5,
+      ),
+    ],
+  },
+  {
     id: "d-perrone",
     first: "Lou",
     last: "Perrone",
@@ -444,6 +482,8 @@ export const demoCustomers: Customer[] = seeds.map((s) => ({
   notes: [...s.notes].sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis()),
   tags: s.source === "meta_lead_ad" ? ["facebook"] : [],
   serviceTypes: s.services,
+  propertyType: s.property ?? "residential",
+  addresses: s.property === "commercial" ? (s.sites ?? []) : [],
   createdAt: s.createdAt ?? ago(s.contactedDays === null ? 30 : s.contactedDays + 4),
   createdBy: s.by,
   createdByName: s.byName,

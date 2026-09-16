@@ -189,7 +189,11 @@ service cloud.firestore {
            ]
         && data.lat is number
         && data.lng is number
-        && data.notes is list;
+        && data.notes is list
+        // Optional on purpose: every customer written before the field existed
+        // has no propertyType, and those documents still have to be editable.
+        && (!('propertyType' in data) || data.propertyType in ['residential', 'commercial'])
+        && (!('addresses' in data) || data.addresses is list);
     }
 
     function validJob() {
