@@ -3,6 +3,7 @@
 import { APIProvider, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { useEffect, useMemo, useState } from "react";
 
+import { OtherLocationsField } from "@/components/customers/OtherLocationsField";
 import { PropertyTypePicker } from "@/components/customers/PropertyTypePicker";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { Button } from "@/components/ui/Button";
@@ -84,16 +85,6 @@ function EditCustomerForm({ customer, open, onClose }: EditCustomerSheetProps) {
   function changePropertyType(next: PropertyType) {
     setPropertyType(next);
     if (next !== "commercial") setSites([]);
-  }
-
-  function editSite(index: number, value: string) {
-    setSites((current) =>
-      current.map((site, i) =>
-        // A retyped address is a different place, so the old fix is dropped and
-        // the row is geocoded again on save.
-        i === index ? { address: value, lat: 0, lng: 0 } : site,
-      ),
-    );
   }
 
   async function save() {
@@ -205,51 +196,8 @@ function EditCustomerForm({ customer, open, onClose }: EditCustomerSheetProps) {
             others, each with its own directions link on the customer's
             screen. */}
         {propertyType === "commercial" ? (
-          <div>
-            <p className="mb-1.5 text-sm font-semibold text-muted">
-              Other locations{sites.length > 0 ? ` (${sites.length})` : ""}
-            </p>
-            {sites.length === 0 ? (
-              <p className="mb-2 text-sm font-medium text-muted">
-                One site so far. Add the rest of their properties here.
-              </p>
-            ) : (
-              <ul className="mb-2 flex flex-col gap-2">
-                {sites.map((site, index) => (
-                  <li key={index} className="flex items-center gap-2">
-                    <input
-                      value={site.address}
-                      onChange={(e) => editSite(index, e.target.value)}
-                      placeholder="Street address"
-                      aria-label={`Location ${index + 2}`}
-                      className="tap-target min-w-0 flex-1 rounded-2xl border border-line bg-surface-2 px-3 text-base font-semibold text-ink placeholder:font-medium placeholder:text-muted/80 focus:border-accent focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={() =>
-                        setSites((current) => current.filter((_, i) => i !== index))
-                      }
-                      aria-label={`Remove location ${index + 2}`}
-                      className="tap-target shrink-0 rounded-2xl border border-line bg-surface-2 px-3 text-sm font-bold text-muted transition hover:bg-surface-3 hover:text-ink disabled:opacity-50"
-                    >
-                      Remove
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <Button
-              variant="secondary"
-              full
-              disabled={saving}
-              onClick={() => setSites((current) => [...current, { address: "", lat: 0, lng: 0 }])}
-            >
-              Add another location
-            </Button>
-          </div>
+          <OtherLocationsField sites={sites} onChange={setSites} disabled={saving} />
         ) : null}
-
         <div>
           <p className="mb-1.5 text-sm font-semibold text-muted">Services</p>
           <div className="flex flex-wrap gap-2">

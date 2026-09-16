@@ -6,6 +6,8 @@ import { useNotify } from "@/components/providers/NotificationsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chips";
+import { OtherLocationsField } from "./OtherLocationsField";
+import { PropertyTypePicker } from "./PropertyTypePicker";
 import { StatusPicker } from "./StatusPicker";
 import { TextAreaField, TextField } from "@/components/ui/Field";
 import { Sheet } from "@/components/ui/Sheet";
@@ -13,7 +15,7 @@ import { customerEntryProblem, willGeocode } from "@/lib/customerEntry";
 import { createCustomer } from "@/lib/db/customers";
 import { SERVICE_LABEL, STATUS_LABEL } from "@/lib/status";
 import { SERVICE_TYPES } from "@/lib/types";
-import type { CustomerStatus, ServiceType } from "@/lib/types";
+import type { CustomerLocation, CustomerStatus, PropertyType, ServiceType } from "@/lib/types";
 
 /**
  * Adding somebody by hand, with no pin.
@@ -50,6 +52,8 @@ export function NewCustomerSheet({
   const [address, setAddress] = useState("");
   const [status, setStatus] = useState<CustomerStatus>("lead");
   const [serviceTypes, setServiceTypes] = useState<ServiceType[]>([]);
+  const [propertyType, setPropertyType] = useState<PropertyType>("residential");
+  const [sites, setSites] = useState<CustomerLocation[]>([]);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +67,8 @@ export function NewCustomerSheet({
     setAddress("");
     setStatus("lead");
     setServiceTypes([]);
+    setPropertyType("residential");
+    setSites([]);
     setNote("");
     setError(null);
   }, [open]);
@@ -107,6 +113,11 @@ export function NewCustomerSheet({
           lng: 0,
           status,
           serviceTypes,
+          propertyType,
+          // No coordinates here either, for the same reason as the main
+          // address: this sheet exists for the lead with no pin. The map's
+          // backfill places every site that has an address and no fix.
+          addresses: sites,
           tags: [],
           note,
           // Not a door knock. Keeping that honest is what makes the reports
@@ -200,6 +211,31 @@ export function NewCustomerSheet({
               : "Optional — without one they won't appear on the map."}
           </p>
         </div>
+
+        {/* House or business. Offered here and not only on the map, because
+            most commercial customers never arrive through a knocked door —
+            they come in as a phone call about four properties at once. */}
+        <div>
+          <p className="mb-1.5 text-sm font-semibold text-muted">Property type</p>
+          <PropertyTypePicker
+            value={propertyType}
+            onChange={(next) => {
+              setPropertyType(next);
+              // Residential is one address, on screen as well as on write.
+              if (next !== "commercial") setSites([]);
+            }}
+            disabled={saving}
+          />
+        </div>
+
+        {propertyType === "commercial" ? (
+          <OtherLocationsField
+            sites={sites}
+            onChange={setSites}
+            disabled={saving}
+            hint="Each one gets its own directions link on their record, and lands on the map with the address above."
+          />
+        ) : null}
 
         <div>
           <p className="mb-1.5 text-sm font-semibold text-muted">Interested in</p>

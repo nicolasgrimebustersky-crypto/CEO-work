@@ -137,6 +137,11 @@ async function ingestLead(leadgenId: string, formId: string | null): Promise<str
     notes,
     tags: ["facebook"],
     serviceTypes: [],
+    // A lead form says nothing about the building, so this is the honest
+    // default rather than a guess. Anybody can change it on the record, and
+    // reads treat a missing value the same way (lib/property.ts).
+    propertyType: "residential",
+    addresses: [],
     createdAt: submitted,
     createdBy: SYSTEM_AUTHOR.uid,
     createdByName: SYSTEM_AUTHOR.name,
