@@ -8,8 +8,8 @@ import type { Customer, CustomerStatus, ServiceType } from "@/lib/types";
  *
  * A pin is its status, twice over: the colour is the fixed
  * lead/quoted/customer/no/never palette the whole app shares, and the mark
- * inside says the same thing in a shape — a house, a price tag, a dollar,
- * a no-entry sign, a ban sign. The service glyphs live here too, for the
+ * inside says the same thing in a shape — a house, a door, a clock, a star,
+ * a price tag, a dollar, a no-entry sign, a ban sign. The service glyphs live here too, for the
  * entry form and anywhere else a drop, a leaf or a snowflake is wanted.
  *
  * Every glyph is a path in a 24×24 box so it can be dropped into a pin, a
@@ -52,9 +52,24 @@ export const PLUS_GLYPH =
 export const DOLLAR_GLYPH =
   "M12 2a1 1 0 0 1 1 1v1.1c2.3.3 4 1.8 4.2 3.9a1 1 0 0 1-2 .2c-.1-1.1-1.1-2-2.7-2.1h-1.1c-1.5 0-2.6.8-2.6 1.9 0 1 .7 1.6 2.5 2l1.5.3c2.9.6 4.3 1.9 4.3 4.1 0 2.2-1.7 3.7-4.1 4v1.6a1 1 0 1 1-2 0v-1.6c-2.5-.3-4.3-1.9-4.5-4.1a1 1 0 0 1 2-.2c.1 1.2 1.3 2.1 3 2.2h1c1.6 0 2.7-.8 2.7-2 0-1-.7-1.6-2.5-2l-1.5-.3C7.3 11.6 6 10.3 6 8.2c0-2.1 1.7-3.6 4-4V3a1 1 0 0 1 1-1h1Z";
 
+/** A closed door: knocked, nobody answered. */
+export const DOOR_GLYPH =
+  "M5 3h14v18H5V3Zm2 2v14h10V5H7Zm7.3 6a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4Z";
+
+/** A clock: come back at a better time. */
+export const CLOCK_GLYPH =
+  "M12 2.5a9.5 9.5 0 1 1 0 19 9.5 9.5 0 0 1 0-19Zm0 2a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15ZM11 7h2v5.4l3.4 2-1 1.7L11 13.5V7Z";
+
+/** A star: interested, worth a price. */
+export const STAR_GLYPH =
+  "M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8L12 2.8Z";
+
 /** The mark a status card shows: what the status *means*, not a service. */
 export const STATUS_GLYPH: Record<CustomerStatus, string> = {
   lead: HOUSE_GLYPH,
+  not_home: DOOR_GLYPH,
+  callback: CLOCK_GLYPH,
+  interested: STAR_GLYPH,
   quoted: QUOTE_GLYPH,
   customer: DOLLAR_GLYPH,
   not_interested: NO_GLYPH,

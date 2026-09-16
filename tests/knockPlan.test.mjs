@@ -190,6 +190,13 @@ describe("who is worth knocking", () => {
     assert.equal(isKnockable("quoted"), true);
   });
 
+  test("so is anyone who was out, asked you back, or wants a price", () => {
+    // These are the doors a route exists to return to.
+    assert.equal(isKnockable("not_home"), true);
+    assert.equal(isKnockable("callback"), true);
+    assert.equal(isKnockable("interested"), true);
+  });
+
   test("an existing customer is not", () => {
     // Knocking somebody who already buys from you is a cold pitch to a person
     // you are already working for — a wasted door on a finite morning.

@@ -6,14 +6,14 @@ import { useState } from "react";
 import { useNotify } from "@/components/providers/NotificationsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { Button } from "@/components/ui/Button";
-import { Chip, StatusPill, UserChip } from "@/components/ui/Chips";
+import { StatusPill, UserChip } from "@/components/ui/Chips";
 import { NavigateLink } from "@/components/ui/NavigateLink";
+import { StatusPicker } from "@/components/customers/StatusPicker";
 import { Sheet } from "@/components/ui/Sheet";
 import { addNote, changeStatus } from "@/lib/db/customers";
 import { customerName, formatPhone, formatRelative } from "@/lib/format";
 import { canNavigateTo } from "@/lib/maps";
 import { STATUS_LABEL } from "@/lib/status";
-import { CUSTOMER_STATUSES } from "@/lib/types";
 import type { Customer } from "@/lib/types";
 import { routes } from "@/lib/routes";
 
@@ -79,6 +79,14 @@ export function CustomerPreviewSheet({
               Call
             </a>
           ) : null}
+          {/* A price from the driveway: a blank estimate for this house,
+              which the customer's link is one tap from once it is written. */}
+          <Link
+            href={routes.newDocument("estimate", customer.id)}
+            className="tap-target inline-flex flex-1 items-center justify-center rounded-xl border border-accent/50 bg-accent/10 px-4 py-3 text-base font-semibold text-ink"
+          >
+            Estimate
+          </Link>
           <Link
             href={routes.customer(customer.id)}
             className="tap-target inline-flex flex-1 items-center justify-center rounded-xl bg-accent px-4 py-3 text-base font-semibold text-accent-ink"
@@ -128,17 +136,11 @@ export function CustomerPreviewSheet({
 
         <section>
           <h3 className="mb-2 text-sm font-bold text-muted">Change status</h3>
-          <div className="flex flex-wrap gap-2">
-            {CUSTOMER_STATUSES.map((status) => (
-              <Chip
-                key={status}
-                active={customer.status === status}
-                onClick={busy ? undefined : () => void onStatusChange(status)}
-              >
-                {STATUS_LABEL[status]}
-              </Chip>
-            ))}
-          </div>
+          <StatusPicker
+            selected={[customer.status]}
+            disabled={busy}
+            onSelect={(status) => void onStatusChange(status)}
+          />
         </section>
 
         <section>

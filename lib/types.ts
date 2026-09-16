@@ -3,8 +3,17 @@ import type { Timestamp } from "firebase/firestore";
 
 import type { PipelineStage } from "./pipeline";
 
+/**
+ * What a door is, in the order the picker shows them: the open ones first,
+ * warmest last, then the two closed ones. Every status is a pin colour and a
+ * pin mark (lib/status.ts, components/map/pinGlyphs.tsx), and the list is
+ * mirrored in firestore.rules — add here, add there.
+ */
 export const CUSTOMER_STATUSES = [
   "lead",
+  "not_home",
+  "callback",
+  "interested",
   "quoted",
   "customer",
   "not_interested",

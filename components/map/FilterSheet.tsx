@@ -2,13 +2,14 @@
 
 import { useTeam } from "@/components/providers/TeamProvider";
 import { Button } from "@/components/ui/Button";
+import { StatusPicker } from "@/components/customers/StatusPicker";
 import { Chip } from "@/components/ui/Chips";
 import { Sheet } from "@/components/ui/Sheet";
 import { CONTACT_RECENCY_OPTIONS, EMPTY_FILTERS } from "@/lib/filters";
 import type { ContactRecency, CustomerFilters } from "@/lib/filters";
-import { SERVICE_LABEL, STATUS_LABEL } from "@/lib/status";
-import { CUSTOMER_STATUSES, SERVICE_TYPES } from "@/lib/types";
-import type { CustomerStatus, ServiceType } from "@/lib/types";
+import { SERVICE_LABEL } from "@/lib/status";
+import { SERVICE_TYPES } from "@/lib/types";
+import type { ServiceType } from "@/lib/types";
 
 interface FilterSheetProps {
   open: boolean;
@@ -50,19 +51,12 @@ export function FilterSheet({
       <div className="flex flex-col gap-6">
         <section>
           <h3 className="mb-2 text-base font-bold text-ink">Status</h3>
-          <div className="flex flex-wrap gap-2">
-            {CUSTOMER_STATUSES.map((status: CustomerStatus) => (
-              <Chip
-                key={status}
-                active={filters.statuses.includes(status)}
-                onClick={() =>
-                  onChange({ ...filters, statuses: toggle(filters.statuses, status) })
-                }
-              >
-                {STATUS_LABEL[status]}
-              </Chip>
-            ))}
-          </div>
+          <StatusPicker
+            selected={filters.statuses}
+            onSelect={(status) =>
+              onChange({ ...filters, statuses: toggle(filters.statuses, status) })
+            }
+          />
         </section>
 
         <section>
