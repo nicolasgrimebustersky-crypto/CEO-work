@@ -176,7 +176,7 @@ export async function createCustomer(
     firstName: input.firstName.trim(),
     lastName: input.lastName.trim(),
     phone: input.phone.trim(),
-    email: input.email.trim(),
+    email: input.email.trim().toLowerCase(),
     address: input.address.trim(),
     lat: input.lat,
     lng: input.lng,
@@ -301,6 +301,8 @@ export async function updateCustomer(
 ): Promise<void> {
   await writeCustomer(id, {
     ...patch,
+    // Stored lowercase so the account portal's exact-match lookup finds it.
+    ...(typeof patch.email === "string" ? { email: patch.email.trim().toLowerCase() } : {}),
     updatedAt: serverTimestamp(),
     updatedBy: author.uid,
     updatedByName: author.displayName,

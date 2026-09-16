@@ -151,6 +151,13 @@ FIRESTORE_EMULATOR_HOST="127.0.0.1:$FIRESTORE_PORT" \
 TEST_PROJECT="$PROJECT" \
   node --test tests/api.mcp.test.mjs
 
+echo "==> account portal: a customer sees only their own documents"
+TEST_AUTH_EMULATOR="http://127.0.0.1:$AUTH_PORT/identitytoolkit.googleapis.com/v1" \
+TEST_BASE_URL="http://localhost:$PORT" \
+FIRESTORE_EMULATOR_HOST="127.0.0.1:$FIRESTORE_PORT" \
+TEST_PROJECT="$PROJECT" \
+  node --test tests/portal.api.test.mjs
+
 # ---------------------------------------------------------------------------
 # The customer's link.
 #
