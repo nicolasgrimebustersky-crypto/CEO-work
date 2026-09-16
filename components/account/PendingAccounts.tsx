@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 
 import { useTeam } from "@/components/providers/TeamProvider";
 import { Button } from "@/components/ui/Button";
-import { setNotificationScopes, setUserRole } from "@/lib/db/users";
+import { setNotificationScopes, setUserRole, deleteUser } from "@/lib/db/users";
 import {
   CATEGORY_LABEL,
   NOTIFICATION_CATEGORIES,
@@ -41,6 +41,19 @@ export function PendingAccounts() {
       await setUserRole(uid, role);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save that.");
+    } finally {
+      setBusyUid(null);
+    }
+  }, []);
+
+  const remove = useCallback(async (uid: string) => {
+    if (!confirm("Delete this account permanently? This cannot be undone.")) return;
+    setBusyUid(uid);
+    setError(null);
+    try {
+      await deleteUser(uid);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete that account.");
     } finally {
       setBusyUid(null);
     }
@@ -117,15 +130,22 @@ export function PendingAccounts() {
                     Owner account — always has access.
                   </p>
                 ) : (
-                  <Button
-                    variant="danger"
-                    full
-                    className="mt-2.5"
-                    disabled={busyUid === user.uid}
-                    onClick={() => void change(user.uid, "pending")}
-                  >
-                    {busyUid === user.uid ? "Saving…" : "Remove access"}
-                  </Button>
+                  <div className="mt-2.5 grid grid-cols-2 gap-2">
+                    <Button
+                      variant="secondary"
+                      disabled={busyUid === user.uid}
+                      onClick={() => void change(user.uid, "pending")}
+                    >
+                      {busyUid === user.uid ? "Saving…" : "Remove access"}
+                    </Button>
+                    <Button
+                      variant="danger"
+                      disabled={busyUid === user.uid}
+                      onClick={() => void remove(user.uid)}
+                    >
+                      {busyUid === user.uid ? "Deleting…" : "Delete account"}
+                    </Button>
+                  </div>
                 )}
               </li>
             ))}

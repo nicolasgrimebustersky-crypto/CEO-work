@@ -28,6 +28,9 @@ export const SERVICE_TYPES = [
 ] as const;
 export type ServiceType = (typeof SERVICE_TYPES)[number];
 
+export const PROPERTY_TYPES = ["residential", "commercial"] as const;
+export type PropertyType = (typeof PROPERTY_TYPES)[number];
+
 export const JOB_STATUSES = [
   "scheduled",
   "in_progress",
@@ -108,6 +111,12 @@ export interface AppUser {
   quietHours: boolean;
 }
 
+export interface CustomerLocation {
+  address: string;
+  lat: number;
+  lng: number;
+}
+
 export interface Customer {
   id: string;
   firstName: string;
@@ -122,6 +131,10 @@ export interface Customer {
   tags: string[];
   /** Service types this customer has been quoted for or bought. Drives map filtering. */
   serviceTypes: ServiceType[];
+  /** Residential or commercial. Defaults to residential. */
+  propertyType?: PropertyType;
+  /** Additional locations for commercial properties. */
+  addresses?: CustomerLocation[];
   createdAt: Timestamp;
   createdBy: string;
   createdByName: string;
