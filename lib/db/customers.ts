@@ -25,6 +25,7 @@ import {
   type PipelineStage,
 } from "@/lib/pipeline";
 import { asLocations, asPropertyType, propertyFields } from "@/lib/property";
+import { asOrgId, DEFAULT_ORG_ID } from "@/lib/org";
 import { CUSTOMER_STATUSES, LEAD_SOURCES, SERVICE_TYPES } from "@/lib/types";
 import type {
   Author,
@@ -71,6 +72,7 @@ export function toCustomer(snap: QueryDocumentSnapshot<DocumentData>): Customer 
   const propertyType = asPropertyType(data.propertyType);
   return {
     id: snap.id,
+    orgId: asOrgId(data.orgId),
     firstName: typeof data.firstName === "string" ? data.firstName : "",
     lastName: typeof data.lastName === "string" ? data.lastName : "",
     phone: typeof data.phone === "string" ? data.phone : "",
@@ -196,6 +198,7 @@ export async function createCustomer(
     tags: input.tags,
     serviceTypes: input.serviceTypes,
     ...propertyFields(input.propertyType ?? "residential", input.addresses ?? []),
+    orgId: DEFAULT_ORG_ID,
     createdAt: serverTimestamp(),
     createdBy: author.uid,
     createdByName: author.displayName,

@@ -16,6 +16,7 @@ import {
 import { isDemoMode } from "@/lib/demo/enabled";
 import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
+import { asOrgId, DEFAULT_ORG_ID } from "@/lib/org";
 import { within } from "@/lib/knock/territory";
 import type { Author, Customer, LatLng, Territory } from "@/lib/types";
 
@@ -44,6 +45,7 @@ export function toTerritory(snap: QueryDocumentSnapshot<DocumentData>): Territor
   const data = snap.data();
   return {
     id: snap.id,
+    orgId: asOrgId(data.orgId),
     name: typeof data.name === "string" ? data.name : "Untitled territory",
     boundary: asBoundary(data.boundary),
     assignedTo: Array.isArray(data.assignedTo)
@@ -92,6 +94,7 @@ export async function createTerritory(
     assignedTo: input.assignedTo,
     notes: input.notes ?? "",
     active: true,
+    orgId: DEFAULT_ORG_ID,
     createdAt: serverTimestamp(),
     createdBy: author.uid,
     createdByName: author.displayName,

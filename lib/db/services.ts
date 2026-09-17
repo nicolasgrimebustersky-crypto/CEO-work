@@ -17,6 +17,7 @@ import { isDemoMode } from "@/lib/demo/enabled";
 import * as demo from "@/lib/demo/store";
 import type { LineItem } from "@/lib/documents";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
+import { asOrgId, DEFAULT_ORG_ID } from "@/lib/org";
 import { SERVICE_TYPES } from "@/lib/types";
 import type { Author, ServiceType } from "@/lib/types";
 
@@ -34,6 +35,8 @@ const COLLECTION = COLLECTIONS.services;
  */
 export interface SavedService {
   id: string;
+  /** Which business this record belongs to. See lib/org.ts. */
+  orgId: string;
   name: string;
   description: string;
   unitPrice: number;
@@ -65,6 +68,7 @@ export function toService(snap: QueryDocumentSnapshot<DocumentData>): SavedServi
   const data = snap.data();
   return {
     id: snap.id,
+    orgId: asOrgId(data.orgId),
     name: typeof data.name === "string" ? data.name : "",
     description: typeof data.description === "string" ? data.description : "",
     unitPrice: typeof data.unitPrice === "number" ? data.unitPrice : 0,
@@ -170,6 +174,7 @@ export async function rememberServices(
           taxable: item.taxable,
           timesUsed: 1,
           lastUsedAt: serverTimestamp(),
+          orgId: DEFAULT_ORG_ID,
           createdAt: serverTimestamp(),
           createdBy: author.uid,
           createdByName: author.displayName,
@@ -224,6 +229,7 @@ export async function createService(
     taxable: input.taxable,
     timesUsed: 0,
     lastUsedAt: serverTimestamp(),
+    orgId: DEFAULT_ORG_ID,
     createdAt: serverTimestamp(),
     createdBy: author.uid,
     createdByName: author.displayName,

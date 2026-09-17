@@ -1,3 +1,4 @@
+import { BUSINESS } from "./business";
 import type { LatLng } from "./types";
 
 /**
@@ -29,10 +30,16 @@ export async function reverseGeocode(
 /**
  * Address -> coordinates, for placing records that arrived without a pin.
  *
- * Bounded to Kentucky and biased to Oldham County, because the export is full
- * of partial addresses like "Chapel View" or "Polo Fields, Louisville KY" that
- * would otherwise match a street of the same name in another state. A wrong
- * pin is worse than no pin: it sends someone to the wrong house.
+ * Bounded to the business's own state (BUSINESS.serviceAreaState, "KY" here),
+ * because a legacy import or a hand-typed lead is full of partial addresses
+ * like "Chapel View" or "Polo Fields, Louisville" that would otherwise match
+ * a street of the same name in another state entirely. A wrong pin is worse
+ * than no pin: it sends someone to the wrong house.
+ *
+ * A business anywhere else sets NEXT_PUBLIC_SERVICE_AREA_STATE and this
+ * function needs no other change — the county-level bias Oldham gets from
+ * being the deployment's actual service area is a matter of which addresses
+ * get typed in, not anything hard-coded here.
  */
 export async function forwardGeocode(
   geocoder: google.maps.Geocoder,
@@ -41,10 +48,12 @@ export async function forwardGeocode(
   const query = address.trim();
   if (!query) return null;
 
+  const state = BUSINESS.serviceAreaState;
+
   try {
     const { results } = await geocoder.geocode({
-      address: /\bKY\b|kentucky/i.test(query) ? query : `${query}, KY`,
-      componentRestrictions: { country: "US", administrativeArea: "KY" },
+      address: new RegExp(`\\b${state}\\b`, "i").test(query) ? query : `${query}, ${state}`,
+      componentRestrictions: { country: "US", administrativeArea: state },
     });
     if (results.length === 0) return null;
 

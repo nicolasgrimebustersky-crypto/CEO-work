@@ -18,6 +18,7 @@ import {
 import { isDemoMode } from "@/lib/demo/enabled";
 import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
+import { asOrgId, DEFAULT_ORG_ID } from "@/lib/org";
 import { STEP_BY_FIELD, STEP_FIELD, type JobStep } from "@/lib/jobFlow";
 import { JOB_STATUSES, SERVICE_TYPES } from "@/lib/types";
 import type { Author, Job, JobStatus, Photo, ServiceType } from "@/lib/types";
@@ -47,6 +48,7 @@ export function toJob(snap: QueryDocumentSnapshot<DocumentData>): Job {
 
   return {
     id: snap.id,
+    orgId: asOrgId(data.orgId),
     customerId: typeof data.customerId === "string" ? data.customerId : "",
     serviceType,
     scheduledStart:
@@ -198,6 +200,7 @@ export async function createJob(input: NewJobInput, author: Author): Promise<str
     beforePhotos: [],
     afterPhotos: [],
     jobNotes: input.jobNotes,
+    orgId: DEFAULT_ORG_ID,
     completedAt: null,
     completedBy: null,
     paidAt: null,

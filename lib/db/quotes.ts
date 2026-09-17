@@ -16,6 +16,7 @@ import {
 import { isDemoMode } from "@/lib/demo/enabled";
 import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
+import { asOrgId, DEFAULT_ORG_ID } from "@/lib/org";
 import { QUOTE_STATUSES, SERVICE_TYPES } from "@/lib/types";
 import type { Author, Quote, QuoteStatus, ServiceType } from "@/lib/types";
 
@@ -23,6 +24,7 @@ export function toQuote(snap: QueryDocumentSnapshot<DocumentData>): Quote {
   const data = snap.data();
   return {
     id: snap.id,
+    orgId: asOrgId(data.orgId),
     customerId: typeof data.customerId === "string" ? data.customerId : "",
     serviceType: SERVICE_TYPES.includes(data.serviceType as ServiceType)
       ? (data.serviceType as ServiceType)
@@ -105,6 +107,7 @@ export async function createQuote(
     status: "sent" satisfies QuoteStatus,
     followUpCount: 0,
     lastFollowUpAt: null,
+    orgId: DEFAULT_ORG_ID,
   };
 
   if (isDemoMode) return demo.add(COLLECTIONS.quotes, payload);

@@ -1,6 +1,7 @@
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 import { adminDb } from "@/lib/server/admin";
+import { DEFAULT_ORG_ID } from "@/lib/org";
 import {
   fetchLead,
   isMetaConfigured,
@@ -142,6 +143,7 @@ async function ingestLead(leadgenId: string, formId: string | null): Promise<str
     // reads treat a missing value the same way (lib/property.ts).
     propertyType: "residential",
     addresses: [],
+    orgId: DEFAULT_ORG_ID,
     createdAt: submitted,
     createdBy: SYSTEM_AUTHOR.uid,
     createdByName: SYSTEM_AUTHOR.name,

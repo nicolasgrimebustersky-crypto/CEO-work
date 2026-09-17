@@ -19,6 +19,7 @@ import { previewOf } from "@/lib/chat/conversation";
 import { isDemoMode } from "@/lib/demo/enabled";
 import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
+import { asOrgId, DEFAULT_ORG_ID } from "@/lib/org";
 import type { Author, ChatMessage, Conversation } from "@/lib/types";
 
 const COLLECTION = COLLECTIONS.conversations;
@@ -44,6 +45,7 @@ function toConversation(snap: QueryDocumentSnapshot<DocumentData>): Conversation
   const data = snap.data();
   return {
     id: snap.id,
+    orgId: asOrgId(data.orgId),
     title: typeof data.title === "string" ? data.title : "",
     memberUids: Array.isArray(data.memberUids)
       ? data.memberUids.filter((uid): uid is string => typeof uid === "string")
@@ -124,6 +126,7 @@ export async function createConversation(
   const payload = {
     title: (input.title ?? "").trim(),
     memberUids: input.memberUids,
+    orgId: DEFAULT_ORG_ID,
     createdAt: serverTimestamp(),
     createdBy: author.uid,
     createdByName: author.displayName,

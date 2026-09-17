@@ -36,6 +36,7 @@ import {
   type Payment,
 } from "@/lib/documents";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
+import { asOrgId, DEFAULT_ORG_ID } from "@/lib/org";
 import { SERVICE_TYPES } from "@/lib/types";
 import type { Author, Customer, ServiceType } from "@/lib/types";
 
@@ -118,6 +119,7 @@ export function toDocument(snap: QueryDocumentSnapshot<DocumentData>): BusinessD
 
   return {
     id: snap.id,
+    orgId: asOrgId(data.orgId),
     number: typeof data.number === "string" ? data.number : "",
     kind: data.kind === "invoice" ? "invoice" : "estimate",
     status: (typeof data.status === "string" ? data.status : "draft") as DocumentStatus,
@@ -257,6 +259,7 @@ export async function createDocument(
     convertedFromId: null,
     convertedToId: null,
     scheduledJobId: null,
+    orgId: DEFAULT_ORG_ID,
     createdAt: serverTimestamp(),
     createdBy: author.uid,
     createdByName: author.displayName,

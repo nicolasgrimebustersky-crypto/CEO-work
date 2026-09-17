@@ -140,6 +140,8 @@ export interface DocumentDecline {
 
 export interface BusinessDocument {
   id: string;
+  /** Which business this record belongs to. See lib/org.ts. */
+  orgId: string;
   /** Human-facing number, continuing the Invoice Fly sequence. */
   number: string;
   kind: DocumentKind;

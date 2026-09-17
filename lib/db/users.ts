@@ -17,6 +17,7 @@ import { isBootstrapCrew, SIGNUP_ROLE, type Role } from "@/lib/auth/roles";
 import { isDemoMode } from "@/lib/demo/enabled";
 import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb, getFirebaseAuth } from "@/lib/firebase";
+import { asOrgId, DEFAULT_ORG_ID } from "@/lib/org";
 import {
   isNotificationCategory,
   type NotificationCategory,
@@ -27,6 +28,7 @@ function toAppUser(snap: QueryDocumentSnapshot<DocumentData>): AppUser {
   const data = snap.data();
   return {
     uid: snap.id,
+    orgId: asOrgId(data.orgId),
     displayName: typeof data.displayName === "string" ? data.displayName : "Unknown",
     role: data.role === "crew" ? "crew" : "pending",
     phone: typeof data.phone === "string" ? data.phone : "",
@@ -86,6 +88,9 @@ export async function ensureUserDoc(
 
   await setDoc(ref, {
     displayName: fallbackName,
+    // Every account signs up into the one org that exists today. See
+    // lib/org.ts — this is the seam a real sign-up flow would replace.
+    orgId: DEFAULT_ORG_ID,
     phone: "",
     currentLat: null,
     currentLng: null,
