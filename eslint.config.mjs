@@ -7,9 +7,6 @@ const compat = new FlatCompat({
 const eslintConfig = [
   {
     ignores: [
-      // The marketing site is its own Next app with its own config; linting it
-      // from here would apply the CRM's rules to a tree that never sees them.
-      "website/**",
       ".next/**",
       "out/**",
       "build/**",

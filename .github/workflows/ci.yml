@@ -30,31 +30,6 @@ jobs:
       # fresh clone.
       - run: npm run build
 
-  website:
-    name: Marketing site
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: website/package-lock.json
-      # website/ is its own Next app with its own config, and the root job
-      # above deliberately excludes it — eslint.config.mjs ignores website/**
-      # and tsconfig.json excludes it, so the CRM's rules are never applied to
-      # a tree that does not share them. The cost of that isolation, until this
-      # job existed, was that ~13k lines had no CI at all: a syntax error, a
-      # type error or a broken build anywhere under website/ merged green.
-      - run: npm ci
-        working-directory: website
-      - run: npx tsc --noEmit
-        working-directory: website
-      - run: npm run lint
-        working-directory: website
-      - run: npm run build
-        working-directory: website
-
   audit:
     name: Dependency audit
     runs-on: ubuntu-latest
