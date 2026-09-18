@@ -17,6 +17,7 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 
+import { chunkIds } from "@/lib/bulkDelete";
 import { isDemoMode } from "@/lib/demo/enabled";
 import { SHARE_TOKEN_BYTES } from "@/lib/shareLinks";
 import * as demo from "@/lib/demo/store";
@@ -559,6 +560,33 @@ export async function deleteDocument(id: string): Promise<void> {
     return;
   }
   await deleteDoc(doc(getDb(), COLLECTION, id));
+}
+
+/**
+ * Delete several documents at once, from the list's select mode.
+ *
+ * Batched so the whole selection lands as one write per chunk rather than one
+ * round trip per row — the difference between a tap and a visible stall when
+ * somebody clears out a month of test invoices.
+ *
+ * Chunked because Firestore refuses a batch over 500 writes: without it a big
+ * selection is rejected *after* the person has already confirmed it. Chunks
+ * commit in order, so an interruption partway through leaves earlier chunks
+ * deleted and later ones untouched — which is the honest outcome, and why the
+ * caller refreshes from the live listener rather than assuming all or nothing.
+ */
+export async function deleteDocuments(ids: readonly string[]): Promise<void> {
+  if (ids.length === 0) return;
+  if (isDemoMode) {
+    for (const id of ids) demo.remove(COLLECTION, id);
+    return;
+  }
+  const db = getDb();
+  for (const chunk of chunkIds(ids)) {
+    const batch = writeBatch(db);
+    for (const id of chunk) batch.delete(doc(db, COLLECTION, id));
+    await batch.commit();
+  }
 }
 
 /** What the customer still owes across every open invoice. */

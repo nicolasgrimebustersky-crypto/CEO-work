@@ -9,10 +9,12 @@ import {
   serverTimestamp,
   Timestamp,
   updateDoc,
+  writeBatch,
   type DocumentData,
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 
+import { chunkIds } from "@/lib/bulkDelete";
 import { isDemoMode } from "@/lib/demo/enabled";
 import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
@@ -431,4 +433,30 @@ export async function deleteCustomer(id: string): Promise<void> {
     return;
   }
   await deleteDoc(doc(getDb(), COLLECTIONS.customers, id));
+}
+
+/**
+ * Delete several clients at once, from the list's select mode.
+ *
+ * Their estimates and invoices are deliberately left alone. Every document
+ * stores the customer's name on itself, so the paperwork still reads correctly
+ * with the client gone, and — the reason this is the right default — deleting
+ * the documents would silently rewrite past revenue on the dashboard, the Money
+ * screen and Reports. Tidying up the client list should never move last
+ * quarter's numbers.
+ *
+ * Batched and chunked for the same reasons as deleteDocuments.
+ */
+export async function deleteCustomers(ids: readonly string[]): Promise<void> {
+  if (ids.length === 0) return;
+  if (isDemoMode) {
+    for (const id of ids) demo.remove(COLLECTIONS.customers, id);
+    return;
+  }
+  const db = getDb();
+  for (const chunk of chunkIds(ids)) {
+    const batch = writeBatch(db);
+    for (const id of chunk) batch.delete(doc(db, COLLECTIONS.customers, id));
+    await batch.commit();
+  }
 }

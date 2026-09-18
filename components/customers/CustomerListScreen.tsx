@@ -10,6 +10,10 @@ import { useDocuments } from "@/components/providers/DocumentsProvider";
 import { useOpenMenu } from "@/components/shell/menu";
 import { MenuIcon } from "@/components/shell/navIcons";
 import { NotificationBell } from "@/components/shell/NotificationBell";
+import { Button } from "@/components/ui/Button";
+import { SelectionBar, SelectTick } from "@/components/ui/SelectionBar";
+import { clientDeleteNote, confirmCopy, toggleAll, toggleId } from "@/lib/bulkDelete";
+import { deleteCustomers } from "@/lib/db/customers";
 import { Sheet } from "@/components/ui/Sheet";
 import { Spinner } from "@/components/ui/Spinner";
 import { BlastSheet } from "./BlastSheet";
@@ -95,6 +99,19 @@ export function CustomerListScreen() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [blastOpen, setBlastOpen] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [selecting, setSelecting] = useState(false);
+  const [chosenIds, setChosenIds] = useState<string[]>([]);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // How much paperwork the chosen clients leave behind. Counted from the live
+  // documents so the sheet states a real number rather than a warning in the
+  // abstract.
+  const attachedCount = useMemo(
+    () => chosenIds.reduce((total, id) => total + forCustomer(id).length, 0),
+    [chosenIds, forCustomer],
+  );
 
   const money = useMemo(
     () => new Map(customers.map((c) => [c.id, clientMoney(forCustomer(c.id), c)])),
@@ -123,6 +140,19 @@ export function CustomerListScreen() {
               Clients
             </h1>
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelecting((on) => !on);
+                  setChosenIds([]);
+                  setDeleteError(null);
+                }}
+                className={`tap-target rounded-xl px-2 text-base font-bold ${
+                  selecting ? "text-accent" : "text-muted"
+                }`}
+              >
+                {selecting ? "Done" : "Select"}
+              </button>
               <NotificationBell />
               {openMenu ? (
                 <RoundButton label="Open menu" onClick={openMenu}>
@@ -207,6 +237,9 @@ export function CustomerListScreen() {
                   <ClientRow
                     customer={customer}
                     money={money.get(customer.id) ?? clientMoney([], customer)}
+                    selecting={selecting}
+                    checked={chosenIds.includes(customer.id)}
+                    onToggle={() => setChosenIds((current) => toggleId(current, customer.id))}
                   />
                 </li>
               ))}
@@ -216,7 +249,24 @@ export function CustomerListScreen() {
       </div>
 
       {/* ------------------------------------------------------------ add */}
-      <div className="pointer-events-none absolute right-4 bottom-4 z-20">
+      {selecting ? (
+        <SelectionBar
+          selected={chosenIds}
+          visible={rows.map((customer) => customer.id)}
+          noun="client"
+          busy={deleting}
+          onToggleAll={() =>
+            setChosenIds((current) => toggleAll(current, rows.map((customer) => customer.id)))
+          }
+          onDelete={() => setConfirmingDelete(true)}
+          onCancel={() => {
+            setSelecting(false);
+            setChosenIds([]);
+          }}
+        />
+      ) : null}
+
+      <div className={`pointer-events-none absolute right-4 bottom-4 z-20 ${selecting ? "hidden" : ""}`}>
         <button
           type="button"
           onClick={() => setAdding(true)}
@@ -226,6 +276,58 @@ export function CustomerListScreen() {
           Add client
         </button>
       </div>
+
+      <Sheet
+        open={confirmingDelete}
+        title={confirmCopy("client", chosenIds.length).title}
+        onClose={() => (deleting ? undefined : setConfirmingDelete(false))}
+        footer={
+          <div className="flex gap-3">
+            <Button variant="secondary" onClick={() => setConfirmingDelete(false)} disabled={deleting}>
+              Keep them
+            </Button>
+            <Button
+              variant="danger"
+              full
+              disabled={deleting}
+              onClick={() => {
+                void (async () => {
+                  setDeleting(true);
+                  setDeleteError(null);
+                  try {
+                    await deleteCustomers(chosenIds);
+                    setChosenIds([]);
+                    setSelecting(false);
+                    setConfirmingDelete(false);
+                  } catch (err) {
+                    setDeleteError(
+                      err instanceof Error ? err.message : "Could not delete those.",
+                    );
+                  } finally {
+                    setDeleting(false);
+                  }
+                })();
+              }}
+            >
+              {deleting ? "Deleting…" : confirmCopy("client", chosenIds.length).action}
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-base font-semibold text-ink">
+          {confirmCopy("client", chosenIds.length).body}
+        </p>
+        {attachedCount > 0 ? (
+          <p className="mt-3 text-sm font-semibold text-muted">
+            {clientDeleteNote(attachedCount)}
+          </p>
+        ) : null}
+        {deleteError ? (
+          <p role="alert" className="mt-3 text-sm font-bold text-danger">
+            {deleteError}
+          </p>
+        ) : null}
+      </Sheet>
 
       <Sheet open={sorting} title="Sort clients" onClose={() => setSorting(false)}>
         <ul className="flex flex-col gap-2">
@@ -280,17 +382,35 @@ export function CustomerListScreen() {
 
 /* ------------------------------------------------------------------------ */
 
-function ClientRow({ customer, money }: { customer: Customer; money: ClientMoney }) {
+function ClientRow({
+  customer,
+  money,
+  selecting = false,
+  checked = false,
+  onToggle,
+}: {
+  customer: Customer;
+  money: ClientMoney;
+  /** In select mode the row ticks instead of navigating. */
+  selecting?: boolean;
+  checked?: boolean;
+  onToggle?: () => void;
+}) {
   const name = customerName(customer);
   // A pin dropped at a door before anyone answered has an address and no
   // name, and "51" is not anybody's initials.
   const named = `${customer.firstName}${customer.lastName}`.trim().length > 0;
   const fresh = isNewClient(customer.createdAt.toMillis(), money.invoiceCount);
-  return (
-    <Link
-      href={routes.customer(customer.id)}
-      className="flex items-center gap-3.5 px-4 py-3.5 active:bg-surface-2"
-    >
+  const ROW_CLASS =
+    "flex w-full items-center gap-3.5 px-4 py-3.5 text-left active:bg-surface-2";
+
+  // A real button while selecting rather than a Link with its navigation
+  // suppressed: a Link still reads as a link to a screen reader and still
+  // offers "open in new tab" on a long press, neither of which is true of
+  // what the row now does.
+  const body = (
+    <>
+      {selecting ? <SelectTick checked={checked} /> : null}
       <span className="relative shrink-0">
         <span
           aria-hidden="true"
@@ -335,6 +455,16 @@ function ClientRow({ customer, money }: { customer: Customer; money: ClientMoney
           {money.paidPct}% paid
         </span>
       </span>
+    </>
+  );
+
+  return selecting ? (
+    <button type="button" onClick={onToggle} aria-pressed={checked} className={ROW_CLASS}>
+      {body}
+    </button>
+  ) : (
+    <Link href={routes.customer(customer.id)} className={ROW_CLASS}>
+      {body}
     </Link>
   );
 }
