@@ -262,7 +262,12 @@ service cloud.firestore {
         // Optional on purpose: every customer written before the field existed
         // has no propertyType, and those documents still have to be editable.
         && (!('propertyType' in data) || data.propertyType in ['residential', 'commercial'])
-        && (!('addresses' in data) || data.addresses is list);
+        && (!('addresses' in data) || data.addresses is list)
+        // The normalised phone the customer portal matches a sign-in against.
+        // Optional for the same reason as propertyType — records written before
+        // the field existed must stay editable — and only ever a string, so a
+        // list or a map cannot be smuggled into that lookup.
+        && (!('phoneE164' in data) || data.phoneE164 is string);
     }
 
     function validJob() {

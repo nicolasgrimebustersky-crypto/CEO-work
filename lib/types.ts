@@ -150,6 +150,15 @@ export interface Customer {
   firstName: string;
   lastName: string;
   phone: string;
+  /**
+   * The phone in E.164 ("+15025550100"), written alongside the typed one.
+   *
+   * Exists so the customer portal can look somebody up by the number Firebase
+   * verified — the typed field holds whatever was tapped in on a porch and
+   * cannot be matched against it. Optional because records written before this
+   * field existed do not have it; scripts/backfill-phone-e164.mjs fills them.
+   */
+  phoneE164?: string;
   email: string;
   address: string;
   lat: number;
