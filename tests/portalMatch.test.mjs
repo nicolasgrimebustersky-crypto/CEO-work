@@ -177,6 +177,17 @@ describe("claiming a document, where the number is guessable", () => {
     assert.equal(claimMatches({ number: "EST-1041", total: 420.15 }, target), false);
   });
 
+  test("the real stored number format — bare digits, shown as #8904", () => {
+    // nextNumber() returns String(n) and DocumentPaper prints "#{number}", so
+    // the stored value is "8904". Customers copy what they see, and the first
+    // version of the claim form asked for "EST-1042" and matched verbatim,
+    // which meant the flow could not have succeeded for anybody.
+    const real = { number: "8904", total: 420.15 };
+    for (const typed of ["8904", "#8904", " 8904 ", "#8904 ", "EST 8904", "est-8904"]) {
+      assert.equal(claimMatches({ number: typed, total: 420.15 }, real), true, `typed: ${typed}`);
+    }
+  });
+
   test("an empty or nonsense claim is refused", () => {
     for (const attempt of [
       { number: "", total: 420.15 },
@@ -186,6 +197,13 @@ describe("claiming a document, where the number is guessable", () => {
     ]) {
       assert.equal(claimMatches(attempt, target), false, `attempt: ${JSON.stringify(attempt)}`);
     }
+  });
+
+  test("a zero total never satisfies a claim", () => {
+    // The hole this closes: parsing an empty or non-numeric total as 0 would
+    // make any zero-total document claimable on its guessable number alone.
+    assert.equal(claimMatches({ number: "8904", total: 0 }, { number: "8904", total: 0 }), true);
+    assert.equal(claimMatches({ number: "8904", total: 0 }, { number: "8904", total: 420.15 }), false);
   });
 
   test("a cent of tolerance, because the figure is read off paper", () => {

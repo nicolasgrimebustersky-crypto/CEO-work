@@ -70,9 +70,12 @@ export async function sendCode(phoneE164: string): Promise<ConfirmationResult> {
   const verifier = new RecaptchaVerifier(auth, "recaptcha-holder", { size: "invisible" });
   try {
     return await signInWithPhoneNumber(auth, phoneE164, verifier);
-  } catch (error) {
+  } finally {
+    // Cleared on success as well as failure. Clearing only on failure leaves a
+    // rendered widget behind after the first code is sent, and the second
+    // request — the customer who mistyped their number, or never got the text —
+    // fails with "reCAPTCHA has already been rendered" until they reload.
     verifier.clear();
-    throw error;
   }
 }
 

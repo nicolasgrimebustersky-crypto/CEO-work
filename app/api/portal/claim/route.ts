@@ -58,14 +58,28 @@ export async function POST(request: Request): Promise<Response> {
       | { number?: unknown; total?: unknown }
       | null;
     const number = typeof body?.number === "string" ? body.number : "";
-    // Accepts "420.15" or "$420.15" — somebody copying off a printed document
-    // includes the dollar sign about half the time.
-    const total =
-      typeof body?.total === "number"
-        ? body.total
-        : Number(String(body?.total ?? "").replace(/[^0-9.-]/g, ""));
 
-    if (!number.trim() || !Number.isFinite(total)) {
+    // Accepts "420.15" or "$420.15" — somebody copying off a printed document
+    // includes the dollar sign about half the time. Parsed strictly: an empty
+    // or non-numeric total must NOT fall through as 0, because a zero-total
+    // document would then be claimable on the guessable number alone, which is
+    // the whole attack this endpoint is shaped against.
+    const rawTotal = typeof body?.total === "number" ? String(body.total) : String(body?.total ?? "");
+    const cleanedTotal = rawTotal.replace(/[^0-9.]/g, "");
+    const total = cleanedTotal === "" ? Number.NaN : Number(cleanedTotal);
+
+    if (!number.trim() || !Number.isFinite(total) || total <= 0) {
+      throw new ApiError(400, "Enter the number and the total from your estimate or invoice.");
+    }
+
+    // Stored numbers are bare digits — nextNumber() returns String(n), printed
+    // as "#8904". Customers copy what they see, so "#8904", "8904" and even
+    // "EST 8904" all have to find it. claimMatches normalises both sides, but
+    // the Firestore query below cannot: it is an exact string match, so the
+    // lookup key has to be built in the stored shape rather than passed
+    // through verbatim.
+    const lookup = number.replace(/\D/g, "");
+    if (!lookup) {
       throw new ApiError(400, "Enter the number and the total from your estimate or invoice.");
     }
 
@@ -74,7 +88,7 @@ export async function POST(request: Request): Promise<Response> {
     // below is what decides; this only narrows.
     const snap = await db
       .collection("documents")
-      .where("number", "==", number.trim().toUpperCase())
+      .where("number", "==", lookup)
       .limit(5)
       .get();
 
@@ -111,9 +125,16 @@ export async function POST(request: Request): Promise<Response> {
     if (!customerSnap.exists) throw new ApiError(409, REFUSED);
 
     const patch: Record<string, unknown> = {};
-    if (identity.phone && !String(customerSnap.get("phoneE164") ?? "").trim()) {
+    // Both fields are checked, not just the normalised one. A record written
+    // before phoneE164 existed — or by the Meta lead webhook — has a real phone
+    // and an empty phoneE164, and treating that as "no phone on file" would
+    // attach the claimant's number to a customer who already has one, quietly
+    // redirecting the real customer's portal access to them.
+    const hasPhone =
+      String(customerSnap.get("phoneE164") ?? "").trim() || String(customerSnap.get("phone") ?? "").trim();
+    if (identity.phone && !hasPhone) {
       patch.phoneE164 = identity.phone;
-      if (!String(customerSnap.get("phone") ?? "").trim()) patch.phone = identity.phone;
+      patch.phone = identity.phone;
     }
     if (identity.email && !String(customerSnap.get("email") ?? "").trim()) {
       patch.email = identity.email;

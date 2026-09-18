@@ -144,6 +144,28 @@ function minutesUntil(resetAt: number): number {
 }
 
 /**
+ * The window, in words. Rules are no longer all hourly — the portal claim limit
+ * is daily — and a message that says "per hour" for a 24-hour rule tells the
+ * person to come back far too soon.
+ */
+function windowLabel(windowMs: number): string {
+  const hours = Math.round(windowMs / (60 * 60 * 1000));
+  if (hours >= 24) {
+    const days = Math.round(hours / 24);
+    return days === 1 ? "day" : `${days} days`;
+  }
+  return hours <= 1 ? "hour" : `${hours} hours`;
+}
+
+/** How long to wait, in the largest unit that does not read as absurd. */
+function waitLabel(resetAt: number): string {
+  const minutes = minutesUntil(resetAt);
+  if (minutes < 90) return `${minutes} minutes`;
+  const hours = Math.round(minutes / 60);
+  return hours < 24 ? `${hours} hours` : "a day";
+}
+
+/**
  * Consumes one unit of the caller's budget, or throws ApiError(429).
  *
  * The read-modify-write runs in a transaction so two requests racing on
@@ -193,7 +215,8 @@ export async function consumeRateLimit(
   if (!outcome.allowed) {
     throw new ApiError(
       429,
-      `Rate limit reached for ${rule.label} (${rule.max} per hour). Try again in about ${minutesUntil(outcome.resetAt)} minutes.`,
+      `Rate limit reached for ${rule.label} (${rule.max} per ${windowLabel(rule.windowMs)}). ` +
+        `Try again in about ${waitLabel(outcome.resetAt)}.`,
     );
   }
 }

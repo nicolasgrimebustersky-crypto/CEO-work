@@ -6,6 +6,7 @@ import { corsHeaders } from "@/lib/server/cors";
 import { serializeCustomer, type SerialCustomer, type SerialDocument } from "@/lib/server/publicDocument";
 import {
   isAnonymous,
+  MAX_RECORDS_PER_IDENTITY,
   verifiedIdentity,
   type VerifiedIdentity,
 } from "@/lib/portalMatch";
@@ -35,16 +36,6 @@ export const PORTAL_NO_RECORDS_MESSAGE =
   "with us before, you can link your account with an estimate or invoice number — " +
   "or call (502) 599-6855 and we'll do it for you.";
 
-/**
- * Firestore's ceiling for an `in` query, and far beyond real life.
- *
- * This is a hard limit rather than a preference: the portal's document and job
- * routes both run `.where("customerId", "in", caller.customerIds)`, and
- * Firestore rejects that outright above 30 ids. Matching now runs one query per
- * proven identifier, so the merged set has to be capped here or a customer with
- * both a phone and an email on many site records would sign in to an error.
- */
-const MAX_RECORDS_PER_IDENTITY = 30;
 
 export interface PortalCaller {
   uid: string;

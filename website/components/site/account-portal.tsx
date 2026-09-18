@@ -434,7 +434,7 @@ function ClaimForm({ message, onLinked }: { message: string; onLinked: () => voi
             <span className="text-sm font-medium text-foreground">Estimate or invoice number</span>
             <input
               className={`mt-1.5 ${INPUT}`}
-              placeholder="EST-1042"
+              placeholder="#8904"
               value={number}
               onChange={(event) => setNumber(event.target.value)}
               required

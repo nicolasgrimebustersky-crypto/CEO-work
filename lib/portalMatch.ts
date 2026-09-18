@@ -100,9 +100,12 @@ export function recordBelongsTo(
     if (stored && stored === identity.email) return true;
   }
   if (identity.phone) {
-    // phoneE164 is the stored normalised field; `phone` is the hand-typed one,
-    // normalised here as a fallback for records written before that field
-    // existed.
+    // phoneE164 is the stored normalised field and the only one a Firestore
+    // query can match on. The typed `phone` is checked too, but only by callers
+    // that already hold a record — the claim route, and tests. A record whose
+    // phoneE164 is unset is NOT findable by sign-in, which is exactly what
+    // scripts/backfill-phone-e164.mjs exists to fix, and why it has to be run
+    // before phone sign-in works for existing customers.
     const stored = phoneKey(record.phoneE164) ?? phoneKey(record.phone);
     if (stored && stored === identity.phone) return true;
   }
@@ -113,12 +116,14 @@ export function recordBelongsTo(
  * How many records one identity may pull back.
  *
  * A commercial customer legitimately has several site records under one
- * contact, so this cannot be 1. It is a ceiling rather than a page size: if a
- * single email or phone matches more than this, something is wrong with the
- * data — or somebody is fishing — and the right move is to stop rather than
- * stream out an unbounded slice of the customer table.
+ * contact, so this cannot be 1. It is also a hard ceiling rather than a
+ * preference: the portal's document and job routes run
+ * `.where("customerId", "in", ids)`, and Firestore rejects that above 30. Both
+ * the query limits and the post-merge cap use this one value — they were
+ * briefly two constants with different numbers, which meant the test guarding
+ * the ceiling was guarding nothing.
  */
-export const MAX_RECORDS_PER_IDENTITY = 25;
+export const MAX_RECORDS_PER_IDENTITY = 30;
 
 export interface ClaimAttempt {
   /** The document number as printed, e.g. "EST-1042". */
@@ -147,11 +152,20 @@ export interface ClaimTarget {
  * is allowed only because the customer is reading a rounded figure off paper.
  */
 export function claimMatches(attempt: ClaimAttempt, target: ClaimTarget): boolean {
-  // Everything but letters and digits is dropped from both sides, so "EST 1042",
-  // "est-1042" and "EST1042" are the same claim. Forgiving the separator costs
-  // nothing: the total below is what actually stands between a guessed number
-  // and somebody else's record, and no amount of punctuation makes that easier.
-  const key = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  // Compared on digits alone, on both sides.
+  //
+  // Stored numbers are bare digits — nextNumber() returns String(n) — and the
+  // document prints them as "#8904", so a customer copying their own paperwork
+  // types "8904", "#8904", or occasionally "EST 8904" because that is what an
+  // estimate looks like to them. All three mean the same document, and the
+  // claim route's Firestore lookup already narrows by digits, so matching on
+  // anything narrower here would reject claims the query had just found.
+  //
+  // Safe because the number was never the secret: it runs in a sequence and is
+  // guessable by design. The total below is the whole guard. Worth revisiting
+  // only if numbers ever gain a meaningful prefix — if estimates and invoices
+  // stopped sharing one sequence, "EST-12" and "INV-12" would collide here.
+  const key = (value: string) => value.replace(/\D/g, "");
   const typed = key(attempt.number);
   const real = key(target.number);
   if (!typed || typed !== real) return false;
