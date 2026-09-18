@@ -4,29 +4,44 @@ import { adminAuth, adminDb } from "@/lib/server/admin";
 import { ApiError } from "@/lib/server/auth";
 import { corsHeaders } from "@/lib/server/cors";
 import { serializeCustomer, type SerialCustomer, type SerialDocument } from "@/lib/server/publicDocument";
+import {
+  isAnonymous,
+  MAX_RECORDS_PER_IDENTITY,
+  verifiedIdentity,
+  type VerifiedIdentity,
+} from "@/lib/portalMatch";
 
 /**
  * Who is on the other end of an account-portal request.
  *
- * A portal session is an ordinary Firebase Auth user who signed in with an
- * email link on grimebusterskyllc.com. The link proves they control the
- * address; this guard then finds every customer record carrying that address.
- * That lookup is the whole match — a customer never types anything the crew
- * has on file, and nothing in Firestore's rules changes, because every read
- * below goes through the Admin SDK and out through the same serializer the
- * share-token link uses.
+ * A portal session is an ordinary Firebase Auth user who signed in on
+ * grimebusterskyllc.com — by a code texted to their phone, or by an email
+ * link. Either way what they hold is proof of *possession*: a handset that
+ * received an SMS, or an inbox that received a link. This guard then finds
+ * every customer record carrying that phone or that address.
  *
- * Consequence worth saying out loud: the email on a customer's record is the
- * key. A wrong address on a record is a wrong key.
+ * That possession is the whole match. A customer never types a name, and a
+ * name would never be accepted if they did — two customers are called John
+ * Smith, and knowing the name on an account proves nothing about owning it.
+ *
+ * Nothing in Firestore's rules changes: every read below goes through the
+ * Admin SDK and out through the same serializer the share-token link uses.
+ *
+ * Consequence worth saying out loud: the phone and email on a customer's
+ * record are the keys. A wrong number on a record is a wrong key — the
+ * customer signs in and sees nothing, which is the safe direction to fail.
  */
 export const PORTAL_NO_RECORDS_MESSAGE =
-  "We don't have any records under that email address yet. If you've worked with us " +
-  "before, call (502) 599-6855 and we'll add it to your account.";
+  "We don't have any records under that phone number or email yet. If you've worked " +
+  "with us before, you can link your account with an estimate or invoice number — " +
+  "or call (502) 599-6855 and we'll do it for you.";
 
-const MAX_RECORDS_PER_EMAIL = 30; // Firestore's ceiling for an `in` query, and far beyond real life.
 
 export interface PortalCaller {
   uid: string;
+  /** What Firebase actually verified. Either side may be null, never both. */
+  identity: VerifiedIdentity;
+  /** The verified email, or "" when they signed in by phone. Kept for callers that log it. */
   email: string;
   customerIds: string[];
   customers: SerialCustomer[];
@@ -34,6 +49,38 @@ export interface PortalCaller {
 
 export function normalizeEmail(value: unknown): string {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+/**
+ * Who is signed in, without requiring that we already know them.
+ *
+ * requirePortalCustomer answers 404 when no record carries the caller's phone
+ * or email — which is right for reading, and exactly wrong for claiming, since
+ * having no records is the reason somebody is claiming in the first place. This
+ * is the same token check without that last step.
+ */
+export async function requirePortalIdentity(
+  request: Request,
+): Promise<{ uid: string; identity: VerifiedIdentity }> {
+  const header = request.headers.get("authorization") ?? "";
+  const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  if (!token) throw new ApiError(401, "Missing bearer token.");
+
+  let decoded;
+  try {
+    decoded = await adminAuth().verifyIdToken(token, true);
+  } catch {
+    throw new ApiError(401, "Invalid or expired session. Sign in again.");
+  }
+
+  const identity = verifiedIdentity(decoded);
+  if (isAnonymous(identity)) {
+    throw new ApiError(
+      403,
+      "Confirm your phone number or email address so we can find your records.",
+    );
+  }
+  return { uid: decoded.uid, identity };
 }
 
 export async function requirePortalCustomer(request: Request): Promise<PortalCaller> {
@@ -48,24 +95,59 @@ export async function requirePortalCustomer(request: Request): Promise<PortalCal
     throw new ApiError(401, "Invalid or expired session. Sign in again.");
   }
 
-  const email = normalizeEmail(decoded.email);
-  if (!email || decoded.email_verified !== true) {
-    throw new ApiError(403, "Sign in with the link we emailed you so we can confirm your address.");
+  const identity = verifiedIdentity(decoded);
+  if (isAnonymous(identity)) {
+    // Signed in, but with nothing we can match on: an unverified email, or an
+    // anonymous/custom-token session. Refused rather than matched loosely.
+    throw new ApiError(
+      403,
+      "Confirm your phone number or email address so we can find your records.",
+    );
   }
 
-  const snap = await adminDb()
-    .collection("customers")
-    .where("email", "==", email)
-    .limit(MAX_RECORDS_PER_EMAIL)
-    .get();
+  const db = adminDb();
 
-  const customers = snap.docs
-    .map((doc) => serializeCustomer(doc))
-    .filter((customer): customer is SerialCustomer => customer !== null);
+  // One query per proven identifier rather than one query over both. Firestore
+  // cannot OR across two fields, and the alternative — reading the collection
+  // and filtering in memory — would mean a full customer-table read on every
+  // sign-in, which is both slow and a much larger blast radius if the filter
+  // is ever wrong.
+  const queries = [];
+  if (identity.email) {
+    queries.push(db.collection("customers").where("email", "==", identity.email).limit(MAX_RECORDS_PER_IDENTITY).get());
+  }
+  if (identity.phone) {
+    queries.push(
+      db.collection("customers").where("phoneE164", "==", identity.phone).limit(MAX_RECORDS_PER_IDENTITY).get(),
+    );
+  }
+
+  const results = await Promise.all(queries);
+
+  // De-duplicated by id: somebody whose record carries both their email and
+  // their phone comes back from both queries and is still one customer.
+  const byId = new Map<string, SerialCustomer>();
+  for (const snap of results) {
+    for (const doc of snap.docs) {
+      const customer = serializeCustomer(doc);
+      if (customer) byId.set(customer.id, customer);
+    }
+  }
+  // Capped after the merge, not just per query: two queries of 30 each would
+  // otherwise hand the routes below 60 ids and Firestore would refuse the `in`.
+  // Taking the first 30 is arbitrary but bounded, and 30 site records under one
+  // contact is already far past anything this business has.
+  const customers = [...byId.values()].slice(0, MAX_RECORDS_PER_IDENTITY);
 
   if (customers.length === 0) throw new ApiError(404, PORTAL_NO_RECORDS_MESSAGE);
 
-  return { uid: decoded.uid, email, customerIds: customers.map((c) => c.id), customers };
+  return {
+    uid: decoded.uid,
+    identity,
+    email: identity.email ?? "",
+    customerIds: customers.map((c) => c.id),
+    customers,
+  };
 }
 
 /**

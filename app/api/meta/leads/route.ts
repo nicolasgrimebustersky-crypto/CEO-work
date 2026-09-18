@@ -1,5 +1,6 @@
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
+import { phoneKey } from "@/lib/portalMatch";
 import { adminDb } from "@/lib/server/admin";
 import { DEFAULT_ORG_ID } from "@/lib/org";
 import {
@@ -127,7 +128,13 @@ async function ingestLead(leadgenId: string, formId: string | null): Promise<str
     firstName: parsed.firstName,
     lastName: parsed.lastName,
     phone: parsed.phone,
-    email: parsed.email,
+    // The normalised copy and a lowercased address, written here as well as in
+    // lib/db/customers.ts. Without them a lead ingested after the one-off
+    // backfill is permanently invisible to the customer portal — it matches on
+    // phoneE164 and on an exact lowercase email, and a webhook that skipped
+    // both would quietly reintroduce the problem the backfill exists to fix.
+    phoneE164: phoneKey(parsed.phone) ?? "",
+    email: parsed.email.trim().toLowerCase(),
     address: parsed.address,
     // Instant Forms rarely capture a street address, and a pin in the wrong
     // place is worse than no pin. 0,0 keeps it off the map until someone adds

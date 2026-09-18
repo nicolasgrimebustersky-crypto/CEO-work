@@ -37,6 +37,11 @@ export type AuditAction =
   | "mcp.call"
   | "mcp.denied"
   | "quote.answered"
+  // A customer linking their portal account to a record we hold under other
+  // contact details. Logged on failure as well as success on purpose: a run of
+  // failures against sequential document numbers is the signature of somebody
+  // guessing, and it needs to be visible after the fact.
+  | "portal.claim"
   | "admin.user.deleted";
 
 export interface AuditEntry {

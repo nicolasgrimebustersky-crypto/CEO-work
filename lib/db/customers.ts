@@ -15,6 +15,7 @@ import {
 } from "firebase/firestore";
 
 import { chunkIds } from "@/lib/bulkDelete";
+import { phoneKey } from "@/lib/portalMatch";
 import { isDemoMode } from "@/lib/demo/enabled";
 import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
@@ -78,6 +79,7 @@ export function toCustomer(snap: QueryDocumentSnapshot<DocumentData>): Customer 
     firstName: typeof data.firstName === "string" ? data.firstName : "",
     lastName: typeof data.lastName === "string" ? data.lastName : "",
     phone: typeof data.phone === "string" ? data.phone : "",
+    phoneE164: typeof data.phoneE164 === "string" ? data.phoneE164 : "",
     email: typeof data.email === "string" ? data.email : "",
     address: typeof data.address === "string" ? data.address : "",
     lat: typeof data.lat === "number" ? data.lat : 0,
@@ -191,6 +193,13 @@ export async function createCustomer(
     firstName: input.firstName.trim(),
     lastName: input.lastName.trim(),
     phone: input.phone.trim(),
+    // The same number in the one form it can be looked up by. Customers type
+    // "(502) 555-0100" and Firebase hands the portal "+15025550100", so without
+    // a normalised copy there is nothing for a phone sign-in to query against.
+    // Empty string rather than absent when the number is unusable: a missing
+    // field and a blank one must both fail to match, and an equality query on
+    // a field that does not exist silently matches nothing anyway.
+    phoneE164: phoneKey(input.phone) ?? "",
     email: input.email.trim().toLowerCase(),
     address: input.address.trim(),
     lat: input.lat,
@@ -322,6 +331,11 @@ export async function updateCustomer(
     ...patch,
     // Stored lowercase so the account portal's exact-match lookup finds it.
     ...(typeof patch.email === "string" ? { email: patch.email.trim().toLowerCase() } : {}),
+    // And kept in step with the typed number, for the same reason. A patch that
+    // changes the phone without this would leave the portal matching the old
+    // one — so the customer signs in and sees nothing, or worse, somebody who
+    // inherited the number signs in and sees them.
+    ...(typeof patch.phone === "string" ? { phoneE164: phoneKey(patch.phone) ?? "" } : {}),
     // Only when the type is part of this edit: a patch that touches neither
     // field must not reach in and clear the sites of a commercial customer.
     ...(patch.propertyType

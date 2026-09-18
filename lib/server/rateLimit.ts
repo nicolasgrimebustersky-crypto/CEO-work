@@ -144,6 +144,28 @@ function minutesUntil(resetAt: number): number {
 }
 
 /**
+ * The window, in words. Rules are no longer all hourly — the portal claim limit
+ * is daily — and a message that says "per hour" for a 24-hour rule tells the
+ * person to come back far too soon.
+ */
+function windowLabel(windowMs: number): string {
+  const hours = Math.round(windowMs / (60 * 60 * 1000));
+  if (hours >= 24) {
+    const days = Math.round(hours / 24);
+    return days === 1 ? "day" : `${days} days`;
+  }
+  return hours <= 1 ? "hour" : `${hours} hours`;
+}
+
+/** How long to wait, in the largest unit that does not read as absurd. */
+function waitLabel(resetAt: number): string {
+  const minutes = minutesUntil(resetAt);
+  if (minutes < 90) return `${minutes} minutes`;
+  const hours = Math.round(minutes / 60);
+  return hours < 24 ? `${hours} hours` : "a day";
+}
+
+/**
  * Consumes one unit of the caller's budget, or throws ApiError(429).
  *
  * The read-modify-write runs in a transaction so two requests racing on
@@ -193,7 +215,8 @@ export async function consumeRateLimit(
   if (!outcome.allowed) {
     throw new ApiError(
       429,
-      `Rate limit reached for ${rule.label} (${rule.max} per hour). Try again in about ${minutesUntil(outcome.resetAt)} minutes.`,
+      `Rate limit reached for ${rule.label} (${rule.max} per ${windowLabel(rule.windowMs)}). ` +
+        `Try again in about ${waitLabel(outcome.resetAt)}.`,
     );
   }
 }
@@ -204,6 +227,21 @@ export async function consumeRateLimit(
  * (notes, notifications, an email) and gets the same kind of ceiling the
  * share-token link has.
  */
+/**
+ * Claiming a document, which is the one portal action that guesses can attack.
+ *
+ * Document numbers run in a sequence, so the only thing stopping somebody
+ * walking it is that they must also produce the total. Deliberately tight: a
+ * customer linking their own account needs two or three attempts at most, while
+ * a script needs thousands to be worth running. Counted per signed-in account,
+ * so making a new one costs an SMS verification each time.
+ */
+export const PORTAL_CLAIM_LIMIT: RateLimitRule = {
+  label: "attempts to link a document",
+  max: 10,
+  windowMs: 24 * 60 * 60 * 1000,
+};
+
 export const PORTAL_READ_LIMIT: RateLimitRule = {
   label: "portal reads",
   max: 240,
