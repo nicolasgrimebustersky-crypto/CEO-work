@@ -95,8 +95,9 @@ const ANALYZING_STEPS = [
 function AnalyzingPanel({ previewUrls }: { previewUrls: string[] }) {
   const [statusIdx, setStatusIdx] = React.useState(0);
 
+  // No reset on mount: useState already starts at 0 and the deps are empty, so
+  // the only thing this effect owns is the interval.
   React.useEffect(() => {
-    setStatusIdx(0);
     const id = setInterval(() => {
       setStatusIdx((i) => (i + 1 < ANALYZING_STEPS.length ? i + 1 : i));
     }, 1800);
@@ -323,7 +324,7 @@ export function QuoteTool() {
         notices.push(`Only the first ${MAX_PHOTOS} photos were used (max ${MAX_PHOTOS} per estimate).`);
       }
       if (notices.length) setError(notices.join(" "));
-      (window as any).gtag?.("event", "ai_estimate", {
+      window.gtag?.("event", "ai_estimate", {
         services: selectedServices.map((s) => s.id).join(","),
         photo_count: images.length,
       });
@@ -334,7 +335,7 @@ export function QuoteTool() {
     }
   };
 
-  const useSize = (label: string, presetSqft: number) => {
+  const applySize = (label: string, presetSqft: number) => {
     const svc = selectedServices[0];
     setPriced([{ service: svc, sqftLow: presetSqft, sqftHigh: presetSqft }]);
     setSourceLabel(label);
@@ -384,7 +385,7 @@ export function QuoteTool() {
       const data = await res.json();
       if (!data.success) throw new Error();
       setPhase(commercial ? "commercial" : "quoted");
-      (window as any).gtag?.("event", commercial ? "quote_commercial" : "quote_revealed", {
+      window.gtag?.("event", commercial ? "quote_commercial" : "quote_revealed", {
         services: priced.map((p) => p.service.id).join(","),
       });
     } catch {
@@ -654,7 +655,7 @@ export function QuoteTool() {
                       <button
                         key={s.label}
                         type="button"
-                        onClick={() => useSize(s.label, s.sqft)}
+                        onClick={() => applySize(s.label, s.sqft)}
                         className="rounded-xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground/85 transition-colors hover:border-primary/50 hover:text-foreground"
                       >
                         {s.label}

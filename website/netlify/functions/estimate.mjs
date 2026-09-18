@@ -123,7 +123,7 @@ async function checkRateLimit(ip) {
   }
 }
 
-export default async (req) => {
+const handler = async (req) => {
   if (req.method !== "POST") {
     return Response.json({ ok: false, error: "method_not_allowed" }, { status: 405 });
   }
@@ -260,5 +260,7 @@ Return one entry in "estimates" for every requested service above, in the same o
     return Response.json({ ok: false, error: "estimate_failed" }, { status: 500 });
   }
 };
+
+export default handler;
 
 export const config = { path: "/api/estimate" };

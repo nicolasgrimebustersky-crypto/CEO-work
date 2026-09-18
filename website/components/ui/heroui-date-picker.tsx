@@ -116,7 +116,6 @@ export function DatePicker({
       <div
         data-react-aria-pressable="true"
         role="group"
-        aria-invalid={invalid || undefined}
         aria-disabled={disabled || undefined}
         className="date-input-group date-input-group--full-width date-input-group--primary"
         data-slot="date-input-group"
@@ -131,6 +130,7 @@ export function DatePicker({
                 key={`${segment}-${index}`}
                 data-slot="date-input-group-segment"
                 role={isLiteral ? undefined : "spinbutton"}
+                aria-invalid={!isLiteral && invalid ? true : undefined}
                 aria-label={isLiteral ? undefined : index === 0 && international ? "दिन, " : index === 2 && international ? "माह, " : index === 4 && international ? "वर्ष, " : index === 0 ? "month, " : index === 2 ? "day, " : "year, "}
                 aria-disabled={disabled || undefined}
                 data-placeholder={!currentValue && !isLiteral ? "true" : undefined}

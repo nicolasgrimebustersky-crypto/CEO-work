@@ -22,11 +22,17 @@ export function ImagePlaceholder({
   imgClassName,
 }: ImagePlaceholderProps) {
   if (src) {
-    // eslint-disable-next-line @next/next/no-img-element
     return (
+      // A plain <img>, deliberately: the site is a static export with
+      // `images: { unoptimized: true }`, so next/image would run the same bytes
+      // through a wrapper that cannot optimise them. Every current caller
+      // renders below the fold, hence the lazy decode.
+      // eslint-disable-next-line @next/next/no-img-element
       <img
         src={src}
         alt={alt}
+        loading="lazy"
+        decoding="async"
         className={cn("h-full w-full object-cover", imgClassName)}
       />
     );

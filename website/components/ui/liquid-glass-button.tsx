@@ -308,17 +308,35 @@ const ShineEffect = ({ isPressed }: { isPressed: boolean }) => {
   );
 };
 
+/**
+ * Whether the pointer is a touch pointer.
+ *
+ * Read through useSyncExternalStore rather than set from an effect: the value
+ * lives on `window`, which does not exist while the page is rendered on the
+ * server. The server snapshot is `false` (assume a mouse, which is the hover
+ * behaviour that degrades gracefully), and the client reads the real thing on
+ * hydration. Touch capability does not change over a page's life, so nothing
+ * needs to subscribe.
+ */
+const subscribeToNothing = () => () => {};
+const readIsTouchDevice = () =>
+  "ontouchstart" in window || navigator.maxTouchPoints > 0;
+
+function useIsTouchDevice(): boolean {
+  return React.useSyncExternalStore(
+    subscribeToNothing,
+    readIsTouchDevice,
+    () => false,
+  );
+}
+
 export const MetalButton = React.forwardRef<
   HTMLButtonElement,
   MetalButtonProps
 >(({ children, className, variant = "default", ...props }, ref) => {
   const [isPressed, setIsPressed] = React.useState(false);
   const [isHovered, setIsHovered] = React.useState(false);
-  const [isTouchDevice, setIsTouchDevice] = React.useState(false);
-
-  React.useEffect(() => {
-    setIsTouchDevice("ontouchstart" in window || navigator.maxTouchPoints > 0);
-  }, []);
+  const isTouchDevice = useIsTouchDevice();
 
   const buttonText = children || "Button";
   const variants = metalButtonVariants(

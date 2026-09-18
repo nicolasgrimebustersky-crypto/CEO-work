@@ -3,6 +3,22 @@
 import { useEffect, useRef } from "react"
 import * as THREE from "three"
 
+/**
+ * The uniforms this shader declares, named rather than `any` so that a typo in
+ * one of the per-frame `.value` writes below fails the build instead of
+ * silently doing nothing on screen.
+ */
+interface ShaderUniforms {
+  // Three's ShaderMaterial takes an open record, so the index signature is what
+  // makes this assignable to it; the named members are what make a typo fail.
+  [uniform: string]: THREE.IUniform;
+  resolution: THREE.IUniform<[number, number]>;
+  time: THREE.IUniform<number>;
+  xScale: THREE.IUniform<number>;
+  yScale: THREE.IUniform<number>;
+  distortion: THREE.IUniform<number>;
+}
+
 export function WebGLShader() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const sceneRef = useRef<{
@@ -10,7 +26,7 @@ export function WebGLShader() {
     camera: THREE.OrthographicCamera | null
     renderer: THREE.WebGLRenderer | null
     mesh: THREE.Mesh | null
-    uniforms: any
+    uniforms: ShaderUniforms | null
     animationId: number | null
   }>({
     scene: null,
