@@ -111,15 +111,22 @@ describe("portal: who gets in", () => {
     const r = await call("/api/portal/documents", null);
     assert.equal(r.status, 401);
   });
-  test("an unverified address is refused, and told to use the emailed link", async () => {
+  test("an unverified address proves nothing and is refused", async () => {
+    // The security property, unchanged: signing up with somebody's address and
+    // never opening the mail must not reach their records. Only the wording
+    // moved — sign-in now accepts a texted code as well, so a message telling
+    // everybody to use "the link we emailed" would be wrong for most callers.
     const r = await call("/api/portal/documents", tokenAUnverified);
     assert.equal(r.status, 403);
-    assert.match(r.body.error, /link we emailed/i);
+    assert.match(r.body.error, /confirm your phone number or email/i);
   });
   test("a verified address with no customer record is told so, readably, cross-origin", async () => {
     const r = await call("/api/portal/documents", tokenNobody);
     assert.equal(r.status, 404);
-    assert.match(r.body.error, /records under that email/i);
+    // Names both identifiers now, and offers the claim route as a way forward
+    // rather than only a phone number.
+    assert.match(r.body.error, /records under that phone number or email/i);
+    assert.match(r.body.error, /estimate or invoice number/i);
     assert.equal(r.cors, "https://grimebusterskyllc.com");
   });
   test("preflight from the marketing site is allowed", async () => {
