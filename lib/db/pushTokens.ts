@@ -9,6 +9,7 @@ import {
 import { isDemoMode } from "@/lib/demo/enabled";
 import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
+import { DEFAULT_ORG_ID } from "@/lib/org";
 
 /**
  * One document per device that has agreed to receive push.
@@ -68,6 +69,7 @@ export async function savePushToken(uid: string, token: string): Promise<void> {
     doc(getDb(), COLLECTIONS.pushTokens, id),
     {
       uid,
+      orgId: DEFAULT_ORG_ID,
       token,
       label: deviceLabel(),
       createdAt: serverTimestamp(),

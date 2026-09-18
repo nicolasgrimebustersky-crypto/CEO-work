@@ -1,5 +1,6 @@
 import { Timestamp } from "firebase/firestore";
 
+import { DEFAULT_ORG_ID } from "@/lib/org";
 import type { AppNotification } from "@/lib/db/notifications";
 import type { SavedService } from "@/lib/db/services";
 import {
@@ -66,7 +67,7 @@ function inDays(days: number, hour: number): Timestamp {
   return Timestamp.fromDate(d);
 }
 
-export const demoUsers: AppUser[] = [
+export const demoUsers: AppUser[] = ([
   {
     uid: DEMO_NICK,
     displayName: "Nick",
@@ -93,7 +94,7 @@ export const demoUsers: AppUser[] = [
     mutedNotifications: [],
     quietHours: true,
   },
-];
+] as AppUser[]).map((item) => ({ ...item, orgId: DEFAULT_ORG_ID }));
 
 function note(
   text: string,
@@ -471,6 +472,7 @@ const seeds: Seed[] = [
 
 export const demoCustomers: Customer[] = seeds.map((s) => ({
   id: s.id,
+  orgId: DEFAULT_ORG_ID,
   firstName: s.first,
   lastName: s.last,
   phone: "5025550100",
@@ -518,6 +520,7 @@ function job(
   const name = uid === DEMO_NICK ? "Nick" : "Dana";
   return {
     id,
+    orgId: DEFAULT_ORG_ID,
     customerId,
     serviceType,
     scheduledStart: start,
@@ -566,7 +569,7 @@ export const demoJobs: Job[] = [
   job("dj-9", "d-brennan", "pressure_washing", ago(100), 3, 610, [DEMO_DANA], "complete", true),
 ];
 
-export const demoQuotes: Quote[] = [
+export const demoQuotes: Quote[] = ([
   {
     id: "dq-1",
     customerId: "d-whitfield",
@@ -615,7 +618,7 @@ export const demoQuotes: Quote[] = [
     followUpCount: 2,
     lastFollowUpAt: ago(9),
   },
-];
+] as Quote[]).map((item) => ({ ...item, orgId: DEFAULT_ORG_ID }));
 
 /**
  * Estimates and invoices for the demo.
@@ -662,6 +665,7 @@ function demoDoc(
 
   return {
     id,
+    orgId: DEFAULT_ORG_ID,
     number,
     kind,
     status,
@@ -720,6 +724,7 @@ function demoService(
 ): SavedService {
   return {
     id,
+    orgId: DEFAULT_ORG_ID,
     name,
     description,
     unitPrice,
@@ -736,7 +741,7 @@ function demoService(
   };
 }
 
-export const demoServices: SavedService[] = [
+export const demoServices: SavedService[] = ([
   demoService(
     "ds-1",
     "House wash",
@@ -810,9 +815,9 @@ export const demoServices: SavedService[] = [
     2,
     41,
   ),
-];
+] as SavedService[]).map((item) => ({ ...item, orgId: DEFAULT_ORG_ID }));
 
-export const demoDocuments: BusinessDocument[] = [
+export const demoDocuments: BusinessDocument[] = ([
   demoDoc(
     "dd-1",
     "8904",
@@ -1087,14 +1092,14 @@ export const demoDocuments: BusinessDocument[] = [
     [line("dd-11-a", "Fence wash", "Both sides, 180 feet.", 1, 400)],
     { issuedDaysAgo: 2, dueInDays: 30 },
   ),
-];
+] as BusinessDocument[]).map((item) => ({ ...item, orgId: DEFAULT_ORG_ID }));
 
 /**
  * Two routes: one being walked right now, one planned for tomorrow and handed
  * to the other person. Between them the list screen shows a progress bar, an
  * assignment, and both of the states that are not "planned".
  */
-export const demoKnockRoutes: KnockRoute[] = [
+export const demoKnockRoutes: KnockRoute[] = ([
   {
     id: "dr-1",
     name: "Ridgemoor sweep",
@@ -1127,13 +1132,13 @@ export const demoKnockRoutes: KnockRoute[] = [
     updatedBy: DEMO_NICK,
     updatedByName: "Nick",
   },
-];
+] as KnockRoute[]).map((item) => ({ ...item, orgId: DEFAULT_ORG_ID }));
 
 /**
  * One claimed territory around the La Grange pins and one unclaimed patch, so
  * the panel shows coverage, an owner colour and the grey unclaimed state.
  */
-export const demoTerritories: Territory[] = [
+export const demoTerritories: Territory[] = ([
   {
     id: "dt-1",
     name: "Ridgemoor & Oak Ridge",
@@ -1172,9 +1177,9 @@ export const demoTerritories: Territory[] = [
     updatedBy: DEMO_NICK,
     updatedByName: "Nick",
   },
-];
+] as Territory[]).map((item) => ({ ...item, orgId: DEFAULT_ORG_ID }));
 
-export const demoNotifications: AppNotification[] = [
+export const demoNotifications: AppNotification[] = ([
   {
     id: "dn-1",
     forUid: DEMO_NICK,
@@ -1250,11 +1255,11 @@ export const demoNotifications: AppNotification[] = [
     createdAt: hoursAgo(28),
     readAt: hoursAgo(27),
   },
-];
+] as AppNotification[]).map((item) => ({ ...item, orgId: DEFAULT_ORG_ID }));
 
 
 /** One direct chat, so the feature is visible in the preview. */
-export const demoConversations: Conversation[] = [
+export const demoConversations: Conversation[] = ([
   {
     id: "conv-1",
     title: "",
@@ -1265,7 +1270,7 @@ export const demoConversations: Conversation[] = [
     lastMessageText: "Ridgemoor's done — heading to Oak Ridge",
     lastMessageBy: DEMO_DANA,
   },
-];
+] as Conversation[]).map((item) => ({ ...item, orgId: DEFAULT_ORG_ID }));
 
 export const demoChatMessages: (ChatMessage & { conversationId: string })[] = [
   {

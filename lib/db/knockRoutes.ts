@@ -16,6 +16,7 @@ import {
 import { isDemoMode } from "@/lib/demo/enabled";
 import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
+import { asOrgId, DEFAULT_ORG_ID } from "@/lib/org";
 import { orderByNearest, type Point, type Stop } from "@/lib/knock/plan";
 import { ROUTE_STATUSES, type Author, type Customer, type KnockRoute, type RouteStatus } from "@/lib/types";
 
@@ -33,6 +34,7 @@ export function toKnockRoute(snap: QueryDocumentSnapshot<DocumentData>): KnockRo
 
   return {
     id: snap.id,
+    orgId: asOrgId(data.orgId),
     name: typeof data.name === "string" ? data.name : "Untitled route",
     walkDate: data.walkDate instanceof Timestamp ? data.walkDate : null,
     assignedTo: asStringList(data.assignedTo),
@@ -99,6 +101,7 @@ export async function createKnockRoute(
     knockedIds: [],
     status: "planned" satisfies RouteStatus,
     notes: input.notes ?? "",
+    orgId: DEFAULT_ORG_ID,
     createdAt: serverTimestamp(),
     createdBy: author.uid,
     createdByName: author.displayName,

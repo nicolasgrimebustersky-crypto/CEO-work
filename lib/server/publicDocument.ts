@@ -5,6 +5,7 @@ import type { DocumentSnapshot } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/server/admin";
 import { looksLikeShareToken, normalizeShareToken } from "@/lib/shareLinks";
 import { DEFAULT_TAX_RATE_PCT, type BusinessDocument, type DocumentStatus } from "@/lib/documents";
+import { asOrgId } from "@/lib/org";
 import { SERVICE_TYPES, type ServiceType } from "@/lib/types";
 
 /**
@@ -136,6 +137,7 @@ export function serializeDocument(hit: DocumentSnapshot): SerialDocument | null 
 
   const document: SerialDocument = {
     id: hit.id,
+    orgId: asOrgId(data.orgId),
     number: text(data.number),
     kind: data.kind === "invoice" ? "invoice" : "estimate",
     status: status || "draft",

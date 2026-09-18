@@ -6,6 +6,7 @@ import { agentAuthor, type Scope } from "@/lib/apiKeys";
 import { computeTotals, type LineItem } from "@/lib/documents";
 import { grossFor, outstanding } from "@/lib/money/summary";
 import { adminDb } from "@/lib/server/admin";
+import { DEFAULT_ORG_ID } from "@/lib/org";
 import { ApiError } from "@/lib/server/auth";
 import { appendNote, getCustomer } from "@/lib/server/customerNotes";
 import { isTwilioConfigured, sendSms } from "@/lib/server/twilio";
@@ -260,6 +261,7 @@ async function createLeadTool(args: Args, key: AuthorisedKey) {
         : [],
       tags: [],
       serviceTypes: [],
+      orgId: DEFAULT_ORG_ID,
       createdAt: now,
       createdBy: author.uid,
       createdByName: author.displayName,
@@ -340,6 +342,7 @@ async function draftEstimateTool(args: Args, key: AuthorisedKey) {
       issuedAt: now,
       dueAt: null,
       sentAt: null,
+      orgId: DEFAULT_ORG_ID,
       createdAt: now,
       createdBy: author.uid,
       createdByName: author.displayName,
@@ -432,6 +435,7 @@ async function scheduleJobTool(args: Args, key: AuthorisedKey) {
       beforePhotos: [],
       afterPhotos: [],
       jobNotes: "Booked by the Ops Agent.",
+      orgId: DEFAULT_ORG_ID,
       enRouteAt: null,
       enRouteBy: null,
       startedAt: null,

@@ -27,6 +27,7 @@ import {
 import { notificationLink } from "@/lib/notifications/link";
 import { shouldPushNow } from "@/lib/notifications/quietHours";
 import { deliverPush } from "@/lib/push/client";
+import { asOrgId, DEFAULT_ORG_ID } from "@/lib/org";
 import type { Author } from "@/lib/types";
 
 export { notificationLink };
@@ -34,6 +35,8 @@ export type { NotificationType };
 
 export interface AppNotification {
   id: string;
+  /** Which business this record belongs to. See lib/org.ts. */
+  orgId: string;
   forUid: string;
   actorUid: string;
   actorName: string;
@@ -52,6 +55,7 @@ function toNotification(snap: QueryDocumentSnapshot<DocumentData>): AppNotificat
   const data = snap.data();
   return {
     id: snap.id,
+    orgId: asOrgId(data.orgId),
     forUid: typeof data.forUid === "string" ? data.forUid : "",
     actorUid: typeof data.actorUid === "string" ? data.actorUid : "",
     actorName: typeof data.actorName === "string" ? data.actorName : "Unknown",
@@ -149,6 +153,7 @@ export async function notifyOthers(
   const title = titleOf(payload.type);
   const rowFor = (forUid: string) => ({
     forUid,
+    orgId: DEFAULT_ORG_ID,
     actorUid: actor.uid,
     actorName: actor.displayName,
     type: payload.type,

@@ -57,4 +57,12 @@ export const BUSINESS = {
   footer:
     process.env.NEXT_PUBLIC_BUSINESS_FOOTER ||
     "Thank you for your business. Payment is due on receipt unless agreed otherwise.",
+  /**
+   * The two-letter state this crew works in. Used to bias forward-geocoding
+   * of partial addresses — see lib/geocode.ts — toward the right state
+   * instead of matching a street of the same name somewhere else in the
+   * country. Not printed anywhere; this is the one field on this object that
+   * exists for the app's own use rather than for a customer to read.
+   */
+  serviceAreaState: (process.env.NEXT_PUBLIC_SERVICE_AREA_STATE || "KY").toUpperCase(),
 } as const;

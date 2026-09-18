@@ -57,8 +57,20 @@ let anon;
 
 /* ---------------------------------------------------------------- fixtures */
 
+// Every helper below stamps the one org this suite tests: exactly what
+// lib/db/*.ts sends today, and what DEFAULT_ORG_ID in lib/org.ts resolves to.
+// createsInMyOrg() in firestore.rules requires a real orgId on every create —
+// deliberately stricter than the legacy-default read path — so a create
+// fixture with none would fail for a reason that has nothing to do with what
+// the test is checking. Cross-org denial itself is
+// tests/orgIsolation.rules.test.mjs, not here: this file is still the
+// single-org suite it always was, proving that ordinary crew data with one
+// business keeps working exactly as it did before orgId existed.
+const ORG_ID = "grime-busters";
+
 function customerDoc(uid, overrides = {}) {
   return {
+    orgId: ORG_ID,
     firstName: "Test",
     lastName: "House",
     status: "lead",
@@ -74,6 +86,7 @@ function customerDoc(uid, overrides = {}) {
 
 function jobDoc(uid, overrides = {}) {
   return {
+    orgId: ORG_ID,
     customerId: "c1",
     serviceType: "pressure_washing",
     status: "scheduled",
@@ -90,6 +103,7 @@ function jobDoc(uid, overrides = {}) {
 
 function quoteDoc(uid, overrides = {}) {
   return {
+    orgId: ORG_ID,
     customerId: "c1",
     serviceType: "landscaping",
     amount: 400,
@@ -103,6 +117,7 @@ function quoteDoc(uid, overrides = {}) {
 
 function businessDoc(uid, overrides = {}) {
   return {
+    orgId: ORG_ID,
     number: "8904",
     kind: "estimate",
     status: "draft",
@@ -129,6 +144,7 @@ function businessDoc(uid, overrides = {}) {
 
 function serviceDoc(uid, overrides = {}) {
   return {
+    orgId: ORG_ID,
     name: "House wash",
     description: "Soft wash, two storey, includes gutter faces",
     unitPrice: 450,
@@ -142,6 +158,7 @@ function serviceDoc(uid, overrides = {}) {
 
 function notificationDoc(actorUid, forUid, overrides = {}) {
   return {
+    orgId: ORG_ID,
     forUid,
     actorUid,
     actorName: "Test",
@@ -732,6 +749,7 @@ describe("push tokens", () => {
   test("a device may file itself", async () => {
     await assertSucceeds(
       addDoc(collection(alice, "pushTokens"), {
+        orgId: ORG_ID,
         uid: "alice",
         token: "a-fresh-token",
         label: "iPhone · Safari",
@@ -787,6 +805,7 @@ describe("push tokens", () => {
 
 describe("door-knocking routes", () => {
   const routeDoc = (by, over = {}) => ({
+    orgId: ORG_ID,
     name: "Elm Hollow",
     status: "planned",
     assignedTo: [],
@@ -858,6 +877,7 @@ describe("territories", () => {
     { lat: 38.4, lng: -85.37 },
   ];
   const territoryDoc = (by, over = {}) => ({
+    orgId: ORG_ID,
     name: "Oak Ridge",
     boundary: square,
     assignedTo: [],
@@ -988,7 +1008,7 @@ describe("the escalation", () => {
       setDoc(doc(newbie, "users/newbie"), { displayName: "New", role: "crew" }),
     );
     await assertSucceeds(
-      setDoc(doc(newbie, "users/newbie"), { displayName: "New", role: "pending" }),
+      setDoc(doc(newbie, "users/newbie"), { displayName: "New", role: "pending", orgId: ORG_ID }),
     );
   });
 
@@ -1224,6 +1244,7 @@ describe("starting a chat", () => {
   test("a real one is allowed", async () => {
     await assertSucceeds(
       setDoc(doc(alice, "conversations/new3"), {
+        orgId: ORG_ID,
         title: "",
         memberUids: ["alice", "bob"],
         createdBy: "alice",

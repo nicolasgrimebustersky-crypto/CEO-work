@@ -84,6 +84,14 @@ export interface Note {
 
 export interface AppUser {
   uid: string;
+  /**
+   * Which business this account belongs to. Absent on every profile written
+   * before this field existed, which is why every read goes through
+   * lib/db/users.ts rather than testing this field directly — a missing
+   * value has to default to the one org that existed at the time, exactly as
+   * firestore.rules' myOrgId() does. See lib/org.ts.
+   */
+  orgId?: string;
   displayName: string;
   /**
    * "crew" can use the app; "pending" has registered and can see nothing until
@@ -137,6 +145,8 @@ export interface CustomerLocation {
 
 export interface Customer {
   id: string;
+  /** Which business this record belongs to. See lib/org.ts. */
+  orgId: string;
   firstName: string;
   lastName: string;
   phone: string;
@@ -199,6 +209,8 @@ export interface Photo {
 
 export interface Job {
   id: string;
+  /** Which business this record belongs to. See lib/org.ts. */
+  orgId: string;
   customerId: string;
   serviceType: ServiceType;
   scheduledStart: Timestamp;
@@ -242,6 +254,8 @@ export interface Job {
 
 export interface Quote {
   id: string;
+  /** Which business this record belongs to. See lib/org.ts. */
+  orgId: string;
   customerId: string;
   serviceType: ServiceType;
   amount: number;
@@ -269,6 +283,8 @@ export const ROUTE_STATUS_LABEL: Record<RouteStatus, string> = {
 
 export interface KnockRoute {
   id: string;
+  /** Which business this record belongs to. See lib/org.ts. */
+  orgId: string;
   name: string;
   /** The day it is meant to be walked. Null for "whenever there's a gap". */
   walkDate: Timestamp | null;
@@ -301,6 +317,8 @@ export interface KnockRoute {
  */
 export interface Territory {
   id: string;
+  /** Which business this record belongs to. See lib/org.ts. */
+  orgId: string;
   name: string;
   /**
    * The outline, in the order it was drawn. Stored as an array of maps because
@@ -345,6 +363,8 @@ export interface Author {
 /** A team chat thread: a direct message or a group. */
 export interface Conversation {
   id: string;
+  /** Which business this thread belongs to. See lib/org.ts. */
+  orgId: string;
   /** Groups only. A direct chat is named after the other person at render. */
   title: string;
   memberUids: string[];
