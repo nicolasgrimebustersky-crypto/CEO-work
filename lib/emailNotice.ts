@@ -27,9 +27,12 @@ export interface EmailEnv {
  *
  * Resend lends this address to every account so a new key works before any
  * domain is verified — but it will only deliver to the address that owns the
- * key. That is exactly this feature's shape (you, emailing yourself), so it is
- * a reasonable default rather than a placeholder. It is still a default worth
- * replacing: mail from a stranger's domain is mail that ends up in spam.
+ * key. That is exactly the crew notice's shape (you, emailing yourself), so
+ * it is a reasonable default rather than a placeholder there. A customer's
+ * approval receipt is a different shape — mail to somebody who is not the
+ * account owner — and left on this default it is accepted by Resend and
+ * never delivered. That send needs NOTIFY_EMAIL_FROM pointed at a domain
+ * verified with Resend before it reaches anyone.
  */
 export const DEFAULT_FROM = "Grime Busters CRM <onboarding@resend.dev>";
 
@@ -221,6 +224,89 @@ export function acceptedEmail(notice: AcceptedNotice): BuiltEmail {
     `<table style="border-collapse:collapse">${cells}</table>` +
     link +
     `<p style="margin:24px 0 0;color:#666;font-size:13px">The signature is on the estimate in the CRM — it is not attached here.</p>` +
+    `</div>`;
+
+  return { subject, text, html };
+}
+
+export interface CustomerApprovalNotice {
+  customerName: string;
+  /** The document's own number, e.g. "EST-1042". */
+  number: string;
+  service: string;
+  /** Already formatted — the caller owns how money reads. */
+  total: string;
+  /** yyyy-mm-dd, as the customer picked it. */
+  requestedDate: string;
+  /** Blank when the business has not set one — the line is dropped, not blank. */
+  businessName: string;
+  businessPhone: string;
+  businessEmail: string;
+}
+
+/**
+ * The receipt a customer gets for approving their own estimate.
+ *
+ * Separate from acceptedEmail on purpose: that one is written for the crew
+ * inbox — terse, ends in a link into the CRM the customer cannot open. This
+ * one is written for somebody who just signed something on their phone and
+ * wants to know it actually went through, so it restates what they agreed to
+ * rather than assuming they still have the page open, and it names a way to
+ * reach the business instead of a way to reach the record.
+ */
+export function customerApprovalEmail(notice: CustomerApprovalNotice): BuiltEmail {
+  const first = notice.customerName.trim().split(/\s+/)[0] || "there";
+  const subject = `You approved ${notice.number} — ${notice.total}`;
+  const business = notice.businessName.trim() || "the crew";
+
+  const rows: Array<[string, string]> = [
+    ["Estimate", notice.number],
+    ["Service", notice.service],
+    ["Total", notice.total],
+    ["You requested", spellDate(notice.requestedDate)],
+  ];
+
+  const contactParts: string[] = [];
+  if (notice.businessPhone.trim()) contactParts.push(`call ${notice.businessPhone.trim()}`);
+  if (notice.businessEmail.trim()) contactParts.push(`email ${notice.businessEmail.trim()}`);
+  const contactLine = contactParts.length
+    ? `Questions before then? You can ${contactParts.join(" or ")}.`
+    : "";
+
+  const lines = rows.map(([label, value]) => `${label}: ${value}`);
+  const textLines = [
+    `Hi ${first},`,
+    "",
+    `Thanks — we've got your approval for ${notice.service} (${notice.number}).`,
+    "",
+    ...lines,
+    "",
+    "We'll be in touch to confirm the date. Nothing else for you to do right now.",
+  ];
+  if (contactLine) textLines.push("", contactLine);
+  textLines.push("", `— ${business}`);
+  const text = textLines.join("\n");
+
+  const cells = rows
+    .map(
+      ([label, value]) =>
+        `<tr>` +
+        `<td style="padding:6px 16px 6px 0;color:#666;white-space:nowrap;vertical-align:top">${escapeHtml(label)}</td>` +
+        `<td style="padding:6px 0;color:#111;vertical-align:top">${escapeHtml(value)}</td>` +
+        `</tr>`,
+    )
+    .join("");
+
+  const html =
+    `<div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;font-size:15px;line-height:1.5;color:#111">` +
+    `<p style="margin:0 0 16px">Hi ${escapeHtml(first)},</p>` +
+    `<p style="margin:0 0 16px">Thanks — we've got your approval for <strong>${escapeHtml(notice.service)}</strong> (${escapeHtml(notice.number)}).</p>` +
+    `<table style="border-collapse:collapse">${cells}</table>` +
+    `<p style="margin:24px 0 0">We'll be in touch to confirm the date. Nothing else for you to do right now.</p>` +
+    (contactLine
+      ? `<p style="margin:16px 0 0;color:#666;font-size:13px">${escapeHtml(contactLine)}</p>`
+      : "") +
+    `<p style="margin:24px 0 0;color:#666;font-size:13px">— ${escapeHtml(business)}</p>` +
     `</div>`;
 
   return { subject, text, html };
