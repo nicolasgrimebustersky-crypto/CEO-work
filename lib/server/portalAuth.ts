@@ -60,6 +60,38 @@ export function normalizeEmail(value: unknown): string {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
 
+/**
+ * Who is signed in, without requiring that we already know them.
+ *
+ * requirePortalCustomer answers 404 when no record carries the caller's phone
+ * or email — which is right for reading, and exactly wrong for claiming, since
+ * having no records is the reason somebody is claiming in the first place. This
+ * is the same token check without that last step.
+ */
+export async function requirePortalIdentity(
+  request: Request,
+): Promise<{ uid: string; identity: VerifiedIdentity }> {
+  const header = request.headers.get("authorization") ?? "";
+  const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  if (!token) throw new ApiError(401, "Missing bearer token.");
+
+  let decoded;
+  try {
+    decoded = await adminAuth().verifyIdToken(token, true);
+  } catch {
+    throw new ApiError(401, "Invalid or expired session. Sign in again.");
+  }
+
+  const identity = verifiedIdentity(decoded);
+  if (isAnonymous(identity)) {
+    throw new ApiError(
+      403,
+      "Confirm your phone number or email address so we can find your records.",
+    );
+  }
+  return { uid: decoded.uid, identity };
+}
+
 export async function requirePortalCustomer(request: Request): Promise<PortalCaller> {
   const header = request.headers.get("authorization") ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";

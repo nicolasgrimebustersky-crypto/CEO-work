@@ -204,6 +204,21 @@ export async function consumeRateLimit(
  * (notes, notifications, an email) and gets the same kind of ceiling the
  * share-token link has.
  */
+/**
+ * Claiming a document, which is the one portal action that guesses can attack.
+ *
+ * Document numbers run in a sequence, so the only thing stopping somebody
+ * walking it is that they must also produce the total. Deliberately tight: a
+ * customer linking their own account needs two or three attempts at most, while
+ * a script needs thousands to be worth running. Counted per signed-in account,
+ * so making a new one costs an SMS verification each time.
+ */
+export const PORTAL_CLAIM_LIMIT: RateLimitRule = {
+  label: "attempts to link a document",
+  max: 10,
+  windowMs: 24 * 60 * 60 * 1000,
+};
+
 export const PORTAL_READ_LIMIT: RateLimitRule = {
   label: "portal reads",
   max: 240,
