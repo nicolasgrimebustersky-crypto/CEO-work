@@ -1,0 +1,28 @@
+# Netlify build config — static export of the Next.js site to ./out
+[build]
+  command = "npm run build"
+  publish = "out"
+
+[build.environment]
+  DEPLOY_TARGET = "static"
+  NODE_VERSION = "20"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# Security headers applied to every response. Content-Security-Policy allows
+# only what the site actually uses: GA4 (googletagmanager.com), Web3Forms
+# (api.web3forms.com) for the two lead forms, and our own /api/estimate.
+# 'unsafe-inline' on script-src is required for Next.js hydration data and
+# the inline GA init/JSON-LD scripts in app/layout.tsx — everything else
+# (frame-ancestors, object-src, base-uri) is locked down.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+    Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.web3forms.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self' https://api.web3forms.com"
