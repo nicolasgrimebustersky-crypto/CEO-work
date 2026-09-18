@@ -5,6 +5,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useDocuments } from "@/components/providers/DocumentsProvider";
 import { NotificationBell } from "@/components/shell/NotificationBell";
+import { Button } from "@/components/ui/Button";
+import { SelectionBar, SelectTick } from "@/components/ui/SelectionBar";
+import { confirmCopy, toggleAll, toggleId } from "@/lib/bulkDelete";
+import { deleteDocuments } from "@/lib/db/documents";
 import { useOpenMenu } from "@/components/shell/menu";
 import { MenuIcon } from "@/components/shell/navIcons";
 import { Sheet } from "@/components/ui/Sheet";
@@ -88,6 +92,11 @@ export function InvoicesScreen() {
   const [filter, setFilter] = useState<Filter>("all");
   const [filtering, setFiltering] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [selecting, setSelecting] = useState(false);
+  const [chosenIds, setChosenIds] = useState<string[]>([]);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const cards = useMemo(() => periodCards(documents, kind), [documents, kind]);
 
@@ -150,6 +159,19 @@ export function InvoicesScreen() {
             {title}
           </h1>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setSelecting((on) => !on);
+                setChosenIds([]);
+                setDeleteError(null);
+              }}
+              className={`tap-target rounded-xl px-2 text-base font-bold ${
+                selecting ? "text-accent" : "text-muted"
+              }`}
+            >
+              {selecting ? "Done" : "Select"}
+            </button>
             <RoundButton
               label={searching ? "Hide search" : "Search"}
               pressed={searching}
@@ -313,7 +335,13 @@ export function InvoicesScreen() {
                   <li key={document.id} className="border-b border-line last:border-b-0">
                     <DocumentRow
                       document={document}
-                      onOpen={() => router.push(routes.document(document.id))}
+                      selecting={selecting}
+                      checked={chosenIds.includes(document.id)}
+                      onOpen={() =>
+                        selecting
+                          ? setChosenIds((current) => toggleId(current, document.id))
+                          : router.push(routes.document(document.id))
+                      }
                     />
                   </li>
                 ))}
@@ -324,7 +352,24 @@ export function InvoicesScreen() {
       </div>
 
       {/* ------------------------------------------------------------ CTA */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-canvas via-canvas/90 to-transparent px-4 pt-8 pb-3">
+      {selecting ? (
+        <SelectionBar
+          selected={chosenIds}
+          visible={visible.map((entry) => entry.id)}
+          noun={kind === "invoice" ? "invoice" : "estimate"}
+          busy={deleting}
+          onToggleAll={() =>
+            setChosenIds((current) => toggleAll(current, visible.map((entry) => entry.id)))
+          }
+          onDelete={() => setConfirmingDelete(true)}
+          onCancel={() => {
+            setSelecting(false);
+            setChosenIds([]);
+          }}
+        />
+      ) : null}
+
+      <div className={`pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-canvas via-canvas/90 to-transparent px-4 pt-8 pb-3 ${selecting ? "hidden" : ""}`}>
         <div className="mx-auto max-w-3xl">
           <button
             type="button"
@@ -340,6 +385,65 @@ export function InvoicesScreen() {
           </button>
         </div>
       </div>
+
+      <Sheet
+        open={confirmingDelete}
+        title={confirmCopy(kind === "invoice" ? "invoice" : "estimate", chosenIds.length).title}
+        onClose={() => (deleting ? undefined : setConfirmingDelete(false))}
+        footer={
+          <div className="flex gap-3">
+            <Button
+              variant="secondary"
+              onClick={() => setConfirmingDelete(false)}
+              disabled={deleting}
+            >
+              Keep them
+            </Button>
+            <Button
+              variant="danger"
+              full
+              disabled={deleting}
+              onClick={() => {
+                void (async () => {
+                  setDeleting(true);
+                  setDeleteError(null);
+                  try {
+                    await deleteDocuments(chosenIds);
+                    // The live listener drops the rows; clearing the selection
+                    // here stops a deleted id lingering as a ticked ghost.
+                    setChosenIds([]);
+                    setSelecting(false);
+                    setConfirmingDelete(false);
+                  } catch (err) {
+                    setDeleteError(
+                      err instanceof Error ? err.message : "Could not delete those.",
+                    );
+                  } finally {
+                    setDeleting(false);
+                  }
+                })();
+              }}
+            >
+              {deleting
+                ? "Deleting…"
+                : confirmCopy(kind === "invoice" ? "invoice" : "estimate", chosenIds.length).action}
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-base font-semibold text-ink">
+          {confirmCopy(kind === "invoice" ? "invoice" : "estimate", chosenIds.length).body}
+        </p>
+        <p className="mt-3 text-sm font-semibold text-muted">
+          Numbering keeps going from where it was — deleting {chosenIds.length === 1 ? "this one" : "these"} leaves a gap
+          rather than renumbering the rest.
+        </p>
+        {deleteError ? (
+          <p role="alert" className="mt-3 text-sm font-bold text-danger">
+            {deleteError}
+          </p>
+        ) : null}
+      </Sheet>
 
       <Sheet open={filtering} title={`Show ${title.toLowerCase()}`} onClose={() => setFiltering(false)}>
         <ul className="flex flex-col gap-2">
@@ -471,17 +575,24 @@ function Dots({ count, active }: { count: number; active: number }) {
 function DocumentRow({
   document,
   onOpen,
+  selecting = false,
+  checked = false,
 }: {
   document: BusinessDocument;
   onOpen: () => void;
+  /** In select mode the row ticks instead of opening. */
+  selecting?: boolean;
+  checked?: boolean;
 }) {
   const invoice = document.kind === "invoice";
   return (
     <button
       type="button"
       onClick={onOpen}
+      aria-pressed={selecting ? checked : undefined}
       className="flex w-full items-center gap-3.5 px-4 py-3.5 text-left active:bg-surface-2"
     >
+      {selecting ? <SelectTick checked={checked} /> : null}
       <span
         className={`flex size-12 shrink-0 items-center justify-center rounded-full ${
           invoice ? "bg-money/15 text-money" : "bg-warn/15 text-warn"
