@@ -1,5 +1,7 @@
+import { formatMoney } from "@/lib/format";
 import { readWebhookPayment } from "@/lib/payments";
 import { verifyStripeSignature } from "@/lib/stripeSignature";
+import { notifyCrew } from "@/lib/server/notify";
 import { recordCardPayment, stripeConfig } from "@/lib/server/stripe";
 
 export const runtime = "nodejs";
@@ -33,7 +35,9 @@ export async function POST(request: Request): Promise<Response> {
     // Nothing can be verified, so nothing can be trusted. Not an error worth
     // retrying — the deployment is simply not set up to take card payments.
     console.error("Stripe webhook received but STRIPE_WEBHOOK_SECRET is not set.");
-    return Response.json({ ok: false }, { status: 503 });
+    // 400, not a 5xx: nothing about this is going to be different on a retry,
+    // and Stripe retries a 5xx on a backoff for three days.
+    return Response.json({ ok: false }, { status: 400 });
   }
 
   const raw = await request.text();
@@ -61,32 +65,55 @@ export async function POST(request: Request): Promise<Response> {
   if (!payment) return Response.json({ ok: true, ignored: true });
   if (!payment.paid) return Response.json({ ok: true, ignored: true, reason: "not paid" });
 
-  const last4 = readLast4(event);
-  const result = await recordCardPayment(payment, last4);
+  const result = await recordCardPayment(payment, "");
 
   if (result.problem) {
-    // A real failure. 500 so Stripe retries it — the transaction is idempotent,
-    // so a retry that arrives after a partial success is a no-op.
+    if (result.permanent) {
+      // Retrying cannot fix a deleted document or a tenant mismatch, and a 5xx
+      // here means Stripe hammers it for three days and then drops it — money
+      // taken, nothing recorded, nobody told. Answered 200 so the retries stop,
+      // and logged at a volume that is meant to be noticed, because a charged
+      // card with no ledger entry needs a human.
+      console.error(
+        `PAYMENT TAKEN BUT NOT RECORDED. Stripe session ${payment.sessionId} for document ` +
+          `${payment.documentId} (${payment.amount}): ${result.problem}`,
+      );
+      return Response.json({ ok: true, unrecorded: true });
+    }
+    // Transient. 500 so Stripe retries — the transaction is idempotent, so a
+    // retry arriving after a partial success is a no-op.
     return Response.json({ ok: false }, { status: 500 });
+  }
+
+  // Tell the crew, exactly once — a duplicate delivery must not buzz twice.
+  // Without this the money arrives silently and somebody chases a customer who
+  // has already paid, which is the same reason the quote-response route next
+  // door notifies. Best-effort: notifyCrew never throws, and a failed push must
+  // not turn a recorded payment into a webhook Stripe retries.
+  if (result.recorded) {
+    await notifyCrew({
+      type: "payment_received",
+      body: `Card payment of ${formatMoney(payment.amount)} received on invoice ${payment.documentId}.`,
+      documentId: payment.documentId,
+      actorName: "Stripe",
+    });
   }
 
   return Response.json({ ok: true, duplicate: result.duplicate });
 }
 
 /**
- * The card's last four, if Stripe included them.
+ * Why there is no card last-four here.
  *
- * Optional by design: Checkout only expands payment details when asked, and a
- * payment recorded as "Card" with no digits is worth having. The digits are
- * only ever used to make a line reconcilable against a statement.
+ * The obvious thing to do is read `payment_method_details.card.last4` off the
+ * event. It is not there: `checkout.session.completed` carries a Checkout
+ * Session, and `payment_method_details` belongs to the Charge. Webhook payloads
+ * cannot be expanded, so getting the digits means a second API call to fetch
+ * the PaymentIntent's latest charge.
+ *
+ * Not worth a blocking round-trip inside a webhook that must answer quickly, so
+ * a card payment is recorded as "Card" until somebody wants the digits enough
+ * to fetch them asynchronously. Written down because the first version of this
+ * file read the non-existent field and silently recorded "Card" forever while
+ * appearing to support last-four.
  */
-function readLast4(event: unknown): string {
-  const session = (event as { data?: { object?: unknown } })?.data?.object;
-  if (!session || typeof session !== "object") return "";
-  const details = (session as { payment_method_details?: unknown }).payment_method_details;
-  if (!details || typeof details !== "object") return "";
-  const card = (details as { card?: unknown }).card;
-  if (!card || typeof card !== "object") return "";
-  const last4 = (card as { last4?: unknown }).last4;
-  return typeof last4 === "string" ? last4 : "";
-}

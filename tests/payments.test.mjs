@@ -26,7 +26,7 @@ const {
   PAID_EVENT,
 } = await import("../lib/payments.ts");
 
-const { round2 } = await import("../lib/documents.ts");
+const { round2, OPEN_INVOICE_STATUSES } = await import("../lib/documents.ts");
 
 const FULL_ENV = {
   STRIPE_SECRET_KEY: "sk_test_x",
@@ -140,6 +140,26 @@ describe("what can actually be paid", () => {
 
   test("a voided invoice is refused", () => {
     assert.equal(checkPayable({ ...invoice, status: "void" }).payable, false);
+  });
+
+  test("a draft invoice is refused — a share link can be copied off one", () => {
+    // ensureShareToken puts no status restriction on sharing, so a crew member
+    // who taps Copy link on a half-finished invoice must not hand the customer
+    // a live Pay button for a price nobody finished deciding.
+    const result = checkPayable({ ...invoice, status: "draft" });
+    assert.equal(result.payable, false);
+    assert.match(result.reason, /isn't ready/i);
+  });
+
+  test("payable status agrees with the app's own OPEN_INVOICE_STATUSES", () => {
+    // Two definitions of "an open invoice" would drift. This pins them.
+    for (const status of ["draft", "sent", "partial", "paid", "void", "accepted", "declined"]) {
+      assert.equal(
+        checkPayable({ ...invoice, status }).payable,
+        OPEN_INVOICE_STATUSES.includes(status),
+        `status ${status}`,
+      );
+    }
   });
 
   test("a balance under Stripe's floor is refused here, not by a broken button", () => {

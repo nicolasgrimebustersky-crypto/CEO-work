@@ -102,6 +102,15 @@ export function fromMinorUnits(cents: number): number {
  */
 export const MIN_CHARGE_CENTS = 50;
 
+/**
+ * Which invoice statuses are open to payment.
+ *
+ * The same list as OPEN_INVOICE_STATUSES in lib/documents.ts, copied for the
+ * reason toMinorUnits duplicates round2: this module stays dependency-free so
+ * it can be tested on its own. A test imports both and asserts they match.
+ */
+const OPEN_INVOICE_STATUSES: readonly string[] = ["sent", "partial"];
+
 export interface PayableCheck {
   payable: boolean;
   /** Why not, in words a customer could read. Empty when payable. */
@@ -123,8 +132,15 @@ export function checkPayable(document: {
   if (document.kind !== "invoice") {
     return { payable: false, reason: "Only an invoice can be paid." };
   }
-  if (document.status === "void") {
-    return { payable: false, reason: "This invoice was voided." };
+  // The app's own definition of an open invoice, not a second one invented
+  // here. A share token can be copied off a *draft* invoice — one never sent,
+  // still being edited — and without this a customer could be handed a live
+  // Pay button for a price nobody had finished deciding.
+  if (!OPEN_INVOICE_STATUSES.includes(document.status)) {
+    return {
+      payable: false,
+      reason: document.status === "void" ? "This invoice was voided." : "This invoice isn't ready to pay yet.",
+    };
   }
   if (document.balanceDue <= 0) {
     return { payable: false, reason: "This invoice is already paid in full." };

@@ -1,5 +1,6 @@
 import { checkPayable, canTakeCardPayments } from "@/lib/payments";
 import { findByShareToken } from "@/lib/server/publicDocument";
+import { ApiError } from "@/lib/server/auth";
 import { consumeRateLimit, PAY_START_LIMIT } from "@/lib/server/rateLimit";
 import { createCheckoutSession, stripeConfig } from "@/lib/server/stripe";
 
@@ -54,8 +55,16 @@ export async function POST(
 
   try {
     await consumeRateLimit(`pay:${document.id}`, "pay_start", PAY_START_LIMIT);
-  } catch {
-    return bad(429, "Too many payment attempts on this invoice. Please try again shortly.");
+  } catch (error) {
+    // Only an actual limit is a limit. consumeRateLimit runs a Firestore
+    // transaction, and a bare catch here told a customer who had tried zero
+    // times that they had tried too many — while hiding the outage that really
+    // happened.
+    if (error instanceof ApiError && error.status === 429) {
+      return bad(429, "Too many payment attempts on this invoice. Please try again shortly.");
+    }
+    console.error(`Rate limit check failed for document ${document.id}:`, error);
+    return bad(503, "We couldn't start the payment just now. Please try again, or call us.");
   }
 
   const result = await createCheckoutSession(document, customer?.email ?? "");

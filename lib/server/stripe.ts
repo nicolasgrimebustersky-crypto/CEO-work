@@ -76,6 +76,12 @@ export async function createCheckoutSession(
     return { url: "", problem: "Card payments are not configured on this deployment." };
   }
 
+  if (!document.shareToken) {
+    // Interpolating null here hands Stripe a success_url of /v/null, which it
+    // accepts — and the customer lands on a 404 with their card already charged.
+    return { url: "", problem: "Document has no share link to return to." };
+  }
+
   let amountCents: number;
   try {
     amountCents = toMinorUnits(document.balanceDue);
@@ -144,6 +150,15 @@ export interface RecordResult {
   /** True when this session was already in the ledger — a retry, not a problem. */
   duplicate: boolean;
   problem: string;
+  /**
+   * True when retrying cannot help.
+   *
+   * The distinction decides the webhook's status code, and getting it wrong
+   * costs real money: Stripe retries a 5xx on a backoff for three days and
+   * then gives up, so a permanent failure answered with 500 means a charged
+   * card, no ledger entry, and nobody told.
+   */
+  permanent?: boolean;
 }
 
 /**
@@ -170,15 +185,31 @@ export async function recordCardPayment(
   try {
     return await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
-      if (!snap.exists) return { recorded: false, duplicate: false, problem: "Document no longer exists." };
+      if (!snap.exists) {
+        return {
+          recorded: false,
+          duplicate: false,
+          problem: "Document no longer exists.",
+          permanent: true,
+        };
+      }
 
       const data = snap.data() as { orgId?: string; total?: number; status?: string; payments?: StoredPayment[] };
 
       // The org on the document must match the one the session was created
       // for. Metadata is signed by Stripe, but it is still an assertion about
       // which tenant this belongs to, and it is cheap to refuse a mismatch.
-      if (data.orgId && payment.orgId && data.orgId !== payment.orgId) {
-        return { recorded: false, duplicate: false, problem: "Payment is for a different organisation." };
+      // Fails closed. An older document written before orgId was required has
+      // no org to compare against, and treating "missing" as "matches" would
+      // accept a payment tagged for any organisation onto exactly the records
+      // least able to prove otherwise.
+      if (!data.orgId || !payment.orgId || data.orgId !== payment.orgId) {
+        return {
+          recorded: false,
+          duplicate: false,
+          problem: "Payment is for a different organisation.",
+          permanent: true,
+        };
       }
 
       const existing: StoredPayment[] = Array.isArray(data.payments) ? data.payments : [];

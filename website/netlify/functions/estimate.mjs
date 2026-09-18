@@ -80,12 +80,29 @@ const MAX_TOTAL_LEN = 10_000_000; // ~7.5MB decoded, combined
 // charges in minutes). Two lightweight guards keep it usable by real
 // customers while blocking that: an Origin allowlist (only our own pages may
 // call it) and a per-IP rate limit backed by Netlify Blobs.
-const ALLOWED_ORIGIN_HOSTS = new Set(["grimebusterskyllc.com", "www.grimebusterskyllc.com"]);
+// Extra hosts, comma separated, for deploy previews — set ALLOWED_ORIGIN_HOSTS
+// in the Netlify site config to the specific preview host. Named hosts, never a
+// wildcard suffix: see isAllowedOrigin below for what that cost.
+const EXTRA_ORIGIN_HOSTS = (process.env.ALLOWED_ORIGIN_HOSTS ?? "")
+  .split(",")
+  .map((host) => host.trim().toLowerCase())
+  .filter(Boolean);
+const ALLOWED_ORIGIN_HOSTS = new Set([
+  "grimebusterskyllc.com",
+  "www.grimebusterskyllc.com",
+  ...EXTRA_ORIGIN_HOSTS,
+]);
 function isAllowedOrigin(origin) {
   if (!origin) return false;
   try {
     const host = new URL(origin).hostname;
-    return ALLOWED_ORIGIN_HOSTS.has(host) || host.endsWith(".netlify.app");
+    // Named hosts only. `host.endsWith(".netlify.app")` used to be here to let
+    // deploy previews through, but it let *every* free Netlify site through
+    // with them: anybody could deploy a page and call this endpoint from it,
+    // which is the whole abuse this allowlist exists to stop on the one route
+    // that spends money per request. A preview host has to be named in
+    // ALLOWED_ORIGIN_HOSTS like any other.
+    return ALLOWED_ORIGIN_HOSTS.has(host.toLowerCase());
   } catch {
     return false;
   }
