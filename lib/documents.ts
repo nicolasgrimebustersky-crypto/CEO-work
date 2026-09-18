@@ -113,6 +113,22 @@ export interface Payment {
   method: string;
   recordedBy: string;
   recordedByName: string;
+  /**
+   * Which payment provider reported this, when one did. Absent on everything
+   * the crew records by hand, which is most of it.
+   */
+  provider?: "stripe";
+  /**
+   * The provider's own id for the transaction — a Stripe Checkout Session id.
+   *
+   * This is what makes recording a card payment idempotent. Stripe retries a
+   * webhook until it gets a 2xx, and it is entitled to: a delivery that times
+   * out after the write would otherwise be indistinguishable from one that
+   * never arrived, and the customer would be credited twice for one payment.
+   * The webhook looks for this reference before appending, inside the same
+   * transaction that appends it.
+   */
+  providerRef?: string;
 }
 
 /**
@@ -348,7 +364,7 @@ export function documentSaved(businessDocument: {
   );
 }
 
-export function sumPayments(payments: Payment[]): number {
+export function sumPayments(payments: readonly { amount: number }[]): number {
   return round2(payments.reduce((sum, payment) => sum + payment.amount, 0));
 }
 

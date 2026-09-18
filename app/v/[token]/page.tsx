@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import { PayInvoiceButton } from "@/components/documents/PayInvoiceButton";
 import { QuoteActions } from "@/components/documents/QuoteActions";
 import { SharedDocument } from "@/components/documents/SharedDocument";
 import { BUSINESS, BUSINESS_TIMEZONE } from "@/lib/business";
+import { canTakeCardPayments, checkPayable } from "@/lib/payments";
 import { todayIn } from "@/lib/quoteResponse";
 import { findByShareToken } from "@/lib/server/publicDocument";
+import { stripeConfig } from "@/lib/server/stripe";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,6 +56,11 @@ export default async function SharedDocumentPage({
   // is a bill; offering to "approve" one would be inviting a customer to think
   // they had changed something.
   const decidable = !isInvoice;
+
+  // Decided on the server, so a browser cannot talk the button into existing.
+  // Both halves have to be true: the deployment can take cards at all, and
+  // this particular document is one there is something to pay on.
+  const canPay = canTakeCardPayments(stripeConfig()) && checkPayable(document).payable;
   const answered =
     document.status === "accepted" || document.status === "declined"
       ? document.status
@@ -80,6 +88,9 @@ export default async function SharedDocumentPage({
 
       <div className="px-3 pb-8">
         <SharedDocument document={document} customer={customer} />
+        {canPay && document.shareToken ? (
+          <PayInvoiceButton token={document.shareToken} balanceDue={document.balanceDue} />
+        ) : null}
       </div>
 
       <footer className="px-4 pb-6 text-center">

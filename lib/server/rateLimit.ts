@@ -126,6 +126,19 @@ export const QUOTE_RESPONSE_LIMIT: RateLimitRule = {
   label: "answers to this quote",
 };
 
+/**
+ * Starting a card checkout, per share link.
+ *
+ * Higher than answering a quote, because a customer legitimately retries: they
+ * abandon the page, come back, try a second card. Low enough that a leaked link
+ * cannot be used to make Stripe sessions in bulk.
+ */
+export const PAY_START_LIMIT: RateLimitRule = {
+  max: 20,
+  windowMs: 60 * 60 * 1000,
+  label: "payment attempts on this invoice",
+};
+
 function minutesUntil(resetAt: number): number {
   return Math.max(1, Math.ceil((resetAt - Date.now()) / 60000));
 }
