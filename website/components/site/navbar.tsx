@@ -65,6 +65,14 @@ export function Navbar() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Its own link rather than a NAV_LINKS entry: those are anchors down
+              this one page, and this is a different page entirely. */}
+          <Link
+            href="/account"
+            className="rounded-full px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            My account
+          </Link>
           <a
             href={BUSINESS.phoneHref}
             className="hidden items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary/20 sm:inline-flex"
