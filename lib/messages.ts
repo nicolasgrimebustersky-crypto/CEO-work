@@ -8,16 +8,33 @@ import { format } from "date-fns";
 
 const BUSINESS_NAME = "Grime Busters";
 
+/**
+ * The opt-out line, on every outbound template.
+ *
+ * Carriers expect it, and an A2P 10DLC campaign whose sample messages do not
+ * carry it is one they flag. Twilio already honours STOP at its own end — a
+ * customer who replies STOP stops receiving messages whether or not we ever
+ * told them they could — so this is not what makes the opt-out work. What it
+ * does is tell somebody it exists, which is the part a person standing in their
+ * driveway with an unfamiliar number actually needs.
+ *
+ * Kept short on purpose. Every template here sits well inside one 160-character
+ * SMS segment and this adds 23; a longer form ("Reply STOP to unsubscribe at
+ * any time") would push the scheduling texts over into a second segment and
+ * double the per-message cost for nothing.
+ */
+const OPT_OUT = " Reply STOP to opt out.";
+
 function whenText(date: Date): string {
   return format(date, "EEEE MMM d 'at' h:mm a");
 }
 
 export function jobConfirmationText(service: string, start: Date): string {
-  return `${BUSINESS_NAME}: your ${service.toLowerCase()} is scheduled for ${whenText(start)}. Reply here if you need to change it.`;
+  return `${BUSINESS_NAME}: your ${service.toLowerCase()} is scheduled for ${whenText(start)}. Reply here if you need to change it.${OPT_OUT}`;
 }
 
 export function jobRescheduledText(service: string, start: Date): string {
-  return `${BUSINESS_NAME}: your ${service.toLowerCase()} has been rescheduled to ${whenText(start)}. Reply here if that doesn't work.`;
+  return `${BUSINESS_NAME}: your ${service.toLowerCase()} has been rescheduled to ${whenText(start)}. Reply here if that doesn't work.${OPT_OUT}`;
 }
 
 /**
@@ -42,12 +59,12 @@ export function documentText(
   const tail = link ? `\n\n${link}` : "";
 
   if (kind === "estimate") {
-    return `${BUSINESS_NAME}: here's your estimate for ${service.toLowerCase()} — ${money}. Reply YES to book it, or with any questions.${tail}`;
+    return `${BUSINESS_NAME}: here's your estimate for ${service.toLowerCase()} — ${money}. Reply YES to book it, or with any questions.${OPT_OUT}${tail}`;
   }
   if (balanceDue > 0 && balanceDue < total) {
-    return `${BUSINESS_NAME}: thanks for the payment. ${`$${balanceDue.toFixed(2)}`} is still outstanding on your ${service.toLowerCase()} invoice.${tail}`;
+    return `${BUSINESS_NAME}: thanks for the payment. ${`$${balanceDue.toFixed(2)}`} is still outstanding on your ${service.toLowerCase()} invoice.${OPT_OUT}${tail}`;
   }
-  return `${BUSINESS_NAME}: your invoice for ${service.toLowerCase()} is ${money}. Thanks for your business — reply here with any questions.${tail}`;
+  return `${BUSINESS_NAME}: your invoice for ${service.toLowerCase()} is ${money}. Thanks for your business — reply here with any questions.${OPT_OUT}${tail}`;
 }
 
 export function quoteFollowUpText(
@@ -57,12 +74,12 @@ export function quoteFollowUpText(
 ): string {
   const money = `$${Math.round(amount)}`;
   if (attempt === 1) {
-    return `${BUSINESS_NAME}: just checking in on the ${money} ${service.toLowerCase()} quote we sent over. Happy to answer any questions.`;
+    return `${BUSINESS_NAME}: just checking in on the ${money} ${service.toLowerCase()} quote we sent over. Happy to answer any questions.${OPT_OUT}`;
   }
   if (attempt === 2) {
-    return `${BUSINESS_NAME}: still interested in the ${money} ${service.toLowerCase()} quote? We have openings this week.`;
+    return `${BUSINESS_NAME}: still interested in the ${money} ${service.toLowerCase()} quote? We have openings this week.${OPT_OUT}`;
   }
-  return `${BUSINESS_NAME}: last check on that ${money} ${service.toLowerCase()} quote. Reply any time if you'd like to book — otherwise we'll leave you be.`;
+  return `${BUSINESS_NAME}: last check on that ${money} ${service.toLowerCase()} quote. Reply any time if you'd like to book — otherwise we'll leave you be.${OPT_OUT}`;
 }
 
 /* ------------------------------------------------------------ on the job */
@@ -104,13 +121,13 @@ export function greetingFor(firstName: string | null | undefined): string {
 }
 
 export function enRouteText(customerFirstName: string | null | undefined): string {
-  return `${greetingFor(customerFirstName)}, your technicians from ${LEGAL_NAME} are currently en route to your scheduled appointment.`;
+  return `${greetingFor(customerFirstName)}, your technicians from ${LEGAL_NAME} are currently en route to your scheduled appointment.${OPT_OUT}`;
 }
 
 export function jobStartedText(technicianFirstName: string): string {
-  return `Hey! This is ${technicianFirstName} from ${LEGAL_NAME}. I'm your technician for the day, if you have any questions feel free to reach out to ${OWNER_NAME} @ ${OWNER_PHONE}.`;
+  return `Hey! This is ${technicianFirstName} from ${LEGAL_NAME}. I'm your technician for the day, if you have any questions feel free to reach out to ${OWNER_NAME} @ ${OWNER_PHONE}.${OPT_OUT}`;
 }
 
 export function jobFinishedText(technicianFirstName: string): string {
-  return `Hey! This is ${technicianFirstName} from ${LEGAL_NAME}. We just finished and are ready awaiting payment. We accept checks made out to ${LEGAL_NAME}, cash, Venmo ${PAYMENT_HANDLES.venmo}, Cash App ${PAYMENT_HANDLES.cashApp}. If you have none of these please reach out to ${OWNER_NAME} at ${OWNER_PHONE}.`;
+  return `Hey! This is ${technicianFirstName} from ${LEGAL_NAME}. We just finished and are ready awaiting payment. We accept checks made out to ${LEGAL_NAME}, cash, Venmo ${PAYMENT_HANDLES.venmo}, Cash App ${PAYMENT_HANDLES.cashApp}. If you have none of these please reach out to ${OWNER_NAME} at ${OWNER_PHONE}.${OPT_OUT}`;
 }
