@@ -314,6 +314,11 @@ export type CustomerPatch = Partial<
     | "lifetimeValue"
     | "propertyType"
     | "addresses"
+    // Recorded from the customer screen when a crew member asks. smsOptOut is
+    // deliberately absent: that one is written by the inbound webhook alone,
+    // because it represents the customer's own instruction and nobody in the
+    // office gets to edit it away from a screen.
+    | "smsConsent"
   >
 >;
 

@@ -48,6 +48,7 @@ import { CUSTOMER_STATUSES, QUOTE_STATUSES } from "@/lib/types";
 import type { Job, Photo, Quote } from "@/lib/types";
 import { JobSheet } from "@/components/schedule/JobSheet";
 import { EditCustomerSheet } from "./EditCustomerSheet";
+import { TextConsentRow } from "./TextConsentRow";
 import { StatusPicker } from "./StatusPicker";
 import { NotesTimeline } from "./NotesTimeline";
 import { QuoteSheet } from "./QuoteSheet";
@@ -324,6 +325,9 @@ export function CustomerDetailScreen() {
           </div>
           <dl className="divide-y divide-line rounded-xl border border-line bg-surface-2">
             <Row label="Phone" value={customer.phone ? formatPhone(customer.phone) : "—"} />
+            {/* Directly under the number it governs, so the answer to "may I
+                text this person" is in the same glance as the number itself. */}
+            <TextConsentRow customer={customer} />
             <Row label="Email" value={customer.email || "—"} />
             {/* Where they came from. Worth showing: a referral and a cold door
                 are different kinds of relationship, and the reports only mean

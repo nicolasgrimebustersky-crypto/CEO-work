@@ -3,6 +3,7 @@ import { audit } from "@/lib/server/audit";
 import { errorResponse, requireCrew, ApiError } from "@/lib/server/auth";
 import { preflight, withCors } from "@/lib/server/cors";
 import { consumeRateLimit, SMS_SEND_LIMIT } from "@/lib/server/rateLimit";
+import { canSendTo } from "@/lib/smsConsent";
 import { isTwilioConfigured, sendSms } from "@/lib/server/twilio";
 
 export const runtime = "nodejs";
@@ -47,6 +48,14 @@ export async function POST(request: Request): Promise<Response> {
     const customer = await getCustomer(customerId);
     if (!customer) throw new ApiError(404, "Customer not found.");
     if (!customer.phone) throw new ApiError(400, "That customer has no phone number.");
+
+    // Refused here rather than handed to Twilio, which would accept the request
+    // and drop the message — leaving the timeline saying "sent" against
+    // somebody who will never receive it. 409 rather than 403: the request is
+    // well-formed and the caller is entitled to make it, the customer's own
+    // instruction is what stands in the way.
+    const verdict = canSendTo(customer);
+    if (!verdict.allowed) throw new ApiError(409, verdict.reason);
 
     // Charged only once the request is known-good, so a typo doesn't eat the
     // caller's budget — but before Twilio is touched, which is the point.
