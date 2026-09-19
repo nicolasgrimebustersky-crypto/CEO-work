@@ -1,5 +1,6 @@
+import { classifyReply, recordOptOut } from "@/lib/smsConsent";
 import { notifyCrew } from "@/lib/server/notify";
-import { appendNote, findCustomerByPhone } from "@/lib/server/customerNotes";
+import { appendNote, findCustomerByPhone, setSmsOptOut } from "@/lib/server/customerNotes";
 import { canVerifyWebhooks, verifyTwilioSignature } from "@/lib/server/twilio";
 
 export const runtime = "nodejs";
@@ -81,8 +82,30 @@ export async function POST(request: Request): Promise<Response> {
 
     const who = `${customer.firstName} ${customer.lastName}`.trim() || "Customer";
 
+    // What the reply is asking for, before it is filed as ordinary chat.
+    //
+    // Twilio has already acted on STOP by the time this runs — it blocks
+    // delivery itself and the customer is protected whether or not this
+    // executes. What happens here is that the business finds out: the record
+    // is flagged, the crew is told, and the next attempt to text them is
+    // refused with a reason instead of being handed to Twilio and dropped.
+    const kind = classifyReply(body);
+    if (kind === "opt_out") {
+      await setSmsOptOut(customer.id, recordOptOut(body));
+    } else if (kind === "opt_in") {
+      // They asked to come back. Clearing the flag is the whole of it — this
+      // does not write a consent record, because texting START says "resume",
+      // not "here is how and when I first agreed".
+      await setSmsOptOut(customer.id, null);
+    }
+
     await appendNote(customer.id, {
-      text: body,
+      text:
+        kind === "opt_out"
+          ? `${body}\n\n[Opted out of text messages. Call them instead, or ask them to text START.]`
+          : kind === "opt_in"
+            ? `${body}\n\n[Opted back in to text messages.]`
+            : body,
       kind: "sms_in",
       authorUid: "customer",
       authorName: who,
@@ -93,7 +116,12 @@ export async function POST(request: Request): Promise<Response> {
     await notifyCrew({
       type: "sms_in",
       actorName: who,
-      body: `${who}: ${body}`,
+      // An opt-out is the one reply the crew must not skim past — somebody is
+      // about to try texting this person again otherwise.
+      body:
+        kind === "opt_out"
+          ? `${who} opted out of texts: ${body}`
+          : `${who}: ${body}`,
       customerId: customer.id,
     });
 

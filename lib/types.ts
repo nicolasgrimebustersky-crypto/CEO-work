@@ -2,6 +2,7 @@ import type { Role } from "@/lib/auth/roles";
 import type { Timestamp } from "firebase/firestore";
 
 import type { PipelineStage } from "./pipeline";
+import type { SmsConsent, SmsOptOut } from "./smsConsent";
 
 /**
  * What a door is, in the order the picker shows them: the open ones first,
@@ -159,6 +160,19 @@ export interface Customer {
    * field existed do not have it; scripts/backfill-phone-e164.mjs fills them.
    */
   phoneE164?: string;
+  /**
+   * Whether this person agreed to be texted, who asked and when.
+   *
+   * Absent on every record written before consent was tracked, which reads as
+   * "nobody has asked" rather than "they said no" — see lib/smsConsent.ts,
+   * which permits sending in that case and tells the crew to ask.
+   */
+  smsConsent?: SmsConsent;
+  /**
+   * Set when this person replied STOP. Outranks smsConsent, including one
+   * recorded afterwards. Cleared only by them texting START.
+   */
+  smsOptOut?: SmsOptOut | null;
   email: string;
   address: string;
   lat: number;

@@ -267,7 +267,21 @@ service cloud.firestore {
         // Optional for the same reason as propertyType — records written before
         // the field existed must stay editable — and only ever a string, so a
         // list or a map cannot be smuggled into that lookup.
-        && (!('phoneE164' in data) || data.phoneE164 is string);
+        && (!('phoneE164' in data) || data.phoneE164 is string)
+        // Text consent, and the instruction to stop.
+        //
+        // Both optional: every customer entered before consent was tracked has
+        // neither, and those records must stay editable. Shape is checked
+        // because these two decide whether somebody gets texted — a consent
+        // whose `granted` is the string "false" would read as truthy in the
+        // wrong hands, and a method outside the three we record is a value
+        // nothing downstream knows how to display.
+        && (!('smsConsent' in data) || (
+             data.smsConsent is map
+             && data.smsConsent.granted is bool
+             && data.smsConsent.method in ['verbal', 'web_form', 'written']
+           ))
+        && (!('smsOptOut' in data) || data.smsOptOut == null || data.smsOptOut is map);
     }
 
     function validJob() {
