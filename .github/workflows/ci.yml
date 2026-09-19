@@ -44,7 +44,14 @@ jobs:
       # point is a tripwire for the next unauthenticated-RCE class advisory in
       # the framework, not a gate that goes red on every transitive moderate;
       # those are reviewed by hand — see docs/SECURITY_AUDIT.md.
-      - run: npm audit --omit=dev --audit-level=critical
+      #
+      # Through the script rather than `npm audit --audit-level=critical`
+      # directly, because that command exits non-zero for a critical advisory
+      # and for npm's own service being unreachable, and CI could not tell them
+      # apart. On 19 Sept npm's audit service went into maintenance and every
+      # pull request went red on a security gate that was not auditing
+      # anything. The script reads the JSON and says which happened.
+      - run: node --experimental-strip-types scripts/audit-deps.mjs
 
   rules:
     name: Security rules
