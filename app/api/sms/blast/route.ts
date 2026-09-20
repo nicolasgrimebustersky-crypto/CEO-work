@@ -4,6 +4,7 @@ import { preflight, withCors } from "@/lib/server/cors";
 import { appendNote, getCustomer } from "@/lib/server/customerNotes";
 import { consumeRateLimit, SMS_BLAST_LIMIT } from "@/lib/server/rateLimit";
 import { isTwilioConfigured, sendSms } from "@/lib/server/twilio";
+import { canSendTo } from "@/lib/smsConsent";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -76,11 +77,14 @@ export async function POST(request: Request): Promise<Response> {
         failed.push({ customerId, name, error: "Customer not found." });
         continue;
       }
-      if (!customer.phone) {
-        failed.push({ customerId, name, error: "No phone number." });
+      // Never blast someone who asked not to be contacted. A blast is where
+      // this matters most: one careless selection is a hundred messages, and
+      // the person who replied STOP last week is somewhere in the list.
+      const verdict = canSendTo(customer);
+      if (!verdict.allowed) {
+        failed.push({ customerId, name, error: verdict.reason });
         continue;
       }
-      // Never blast someone who asked not to be contacted.
       if (customer.status === "do_not_knock") {
         failed.push({ customerId, name, error: "Marked do not knock — skipped." });
         continue;

@@ -3,6 +3,7 @@ import "server-only";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 import { adminDb } from "./admin";
+import type { SmsConsent, SmsOptOut } from "@/lib/smsConsent";
 import type { NoteKind } from "@/lib/types";
 
 export interface AdminCustomer {
@@ -12,6 +13,49 @@ export interface AdminCustomer {
   phone: string;
   address: string;
   status: string;
+  /** Read back so the send path can refuse before it reaches Twilio. */
+  smsConsent?: SmsConsent | null;
+  smsOptOut?: SmsOptOut | null;
+}
+
+/**
+ * Reads a stored consent record back, or null.
+ *
+ * Deliberately strict about shape. A half-written record — `granted` missing,
+ * or a number where a string belongs — must not be read as consent, because
+ * the failure is silent and the consequence is texting somebody who never
+ * agreed. Anything that is not plainly a consent record is nothing.
+ */
+function readConsent(value: unknown): SmsConsent | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  if (typeof raw.granted !== "boolean") return null;
+  const method = raw.method;
+  if (method !== "verbal" && method !== "web_form" && method !== "written") return null;
+  return {
+    granted: raw.granted,
+    method,
+    at: typeof raw.at === "string" ? raw.at : "",
+    byUid: typeof raw.byUid === "string" ? raw.byUid : "",
+    byName: typeof raw.byName === "string" ? raw.byName : "",
+  };
+}
+
+/**
+ * Reads a stored opt-out back, or null.
+ *
+ * Errs the other way from readConsent, and for the same reason: where a
+ * malformed consent must not be read as permission, a malformed opt-out must
+ * still be read as an opt-out. The field being present at all is somebody
+ * having said stop; a missing timestamp is a data problem, not a retraction.
+ */
+function readOptOut(value: unknown): SmsOptOut | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  return {
+    at: typeof raw.at === "string" ? raw.at : "",
+    keyword: typeof raw.keyword === "string" ? raw.keyword : "",
+  };
 }
 
 export async function getCustomer(customerId: string): Promise<AdminCustomer | null> {
@@ -25,7 +69,30 @@ export async function getCustomer(customerId: string): Promise<AdminCustomer | n
     phone: typeof data.phone === "string" ? data.phone : "",
     address: typeof data.address === "string" ? data.address : "",
     status: typeof data.status === "string" ? data.status : "lead",
+    smsConsent: readConsent(data.smsConsent),
+    smsOptOut: readOptOut(data.smsOptOut),
   };
+}
+
+/**
+ * Flags a customer as having opted out, or clears it when they text START.
+ *
+ * Written from the inbound webhook, which is the only place that learns of it.
+ * Null deletes the field rather than storing a false-y marker: "there is no
+ * opt-out" and "there is an opt-out that says no" are different states, and a
+ * stored empty object would read as the second.
+ */
+export async function setSmsOptOut(
+  customerId: string,
+  optOut: SmsOptOut | null,
+): Promise<void> {
+  await adminDb()
+    .collection("customers")
+    .doc(customerId)
+    .update({
+      smsOptOut: optOut ?? FieldValue.delete(),
+      updatedAt: Timestamp.now(),
+    });
 }
 
 /**
