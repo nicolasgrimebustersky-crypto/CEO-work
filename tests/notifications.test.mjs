@@ -169,6 +169,10 @@ describe("the shape the demo and the server both rely on", () => {
   test("destinations are limited to screens that exist", () => {
     const known = new Set([
       "customer",
+      // A reply can arrive from a number no customer record holds, so sms_in
+      // resolves to the record when there is one and to the Messages inbox
+      // when there is not. /messages is app/messages/page.tsx.
+      "messages",
       "document",
       "invoices",
       "knockRoutes",
@@ -181,6 +185,30 @@ describe("the shape the demo and the server both rely on", () => {
         known.has(NOTIFICATION_EVENTS[type].destination),
         `${type} points at an unknown destination`,
       );
+    }
+  });
+
+  test("every event resolves to a path, with an id and without one", () => {
+    // The allowlist above pins the *name* of each destination. This pins that
+    // the name leads somewhere: a destination added to the union but never
+    // handled in destinationFor falls through to a default, and a notification
+    // that opens the wrong screen is the failure the catalogue exists to stop.
+    for (const type of NOTIFICATION_TYPES) {
+      for (const ids of [
+        {},
+        { customerId: "cus_1", documentId: "doc_1", conversationId: "con_1" },
+      ]) {
+        const target = destinationFor({ type, ...ids });
+        assert.ok(
+          typeof target.screen === "string" && target.screen.length > 0,
+          `${type} resolved to no screen`,
+        );
+        // A screen that takes a record must not resolve to one without an id —
+        // that is the "opens nothing" case in the header comment.
+        if (target.screen === "customer" || target.screen === "document") {
+          assert.ok(target.id, `${type} points at a ${target.screen} with no id`);
+        }
+      }
     }
   });
 });

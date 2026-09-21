@@ -451,6 +451,32 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Texts from numbers no customer record holds.
+    //
+    // Written by the Admin SDK only, from the inbound webhook, and only after
+    // that webhook has verified Twilio's signature — so `create` is closed to
+    // clients the same way the audit log is. What the crew may do is mark one
+    // handled once they have turned it into a customer or judged it spam, and
+    // that is the only field they may move.
+    //
+    // Deleting is closed too. These are the messages the app used to lose
+    // silently; a screen that can make them disappear again, from a phone, with
+    // one mis-tap, would be the same hole with a nicer surface.
+    match /inboundSms/{messageId} {
+      allow read: if isCrew() && belongsToMyOrg(resource.data);
+      allow create, delete: if false;
+      allow update: if isCrew()
+        && belongsToMyOrg(resource.data)
+        && keepsOrg()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['handled', 'handledBy', 'handledByName', 'handledAt', 'customerId'])
+        && request.resource.data.handled is bool
+        // The message itself is a record of what somebody sent us. Nobody gets
+        // to edit what a customer said after the fact.
+        && request.resource.data.body == resource.data.body
+        && request.resource.data.from == resource.data.from;
+    }
+
     match /apiKeys/{keyHash} {
       allow read, write: if isAdmin() && hasVerifiedSession();
     }

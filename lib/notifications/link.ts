@@ -21,6 +21,8 @@ export function notificationLink(item: {
       return routes.document(target.id ?? "");
     case "customer":
       return routes.customer(target.id ?? "");
+    case "messages":
+      return routes.messages;
     case "invoices":
       return routes.invoices;
     case "knockRoutes":
