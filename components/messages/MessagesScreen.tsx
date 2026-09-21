@@ -10,6 +10,7 @@ import { customerName, formatRelative } from "@/lib/format";
 import { buildThreads, needsReplyCount, previewOf, type Thread } from "@/lib/threads";
 import type { Customer } from "@/lib/types";
 import { ThreadSheet } from "./ThreadSheet";
+import { UnmatchedInbox } from "./UnmatchedInbox";
 
 /**
  * Every text conversation in one place.
@@ -60,6 +61,12 @@ export function MessagesScreen() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4">
+        {/* Above the known threads on purpose. An unknown number is usually
+            somebody who is not a customer yet asking whether we want their
+            money, which makes it the most urgent thing on the screen. It
+            renders nothing at all when there is nothing waiting. */}
+        <UnmatchedInbox />
+
         {loading && threads.length === 0 ? (
           <Spinner />
         ) : rows.length === 0 ? (

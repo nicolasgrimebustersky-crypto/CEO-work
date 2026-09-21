@@ -1535,6 +1535,102 @@ describe("the sign-in code", () => {
 });
 
 
+/* ------------------------------------------- texts from unknown numbers */
+
+describe("texts from numbers we don't have on file", () => {
+  /** What the inbound webhook writes through the Admin SDK. */
+  const seed = async (id = "m1", extra = {}) => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), `inboundSms/${id}`), {
+        orgId: "grime-busters",
+        from: "+15025550147",
+        body: "how much for a driveway",
+        handled: false,
+        customerId: null,
+        ...extra,
+      });
+    });
+  };
+
+  test("crew can read them — that is the entire point", async () => {
+    await seed();
+    await assertSucceeds(getDoc(doc(alice, "inboundSms/m1")));
+    await assertSucceeds(getDocs(collection(bob, "inboundSms")));
+  });
+
+  test("a signed-out stranger cannot", async () => {
+    await seed();
+    const anon = testEnv.unauthenticatedContext().firestore();
+    await assertFails(getDoc(doc(anon, "inboundSms/m1")));
+  });
+
+  test("nobody can forge one — only the webhook writes these", async () => {
+    // A client that could create these could put words in a customer's mouth
+    // on the screen the crew works from.
+    await assertFails(
+      setDoc(doc(alice, "inboundSms/forged"), {
+        orgId: "grime-busters",
+        from: "+15025550147",
+        body: "please send $500 to this account",
+        handled: false,
+      }),
+    );
+    await assertFails(
+      setDoc(doc(admin, "inboundSms/forged2"), { orgId: "grime-busters", from: "x", body: "y" }),
+    );
+  });
+
+  test("marking one handled is allowed, and is the only thing that is", async () => {
+    await seed();
+    await assertSucceeds(
+      updateDoc(doc(alice, "inboundSms/m1"), {
+        handled: true,
+        handledBy: "alice",
+        handledByName: "Alice",
+        handledAt: serverTimestamp(),
+        customerId: "cus_1",
+      }),
+    );
+  });
+
+  test("the message itself cannot be edited after the fact", async () => {
+    // It is a record of what somebody sent us. Nobody gets to rewrite it.
+    await seed("m2");
+    await assertFails(updateDoc(doc(alice, "inboundSms/m2"), { body: "something else" }));
+    await assertFails(updateDoc(doc(alice, "inboundSms/m2"), { from: "+15025559999" }));
+    await assertFails(
+      updateDoc(doc(alice, "inboundSms/m2"), { handled: true, body: "and handled" }),
+    );
+  });
+
+  test("handled has to be a boolean", async () => {
+    await seed("m3");
+    await assertFails(updateDoc(doc(alice, "inboundSms/m3"), { handled: "yes" }));
+  });
+
+  test("deleting is closed, including to the admin", async () => {
+    // These are the messages the app used to lose silently. A screen that can
+    // make them vanish again, with one mis-tap, is the same hole repainted.
+    await seed("m4");
+    await assertFails(deleteDoc(doc(alice, "inboundSms/m4")));
+    await assertFails(deleteDoc(doc(admin, "inboundSms/m4")));
+  });
+
+  test("another org's messages are invisible", async () => {
+    await seed("m5", { orgId: "somebody-else" });
+    await assertFails(getDoc(doc(alice, "inboundSms/m5")));
+    await assertFails(updateDoc(doc(alice, "inboundSms/m5"), { handled: true }));
+  });
+
+  test("handling one cannot move it between orgs", async () => {
+    await seed("m6");
+    await assertFails(
+      updateDoc(doc(alice, "inboundSms/m6"), { handled: true, orgId: "somebody-else" }),
+    );
+  });
+});
+
+
 /* ---------------------------------------------------------- the audit log */
 
 describe("the audit log", () => {

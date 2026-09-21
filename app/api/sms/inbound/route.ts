@@ -1,4 +1,6 @@
 import { classifyReply, recordOptOut } from "@/lib/smsConsent";
+import { formatPhone } from "@/lib/inboundSms";
+import { recordUnmatchedInbound } from "@/lib/server/inboundSms";
 import { notifyCrew } from "@/lib/server/notify";
 import { appendNote, findCustomerByPhone, setSmsOptOut } from "@/lib/server/customerNotes";
 import { canVerifyWebhooks, verifyTwilioSignature } from "@/lib/server/twilio";
@@ -74,9 +76,30 @@ export async function POST(request: Request): Promise<Response> {
 
     const customer = await findCustomerByPhone(from);
     if (!customer) {
-      // Nothing to attach it to. Returning 200 keeps Twilio from retrying a
-      // message that will never match.
-      console.warn(`Inbound SMS from unknown number ${from}`);
+      // Nothing to attach it to — but somebody still wrote to the business,
+      // and until now that fact died in this log line.
+      //
+      // The cases are not exotic: a lead texting back off an estimate link
+      // from a different handset, a spouse answering from their own phone, a
+      // number taken down at the door with a digit wrong. Each one is somebody
+      // asking us to do work, and each one vanished.
+      //
+      // Still 200 to Twilio. Retrying would not conjure a customer record; the
+      // message is filed where a person can see it instead.
+      await recordUnmatchedInbound({
+        from,
+        body,
+        messageSid: params.MessageSid || params.SmsMessageSid || undefined,
+      });
+
+      // No customerId, so `destinationFor` sends this to the Messages screen
+      // rather than to a customer record that does not exist.
+      await notifyCrew({
+        type: "sms_in",
+        actorName: formatPhone(from),
+        body: `${formatPhone(from)} (not a customer yet): ${body}`,
+      });
+
       return twiml();
     }
 

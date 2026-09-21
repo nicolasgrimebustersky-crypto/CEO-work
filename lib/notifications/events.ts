@@ -52,6 +52,8 @@ export const CATEGORY_HINT: Record<NotificationCategory, string> = {
  */
 type Destination =
   | "customer"
+  /** The customer's record when we know who wrote; the Messages inbox when we don't. */
+  | "messages"
   | "document"
   | "invoices"
   | "knockRoutes"
@@ -146,7 +148,12 @@ export const NOTIFICATION_EVENTS = {
   },
 
   /* ------------------------------------------------------------- messages */
-  sms_in: { category: "messages", title: "Customer replied", destination: "customer" },
+  // "messages" rather than "customer" because a reply can arrive from a number
+  // no customer record holds — a lead on a different handset, a spouse, a digit
+  // taken down wrong. Those used to be dropped by the webhook entirely; now
+  // they are filed, and this is where the notification has to land, because
+  // there is no customer record to open.
+  sms_in: { category: "messages", title: "Customer replied", destination: "messages" },
 
   /* ------------------------------------------------------------ team chat */
   chat_message: { category: "chat", title: "New message", destination: "chat" },
@@ -198,6 +205,7 @@ export interface ResolvedDestination {
   screen:
     | "customer"
     | "customers"
+    | "messages"
     | "document"
     | "invoices"
     | "knockRoutes"
@@ -234,6 +242,12 @@ export function destinationFor(item: {
       return { screen: "schedule" };
     case "pipeline":
       return { screen: "pipeline" };
+    case "messages":
+      // Straight to the record when we know whose it is — that is the fuller
+      // context. Only a text we could not match falls through to the inbox.
+      return item.customerId
+        ? { screen: "customer", id: item.customerId }
+        : { screen: "messages" };
     case "customer":
     default:
       return item.customerId
