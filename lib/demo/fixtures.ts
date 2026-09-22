@@ -544,6 +544,9 @@ function job(
     completedBy: status === "complete" ? uid : null,
     paidAt: paid ? start : null,
     paidBy: paid ? uid : null,
+    // Demo jobs have never asked for a review — the demo texts nobody, and a
+    // stamp here would hide the button this feature exists for.
+    reviewRequestedAt: null,
     createdAt: Timestamp.fromMillis(start.toMillis() - 5 * 86_400_000),
     createdBy: uid,
     createdByName: name,

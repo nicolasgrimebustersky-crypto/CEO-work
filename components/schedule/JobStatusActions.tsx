@@ -7,7 +7,7 @@ import { useNotify } from "@/components/providers/NotificationsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { OWNER_UID } from "@/lib/auth/roles";
 import { advancePipeline } from "@/lib/db/customers";
-import { signOffJob, stampJobStep } from "@/lib/db/jobs";
+import { markReviewRequested, signOffJob, stampJobStep } from "@/lib/db/jobs";
 import { DEMO_NICK } from "@/lib/demo/fixtures";
 import { isDemoMode } from "@/lib/demo/enabled";
 import { customerName, formatMoney } from "@/lib/format";
@@ -18,7 +18,8 @@ import {
   stepProblem,
   type JobStep,
 } from "@/lib/jobFlow";
-import { enRouteText, jobFinishedText, jobStartedText } from "@/lib/messages";
+import { enRouteText, jobFinishedText, jobStartedText, reviewRequestText } from "@/lib/messages";
+import { normalizeReviewUrl, shouldAskForReview } from "@/lib/reviewRequest";
 import { SERVICE_LABEL } from "@/lib/status";
 import { trySendSms } from "@/lib/smsClient";
 import type { Customer, Job } from "@/lib/types";
@@ -92,6 +93,48 @@ export function JobStatusActions({
   }
 
   /**
+   * Asks for a Google review, once, when the money was collected.
+   *
+   * Nothing here throws. A review request is the least important thing that
+   * happens at sign-off, and a failed one must never surface as "Could not
+   * complete this job" against a job that completed perfectly well. What a
+   * failure costs is the ask — the stamp is only written after the text has
+   * actually gone, so an unsent one can be retried rather than silently spent.
+   *
+   * The consent and opt-out checks are not repeated here on purpose: they live
+   * in /api/sms/send, which refuses with a 409 before Twilio is touched. One
+   * place to change when the rule changes, and no way for this path to drift
+   * out of step with the others.
+   */
+  async function askForReview(collected: boolean) {
+    const verdict = shouldAskForReview({
+      paymentCollected: collected,
+      reviewRequestedAt: job.reviewRequestedAt,
+      reviewUrl: normalizeReviewUrl(process.env.NEXT_PUBLIC_GOOGLE_REVIEW_URL),
+      customerPhone: customer?.phone,
+    });
+    if (!verdict.ask || !author) return;
+
+    const body = reviewRequestText(
+      customer?.firstName,
+      normalizeReviewUrl(process.env.NEXT_PUBLIC_GOOGLE_REVIEW_URL),
+    );
+    if (!body) return;
+
+    try {
+      const problem = await trySendSms(job.customerId, body, "review_request");
+      // A refusal here is usually the customer having opted out, which is a
+      // correct outcome rather than an error. It is left unstamped so that a
+      // transient failure can be retried, and not shown: the crew member has
+      // finished the job and this is not their problem to solve.
+      if (problem) return;
+      await markReviewRequested(job.id, author);
+    } catch {
+      // Same reasoning. The job is signed off either way.
+    }
+  }
+
+  /**
    * Signs the job off.
    *
    * The answer to the payment question is recorded either way, and the owner is
@@ -139,6 +182,15 @@ export function JobStatusActions({
         jobId: job.id,
         toUids: [ownerUid],
       });
+
+      // The review request. Last, and deliberately after everything that must
+      // happen: the sign-off, the pipeline move and both notifications are the
+      // job getting recorded, and none of them may be lost to a failed text.
+      //
+      // Only fires on a yes to "did you get paid". The wording thanks them for
+      // a payment, so sending it on a no would thank somebody for money they
+      // still owe — see lib/reviewRequest.ts for the rest of the conditions.
+      await askForReview(collected);
 
       setAsking(false);
       onSignedOff();

@@ -75,6 +75,8 @@ export function toJob(snap: QueryDocumentSnapshot<DocumentData>): Job {
     completedBy: typeof data.completedBy === "string" ? data.completedBy : null,
     paidAt: data.paidAt instanceof Timestamp ? data.paidAt : null,
     paidBy: typeof data.paidBy === "string" ? data.paidBy : null,
+    reviewRequestedAt:
+      data.reviewRequestedAt instanceof Timestamp ? data.reviewRequestedAt : null,
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt : Timestamp.now(),
     createdBy: typeof data.createdBy === "string" ? data.createdBy : "",
     createdByName: typeof data.createdByName === "string" ? data.createdByName : "Unknown",
@@ -330,6 +332,22 @@ export async function signOffJob(
     completedBy: author.uid,
     paymentCollected: collected,
     ...(collected ? { paidAt: serverTimestamp(), paidBy: author.uid } : {}),
+    updatedAt: serverTimestamp(),
+    updatedBy: author.uid,
+    updatedByName: author.displayName,
+  });
+}
+
+/**
+ * Stamps that the review request went out.
+ *
+ * Written after the text is actually sent rather than before, so a send that
+ * fails leaves the job eligible to ask again next time somebody opens it. The
+ * opposite order would spend the one ask on a message nobody received.
+ */
+export async function markReviewRequested(jobId: string, author: Author): Promise<void> {
+  await writeJob(jobId, {
+    reviewRequestedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     updatedBy: author.uid,
     updatedByName: author.displayName,

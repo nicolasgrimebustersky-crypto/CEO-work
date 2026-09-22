@@ -131,3 +131,29 @@ export function jobStartedText(technicianFirstName: string): string {
 export function jobFinishedText(technicianFirstName: string): string {
   return `Hey! This is ${technicianFirstName} from ${LEGAL_NAME}. We just finished and are ready awaiting payment. We accept checks made out to ${LEGAL_NAME}, cash, Venmo ${PAYMENT_HANDLES.venmo}, Cash App ${PAYMENT_HANDLES.cashApp}. If you have none of these please reach out to ${OWNER_NAME} at ${OWNER_PHONE}.${OPT_OUT}`;
 }
+
+/**
+ * The thank-you that goes out when the money is in hand.
+ *
+ * Sent from the sign-off on site, and only when the crew member answers yes to
+ * "did you get paid" — so it is a receipt first and an ask second. That order
+ * is deliberate in the wording too: it confirms something the customer cares
+ * about before asking them for anything, which is the difference between a
+ * courtesy and a solicitation.
+ *
+ * The link goes last and on its own line, for the same reason `documentText`
+ * does it: punctuation immediately after a URL gets swallowed into the href by
+ * some messaging apps and the customer taps through to a 404.
+ *
+ * Returns "" when no review link is configured. A thank-you that asks for a
+ * review and then offers nowhere to leave one is worse than sending nothing,
+ * and the caller treats "" as "don't send".
+ */
+export function reviewRequestText(
+  customerFirstName: string | null | undefined,
+  reviewUrl: string,
+): string {
+  const url = (reviewUrl ?? "").trim();
+  if (!url) return "";
+  return `${greetingFor(customerFirstName)}, thanks — ${BUSINESS_NAME} has received your payment and the job is all wrapped up. If we did right by you, a quick Google review helps a small local business more than you'd think.${OPT_OUT}\n\n${url}`;
+}
