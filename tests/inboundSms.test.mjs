@@ -132,6 +132,23 @@ describe("grouping what came in", () => {
     assert.equal(unmatchedCount(threads), 2);
   });
 
+  test("the order comes from here, not from the query", () => {
+    // This is load-bearing. lib/db/inboundSms.ts asks Firestore for two
+    // equality filters and no ordering, because adding orderBy on a third
+    // field demands a composite index — the first version shipped with one and
+    // the screen rendered "The query requires an index" instead of the
+    // messages. Nothing downstream may depend on documents arriving sorted.
+    const shuffled = [
+      msg("c", "+15025550147", "third", 3000),
+      msg("a", "+15025550147", "first", 1000),
+      msg("z", "+15025559999", "newest", 9000),
+      msg("b", "+15025550147", "second", 2000),
+    ];
+    const threads = groupUnmatched(shuffled);
+    assert.deepEqual(threads.map((t) => t.last.id), ["z", "c"]);
+    assert.deepEqual(threads[1].messages.map((m) => m.id), ["a", "b", "c"]);
+  });
+
   test("nothing in, nothing out", () => {
     assert.deepEqual(groupUnmatched([]), []);
   });

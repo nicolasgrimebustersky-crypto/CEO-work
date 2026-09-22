@@ -35,6 +35,7 @@ const CALLS = {
   enRouteText: ["Marta"],
   jobStartedText: ["Noah"],
   jobFinishedText: ["Noah"],
+  reviewRequestText: ["Marta", "https://g.page/r/ExampleToken/review"],
 };
 
 /** greetingFor is a fragment used to build other texts, not a message itself. */

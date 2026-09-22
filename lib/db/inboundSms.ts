@@ -2,7 +2,6 @@ import {
   collection,
   doc,
   onSnapshot,
-  orderBy,
   query,
   serverTimestamp,
   Timestamp,
@@ -50,12 +49,26 @@ function toUnmatched(snap: QueryDocumentSnapshot<DocumentData>): StoredUnmatched
 }
 
 /**
- * Live unhandled messages, newest first.
+ * Live unhandled messages.
  *
  * Filtered server-side on `handled` so a year of dealt-with spam never reaches
  * the phone. The demo store has no equivalent — demo mode fabricates customers,
  * and an unknown number is by definition one it did not fabricate — so it
  * yields an empty list rather than pretending.
+ *
+ * Deliberately unordered. Two equality filters are served by merging the
+ * automatic single-field indexes; adding `orderBy("receivedAt")` on top of them
+ * demands a composite index, and the first version of this shipped with one —
+ * so the screen loaded with "The query requires an index" where the messages
+ * should have been. The ordering was never needed from Firestore in the first
+ * place: `groupUnmatched` sorts threads newest-first and messages oldest-first
+ * in memory, because it has to group by number before it can sort by time.
+ * Sorting twice bought nothing and cost the whole feature.
+ *
+ * Unbounded on purpose. The set is "unknown numbers nobody has dealt with yet",
+ * which is small by construction and gets smaller every time somebody taps a
+ * button. If it ever is not, that is a spam problem to see rather than to
+ * paginate away.
  */
 export function subscribeUnmatched(
   onChange: (messages: StoredUnmatched[]) => void,
@@ -70,7 +83,6 @@ export function subscribeUnmatched(
     collection(getDb(), COLLECTION),
     where("orgId", "==", DEFAULT_ORG_ID),
     where("handled", "==", false),
-    orderBy("receivedAt", "desc"),
   );
 
   return onSnapshot(

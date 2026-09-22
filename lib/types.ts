@@ -267,6 +267,12 @@ export interface Job {
   /** Null until the money actually lands. Drives the awaiting-payment stage. */
   paidAt: Timestamp | null;
   paidBy: string | null;
+  /**
+   * When the Google review request went out, so it goes out once and no more.
+   * Null on every job signed off before this existed, and on every one where
+   * the money was not collected — see lib/reviewRequest.ts.
+   */
+  reviewRequestedAt: Timestamp | null;
   createdAt: Timestamp;
   createdBy: string;
   createdByName: string;
