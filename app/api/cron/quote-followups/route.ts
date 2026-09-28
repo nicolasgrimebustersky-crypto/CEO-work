@@ -6,7 +6,8 @@ import { adminDb } from "@/lib/server/admin";
 import { ApiError, errorResponse, requireCronSecret } from "@/lib/server/auth";
 import { appendNote, getCustomer } from "@/lib/server/customerNotes";
 import { notifyCrew } from "@/lib/server/notify";
-import { isTwilioConfigured, sendSms } from "@/lib/server/twilio";
+import { sendSmsToCustomer } from "@/lib/server/customerSms";
+import { isTwilioConfigured } from "@/lib/server/twilio";
 import { SERVICE_TYPES, type ServiceType } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -116,7 +117,11 @@ export async function GET(request: Request): Promise<Response> {
 
       const attempt = followUpCount + 1;
       const message = quoteFollowUpText(SERVICE_LABEL[serviceType], amount, attempt);
-      const result = await sendSms(customer.phone, message);
+      // Through the chokepoint rather than straight to Twilio: this runs at
+      // night with nobody watching, and a customer who replied STOP would
+      // otherwise have three more messages queued against their name, each one
+      // advancing followUpCount towards marking their quote declined.
+      const result = await sendSmsToCustomer(customer, message);
 
       if (!result.ok) {
         outcomes.push({

@@ -136,6 +136,42 @@ export async function appendNote(
   await adminDb().collection("customers").doc(customerId).update(patch);
 }
 
+/**
+ * Any recorded opt-out for this number, across every record that carries it.
+ *
+ * Needed because a number is not a customer. The Meta lead webhook creates a
+ * fresh record for every form submission rather than matching an existing one,
+ * so somebody who replied STOP last spring and fills in an ad form today
+ * arrives as a brand-new document with no opt-out on it — and a consent check
+ * that reads only that document says yes.
+ *
+ * Twilio still refuses to deliver to a number that opted out, so the message
+ * would not arrive either way. What this changes is that the app knows: the
+ * timeline says "they asked us to stop" rather than "sent", which is the
+ * difference between a record and a lie.
+ *
+ * Returns the opt-out from any matching record. One STOP is enough; a second
+ * record without one is not a retraction.
+ */
+export async function optOutForPhone(rawPhone: string): Promise<SmsOptOut | null> {
+  const digits = String(rawPhone ?? "").replace(/\D/g, "").slice(-10);
+  if (digits.length !== 10) return null;
+
+  // The same full scan as findCustomerByPhone, and for the same reason:
+  // numbers are stored however they were typed, so there is nothing to query
+  // on. Hundreds of documents, once per inbound lead.
+  const snap = await adminDb().collection("customers").get();
+  for (const doc of snap.docs) {
+    const data = doc.data();
+    const phone = data.phone;
+    if (typeof phone !== "string") continue;
+    if (phone.replace(/\D/g, "").slice(-10) !== digits) continue;
+    const optOut = readOptOut(data.smsOptOut);
+    if (optOut) return optOut;
+  }
+  return null;
+}
+
 /** Finds a customer by phone number, for matching inbound texts. */
 export async function findCustomerByPhone(e164: string): Promise<AdminCustomer | null> {
   const digits = e164.replace(/\D/g, "").slice(-10);
@@ -157,6 +193,14 @@ export async function findCustomerByPhone(e164: string): Promise<AdminCustomer |
         phone,
         address: typeof data.address === "string" ? data.address : "",
         status: typeof data.status === "string" ? data.status : "lead",
+        // Read here as well as in getCustomer, and not decoration: the caller
+        // that matched a number is the inbound webhook and anything replying
+        // to it, and canSendTo reads these two fields. Leaving them undefined
+        // on a record that has an opt-out makes the check answer "allowed" —
+        // a refusal that silently becomes a permission, which is the worst
+        // shape this particular bug can take.
+        smsConsent: readConsent(data.smsConsent),
+        smsOptOut: readOptOut(data.smsOptOut),
       };
     }
   }

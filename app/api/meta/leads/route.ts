@@ -13,7 +13,8 @@ import {
   type ParsedLead,
 } from "@/lib/server/meta";
 import { notifyCrew } from "@/lib/server/notify";
-import { isTwilioConfigured, sendSms } from "@/lib/server/twilio";
+import { sendSmsToPhone } from "@/lib/server/customerSms";
+import { isTwilioConfigured } from "@/lib/server/twilio";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -212,7 +213,10 @@ async function acknowledge(
     `We've got your details and one of us will call you shortly to talk it through. ` +
     `Reply STOP to opt out.`;
 
-  const result = await sendSms(parsed.phone, message);
+  // By number, not by the record just created: that record is seconds old and
+  // cannot carry an opt-out, so checking it would always pass. See
+  // sendSmsToPhone.
+  const result = await sendSmsToPhone(parsed.phone, message);
 
   await db
     .collection("customers")
@@ -220,7 +224,14 @@ async function acknowledge(
     .update({
       notes: FieldValue.arrayUnion({
         id: crypto.randomUUID(),
-        text: result.ok ? message : `Auto-acknowledgement failed: ${result.error}`,
+        // A refusal and a failure read differently on the timeline. "Failed"
+        // invites somebody to retry; "not sent" tells them to pick up the
+        // phone, which is the only thing that will reach this person.
+        text: result.ok
+          ? message
+          : result.refused
+            ? `Auto-acknowledgement not sent: ${result.error}`
+            : `Auto-acknowledgement failed: ${result.error}`,
         kind: "sms_out",
         authorUid: SYSTEM_AUTHOR.uid,
         authorName: "Automatic reply",
