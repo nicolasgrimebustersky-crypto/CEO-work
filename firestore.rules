@@ -185,6 +185,21 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasAll(['updatedAt']);
     }
 
+    // An opt-out is the customer's own instruction, and no client may touch it.
+    //
+    // lib/db/customers.ts leaves smsOptOut out of CustomerPatch and says in a
+    // comment that "nobody in the office gets to edit it away from a screen".
+    // That was true of the app and only of the app: a type is a convention, and
+    // the rule is what somebody holding a crew account and a Firebase console
+    // actually has to get past. Until this clause, they did not.
+    //
+    // Clearing one takes a START text, which arrives through the inbound
+    // webhook on the Admin SDK and bypasses these rules entirely — so there is
+    // no legitimate client write to allow through here.
+    function keepsOptOut() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['smsOptOut']);
+    }
+
     // Profiles. This is the one collection a pending account can touch, and
     // every clause here is load-bearing.
     match /users/{uid} {
@@ -353,6 +368,7 @@ service cloud.firestore {
         && belongsToMyOrg(resource.data)
         && refreshesAuthorStamp()
         && validCustomer()
+        && keepsOptOut()
         && keepsOrg();
       allow delete: if isCrew() && belongsToMyOrg(resource.data);
     }

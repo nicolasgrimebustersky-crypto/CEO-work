@@ -9,7 +9,8 @@ import { adminDb } from "@/lib/server/admin";
 import { DEFAULT_ORG_ID } from "@/lib/org";
 import { ApiError } from "@/lib/server/auth";
 import { appendNote, getCustomer } from "@/lib/server/customerNotes";
-import { isTwilioConfigured, sendSms } from "@/lib/server/twilio";
+import { sendSmsToCustomer } from "@/lib/server/customerSms";
+import { isTwilioConfigured } from "@/lib/server/twilio";
 import type { AuthorisedKey } from "@/lib/server/apiKeyAuth";
 import { findTool } from "./tools";
 
@@ -376,19 +377,30 @@ async function sendSmsTool(args: Args, key: AuthorisedKey) {
   }
   if (body.length > 1600) throw new ApiError(400, "That message is too long.");
 
-  const result = await sendSms(customer.phone, body);
+  // An API key reaches this tool, and an agent holding one has no way of
+  // knowing that a customer replied STOP. The chokepoint does.
+  const result = await sendSmsToCustomer(customer, body);
   if (!result.ok) {
     await appendNote(
       customerId,
       {
-        text: `Agent text failed: ${result.error}\n\n${body}`,
+        text: result.refused
+          ? `Agent text not sent: ${result.error}\n\n${body}`
+          : `Agent text failed: ${result.error}\n\n${body}`,
         kind: "sms_out",
         authorUid: author.uid,
         authorName: author.displayName,
       },
       { markContacted: false },
     );
-    throw new ApiError(502, result.error ?? "Twilio refused the message.");
+    // 403 for a refusal, 502 for a Twilio problem. An agent that retries on a
+    // 502 is behaving correctly; one that retries a consent refusal is
+    // hammering a customer who asked to be left alone, and the status code is
+    // the only thing telling it which of the two it hit.
+    throw new ApiError(
+      result.refused ? 403 : 502,
+      result.error ?? "Twilio refused the message.",
+    );
   }
 
   await appendNote(customerId, {
@@ -468,8 +480,8 @@ async function scheduleJobTool(args: Args, key: AuthorisedKey) {
       hour: "numeric",
       minute: "2-digit",
     });
-    const result = await sendSms(
-      customer.phone,
+    const result = await sendSmsToCustomer(
+      customer,
       `Grime Busters: your ${serviceType.replace(/_/g, " ")} is scheduled for ${when}. Reply here if you need to change it.`,
     );
     texted = result.ok;

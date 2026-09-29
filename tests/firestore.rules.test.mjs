@@ -422,6 +422,73 @@ describe("customer author stamps", () => {
 
 /* -------------------------------------------------------------------- jobs */
 
+describe("an opt-out is the customer's own instruction", () => {
+  /** Put a STOP on c1, the way the inbound webhook does (Admin SDK, no rules). */
+  async function withOptOut() {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), "customers/c1"), {
+        smsOptOut: { at: "2026-02-01T10:00:00.000Z", keyword: "STOP" },
+      });
+    });
+  }
+
+  test("a crew member cannot delete it", async () => {
+    // The whole point. A type in lib/db/customers.ts kept the app from doing
+    // this; it did nothing about anybody talking to Firestore directly.
+    await withOptOut();
+    await assertFails(
+      updateDoc(doc(alice, "customers/c1"), stampedUpdate("alice", { smsOptOut: deleteField() })),
+    );
+  });
+
+  test("a crew member cannot overwrite it with null", async () => {
+    await withOptOut();
+    await assertFails(
+      updateDoc(doc(alice, "customers/c1"), stampedUpdate("alice", { smsOptOut: null })),
+    );
+  });
+
+  test("a crew member cannot forge one either", async () => {
+    // The other direction matters as much: a planted opt-out silently stops a
+    // paying customer hearing from the business again.
+    await assertFails(
+      updateDoc(
+        doc(alice, "customers/c1"),
+        stampedUpdate("alice", { smsOptOut: { at: "2026-02-01T10:00:00.000Z", keyword: "STOP" } }),
+      ),
+    );
+  });
+
+  test("everything else about that customer stays editable", async () => {
+    // A rule that locked the record once somebody replied STOP would be its own
+    // bug — the crew still needs to change an address and record a payment.
+    await withOptOut();
+    await assertSucceeds(
+      updateDoc(doc(alice, "customers/c1"), stampedUpdate("alice", { status: "customer" })),
+    );
+  });
+
+  test("recording a consent is still allowed, and does not clear the opt-out", async () => {
+    // canSendTo puts the opt-out ahead of a later consent on purpose, so this
+    // write is permitted and changes nothing about whether we may text them.
+    await withOptOut();
+    await assertSucceeds(
+      updateDoc(
+        doc(alice, "customers/c1"),
+        stampedUpdate("alice", {
+          smsConsent: {
+            granted: true,
+            method: "verbal",
+            at: "2026-02-02T10:00:00.000Z",
+            byUid: "alice",
+            byName: "Alice",
+          },
+        }),
+      ),
+    );
+  });
+});
+
 describe("jobs", () => {
   test("a crew member can schedule, edit and delete a job", async () => {
     const ref = await assertSucceeds(
