@@ -16,11 +16,21 @@ concurrency:
 
 jobs:
   review:
-    # Only Claude-authored pull requests enter the hands-off publish loop.
-    # Human pull requests keep their normal review process.
-    if: >-
-      github.event.pull_request.draft == false &&
-      github.event.pull_request.user.login == 'claude[bot]'
+    # Every pull request to main is reviewed, drafts included.
+    #
+    # This used to read `draft == false && user.login == 'claude[bot]'`, and
+    # between them those two conditions meant the review never ran once. Claude
+    # pushes with a user token, so the author is a person, not claude[bot]; and
+    # Claude opens pull requests as drafts. Each condition alone was enough to
+    # skip the job — and because the gate below treated a skipped review as a
+    # pass, every pull request carried a green "Codex review gate" that had
+    # reviewed nothing. #58, which changed security rules, merged that way.
+    #
+    # There is no author condition now. Distinguishing authors is what caused
+    # this, the business is one person, and "review everything" is the
+    # instruction. Drafts are included because a draft is where the work
+    # actually is: review that arrives only once somebody marks a pull request
+    # ready is review that arrives after the thinking is done.
     runs-on: ubuntu-latest
     outputs:
       final_message: ${{ steps.codex.outputs.final-message }}
@@ -93,9 +103,16 @@ jobs:
           REVIEW_RESULT: ${{ needs.review.result }}
           FINAL_MESSAGE: ${{ needs.review.outputs.final_message }}
         run: |
+          # A review that did not run is not an approval. This branch used to
+          # `exit 0`, which is how a skipped job became a green gate — the
+          # single line that let every pull request through unreviewed. It fails
+          # now, so the same mistake is loud instead of silent, whatever future
+          # condition causes the job to be skipped.
           if [ "$REVIEW_RESULT" = "skipped" ]; then
-            # This is not a Claude-authored PR, so it is outside this workflow.
-            exit 0
+            echo 'The Codex review job did not run, so this PR is unreviewed.'
+            echo 'A skipped review is not an approval. Check the review job'\''s'
+            echo 'conditions in .github/workflows/codex-auto-review.yml.'
+            exit 1
           fi
           if [ "$REVIEW_RESULT" = "success" ] && [ "$FINAL_MESSAGE" = "CODEX_APPROVED" ]; then
             exit 0
@@ -103,19 +120,10 @@ jobs:
           echo 'Codex requested corrections or could not complete the review.'
           exit 1
 
-  enable_auto_merge:
-    needs: review_gate
-    if: >-
-      needs.review.result == 'success' &&
-      needs.review_gate.result == 'success'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-    steps:
-      - name: Enable squash auto-merge
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          REPOSITORY: ${{ github.repository }}
-        run: gh pr merge "$PR_NUMBER" --repo "$REPOSITORY" --auto --squash
+# There is deliberately no auto-merge job here.
+#
+# One used to squash-merge any pull request the gate passed. With the gate
+# passing on skipped reviews, that was a path from "Claude opened a pull
+# request" to "it is on main" with nothing having read the diff. Merging is the
+# maintainer's, and a Codex approval is an input to that decision rather than a
+# substitute for it.
