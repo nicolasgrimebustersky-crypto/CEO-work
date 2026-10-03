@@ -198,6 +198,23 @@ service cloud.firestore {
     // so locking them here costs no legitimate write. Restarting a sequence by
     // hand is deliberately not possible from a screen; it would be a server
     // change, which is the right amount of friction for re-texting somebody.
+    // A new lead starts the sequence at the beginning or not at all.
+    //
+    // keepsNurtureCounters() below stops a client *changing* these, which left
+    // create wide open: a record could be created at step -1, and until
+    // lib/leadNurture.ts was hardened that indexed past the end of the step
+    // list, threw, and took the whole nightly run down — so one planted record
+    // stopped every lead being nurtured. The pure code refuses corrupt
+    // counters now; this stops them being written in the first place.
+    //
+    // Absent is fine and is the normal case: nothing in the UI writes these,
+    // and a missing counter reads back as 0.
+    function safeNurtureStart() {
+      let data = request.resource.data;
+      return (!('nurtureStep' in data) || data.nurtureStep == 0)
+        && (!('lastNurtureAt' in data) || data.lastNurtureAt == null);
+    }
+
     function keepsNurtureCounters() {
       return !request.resource.data.diff(resource.data).affectedKeys()
         .hasAny(['nurtureStep', 'lastNurtureAt']);
@@ -381,6 +398,7 @@ service cloud.firestore {
       allow create: if isCrew()
         && stampedByCaller('createdBy')
         && validCustomer()
+        && safeNurtureStart()
         && createsInMyOrg(request.resource.data);
       allow update: if isCrew()
         && belongsToMyOrg(resource.data)

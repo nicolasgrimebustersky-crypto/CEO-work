@@ -422,6 +422,45 @@ describe("customer author stamps", () => {
 
 /* -------------------------------------------------------------------- jobs */
 
+describe("a new lead starts the nurture sequence at the beginning", () => {
+  // Codex review on #60: keepsNurtureCounters() guarded changes and left
+  // create open, so a record could be born at step -1. Until the pure code was
+  // hardened that threw inside the nightly run and abandoned every other lead.
+  test("a negative step cannot be created", async () => {
+    await assertFails(
+      addDoc(collection(alice, "customers"), customerDoc("alice", { nurtureStep: -1 })),
+    );
+  });
+
+  test("nor a fractional one", async () => {
+    await assertFails(
+      addDoc(collection(alice, "customers"), customerDoc("alice", { nurtureStep: 0.5 })),
+    );
+  });
+
+  test("nor one part-way through the sequence", async () => {
+    await assertFails(
+      addDoc(collection(alice, "customers"), customerDoc("alice", { nurtureStep: 2 })),
+    );
+  });
+
+  test("nor a last-sent stamp on a lead nothing has been sent to", async () => {
+    await assertFails(
+      addDoc(
+        collection(alice, "customers"),
+        customerDoc("alice", { lastNurtureAt: serverTimestamp() }),
+      ),
+    );
+  });
+
+  test("zero is fine, and so is leaving them out entirely", async () => {
+    await assertSucceeds(
+      addDoc(collection(alice, "customers"), customerDoc("alice", { nurtureStep: 0 })),
+    );
+    await assertSucceeds(addDoc(collection(alice, "customers"), customerDoc("alice")));
+  });
+});
+
 describe("the lead-nurture counters belong to the cron", () => {
   test("a crew member cannot reset the step counter", async () => {
     // Resetting to 0 would let step 1 go out again to a lead who already had

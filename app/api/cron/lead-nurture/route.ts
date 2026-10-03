@@ -1,10 +1,16 @@
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
-import { hasInboundNote, nurtureDecision, type NurtureConsent } from "@/lib/leadNurture";
+import { phoneKey } from "@/lib/inboundSms";
+import {
+  hasInboundNote,
+  nurtureDecision,
+  oneLeadPerPhone,
+  type NurtureConsent,
+} from "@/lib/leadNurture";
 import { leadNurtureText } from "@/lib/messages";
 import { adminDb } from "@/lib/server/admin";
 import { ApiError, errorResponse, requireCronSecret } from "@/lib/server/auth";
-import { appendNote } from "@/lib/server/customerNotes";
+import { appendNote, optOutForPhone } from "@/lib/server/customerNotes";
 import { sendSmsToCustomerId } from "@/lib/server/customerSms";
 import { notifyCrew } from "@/lib/server/notify";
 import { isTwilioConfigured } from "@/lib/server/twilio";
@@ -57,19 +63,86 @@ function noteKinds(value: unknown): string[] {
     .filter(Boolean);
 }
 
+/** What one candidate lead looks like once its document has been read. */
+interface Candidate {
+  id: string;
+  phoneKey: string;
+  phone: string;
+  firstName: string;
+  pipelineStage: string;
+  status: string;
+  createdAtMs: number;
+  nurtureStep: number;
+  lastNurtureAtMs: number | null;
+  hasReplied: boolean;
+  consent: NurtureConsent | null;
+  optedOut: boolean;
+}
+
+/**
+ * Claims a step before the text goes out, or declines to.
+ *
+ * Read-decide-send-increment is not atomic, and the gap between reading the
+ * counter and writing it is a window where a second run sees the same counter
+ * and sends the same message. Vercel cron delivery is at-least-once, and the
+ * endpoint is reachable by anyone holding CRON_SECRET, so two runs overlapping
+ * is a thing that happens rather than a thing that theoretically could.
+ *
+ * The claim is `lastNurtureAt`, written inside a transaction that first
+ * re-reads the document and checks the counter is still what the decision was
+ * made on. A concurrent run then reads a fresh stamp and its own minimum-gap
+ * check refuses — so the duplicate is prevented by the rule that already
+ * exists rather than by a new one.
+ *
+ * `nurtureStep` is deliberately NOT incremented here. It advances only after
+ * Twilio has accepted the message, which is what keeps a failed send
+ * retryable. The cost is that a failure delays the retry by the minimum gap
+ * instead of a day, and that is the right side to err on: a message sent twice
+ * cannot be recalled, where one sent late can still be sent.
+ */
+async function claimStep(
+  docRef: FirebaseFirestore.DocumentReference,
+  expectedStep: number,
+): Promise<{ claimed: true; previous: Timestamp | null } | { claimed: false; reason: string }> {
+  return adminDb().runTransaction(async (tx) => {
+    const fresh = await tx.get(docRef);
+    if (!fresh.exists) return { claimed: false as const, reason: "the lead was deleted mid-run" };
+
+    const data = fresh.data() ?? {};
+    const step = typeof data.nurtureStep === "number" ? data.nurtureStep : 0;
+    if (step !== expectedStep) {
+      return {
+        claimed: false as const,
+        reason: `another run already advanced this lead to step ${step}`,
+      };
+    }
+
+    const previous = data.lastNurtureAt instanceof Timestamp ? data.lastNurtureAt : null;
+    tx.update(docRef, { lastNurtureAt: Timestamp.now() });
+    return { claimed: true as const, previous };
+  });
+}
+
 /**
  * Nightly lead nurture, triggered by the Vercel cron in vercel.json.
  *
  * Three texts across a lead's first month and then nothing — see
  * lib/leadNurture.ts, which owns every decision about who and when. This route
- * only reads, asks, sends and records; it holds no policy of its own, so the
- * rules can be tested without a database or a Twilio account.
+ * reads, asks, claims, sends and records; the policy lives next door so it can
+ * be tested without a database or a Twilio account.
  *
  * Runs on the Admin SDK and is therefore gated on CRON_SECRET rather than a
- * user token. Sends go through sendSmsToCustomerId, which refuses an opt-out
- * before Twilio is touched. The decision checks opt-out as well, and that
- * duplication is deliberate: this is the only path in the app that texts
- * somebody who has never replied, so it gets two chances to refuse.
+ * user token. Three things here exist because this is the only path in the app
+ * that texts somebody who has never replied, and each is worth naming:
+ *
+ *   The number is the person. Duplicate records for one handset are grouped,
+ *   a reply or opt-out on any of them counts for all, and at most one sends.
+ *
+ *   The step is claimed before the send, so two overlapping runs cannot both
+ *   send the same message.
+ *
+ *   One bad record cannot stop the run. Each lead is handled inside its own
+ *   try, because a single thrown error used to abandon every lead after it.
  */
 export async function GET(request: Request): Promise<Response> {
   try {
@@ -85,11 +158,12 @@ export async function GET(request: Request): Promise<Response> {
 
     const now = Date.now();
     const outcomes: Outcome[] = [];
-    let sent = 0;
 
+    // Read every candidate first. Grouping by phone needs the whole set in
+    // hand: whether this record may send depends on its siblings.
+    const candidates: Candidate[] = [];
     for (const doc of snap.docs) {
       const data = doc.data();
-
       const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toMillis() : 0;
       // A lead with no creation stamp has no measurable age, and guessing one
       // would start a sequence from an invented date. Left alone, and reported.
@@ -97,86 +171,121 @@ export async function GET(request: Request): Promise<Response> {
         outcomes.push({ customerId: doc.id, action: "skipped", reason: "no createdAt" });
         continue;
       }
+      const phone = typeof data.phone === "string" ? data.phone : "";
+      candidates.push({
+        id: doc.id,
+        phoneKey: phoneKey(phone),
+        phone,
+        firstName: typeof data.firstName === "string" ? data.firstName : "",
+        pipelineStage: typeof data.pipelineStage === "string" ? data.pipelineStage : "",
+        status: typeof data.status === "string" ? data.status : "",
+        createdAtMs: createdAt,
+        nurtureStep: typeof data.nurtureStep === "number" ? data.nurtureStep : 0,
+        lastNurtureAtMs:
+          data.lastNurtureAt instanceof Timestamp ? data.lastNurtureAt.toMillis() : null,
+        hasReplied: hasInboundNote(noteKinds(data.notes)),
+        consent: readConsent(data.smsConsent),
+        optedOut: Boolean(data.smsOptOut),
+      });
+    }
 
-      const verdict = nurtureDecision(
-        {
-          pipelineStage: typeof data.pipelineStage === "string" ? data.pipelineStage : "",
-          status: typeof data.status === "string" ? data.status : "",
-          createdAtMs: createdAt,
-          nurtureStep: typeof data.nurtureStep === "number" ? data.nurtureStep : 0,
-          lastNurtureAtMs:
-            data.lastNurtureAt instanceof Timestamp ? data.lastNurtureAt.toMillis() : null,
-          hasReplied: hasInboundNote(noteKinds(data.notes)),
-          phone: typeof data.phone === "string" ? data.phone : "",
-          consent: readConsent(data.smsConsent),
-          optedOut: Boolean(data.smsOptOut),
-        },
-        now,
-      );
+    const { chosen, setAside } = oneLeadPerPhone(candidates);
+    for (const { lead, reason } of setAside) {
+      outcomes.push({ customerId: lead.id, action: "skipped", reason });
+    }
 
-      if (!verdict.send) {
-        outcomes.push({ customerId: doc.id, action: "skipped", reason: verdict.reason });
-        continue;
-      }
+    let sent = 0;
 
-      // Everything past here would have been sent. Over the cap it is deferred
-      // rather than dropped: tomorrow's run picks it up, and the count in the
-      // response says how many are waiting.
-      if (sent >= MAX_SENDS_PER_RUN) {
-        outcomes.push({
-          customerId: doc.id,
-          action: "deferred",
-          step: verdict.step + 1,
-          reason: `run cap of ${MAX_SENDS_PER_RUN} reached`,
+    for (const lead of chosen) {
+      // One lead's problem is one lead's problem. Before this, a single thrown
+      // error — a corrupt counter was enough — ended the run and abandoned
+      // every lead after it in the list.
+      try {
+        const verdict = nurtureDecision(lead, now);
+        if (!verdict.send) {
+          outcomes.push({ customerId: lead.id, action: "skipped", reason: verdict.reason });
+          continue;
+        }
+
+        // Asked of the number rather than the record, because an opt-out can
+        // be recorded against a duplicate this lead does not know about.
+        const numberOptOut = await optOutForPhone(lead.phone);
+        if (numberOptOut) {
+          outcomes.push({
+            customerId: lead.id,
+            action: "skipped",
+            reason: `this number replied ${numberOptOut.keyword || "STOP"} on another record`,
+          });
+          continue;
+        }
+
+        // Everything past here would have been sent. Over the cap it is
+        // deferred rather than dropped: tomorrow's run picks it up, and the
+        // count in the response says how many are waiting.
+        if (sent >= MAX_SENDS_PER_RUN) {
+          outcomes.push({
+            customerId: lead.id,
+            action: "deferred",
+            step: verdict.step + 1,
+            reason: `run cap of ${MAX_SENDS_PER_RUN} reached`,
+          });
+          continue;
+        }
+
+        const docRef = db.collection("customers").doc(lead.id);
+        const claim = await claimStep(docRef, lead.nurtureStep);
+        if (!claim.claimed) {
+          outcomes.push({ customerId: lead.id, action: "skipped", reason: claim.reason });
+          continue;
+        }
+
+        const body = leadNurtureText(verdict.kind, lead.firstName);
+        const result = await sendSmsToCustomerId(lead.id, body);
+
+        if (!result.ok) {
+          // Put the claim back so this is retried rather than silently spent,
+          // and leave nurtureStep alone — it never advanced.
+          await docRef.update({ lastNurtureAt: claim.previous });
+          await appendNote(
+            lead.id,
+            {
+              text: result.refused
+                ? `Nurture step ${verdict.step + 1} not sent: ${result.error}`
+                : `Nurture step ${verdict.step + 1} failed: ${result.error}`,
+              kind: "sms_out",
+              authorUid: "system",
+              authorName: "Lead nurture",
+            },
+            { markContacted: false },
+          );
+          outcomes.push({
+            customerId: lead.id,
+            action: "failed",
+            step: verdict.step + 1,
+            reason: result.error,
+          });
+          continue;
+        }
+
+        await docRef.update({ nurtureStep: FieldValue.increment(1) });
+
+        await appendNote(lead.id, {
+          text: body,
+          kind: "sms_out",
+          authorUid: "system",
+          authorName: `Lead nurture ${verdict.step + 1} of 3`,
         });
-        continue;
-      }
 
-      const firstName = typeof data.firstName === "string" ? data.firstName : "";
-      const body = leadNurtureText(verdict.kind, firstName);
-      const result = await sendSmsToCustomerId(doc.id, body);
-
-      if (!result.ok) {
-        // The step is NOT advanced and no stamp is written, so an unsent
-        // message is retried tomorrow rather than silently spent. The note
-        // records the attempt either way, because a customer record that says
-        // nothing happened is how the last SMS bug stayed invisible for days.
-        await appendNote(
-          doc.id,
-          {
-            text: result.refused
-              ? `Nurture step ${verdict.step + 1} not sent: ${result.error}`
-              : `Nurture step ${verdict.step + 1} failed: ${result.error}`,
-            kind: "sms_out",
-            authorUid: "system",
-            authorName: "Lead nurture",
-          },
-          { markContacted: false },
-        );
+        sent += 1;
+        outcomes.push({ customerId: lead.id, action: "sent", step: verdict.step + 1 });
+        await wait(SEND_INTERVAL_MS);
+      } catch (error) {
         outcomes.push({
-          customerId: doc.id,
+          customerId: lead.id,
           action: "failed",
-          step: verdict.step + 1,
-          reason: result.error,
+          reason: error instanceof Error ? error.message : "unexpected error",
         });
-        continue;
       }
-
-      await doc.ref.update({
-        nurtureStep: FieldValue.increment(1),
-        lastNurtureAt: FieldValue.serverTimestamp(),
-      });
-
-      await appendNote(doc.id, {
-        text: body,
-        kind: "sms_out",
-        authorUid: "system",
-        authorName: `Lead nurture ${verdict.step + 1} of 3`,
-      });
-
-      sent += 1;
-      outcomes.push({ customerId: doc.id, action: "sent", step: verdict.step + 1 });
-      await wait(SEND_INTERVAL_MS);
     }
 
     // One notification for the run, not one per lead. A nightly job that sent

@@ -144,6 +144,20 @@ export function nurtureDecision(input: NurtureInput, nowMs: number): NurtureVerd
     };
   }
 
+  // A step that is not a whole count is corrupt data, and the safe reading of
+  // corrupt data is "do not text anybody". It used to be worse than unsafe: a
+  // negative or fractional step indexed past the end of NURTURE_STEPS, and
+  // reading `.day` off the resulting undefined threw a TypeError. One bad
+  // record took the whole nightly run down with it, so nobody got nurtured at
+  // all — and until this was fixed, firestore.rules guarded these counters on
+  // update but not on create, which made that reachable from a client.
+  if (!Number.isInteger(input.nurtureStep) || input.nurtureStep < 0) {
+    return {
+      send: false,
+      reason: `nurtureStep is ${JSON.stringify(input.nurtureStep)}, which is not a whole count`,
+    };
+  }
+
   if (input.nurtureStep >= NURTURE_STEPS.length) {
     return { send: false, reason: "the sequence is finished — seasonal from here" };
   }
@@ -168,6 +182,12 @@ export function nurtureDecision(input: NurtureInput, nowMs: number): NurtureVerd
   }
 
   const step = NURTURE_STEPS[input.nurtureStep];
+  // Unreachable given the two checks above, and left in anyway: the cost of
+  // being wrong here is a thrown TypeError inside a nightly job, which is the
+  // one failure that stops every other lead being looked at.
+  if (!step) {
+    return { send: false, reason: `no step ${input.nurtureStep} in the sequence` };
+  }
   if (ageDays < step.day) {
     return { send: false, reason: `step ${input.nurtureStep + 1} is not due until day ${step.day}` };
   }
@@ -185,4 +205,80 @@ export function nurtureDecision(input: NurtureInput, nowMs: number): NurtureVerd
  */
 export function hasInboundNote(kinds: readonly string[]): boolean {
   return kinds.some((kind) => kind === "sms_in");
+}
+
+/**
+ * One lead per phone number, and the number's history applied to all of them.
+ *
+ * The Meta lead webhook creates a fresh customer record for every form
+ * submission rather than matching an existing one, so the same person can sit
+ * in the database three times. An inbound reply attaches to only one of those
+ * records — findCustomerByPhone returns the first match — which means the other
+ * two still look like someone who has never answered. Without this, a lead who
+ * replied would keep getting nurture texts from their duplicate records, and
+ * two records coming due on the same night would send two texts to one handset.
+ *
+ * So the number is the person, not the record. A reply or an opt-out on any
+ * record counts for every record on that number, and at most one of them is
+ * ever picked to send. The one picked is the furthest through the sequence,
+ * because that is the record whose history is real; the duplicates behind it
+ * would otherwise replay messages this person has already had.
+ *
+ * Pure, and keyed on a `phoneKey` the caller computes, so this file stays
+ * import-free and the rule can be tested by running it.
+ */
+export interface PhoneGroupable {
+  phoneKey: string;
+  nurtureStep: number;
+  hasReplied: boolean;
+  optedOut: boolean;
+}
+
+export interface PhoneGroupResult<T> {
+  /** The one record allowed to send, per number. */
+  chosen: T[];
+  /** The rest, with why they were set aside. */
+  setAside: { lead: T; reason: string }[];
+}
+
+export function oneLeadPerPhone<T extends PhoneGroupable>(leads: readonly T[]): PhoneGroupResult<T> {
+  const byPhone = new Map<string, T[]>();
+  const chosen: T[] = [];
+  const setAside: { lead: T; reason: string }[] = [];
+
+  for (const lead of leads) {
+    // A record with no usable number cannot be grouped and cannot be texted.
+    // It is set aside rather than silently treated as its own group.
+    if (!lead.phoneKey) {
+      setAside.push({ lead, reason: "no usable phone number to group on" });
+      continue;
+    }
+    const group = byPhone.get(lead.phoneKey);
+    if (group) group.push(lead);
+    else byPhone.set(lead.phoneKey, [lead]);
+  }
+
+  for (const group of byPhone.values()) {
+    // Any record saying this person replied or opted out speaks for the number.
+    const replied = group.some((lead) => lead.hasReplied);
+    const optedOut = group.some((lead) => lead.optedOut);
+
+    if (optedOut || replied) {
+      const reason = optedOut
+        ? "this number replied STOP on one of its records"
+        : "this number has replied on one of its records";
+      for (const lead of group) setAside.push({ lead, reason });
+      continue;
+    }
+
+    // Furthest through the sequence wins; a stable tie-break so two runs over
+    // the same data make the same choice.
+    const sorted = [...group].sort((a, b) => b.nurtureStep - a.nurtureStep);
+    chosen.push(sorted[0]);
+    for (const lead of sorted.slice(1)) {
+      setAside.push({ lead, reason: "another record for this number is further along" });
+    }
+  }
+
+  return { chosen, setAside };
 }

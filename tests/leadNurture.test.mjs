@@ -17,6 +17,7 @@ import { test, describe } from "node:test";
 const {
   nurtureDecision,
   hasInboundNote,
+  oneLeadPerPhone,
   NURTURE_STEPS,
   MIN_GAP_DAYS,
   MAX_AGE_TO_START_DAYS,
@@ -339,5 +340,122 @@ describe("what the lead actually reads", () => {
   test("each is a distinct message", () => {
     const texts = kinds.map((k) => leadNurtureText(k, "Marta"));
     assert.equal(new Set(texts).size, 3);
+  });
+});
+
+describe("a corrupt step counter", () => {
+  // Found by Codex review on #60, and worse than it first looked: a negative
+  // or fractional step indexed past the end of NURTURE_STEPS, and reading
+  // `.day` off the undefined threw. The route had one try around the whole
+  // loop, so one bad record ended the run and nobody got nurtured — and
+  // firestore.rules guarded these counters on update but not on create, which
+  // made it reachable from a client.
+  test("never throws, whatever is in the field", () => {
+    for (const nurtureStep of [-1, -99, 0.5, 2.7, NaN, Infinity, -Infinity]) {
+      const verdict = decide({ nurtureStep });
+      assert.equal(verdict.send, false, String(nurtureStep));
+      assert.match(verdict.reason, /not a whole count/, String(nurtureStep));
+    }
+  });
+
+  test("a whole count still works", () => {
+    assert.equal(decide({ nurtureStep: 0 }).send, true);
+  });
+});
+
+describe("one person, several records", () => {
+  // The Meta webhook creates a fresh customer per form submission rather than
+  // matching an existing one, so one handset can sit in the database three
+  // times. An inbound reply attaches to only one of them.
+  const lead = (id, patch = {}) => ({
+    id,
+    phoneKey: "5025550147",
+    nurtureStep: 0,
+    hasReplied: false,
+    optedOut: false,
+    ...patch,
+  });
+
+  test("three records for one number send at most one text", () => {
+    const { chosen, setAside } = oneLeadPerPhone([lead("a"), lead("b"), lead("c")]);
+    assert.equal(chosen.length, 1);
+    assert.equal(setAside.length, 2);
+    for (const entry of setAside) {
+      assert.match(entry.reason, /another record for this number/);
+    }
+  });
+
+  test("the record furthest through the sequence is the one that sends", () => {
+    // The duplicates behind it would replay messages this person already had.
+    const { chosen } = oneLeadPerPhone([
+      lead("behind", { nurtureStep: 0 }),
+      lead("ahead", { nurtureStep: 2 }),
+      lead("middle", { nurtureStep: 1 }),
+    ]);
+    assert.equal(chosen[0].id, "ahead");
+  });
+
+  test("a reply on ANY record stops the whole number", () => {
+    // This is the finding. Without it, a lead who answered kept getting texts
+    // from the duplicate records that did not carry their reply.
+    const { chosen, setAside } = oneLeadPerPhone([
+      lead("replied", { hasReplied: true }),
+      lead("duplicate"),
+      lead("another"),
+    ]);
+    assert.deepEqual(chosen, []);
+    assert.equal(setAside.length, 3);
+    for (const entry of setAside) assert.match(entry.reason, /has replied/);
+  });
+
+  test("an opt-out on ANY record stops the whole number", () => {
+    const { chosen, setAside } = oneLeadPerPhone([
+      lead("duplicate"),
+      lead("stopped", { optedOut: true }),
+    ]);
+    assert.deepEqual(chosen, []);
+    for (const entry of setAside) assert.match(entry.reason, /STOP/);
+  });
+
+  test("an opt-out outranks a reply in the wording, and both stop everything", () => {
+    const { chosen } = oneLeadPerPhone([
+      lead("x", { hasReplied: true, optedOut: true }),
+      lead("y"),
+    ]);
+    assert.deepEqual(chosen, []);
+  });
+
+  test("different numbers are different people", () => {
+    const { chosen } = oneLeadPerPhone([
+      lead("a", { phoneKey: "5025550147" }),
+      lead("b", { phoneKey: "5025559999" }),
+    ]);
+    assert.equal(chosen.length, 2);
+  });
+
+  test("one number replying does not silence a different number", () => {
+    const { chosen } = oneLeadPerPhone([
+      lead("replied", { phoneKey: "5025550147", hasReplied: true }),
+      lead("innocent", { phoneKey: "5025559999" }),
+    ]);
+    assert.deepEqual(chosen.map((l) => l.id), ["innocent"]);
+  });
+
+  test("a record with no usable number is set aside, not texted", () => {
+    const { chosen, setAside } = oneLeadPerPhone([lead("nophone", { phoneKey: "" })]);
+    assert.deepEqual(chosen, []);
+    assert.match(setAside[0].reason, /no usable phone number/);
+  });
+
+  test("nothing in, nothing out", () => {
+    assert.deepEqual(oneLeadPerPhone([]), { chosen: [], setAside: [] });
+  });
+
+  test("the choice is stable across runs over the same data", () => {
+    // Two runs picking different records would replay a message.
+    const leads = [lead("a", { nurtureStep: 1 }), lead("b", { nurtureStep: 1 })];
+    const first = oneLeadPerPhone(leads).chosen[0].id;
+    const second = oneLeadPerPhone(leads).chosen[0].id;
+    assert.equal(first, second);
   });
 });
