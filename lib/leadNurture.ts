@@ -260,6 +260,20 @@ export interface PhoneGroupable {
   /** `recordIsSendable` for this record — the grouping prefers one that is. */
   sendable: boolean;
   /**
+   * `do_not_knock` on this record.
+   *
+   * Separate from `sendable`, which it also fails, because this one speaks for
+   * the whole number rather than just disqualifying the row. Do not knock is
+   * an instruction about a person — leave them alone, by any channel — and
+   * somebody who gave it does not become contactable because a later form
+   * submission created a second record without the mark.
+   *
+   * Preferring a sendable record made this worse rather than better: the
+   * blocked row used to win sometimes and get refused, where afterwards the
+   * clean duplicate was actively chosen and texted.
+   */
+  blocked: boolean;
+  /**
    * Whether this record could be sent to at all.
    *
    * An ineligible record — a duplicate that has moved on to `estimate_sent`,
@@ -321,14 +335,17 @@ export function oneLeadPerPhone<T extends PhoneGroupable>(leads: readonly T[]): 
     // number — including a record that is not itself a candidate.
     const replied = group.some((lead) => lead.hasReplied);
     const optedOut = group.some((lead) => lead.optedOut);
+    const blocked = group.some((lead) => lead.blocked);
     // Only a candidate can be sent to. The rest were context.
     const candidates = group.filter((lead) => lead.eligible);
     if (candidates.length === 0) continue;
 
-    if (optedOut || replied) {
+    if (optedOut || replied || blocked) {
       const reason = optedOut
         ? "this number replied STOP on one of its records"
-        : "this number has replied on one of its records";
+        : replied
+          ? "this number has replied on one of its records"
+          : "one of this number's records is marked do not knock";
       for (const lead of candidates) setAside.push({ lead, reason });
       continue;
     }

@@ -378,6 +378,7 @@ describe("one person, several records", () => {
     hasReplied: false,
     optedOut: false,
     sendable: true,
+    blocked: false,
     eligible: true,
     ...patch,
   });
@@ -480,6 +481,7 @@ describe("a duplicate that has moved on still speaks for the person", () => {
     hasReplied: false,
     optedOut: false,
     sendable: true,
+    blocked: false,
     eligible: true,
     ...patch,
   });
@@ -876,6 +878,7 @@ describe("the record chosen to send is one that can send", () => {
     hasReplied: false,
     optedOut: false,
     sendable: true,
+    blocked: false,
     eligible: true,
     ...patch,
   });
@@ -1024,5 +1027,72 @@ describe("the claim belongs to the phone number, not the record", () => {
       "5025550147",
       "the recipient is the number that was evaluated, not whatever is read later",
     );
+  });
+});
+
+describe("do not knock is about the person, not the paperwork", () => {
+  // "Leave them alone" is an instruction about a human being. Somebody who
+  // gave it does not become contactable because a later form submission
+  // created a second record without the mark.
+  //
+  // Preferring a record that can send — the fix for consent shadowing — made
+  // this worse rather than better. Before it, the marked row sometimes won the
+  // selection and was refused; after it, the clean duplicate was actively
+  // chosen and texted. A fix in one direction opening a hole in the other is
+  // the shape of this whole file's history, so this is pinned from both sides.
+  const rec = (id, patch = {}) => ({
+    id,
+    phoneKey: "5025550147",
+    nurtureStep: 0,
+    lastNurtureAtMs: null,
+    hasReplied: false,
+    optedOut: false,
+    sendable: true,
+    blocked: false,
+    eligible: true,
+    ...patch,
+  });
+
+  test("a marked record silences the number, even from a clean duplicate", () => {
+    const { chosen, setAside } = oneLeadPerPhone([
+      rec("marked", { blocked: true, sendable: false }),
+      rec("clean_consented"),
+    ]);
+    assert.equal(chosen.length, 0, "this person asked not to be contacted");
+    // Both are new leads somebody expected to be nurtured, so both get a
+    // reason in the run's output rather than one vanishing.
+    assert.deepEqual(setAside.map((s) => s.lead.id).sort(), ["clean_consented", "marked"]);
+    for (const { reason } of setAside) assert.match(reason, /do not knock/);
+  });
+
+  test("an ineligible marked sibling silences it too", () => {
+    // The mark is usually on the record somebody actually opened to set it,
+    // and that is often the one that has moved past new_lead — the same
+    // reason a reply hides on a record that moved on.
+    const { chosen, setAside } = oneLeadPerPhone([
+      rec("marked_and_quoted", { blocked: true, sendable: false, eligible: false }),
+      rec("fresh_lead"),
+    ]);
+    assert.equal(chosen.length, 0);
+    assert.match(setAside[0].reason, /do not knock/);
+  });
+
+  test("being the only record does not make the mark negotiable", () => {
+    const { chosen, setAside } = oneLeadPerPhone([rec("marked", { blocked: true, sendable: false })]);
+    assert.equal(chosen.length, 0);
+    assert.match(setAside[0].reason, /do not knock/);
+  });
+
+  test("a mark on one number does not silence a different number", () => {
+    const { chosen } = oneLeadPerPhone([
+      rec("marked", { blocked: true, sendable: false }),
+      rec("someone_else", { phoneKey: "5025559999" }),
+    ]);
+    assert.deepEqual(chosen.map((c) => c.lead.id), ["someone_else"]);
+  });
+
+  test("an unmarked number is unaffected", () => {
+    const { chosen } = oneLeadPerPhone([rec("a"), rec("b")]);
+    assert.equal(chosen.length, 1);
   });
 });

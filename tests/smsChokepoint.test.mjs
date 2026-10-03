@@ -224,3 +224,58 @@ describe("the lead nurture cron texts the number it actually checked", () => {
     );
   });
 });
+
+describe("a claim never outlives the attempt that made it", () => {
+  /*
+   * The claim writes two timestamps and they hold back every record for a
+   * phone number. If something throws between the claim and the send — and
+   * hasReplyForPhone scans the whole customer collection, so it can — the
+   * claim used to stand with no text sent, delaying that person by the minimum
+   * gap over a failure that achieved nothing, silently.
+   *
+   * Route-level, so a source assertion again, and the same caveat applies: it
+   * is weaker than running the code and is here so that reverting the fix
+   * fails the build.
+   */
+  const ROUTE = "app/api/cron/lead-nurture/route.ts";
+  const code = readFileSync(join(ROOT, ROUTE), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "");
+
+  test("the claim and the send state outlive the try, so the catch can see them", () => {
+    assert.match(
+      code,
+      /let claim[^\n]*=\s*null/,
+      `${ROUTE} must hold the claim outside the try, or the catch cannot release it`,
+    );
+    assert.match(
+      code,
+      /let texted\s*=\s*false/,
+      `${ROUTE} must track whether a text actually went out`,
+    );
+  });
+
+  // The per-lead catch, not the route's outer one. Both match the same
+  // opening, and the outer one comes later in the file.
+  const perLeadCatch = code.slice(
+    code.indexOf("} catch (error) {"),
+    code.lastIndexOf("} catch (error) {"),
+  );
+
+  test("the catch releases a claim that never became a text", () => {
+    const catchBlock = perLeadCatch;
+    assert.match(
+      catchBlock,
+      /claim\?\.claimed\s*&&\s*!texted/,
+      "the catch must release a claim only when no text was sent — releasing one " +
+        "after a successful send would let the same message go out again",
+    );
+    assert.match(catchBlock, /rollBackClaim/, "the catch must actually roll the claim back");
+  });
+
+  test("a failure reaches the lead's timeline", () => {
+    // A lead that silently failed to be nurtured looks exactly like one that
+    // was never due.
+    assert.match(perLeadCatch, /appendNote/, "the catch must record the failure on the timeline");
+  });
+});

@@ -4,6 +4,7 @@ import { phoneKey } from "@/lib/inboundSms";
 import {
   claimDecision,
   hasInboundNote,
+  MIN_GAP_DAYS,
   nurtureDecision,
   oneLeadPerPhone,
   recordIsSendable,
@@ -122,6 +123,8 @@ interface Candidate {
   eligible: boolean;
   /** Could it ever send, consent and phone and do-not-knock aside from timing? */
   sendable: boolean;
+  /** Marked do not knock — which speaks for the whole number, not just this row. */
+  blocked: boolean;
 }
 
 /**
@@ -337,6 +340,7 @@ export async function GET(request: Request): Promise<Response> {
           phone,
           consent: readConsent(data.smsConsent),
         }),
+        blocked: (typeof data.status === "string" ? data.status : "") === "do_not_knock",
       });
     }
 
@@ -351,6 +355,15 @@ export async function GET(request: Request): Promise<Response> {
       // One lead's problem is one lead's problem. Before this, a single thrown
       // error — a corrupt counter was enough — ended the run and abandoned
       // every lead after it in the list.
+      // Held outside the try so the catch can tell a claim that was never
+      // spent from one that resulted in a text. An exception between the claim
+      // and the send — hasReplyForPhone scans the whole customer collection,
+      // so it can throw — used to leave both stamps written with no message
+      // sent, which held the entire number back for the minimum gap for
+      // nothing, and did it silently.
+      let claim: Awaited<ReturnType<typeof claimStep>> | null = null;
+      let texted = false;
+
       try {
         // A pre-filter only. The decision that authorises the text is made
         // from fresh data inside the claim below; this one exists so the run
@@ -392,7 +405,7 @@ export async function GET(request: Request): Promise<Response> {
         }
 
         const docRef = db.collection("customers").doc(lead.id);
-        const claim = await claimStep(
+        claim = await claimStep(
           docRef,
           lead,
           { effectiveStep, effectiveLastNurtureAtMs },
@@ -460,6 +473,7 @@ export async function GET(request: Request): Promise<Response> {
         // below — but the message is out regardless, and a run that failed its
         // bookkeeping ten times must not go on to send an eleventh.
         sent += 1;
+        texted = true;
 
         // Set, not incremented. The step that was sent is the *number's*
         // step, which can be ahead of this record's own — a duplicate whose
@@ -484,11 +498,47 @@ export async function GET(request: Request): Promise<Response> {
         outcomes.push({ customerId: lead.id, action: "sent", step: step + 1 });
         await wait(SEND_INTERVAL_MS);
       } catch (error) {
-        outcomes.push({
-          customerId: lead.id,
-          action: "failed",
-          reason: error instanceof Error ? error.message : "unexpected error",
-        });
+        const reason = error instanceof Error ? error.message : "unexpected error";
+
+        // A claim that never became a text is given back. Leaving it would
+        // block every record for this number for the minimum gap over a
+        // failure that sent nothing — the opposite of what the claim is for.
+        if (claim?.claimed && !texted) {
+          try {
+            await rollBackClaim(db.collection("customers").doc(lead.id), claim);
+          } catch {
+            // The rollback itself failed, so the claim stands and this number
+            // waits out the gap. Worth saying in the run's output rather than
+            // swallowing: it is the one case where a failure costs a delay.
+            outcomes.push({
+              customerId: lead.id,
+              action: "failed",
+              reason: `${reason} (and the claim could not be released, so this number waits ${MIN_GAP_DAYS} days)`,
+            });
+            continue;
+          }
+        }
+
+        // On the timeline too, because a lead that silently failed to be
+        // nurtured looks exactly like one that was never due.
+        try {
+          await appendNote(
+            lead.id,
+            {
+              text: texted
+                ? `Nurture text sent, but recording it failed: ${reason}`
+                : `Nurture attempt failed before sending: ${reason}`,
+              kind: "sms_out",
+              authorUid: "system",
+              authorName: "Lead nurture",
+            },
+            { markContacted: false },
+          );
+        } catch {
+          // Nothing more to do here. The outcome below is the record.
+        }
+
+        outcomes.push({ customerId: lead.id, action: "failed", reason });
       }
     }
 
