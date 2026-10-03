@@ -640,3 +640,60 @@ export function claimStillOwns(
   if (storedMs == null || claimedMs == null) return false;
   return storedMs === claimedMs;
 }
+
+/**
+ * What is known about a send, and what follows from it.
+ *
+ * Three facts were being carried in two booleans — `texted` and a release
+ * flag — and the gap between them was a bug both times. A send whose answer
+ * never came back is neither "sent" nor "not sent", and encoding it as
+ * `texted = false` meant the exception handler read it as nothing-happened and
+ * gave the hold back, making a possibly-delivered message retryable. The same
+ * gap let an uncertain send consume no capacity, so a transport outage could
+ * walk the whole eligible list in one run.
+ *
+ * So there is one value with three cases rather than two flags that can
+ * disagree:
+ *
+ *   "none"    — nothing was sent and that is known. Safe to release and retry.
+ *   "unknown" — the request went out, no answer came back. May have arrived.
+ *   "sent"    — Twilio accepted it.
+ *
+ * The two rules that hang off it are here beside it, because both were got
+ * wrong by being inferred at the call site instead.
+ */
+export type SendState = "none" | "unknown" | "sent";
+
+export function sendStateFrom(result: {
+  ok: boolean;
+  delivery: "accepted" | "rejected" | "unknown";
+}): SendState {
+  if (result.ok) return "sent";
+  // Only a refusal Twilio actually gave back means nothing went out.
+  return result.delivery === "rejected" ? "none" : "unknown";
+}
+
+/**
+ * May this attempt give its claim back?
+ *
+ * Only when nothing was sent and the claim has not already been released.
+ * Anything else leaves the hold standing, which is the safe direction: a hold
+ * left on costs one lead a few days and shows up as `held` for somebody to
+ * clear, where a hold wrongly lifted sends a stranger the same text again.
+ */
+export function mayRelease(state: SendState, alreadyReleased: boolean): boolean {
+  return state === "none" && !alreadyReleased;
+}
+
+/**
+ * Does this attempt count against the run's send cap?
+ *
+ * Anything that may have reached somebody's phone does. The cap exists to
+ * limit messages rather than successes, so counting only confirmed sends meant
+ * that during a transport outage — every answer lost, every send "unknown" —
+ * the run would text the entire eligible list while believing it had sent
+ * nothing.
+ */
+export function consumesCapacity(state: SendState): boolean {
+  return state === "sent" || state === "unknown";
+}

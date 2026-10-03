@@ -4,6 +4,10 @@ import { phoneKey } from "@/lib/inboundSms";
 import {
   claimDecision,
   claimStillOwns,
+  consumesCapacity,
+  mayRelease,
+  sendStateFrom,
+  type SendState,
   hasInboundNote,
   MIN_GAP_DAYS,
   nurtureDecision,
@@ -392,7 +396,10 @@ export async function GET(request: Request): Promise<Response> {
       outcomes.push({ customerId: lead.id, action: "skipped", reason });
     }
 
+    // Confirmed sends, for the report. And everything that may have reached a
+    // phone, for the cap — which exists to limit messages, not successes.
     let sent = 0;
+    let spent = 0;
 
     for (const { lead, effectiveStep, effectiveLastNurtureAtMs } of chosen) {
       // One lead's problem is one lead's problem. Before this, a single thrown
@@ -405,7 +412,11 @@ export async function GET(request: Request): Promise<Response> {
       // sent, which held the entire number back for the minimum gap for
       // nothing, and did it silently.
       let claim: Awaited<ReturnType<typeof claimStep>> | null = null;
-      let texted = false;
+      // Three cases, not a boolean. A send whose answer never came back is
+      // neither sent nor not-sent, and calling it `texted = false` was read by
+      // the catch below as nothing-happened — which gave the hold back on a
+      // message that may well have arrived.
+      let sendState: SendState = "none";
       // A claim is released once. The failed-send path releases and then
       // writes a note about the failure; when that note write threw, the catch
       // released the same claim again, and anything that had claimed the
@@ -442,7 +453,7 @@ export async function GET(request: Request): Promise<Response> {
         // Everything past here would have been sent. Over the cap it is
         // deferred rather than dropped: tomorrow's run picks it up, and the
         // count in the response says how many are waiting.
-        if (sent >= MAX_SENDS_PER_RUN) {
+        if (spent >= MAX_SENDS_PER_RUN) {
           outcomes.push({
             customerId: lead.id,
             action: "deferred",
@@ -511,14 +522,17 @@ export async function GET(request: Request): Promise<Response> {
         // to the same number, because the claim refused any change to it.
         const result = await sendSmsToPhone(claim.phone, body);
 
+        sendState = sendStateFrom(result);
+        if (consumesCapacity(sendState)) spent += 1;
+
         if (!result.ok) {
           // Only a confirmed non-send gives the claim back. `ok: false` also
           // covers a request whose answer never came, where Twilio may have
           // accepted the text — releasing the hold there is how the same
           // message gets sent again five days later, which is the exact replay
           // the pending marker exists to stop.
-          const certain = result.delivery === "rejected";
-          if (certain) {
+          const certain = sendState === "none";
+          if (mayRelease(sendState, released)) {
             await rollBackClaim(docRef, claim);
             released = true;
           }
@@ -554,7 +568,6 @@ export async function GET(request: Request): Promise<Response> {
         // below — but the message is out regardless, and a run that failed its
         // bookkeeping ten times must not go on to send an eleventh.
         sent += 1;
-        texted = true;
 
         // Set, not incremented. The step that was sent is the *number's*
         // step, which can be ahead of this record's own — a duplicate whose
@@ -588,7 +601,10 @@ export async function GET(request: Request): Promise<Response> {
         // A claim that never became a text is given back. Leaving it would
         // block every record for this number for the minimum gap over a
         // failure that sent nothing — the opposite of what the claim is for.
-        if (claim?.claimed && !texted && !released) {
+        // Only a claim known to have sent nothing. An uncertain send keeps its
+        // hold through the exception — that is the whole reason sendState has
+        // three cases instead of two.
+        if (claim?.claimed && mayRelease(sendState, released)) {
           try {
             await rollBackClaim(db.collection("customers").doc(lead.id), claim);
             released = true;
@@ -611,9 +627,13 @@ export async function GET(request: Request): Promise<Response> {
           await appendNote(
             lead.id,
             {
-              text: texted
-                ? `Nurture text sent, but recording it failed: ${reason}`
-                : `Nurture attempt failed before sending: ${reason}`,
+              text:
+                sendState === "sent"
+                  ? `Nurture text sent, but recording it failed: ${reason}`
+                  : sendState === "unknown"
+                    ? `Nurture text may have been sent — no answer from Twilio — and recording it failed: ${reason}. ` +
+                      "This number is held until somebody checks whether it arrived."
+                    : `Nurture attempt failed before sending: ${reason}`,
               kind: "sms_out",
               authorUid: "system",
               authorName: "Lead nurture",
@@ -624,7 +644,13 @@ export async function GET(request: Request): Promise<Response> {
           // Nothing more to do here. The outcome below is the record.
         }
 
-        outcomes.push({ customerId: lead.id, action: "failed", reason });
+        outcomes.push({
+          customerId: lead.id,
+          // An uncertain send that then failed its bookkeeping is held, not
+          // failed: its hold is still standing and a person has to clear it.
+          action: sendState === "none" ? "failed" : "held",
+          reason,
+        });
       }
     }
 

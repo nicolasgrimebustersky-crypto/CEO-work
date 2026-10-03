@@ -262,8 +262,15 @@ describe("a claim never outlives the attempt that made it", () => {
     );
     assert.match(
       code,
-      /let texted\s*=\s*false/,
-      `${ROUTE} must track whether a text actually went out`,
+      /let sendState: SendState = "none"/,
+      `${ROUTE} must track what is known about the send — three cases, not a ` +
+        "boolean, because a send whose answer never came back is neither sent nor not-sent",
+    );
+    assert.doesNotMatch(
+      code,
+      /let texted\s*=/,
+      "a boolean cannot hold three cases; that gap released the hold on a " +
+        "message that may have been delivered",
     );
   });
 
@@ -278,9 +285,10 @@ describe("a claim never outlives the attempt that made it", () => {
     const catchBlock = perLeadCatch;
     assert.match(
       catchBlock,
-      /claim\?\.claimed\s*&&\s*!texted/,
-      "the catch must release a claim only when no text was sent — releasing one " +
-        "after a successful send would let the same message go out again",
+      /claim\?\.claimed\s*&&\s*mayRelease\(sendState, released\)/,
+      "the catch must release a claim only when nothing was sent and that is known — " +
+        "after a successful send it would resend, and after an uncertain one it " +
+        "would resend something that may already have arrived",
     );
     assert.match(catchBlock, /rollBackClaim/, "the catch must actually roll the claim back");
   });
@@ -313,7 +321,7 @@ describe("a claim is released once, and only by its owner", () => {
     assert.match(code, /let released\s*=\s*false/, `${ROUTE} must track whether it released`);
     assert.match(
       code,
-      /claim\?\.claimed\s*&&\s*!texted\s*&&\s*!released/,
+      /mayRelease\(sendState, released\)/,
       "the catch must skip a claim the failed-send path already released",
     );
   });
@@ -385,15 +393,19 @@ describe("a lost answer from Twilio is not a refusal", () => {
   });
 
   test("the cron releases its claim only on a confirmed non-send", () => {
+    // The classification now lives in sendStateFrom and the rule in
+    // mayRelease, so what this pins is that the route asks them rather than
+    // re-deriving either at the call site — which is how both halves of this
+    // went wrong before.
     assert.match(
       code,
-      /result\.delivery === "rejected"/,
-      `${ROUTE} must release the claim only when nothing was sent, and that is known`,
+      /sendState = sendStateFrom\(result\)/,
+      `${ROUTE} must classify the result rather than inspect ok alone`,
     );
     const failure = code.slice(code.indexOf("if (!result.ok) {"));
-    const guard = failure.indexOf("if (certain) {");
+    const guard = failure.indexOf("mayRelease(sendState, released)");
     const release = failure.indexOf("rollBackClaim");
-    assert.ok(guard > 0 && guard < release, "the release must sit behind that check");
+    assert.ok(guard > 0 && guard < release, "the release must sit behind that rule");
   });
 
   test("an uncertain send is held, not filed as failed", () => {

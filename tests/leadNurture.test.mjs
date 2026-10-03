@@ -21,6 +21,9 @@ const {
   claimVerdict,
   claimDecision,
   claimStillOwns,
+  sendStateFrom,
+  mayRelease,
+  consumesCapacity,
   recordIsSendable,
   NURTURE_STEPS,
   MIN_GAP_DAYS,
@@ -1366,5 +1369,98 @@ describe("a text that reached Twilio but was never recorded holds the number", (
     );
     assert.equal(decision.claim, false);
     assert.match(decision.reason, /advanced this lead to step 1/);
+  });
+});
+
+describe("a send whose answer never came back", () => {
+  // Two findings in one place, both consequences of distinguishing a Twilio
+  // refusal from a lost answer in the first place. Three facts were being
+  // carried in two booleans, and the gap between them was the bug twice over.
+  const rejected = { ok: false, delivery: "rejected" };
+  const lost = { ok: false, delivery: "unknown" };
+  const accepted = { ok: true, delivery: "accepted" };
+
+  test("each result maps to what is actually known", () => {
+    assert.equal(sendStateFrom(accepted), "sent");
+    assert.equal(sendStateFrom(rejected), "none", "Twilio answered and declined");
+    assert.equal(sendStateFrom(lost), "unknown", "the request went out, the answer did not come");
+  });
+
+  test("a hold survives an exception after an uncertain send", () => {
+    // The sequence: Twilio's answer is lost, so the claim is kept. Then the
+    // note write throws. The old code read `texted === false` as
+    // nothing-happened and released the hold, making a message that may have
+    // arrived retryable five days later.
+    const state = sendStateFrom(lost);
+    assert.equal(mayRelease(state, false), false, "the hold must stand through the catch");
+  });
+
+  test("a confirmed non-send is still released, so it retries", () => {
+    // The guard must not make every failure permanent.
+    assert.equal(mayRelease(sendStateFrom(rejected), false), true);
+  });
+
+  test("a successful send is never released", () => {
+    // Releasing here would let the same message go out again.
+    assert.equal(mayRelease(sendStateFrom(accepted), false), false);
+  });
+
+  test("nothing is released twice", () => {
+    assert.equal(mayRelease("none", true), false);
+  });
+
+  test("anything that may have reached a phone counts against the cap", () => {
+    assert.equal(consumesCapacity("sent"), true);
+    assert.equal(consumesCapacity("unknown"), true, "it may have arrived");
+    assert.equal(consumesCapacity("none"), false, "nothing was sent, so nothing was spent");
+  });
+
+  test("a transport outage cannot walk the whole list", () => {
+    // Every answer lost. Counting only confirmed successes meant the run
+    // believed it had sent nothing and kept going — so an outage was the one
+    // condition under which the safety cap did not apply at all.
+    const CAP = 10;
+    let spent = 0;
+    let attempts = 0;
+    for (let lead = 0; lead < 50; lead += 1) {
+      if (spent >= CAP) break;
+      attempts += 1;
+      const state = sendStateFrom(lost);
+      if (consumesCapacity(state)) spent += 1;
+    }
+    assert.equal(attempts, CAP, `an outage must still stop at ${CAP}, not run to 50`);
+  });
+
+  test("confirmed refusals do not eat the cap", () => {
+    // The other direction: a run refused by Twilio for every lead has sent
+    // nothing, so it has no reason to stop early.
+    const CAP = 10;
+    let spent = 0;
+    let attempts = 0;
+    for (let lead = 0; lead < 25; lead += 1) {
+      if (spent >= CAP) break;
+      attempts += 1;
+      if (consumesCapacity(sendStateFrom(rejected))) spent += 1;
+    }
+    assert.equal(attempts, 25);
+    assert.equal(spent, 0);
+  });
+
+  test("a mixed run counts the sent and the uncertain together", () => {
+    const CAP = 10;
+    let spent = 0;
+    let attempts = 0;
+    const results = [accepted, lost, rejected];
+    for (let lead = 0; lead < 100; lead += 1) {
+      if (spent >= CAP) break;
+      attempts += 1;
+      if (consumesCapacity(sendStateFrom(results[lead % 3]))) spent += 1;
+    }
+    assert.equal(spent, CAP);
+    // Fourteen attempts: ten that may have arrived and four confirmed
+    // refusals. Not fifteen — the tenth spend lands before that cycle's
+    // refusal, so the loop stops a attempt early. Counted by hand and then
+    // corrected against what it actually does.
+    assert.equal(attempts, 14);
   });
 });
