@@ -193,18 +193,30 @@ describe("the lead nurture cron texts the number it actually checked", () => {
     );
   });
 
-  test("it asks whether the number replied, after the claim and before the send", () => {
-    // A run works through its list for minutes. A reply landing on a different
-    // record for the same handset in that window was invisible, so the
-    // automation texted somebody who had just answered.
-    const replyCheck = code.indexOf("hasReplyForPhone(claim.phone)");
+  test("it asks what the number says to stop for, after the claim and before the send", () => {
+    // A run works through its list for minutes. A reply, a STOP or a
+    // do-not-knock mark landing on a different record for the same handset in
+    // that window was invisible, so the automation texted somebody who had
+    // just answered or had just asked not to be contacted.
+    //
+    // All three, because checking only replies here was the gap that let the
+    // third one through: the grouping caught a do-not-knock sibling at the top
+    // of the run and nothing caught one that arrived during it.
+    const check = code.indexOf("numberSuppression(claim.phone)");
     const send = code.indexOf("sendSmsToPhone(claim.phone");
-    assert.ok(replyCheck > 0, `${ROUTE} must ask hasReplyForPhone about the claimed number`);
+    assert.ok(check > 0, `${ROUTE} must ask numberSuppression about the claimed number`);
     assert.ok(send > 0, `${ROUTE} must send through sendSmsToPhone`);
-    assert.ok(
-      replyCheck < send,
-      "the reply check must come before the send, or it is decoration",
-    );
+    assert.ok(check < send, "the check must come before the send, or it is decoration");
+
+    const between = code.slice(check, send);
+    for (const field of ["optOut", "replied", "blocked"]) {
+      assert.match(
+        between,
+        new RegExp(`stop\\.${field}`),
+        `${ROUTE} must act on ${field} before sending — reading it and ignoring it is worse ` +
+          "than not reading it, because it looks covered",
+      );
+    }
   });
 
   test("a refusal after the claim gives the claim back", () => {
@@ -328,5 +340,71 @@ describe("a claim is released once, and only by its owner", () => {
       "a release must check it still owns what it is undoing, or it can erase a live claim",
     );
     assert.match(code, /stamp: Timestamp/, "the claim must carry the stamp it wrote");
+  });
+});
+
+describe("a lost answer from Twilio is not a refusal", () => {
+  /*
+   * `sendSms` used to collapse every failure into `{ ok: false, error }`, so a
+   * number Twilio rejected and a request whose answer never came back were
+   * indistinguishable downstream. The cron released its claim on both — and in
+   * the second case the text may well have been delivered, so releasing the
+   * hold meant sending the same message again five days later. That is the
+   * exact replay the pending marker was added to stop, arriving through the
+   * failure path instead of the success path.
+   *
+   * The distinction is made where the knowledge is: a Twilio REST error
+   * carries its own code and an HTTP status, and one of those being present
+   * means the service answered and declined. Neither present means the
+   * failure happened in transit and nothing may be assumed.
+   */
+  const TWILIO = readFileSync(join(ROOT, "lib/server/twilio.ts"), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "");
+  const ROUTE = "app/api/cron/lead-nurture/route.ts";
+  const code = readFileSync(join(ROOT, ROUTE), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "");
+
+  test("sendSms says what it knows about every outcome", () => {
+    assert.match(TWILIO, /delivery:\s*"accepted"/, "a sid back from Twilio is an acceptance");
+    assert.match(TWILIO, /delivery:\s*"rejected"/, "a validation failure never reached Twilio");
+    assert.match(
+      TWILIO,
+      /delivery:\s*answeredByTwilio\(error\)\s*\?\s*"rejected"\s*:\s*"unknown"/,
+      "a caught error must be classified by whether Twilio answered, not assumed to be a refusal",
+    );
+  });
+
+  test("an answer from Twilio is recognised by its own code or status", () => {
+    assert.match(
+      TWILIO,
+      /typeof e\.code === "number" \|\| typeof e\.status === "number"/,
+      "neither present means the request vanished in transit",
+    );
+  });
+
+  test("the cron releases its claim only on a confirmed non-send", () => {
+    assert.match(
+      code,
+      /result\.delivery === "rejected"/,
+      `${ROUTE} must release the claim only when nothing was sent, and that is known`,
+    );
+    const failure = code.slice(code.indexOf("if (!result.ok) {"));
+    const guard = failure.indexOf("if (certain) {");
+    const release = failure.indexOf("rollBackClaim");
+    assert.ok(guard > 0 && guard < release, "the release must sit behind that check");
+  });
+
+  test("an uncertain send is held, not filed as failed", () => {
+    // Reported as held so somebody checks whether it arrived. Filing it as a
+    // plain failure would read as "nothing was sent", which is the thing
+    // nobody actually knows.
+    const failure = code.slice(code.indexOf("if (!result.ok) {"));
+    assert.match(
+      failure,
+      /action: certain \? "failed" : "held"/,
+      `${ROUTE} must distinguish a failure from an unknown in what it reports`,
+    );
   });
 });

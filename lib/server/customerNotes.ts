@@ -173,40 +173,65 @@ export async function optOutForPhone(rawPhone: string): Promise<SmsOptOut | null
 }
 
 /**
- * Has anybody on this number ever written back, on any record?
+ * Everything on this phone number that says "do not send", across every record
+ * that carries it.
  *
- * The companion to optOutForPhone, and needed for the same reason: a number is
- * not a customer. An inbound text is matched to one record by
- * findCustomerByPhone, so the reply lands on that document and the duplicates
- * for the same handset still look like somebody who has never answered.
+ * One scan answering three questions, because a number is not a customer and
+ * each of the three has already been got wrong separately. The Meta lead
+ * webhook creates a fresh record per form submission rather than matching an
+ * existing one, so one handset can sit in the database several times:
+ *
+ *   an inbound text is matched to one record, so a reply hides on that one;
+ *   an opt-out is written to one record, so STOP hides on that one;
+ *   do not knock is set by somebody opening one record, so the mark hides on
+ *   that one — usually the record that has since moved past `new_lead`,
+ *   because moving it on is what you do after you have spoken to someone.
  *
  * Asked immediately before a nurture text goes out, not only when the nightly
- * run starts. A run reads the whole customer collection and then spends
- * minutes working through it, and a reply arriving on a *different* record for
- * the same number in that window used to be invisible — so the automation
- * would text somebody who had just answered, which is the single worst thing
- * it can do.
+ * run starts. The run reads the whole customer collection and then works
+ * through it for minutes, and any of these three arriving on a *different*
+ * record in that window used to be invisible.
  *
- * One reply is enough, and a second record without one is not a retraction.
+ * One record saying stop is enough. A second record without the mark is not a
+ * retraction of the first.
  */
-export async function hasReplyForPhone(rawPhone: string): Promise<boolean> {
-  const digits = String(rawPhone ?? "").replace(/\D/g, "").slice(-10);
-  if (digits.length !== 10) return false;
+export interface NumberSuppression {
+  /** Somebody on this number has written back. */
+  replied: boolean;
+  /** A record for this number is marked do_not_knock. */
+  blocked: boolean;
+  /** A recorded STOP, if there is one. */
+  optOut: SmsOptOut | null;
+}
 
-  // The same full scan as optOutForPhone, and for the same reason: numbers are
-  // stored however they were typed, so there is nothing to query on.
+export async function numberSuppression(rawPhone: string): Promise<NumberSuppression> {
+  const none: NumberSuppression = { replied: false, blocked: false, optOut: null };
+  const digits = String(rawPhone ?? "").replace(/\D/g, "").slice(-10);
+  if (digits.length !== 10) return none;
+
+  // The same full scan as findCustomerByPhone, and for the same reason:
+  // numbers are stored however they were typed, so there is nothing to query
+  // on. One scan for all three, rather than one each.
   const snap = await adminDb().collection("customers").get();
+  const found: NumberSuppression = { ...none };
+
   for (const doc of snap.docs) {
     const data = doc.data();
     const phone = data.phone;
     if (typeof phone !== "string") continue;
     if (phone.replace(/\D/g, "").slice(-10) !== digits) continue;
-    const notes = Array.isArray(data.notes) ? data.notes : [];
-    if (notes.some((note) => note && typeof note === "object" && note.kind === "sms_in")) {
-      return true;
+
+    if (data.status === "do_not_knock") found.blocked = true;
+    if (!found.optOut) found.optOut = readOptOut(data.smsOptOut);
+    if (!found.replied) {
+      const notes = Array.isArray(data.notes) ? data.notes : [];
+      if (notes.some((note) => note && typeof note === "object" && note.kind === "sms_in")) {
+        found.replied = true;
+      }
     }
   }
-  return false;
+
+  return found;
 }
 
 /** Finds a customer by phone number, for matching inbound texts. */

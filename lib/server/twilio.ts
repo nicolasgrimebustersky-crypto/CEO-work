@@ -71,26 +71,69 @@ export function toE164(raw: string): string | null {
   return null;
 }
 
+/**
+ * What is actually known about where a message ended up.
+ *
+ * `ok: false` on its own is not enough to act on, and treating it as "nothing
+ * was sent" caused a real bug. A failure can mean Twilio answered and refused,
+ * or it can mean the request went out and the answer never came back — and in
+ * the second case the text may well have been delivered. Code that undoes its
+ * bookkeeping on every failure will, in that second case, send the same
+ * message again.
+ *
+ *   "rejected" — nothing was sent, and that is known. Either the number or the
+ *   body failed validation before Twilio was called at all, or Twilio replied
+ *   with an error code of its own.
+ *
+ *   "unknown" — the request was made and no answer came back. A timeout, a
+ *   dropped connection, a process killed mid-flight. The message may have been
+ *   accepted. Nothing may be assumed.
+ *
+ *   "accepted" — Twilio took it and gave back a sid.
+ */
+export type Delivery = "accepted" | "rejected" | "unknown";
+
 export interface SendResult {
   ok: boolean;
   to: string;
   sid?: string;
   error?: string;
+  /** What is known about delivery — see Delivery above. */
+  delivery: Delivery;
+}
+
+/**
+ * Did Twilio itself answer, or did the request vanish?
+ *
+ * A Twilio REST error carries its own numeric `code` and an HTTP `status`. One
+ * of those present means the service replied and declined, which is a fact.
+ * Neither present means the failure happened in transit, which is not.
+ */
+function answeredByTwilio(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const e = error as { code?: unknown; status?: unknown };
+  return typeof e.code === "number" || typeof e.status === "number";
 }
 
 export async function sendSms(rawTo: string, body: string): Promise<SendResult> {
   const to = toE164(rawTo);
-  if (!to) return { ok: false, to: rawTo, error: "Not a valid US phone number." };
-  if (!body.trim()) return { ok: false, to, error: "Message body is empty." };
+  // Neither of these reached Twilio, so nothing was sent and that is known.
+  if (!to) {
+    return { ok: false, to: rawTo, error: "Not a valid US phone number.", delivery: "rejected" };
+  }
+  if (!body.trim()) return { ok: false, to, error: "Message body is empty.", delivery: "rejected" };
 
   try {
     const message = await client().messages.create({ to, from: fromNumber, body });
-    return { ok: true, to, sid: message.sid };
+    return { ok: true, to, sid: message.sid, delivery: "accepted" };
   } catch (error) {
     return {
       ok: false,
       to,
       error: error instanceof Error ? error.message : "Twilio rejected the message.",
+      // A timeout is not a refusal. Saying "rejected" here is what let a
+      // message that may have been delivered be sent again.
+      delivery: answeredByTwilio(error) ? "rejected" : "unknown",
     };
   }
 }

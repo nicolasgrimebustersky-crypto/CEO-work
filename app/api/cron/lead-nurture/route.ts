@@ -14,7 +14,7 @@ import {
 import { leadNurtureText } from "@/lib/messages";
 import { adminDb } from "@/lib/server/admin";
 import { ApiError, errorResponse, requireCronSecret } from "@/lib/server/auth";
-import { appendNote, hasReplyForPhone, optOutForPhone } from "@/lib/server/customerNotes";
+import { appendNote, numberSuppression, optOutForPhone } from "@/lib/server/customerNotes";
 import { sendSmsToPhone } from "@/lib/server/customerSms";
 import { notifyCrew } from "@/lib/server/notify";
 import { isTwilioConfigured } from "@/lib/server/twilio";
@@ -476,19 +476,28 @@ export async function GET(request: Request): Promise<Response> {
         // The claim's step and kind, not the preview's — the claim read the
         // lead again and is the only one of the two that authorised anything.
         const step = claim.step;
-        // The last per-number question, asked after the claim rather than
+        // The last per-number questions, asked after the claim rather than
         // only at the top of the run. A run works through its list for
-        // minutes, and a reply landing on a *different* record for this
-        // handset in that window was invisible — so the automation would text
-        // somebody who had just answered, which is the worst thing it does.
-        if (await hasReplyForPhone(claim.phone)) {
+        // minutes, and a reply, a STOP or a do-not-knock mark landing on a
+        // *different* record for this handset in that window was invisible —
+        // so the automation would text somebody who had just answered, or who
+        // had just asked not to be contacted.
+        //
+        // All three in one scan. Checking only replies here was the gap: the
+        // grouping caught a do-not-knock sibling at the top of the run and
+        // nothing caught one that arrived during it.
+        const stop = await numberSuppression(claim.phone);
+        const stopReason = stop.optOut
+          ? `this number replied ${stop.optOut.keyword || "STOP"} during the run`
+          : stop.replied
+            ? "this number replied during the run — a person takes it from here"
+            : stop.blocked
+              ? "a record for this number was marked do not knock during the run"
+              : null;
+        if (stopReason) {
           await rollBackClaim(docRef, claim);
           released = true;
-          outcomes.push({
-            customerId: lead.id,
-            action: "skipped",
-            reason: "this number replied during the run — a person takes it from here",
-          });
+          outcomes.push({ customerId: lead.id, action: "skipped", reason: stopReason });
           continue;
         }
 
@@ -503,14 +512,25 @@ export async function GET(request: Request): Promise<Response> {
         const result = await sendSmsToPhone(claim.phone, body);
 
         if (!result.ok) {
-          await rollBackClaim(docRef, claim);
-          released = true;
+          // Only a confirmed non-send gives the claim back. `ok: false` also
+          // covers a request whose answer never came, where Twilio may have
+          // accepted the text — releasing the hold there is how the same
+          // message gets sent again five days later, which is the exact replay
+          // the pending marker exists to stop.
+          const certain = result.delivery === "rejected";
+          if (certain) {
+            await rollBackClaim(docRef, claim);
+            released = true;
+          }
           await appendNote(
             lead.id,
             {
               text: result.refused
                 ? `Nurture step ${step + 1} not sent: ${result.error}`
-                : `Nurture step ${step + 1} failed: ${result.error}`,
+                : certain
+                  ? `Nurture step ${step + 1} failed: ${result.error}`
+                  : `Nurture step ${step + 1} may have been sent — no answer from Twilio: ${result.error}. ` +
+                    "This number is held until somebody checks whether it arrived.",
               kind: "sms_out",
               authorUid: "system",
               authorName: "Lead nurture",
@@ -519,9 +539,11 @@ export async function GET(request: Request): Promise<Response> {
           );
           outcomes.push({
             customerId: lead.id,
-            action: "failed",
+            action: certain ? "failed" : "held",
             step: step + 1,
-            reason: result.error,
+            reason: certain
+              ? result.error
+              : `no answer from Twilio, so delivery is unknown: ${result.error}`,
           });
           continue;
         }
