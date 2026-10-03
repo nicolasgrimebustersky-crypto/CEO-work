@@ -10,7 +10,6 @@ import {
   sendStateFrom,
   type SendState,
   hasInboundNote,
-  MIN_GAP_DAYS,
   nurtureDecision,
   oneLeadPerPhone,
   type NurtureConsent,
@@ -633,20 +632,20 @@ export async function GET(request: Request): Promise<Response> {
         // Only a claim known to have sent nothing. An uncertain send keeps its
         // hold through the exception — that is the whole reason sendState has
         // three cases instead of two.
+        // Set when the release itself failed, which leaves the claim — and
+        // with it pendingStep — standing. That is not a delay, it is a stop:
+        // no later run clears a pending marker, so this number waits for a
+        // person. It said "waits five days" until this was corrected, which
+        // was true of the claim's stamp alone and stopped being true the
+        // moment the pending marker was added.
+        let stuck = false;
+
         if (claim?.claimed && mayRelease(sendState, released)) {
           try {
             await rollBackClaim(db.collection("customers").doc(lead.id), claim);
             released = true;
           } catch {
-            // The rollback itself failed, so the claim stands and this number
-            // waits out the gap. Worth saying in the run's output rather than
-            // swallowing: it is the one case where a failure costs a delay.
-            outcomes.push({
-              customerId: lead.id,
-              action: "failed",
-              reason: `${reason} (and the claim could not be released, so this number waits ${MIN_GAP_DAYS} days)`,
-            });
-            continue;
+            stuck = true;
           }
         }
 
@@ -656,8 +655,11 @@ export async function GET(request: Request): Promise<Response> {
           await appendNote(
             lead.id,
             {
-              text:
-                sendState === "sent"
+              text: stuck
+                ? `Nurture attempt failed before sending: ${reason}. Releasing the hold also ` +
+                  "failed, so this number is held and no later run will clear it — it needs " +
+                  "clearing by hand."
+                : sendState === "sent"
                   ? `Nurture text sent, but recording it failed: ${reason}`
                   : sendState === "unknown"
                     ? `Nurture text may have been sent — no answer from Twilio — and recording it failed: ${reason}. ` +
@@ -675,10 +677,13 @@ export async function GET(request: Request): Promise<Response> {
 
         outcomes.push({
           customerId: lead.id,
-          // An uncertain send that then failed its bookkeeping is held, not
-          // failed: its hold is still standing and a person has to clear it.
-          action: sendState === "none" ? "failed" : "held",
-          reason,
+          // Held, not failed, whenever a hold is left standing — whether
+          // because the send was uncertain or because releasing it failed.
+          // Both need a person, and only "held" reaches the notification.
+          action: stuck || sendState !== "none" ? "held" : "failed",
+          reason: stuck
+            ? `${reason} — and the hold could not be released, so this number is stuck until somebody clears it`
+            : reason,
         });
       }
     }
@@ -696,10 +701,10 @@ export async function GET(request: Request): Promise<Response> {
     if (sent > 0 || held.length > 0) {
       const nudged =
         sent === 1 ? "1 quiet lead was nudged overnight" : `${sent} quiet leads were nudged overnight`;
-      const stuck =
+      const blocked =
         held.length === 1
-          ? "1 is held: a text reached Twilio and was never recorded"
-          : `${held.length} are held: texts reached Twilio and were never recorded`;
+          ? "1 lead is held and needs a person: a text may have gone out without being recorded"
+          : `${held.length} leads are held and need a person: texts may have gone out without being recorded`;
 
       await notifyCrew({
         type: "followup_sent",
@@ -708,8 +713,8 @@ export async function GET(request: Request): Promise<Response> {
           held.length === 0
             ? `${nudged}.`
             : sent === 0
-              ? `${stuck}. Check whether ${held.length === 1 ? "it" : "they"} arrived.`
-              : `${nudged}, and ${stuck}. Check whether ${held.length === 1 ? "it" : "they"} arrived.`,
+              ? `${blocked}. Check whether ${held.length === 1 ? "it" : "they"} arrived.`
+              : `${nudged}, and ${blocked}. Check whether ${held.length === 1 ? "it" : "they"} arrived.`,
       });
     }
 

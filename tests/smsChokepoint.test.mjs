@@ -639,3 +639,87 @@ describe("an opt-out belongs to the business it was told to", () => {
     );
   });
 });
+
+describe("a hold that could not be released needs a person, and says so", () => {
+  /*
+   * The last branch in the per-lead catch, and it had gone stale rather than
+   * being wrong when written. When it was added, the only thing a failed
+   * release left behind was the claim's timestamp — so "this number waits five
+   * days" was true. Then the pending marker arrived two rounds later, and a
+   * failed release started leaving that behind too. No later run clears a
+   * pending marker: the wait became indefinite and the message kept saying
+   * five days.
+   *
+   * It also reported `failed` and returned early, which skipped both the
+   * timeline note and — because the run's notification counts `held` outcomes
+   * — the buzz that would have told anybody about it. The one outcome that
+   * genuinely needs a person was the one nobody would hear about.
+   */
+  const ROUTE = "app/api/cron/lead-nurture/route.ts";
+  const code = readFileSync(join(ROOT, ROUTE), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "");
+  const perLeadCatch = code.slice(
+    code.indexOf("} catch (error) {"),
+    code.lastIndexOf("} catch (error) {"),
+  );
+
+  test("a failed release does not return early", () => {
+    // The early return was what skipped the note and the notification.
+    assert.doesNotMatch(
+      perLeadCatch,
+      /action: "failed",\s*reason: `\$\{reason\} \(and the claim could not be released/,
+      "the stale branch must be gone",
+    );
+    assert.match(
+      perLeadCatch,
+      /let stuck = false/,
+      `${ROUTE} must record a failed release and carry on to the note and the outcome`,
+    );
+  });
+
+  test("it is reported as held, not failed", () => {
+    // Only `held` reaches the run's notification.
+    assert.match(
+      perLeadCatch,
+      /action: stuck \|\| sendState !== "none" \? "held" : "failed"/,
+      "a hold left standing is held, however it came to be standing",
+    );
+  });
+
+  test("it no longer promises a five-day wait it cannot keep", () => {
+    assert.doesNotMatch(
+      perLeadCatch,
+      /waits \$\{MIN_GAP_DAYS\} days/,
+      "the pending marker makes the wait indefinite, not five days",
+    );
+    assert.match(
+      perLeadCatch,
+      /stuck until somebody clears it/,
+      "the reason must say a person is needed",
+    );
+  });
+
+  test("it reaches the lead's timeline", () => {
+    assert.match(
+      perLeadCatch,
+      /text: stuck/,
+      "the note must distinguish a stuck hold from an ordinary failure",
+    );
+    // The sentence is split across concatenated lines in the source, so the
+    // match is on its tail rather than the whole phrase.
+    assert.match(perLeadCatch, /clearing by hand/, "and say what is needed");
+    assert.match(perLeadCatch, /no later run will clear it/, "and why nothing else will do it");
+  });
+
+  test("the run's notification says a person is needed", () => {
+    // It said "a text reached Twilio and was never recorded", which is one of
+    // the two ways to be held and not the one a failed release produces.
+    const notify = code.slice(code.indexOf("const held = outcomes.filter"));
+    assert.match(
+      notify,
+      /held and needs? a person/,
+      "the notification must name what the crew has to do, not only what happened",
+    );
+  });
+});
