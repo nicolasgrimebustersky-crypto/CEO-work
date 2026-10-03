@@ -185,6 +185,24 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasAll(['updatedAt']);
     }
 
+    // The nurture counters belong to the cron, not to a client.
+    //
+    // They decide whether somebody who has never replied gets a text and which
+    // one. A client that could reset nurtureStep to 0 could replay step 1 at a
+    // lead who already had it, and one that could backdate lastNurtureAt could
+    // step around the minimum gap between messages. Neither is a thing anybody
+    // would do on purpose from the app — nothing in the UI writes these — which
+    // is exactly why they should not be writable by accident.
+    //
+    // app/api/cron/lead-nurture runs on the Admin SDK and bypasses these rules,
+    // so locking them here costs no legitimate write. Restarting a sequence by
+    // hand is deliberately not possible from a screen; it would be a server
+    // change, which is the right amount of friction for re-texting somebody.
+    function keepsNurtureCounters() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['nurtureStep', 'lastNurtureAt']);
+    }
+
     // An opt-out is the customer's own instruction, and no client may touch it.
     //
     // lib/db/customers.ts leaves smsOptOut out of CustomerPatch and says in a
@@ -369,6 +387,7 @@ service cloud.firestore {
         && refreshesAuthorStamp()
         && validCustomer()
         && keepsOptOut()
+        && keepsNurtureCounters()
         && keepsOrg();
       allow delete: if isCrew() && belongsToMyOrg(resource.data);
     }
