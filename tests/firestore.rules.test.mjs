@@ -1802,23 +1802,46 @@ describe("the audit log", () => {
 
 describe("a phone number's nurture history", () => {
   // One document per number, holding what the lead-nurture cron has sent to
-  // that person. It is the shared claim two overlapping runs contend on, so a
-  // client that could write it could make one handset receive the same text
-  // twice — or hold a number back forever. The cron runs on the Admin SDK,
-  // which does not pass through these rules at all, so denying every client
-  // write costs the feature nothing.
-  test("crew can read it, to see why a lead is or is not being nurtured", async () => {
+  // that person. Closed to clients in both directions.
+  //
+  // Reads were briefly allowed to any signed-in crew member. That leaked a
+  // list of phone numbers and their contact history across every business
+  // using this app: the document is keyed by the number alone, carries no
+  // orgId, and a number is not inherently one business's — so there was
+  // nothing to scope an org check against. The crew-facing reason was never
+  // real either, since nurtureStep sits on the customer record, which is
+  // org-scoped already.
+  test("the cron's own writes are unaffected — they bypass rules entirely", async () => {
+    // Establishes the document exists for the denial tests below, and records
+    // why denying everything costs the feature nothing: this is how the cron
+    // writes it, on the Admin SDK.
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), "nurtureNumbers/5025550147"), {
         phoneKey: "5025550147",
         step: 1,
       });
     });
-    await assertSucceeds(getDoc(doc(alice, "nurtureNumbers/5025550147")));
+    await assertSucceeds(
+      testEnv.withSecurityRulesDisabled(async (ctx) =>
+        getDoc(doc(ctx.firestore(), "nurtureNumbers/5025550147")),
+      ),
+    );
   });
 
-  test("a signed-out stranger cannot read it — it is a list of phone numbers", async () => {
+  test("no crew member can read it, in any organisation", async () => {
+    await assertFails(getDoc(doc(alice, "nurtureNumbers/5025550147")));
+    await assertFails(getDoc(doc(bob, "nurtureNumbers/5025550147")));
+    await assertFails(getDocs(collection(alice, "nurtureNumbers")));
+  });
+
+  test("the admin cannot read it either", async () => {
+    await assertFails(getDoc(doc(admin, "nurtureNumbers/5025550147")));
+    await assertFails(getDocs(collection(admin, "nurtureNumbers")));
+  });
+
+  test("a signed-out stranger cannot read it", async () => {
     await assertFails(getDoc(doc(anon, "nurtureNumbers/5025550147")));
+    await assertFails(getDocs(collection(anon, "nurtureNumbers")));
   });
 
   test("nobody can write it, not even the admin", async () => {
@@ -1830,5 +1853,6 @@ describe("a phone number's nurture history", () => {
       setDoc(doc(alice, "nurtureNumbers/5025559999"), { phoneKey: "5025559999", step: 0 }),
     );
     await assertFails(deleteDoc(doc(admin, "nurtureNumbers/5025550147")));
+    await assertFails(setDoc(doc(anon, "nurtureNumbers/5025551111"), { step: 0 }));
   });
 });

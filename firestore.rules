@@ -398,13 +398,22 @@ service cloud.firestore {
     // contend on, and the record of a number's progress that survives its
     // customer rows being edited, re-staged or deleted.
     //
-    // Readable so the crew can see why a lead is or is not being nurtured.
-    // Never writable from a client: it is the one thing standing between a
-    // duplicated lead and the same text twice, and the cron that maintains it
-    // runs on the Admin SDK, which does not pass through these rules.
+    // Closed to clients entirely, reads included.
+    //
+    // It was briefly readable by any signed-in crew member, which leaked a
+    // list of phone numbers and their contact history across every business
+    // using this app — the document is keyed by the number alone and carries
+    // no orgId, so there is nothing here to scope an org check against, and a
+    // number is not inherently one business's anyway. The crew-facing reason
+    // for reading it was never real: nurtureStep sits on the customer record,
+    // which is already org-scoped, and that is where the crew looks.
+    //
+    // Writes were always denied and the reason stands: rewinding `step` would
+    // replay the whole sequence at somebody, and moving `lastNurtureAt`
+    // forward would silence a number. The cron runs on the Admin SDK, which
+    // does not pass through these rules, so closing this costs it nothing.
     match /nurtureNumbers/{phoneKey} {
-      allow read: if isCrew();
-      allow write: if false;
+      allow read, write: if false;
     }
 
     match /customers/{customerId} {

@@ -172,6 +172,43 @@ export async function optOutForPhone(rawPhone: string): Promise<SmsOptOut | null
   return null;
 }
 
+/**
+ * Has anybody on this number ever written back, on any record?
+ *
+ * The companion to optOutForPhone, and needed for the same reason: a number is
+ * not a customer. An inbound text is matched to one record by
+ * findCustomerByPhone, so the reply lands on that document and the duplicates
+ * for the same handset still look like somebody who has never answered.
+ *
+ * Asked immediately before a nurture text goes out, not only when the nightly
+ * run starts. A run reads the whole customer collection and then spends
+ * minutes working through it, and a reply arriving on a *different* record for
+ * the same number in that window used to be invisible — so the automation
+ * would text somebody who had just answered, which is the single worst thing
+ * it can do.
+ *
+ * One reply is enough, and a second record without one is not a retraction.
+ */
+export async function hasReplyForPhone(rawPhone: string): Promise<boolean> {
+  const digits = String(rawPhone ?? "").replace(/\D/g, "").slice(-10);
+  if (digits.length !== 10) return false;
+
+  // The same full scan as optOutForPhone, and for the same reason: numbers are
+  // stored however they were typed, so there is nothing to query on.
+  const snap = await adminDb().collection("customers").get();
+  for (const doc of snap.docs) {
+    const data = doc.data();
+    const phone = data.phone;
+    if (typeof phone !== "string") continue;
+    if (phone.replace(/\D/g, "").slice(-10) !== digits) continue;
+    const notes = Array.isArray(data.notes) ? data.notes : [];
+    if (notes.some((note) => note && typeof note === "object" && note.kind === "sms_in")) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** Finds a customer by phone number, for matching inbound texts. */
 export async function findCustomerByPhone(e164: string): Promise<AdminCustomer | null> {
   const digits = e164.replace(/\D/g, "").slice(-10);

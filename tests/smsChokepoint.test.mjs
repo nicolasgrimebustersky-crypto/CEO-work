@@ -156,3 +156,71 @@ describe("every customer text goes through the consent check", () => {
     }
   });
 });
+
+describe("the lead nurture cron texts the number it actually checked", () => {
+  /*
+   * Two invariants that live in the shape of one function and cannot be
+   * reached by a unit test — the cron runs on the Admin SDK against a real
+   * Firestore, and this repository has no emulator harness for that.
+   *
+   * A source assertion is a weaker thing than running the code and is not
+   * presented as more. What it does buy is that the next person to edit this
+   * route gets a failing build rather than a silent regression, in a file that
+   * explains why the ordering matters. Both of these were real bugs, not
+   * hypotheticals.
+   */
+  const ROUTE = "app/api/cron/lead-nurture/route.ts";
+  const text = readFileSync(join(ROOT, ROUTE), "utf8");
+  // Comments stripped, because these assertions are about what the route
+  // does. The prose explains which call was wrong and why, and naming it
+  // there must not read as making it.
+  const code = text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+
+  test("it sends to the phone number the claim validated", () => {
+    // sendSmsToCustomerId re-read the customer document, so a phone edit
+    // between the claim and the send meant marketing going to a number whose
+    // consent, opt-out state and nurture history had never been looked at.
+    assert.match(
+      code,
+      /sendSmsToPhone\(\s*claim\.phone/,
+      `${ROUTE} must send to claim.phone — the number the claim authorised`,
+    );
+    assert.doesNotMatch(
+      code,
+      /sendSmsToCustomerId/,
+      `${ROUTE} must not re-read the customer to find a recipient: the number ` +
+        "it was authorised to text is the one the claim returned",
+    );
+  });
+
+  test("it asks whether the number replied, after the claim and before the send", () => {
+    // A run works through its list for minutes. A reply landing on a different
+    // record for the same handset in that window was invisible, so the
+    // automation texted somebody who had just answered.
+    const replyCheck = code.indexOf("hasReplyForPhone(claim.phone)");
+    const send = code.indexOf("sendSmsToPhone(claim.phone");
+    assert.ok(replyCheck > 0, `${ROUTE} must ask hasReplyForPhone about the claimed number`);
+    assert.ok(send > 0, `${ROUTE} must send through sendSmsToPhone`);
+    assert.ok(
+      replyCheck < send,
+      "the reply check must come before the send, or it is decoration",
+    );
+  });
+
+  test("a refusal after the claim gives the claim back", () => {
+    // The shared stamp holds every record for this number back. Left set
+    // after a text that never went out, it delays the whole number by the
+    // minimum gap for nothing.
+    assert.match(
+      code,
+      /rollBackClaim\(docRef, claim\)/,
+      `${ROUTE} must roll the claim back when it refuses after claiming`,
+    );
+    const rollbacks = code.match(/rollBackClaim\(docRef, claim\)/g) ?? [];
+    assert.ok(
+      rollbacks.length >= 2,
+      "both post-claim refusals — the late reply and a failed send — must roll back, " +
+        `found ${rollbacks.length}`,
+    );
+  });
+});

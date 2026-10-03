@@ -13,8 +13,8 @@ import {
 import { leadNurtureText } from "@/lib/messages";
 import { adminDb } from "@/lib/server/admin";
 import { ApiError, errorResponse, requireCronSecret } from "@/lib/server/auth";
-import { appendNote, optOutForPhone } from "@/lib/server/customerNotes";
-import { sendSmsToCustomerId } from "@/lib/server/customerSms";
+import { appendNote, hasReplyForPhone, optOutForPhone } from "@/lib/server/customerNotes";
+import { sendSmsToPhone } from "@/lib/server/customerSms";
 import { notifyCrew } from "@/lib/server/notify";
 import { isTwilioConfigured } from "@/lib/server/twilio";
 
@@ -56,6 +56,25 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * Admin SDK only. firestore.rules denies clients any write to it.
  */
 const NUMBERS = "nurtureNumbers";
+
+/**
+ * Gives a claim back, so the step is retried rather than silently spent.
+ *
+ * Both halves of it, and the shared stamp matters more than the record's: that
+ * is the one holding every record for this number back, so leaving it set
+ * after a send that did not happen would delay the whole number by the
+ * minimum gap for nothing. Neither step counter is touched, because neither
+ * ever advanced.
+ */
+async function rollBackClaim(
+  docRef: FirebaseFirestore.DocumentReference,
+  claim: { previous: Timestamp | null; previousShared: Timestamp | null; numberRef: FirebaseFirestore.DocumentReference },
+): Promise<void> {
+  await Promise.all([
+    docRef.update({ lastNurtureAt: claim.previous }),
+    claim.numberRef.set({ lastNurtureAt: claim.previousShared }, { merge: true }),
+  ]);
+}
 
 interface Outcome {
   customerId: string;
@@ -147,6 +166,8 @@ async function claimStep(
       previousShared: Timestamp | null;
       step: number;
       kind: NurtureKind;
+      /** The number the claim actually authorised, as read in the transaction. */
+      phone: string;
       numberRef: FirebaseFirestore.DocumentReference;
     }
   | { claimed: false; reason: string }
@@ -220,6 +241,7 @@ async function claimStep(
       previousShared,
       step: decision.step,
       kind: decision.kind,
+      phone,
       numberRef,
     };
   });
@@ -384,16 +406,33 @@ export async function GET(request: Request): Promise<Response> {
         // The claim's step and kind, not the preview's — the claim read the
         // lead again and is the only one of the two that authorised anything.
         const step = claim.step;
+        // The last per-number question, asked after the claim rather than
+        // only at the top of the run. A run works through its list for
+        // minutes, and a reply landing on a *different* record for this
+        // handset in that window was invisible — so the automation would text
+        // somebody who had just answered, which is the worst thing it does.
+        if (await hasReplyForPhone(claim.phone)) {
+          await rollBackClaim(docRef, claim);
+          outcomes.push({
+            customerId: lead.id,
+            action: "skipped",
+            reason: "this number replied during the run — a person takes it from here",
+          });
+          continue;
+        }
+
         const body = leadNurtureText(claim.kind, lead.firstName);
-        const result = await sendSmsToCustomerId(lead.id, body);
+        // Sent to the number the claim validated, not to whatever the customer
+        // record says by now. sendSmsToCustomerId re-read the document, so a
+        // phone edit between the claim and the send meant marketing going to a
+        // number whose consent, opt-out state and nurture history had never
+        // been looked at. sendSmsToPhone still runs the number's own opt-out
+        // check, and the marketing-consent check that authorised this belongs
+        // to the same number, because the claim refused any change to it.
+        const result = await sendSmsToPhone(claim.phone, body);
 
         if (!result.ok) {
-          // Put the claim back — both halves of it — so this is retried rather
-          // than silently spent, and leave the step counters alone: they never
-          // advanced. Restoring the shared stamp matters most, because that is
-          // the one holding every record for this number back.
-          await docRef.update({ lastNurtureAt: claim.previous });
-          await claim.numberRef.set({ lastNurtureAt: claim.previousShared }, { merge: true });
+          await rollBackClaim(docRef, claim);
           await appendNote(
             lead.id,
             {
