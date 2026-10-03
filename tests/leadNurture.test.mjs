@@ -20,6 +20,7 @@ const {
   oneLeadPerPhone,
   claimVerdict,
   claimDecision,
+  claimStillOwns,
   recordIsSendable,
   NURTURE_STEPS,
   MIN_GAP_DAYS,
@@ -1094,5 +1095,79 @@ describe("do not knock is about the person, not the paperwork", () => {
   test("an unmarked number is unaffected", () => {
     const { chosen } = oneLeadPerPhone([rec("a"), rec("b")]);
     assert.equal(chosen.length, 1);
+  });
+});
+
+describe("a released claim cannot erase somebody else's", () => {
+  // The sequence the review named, which is an ordinary one rather than a
+  // contrived race: a send fails, its claim is released, a note explaining the
+  // failure is written — and when that note write throws, the catch releases
+  // the same claim a second time. Between the two releases the number is
+  // free, so an overlapping run can claim it, and a blind second release then
+  // writes the old stamp back over that run's claim. A number with no recent
+  // stamp is a number that gets texted again inside the gap.
+  //
+  // Two things stop it: a release happens at most once, and a release only
+  // touches what its own stamp still owns. Both are modelled here because
+  // either alone leaves a hole — the flag is in the route and the ownership
+  // rule is this function.
+  const FIRST = NOW;
+  const SECOND = NOW + 1000;
+
+  test("ownership is the claim's own stamp, nothing looser", () => {
+    assert.equal(claimStillOwns(FIRST, FIRST), true);
+    assert.equal(claimStillOwns(SECOND, FIRST), false, "another run's stamp is not ours to undo");
+    assert.equal(claimStillOwns(null, FIRST), false, "already released by somebody");
+    assert.equal(claimStillOwns(FIRST, null), false, "a claim with no receipt owns nothing");
+    assert.equal(claimStillOwns(null, null), false);
+  });
+
+  test("failed send, release, another run claims, note write fails", () => {
+    // A model of the shared document through the whole sequence. `release`
+    // is the rule under test: restore only while this claim still owns what
+    // is stored.
+    let stored = null;
+    const release = (claimStamp, previous) => {
+      if (claimStillOwns(stored, claimStamp)) stored = previous;
+    };
+
+    // Run one claims, its send fails, it releases.
+    stored = FIRST;
+    release(FIRST, null);
+    assert.equal(stored, null, "the release gave the number back");
+
+    // An overlapping run claims the now-free number.
+    stored = SECOND;
+
+    // Run one's note write throws, and the catch tries to release again.
+    release(FIRST, null);
+    assert.equal(
+      stored,
+      SECOND,
+      "the second release must not erase the other run's claim — a number with " +
+        "no stamp is one that gets texted again inside the gap",
+    );
+  });
+
+  test("a release still works when nothing has intervened", () => {
+    // The guard must not make the ordinary case a no-op.
+    let stored = FIRST;
+    const release = (claimStamp, previous) => {
+      if (claimStillOwns(stored, claimStamp)) stored = previous;
+    };
+    release(FIRST, null);
+    assert.equal(stored, null);
+  });
+
+  test("a release restores the previous stamp, not merely null", () => {
+    // A number on step 2 had a real stamp before this attempt. Releasing to
+    // null would let it be texted immediately.
+    const before = NOW - 20 * DAY;
+    let stored = FIRST;
+    const release = (claimStamp, previous) => {
+      if (claimStillOwns(stored, claimStamp)) stored = previous;
+    };
+    release(FIRST, before);
+    assert.equal(stored, before);
   });
 });

@@ -3,6 +3,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import { phoneKey } from "@/lib/inboundSms";
 import {
   claimDecision,
+  claimStillOwns,
   hasInboundNote,
   MIN_GAP_DAYS,
   nurtureDecision,
@@ -66,15 +67,49 @@ const NUMBERS = "nurtureNumbers";
  * after a send that did not happen would delay the whole number by the
  * minimum gap for nothing. Neither step counter is touched, because neither
  * ever advanced.
+ *
+ * In one transaction, and only for whichever documents still carry this
+ * claim's own stamp. A release used to be a blind write of the previous
+ * values, which is wrong whenever anything has claimed in between: putting an
+ * older stamp back over a live claim leaves a number looking untouched, and a
+ * number looking untouched gets texted again inside the gap. See
+ * claimStillOwns in lib/leadNurture.ts for the ordinary sequence that reached
+ * it.
+ *
+ * Nothing is returned, because there is nothing a caller can usefully do
+ * about a release it no longer owns: not finding its own stamp means somebody
+ * else is holding the number, which is what the release wanted anyway.
  */
 async function rollBackClaim(
   docRef: FirebaseFirestore.DocumentReference,
-  claim: { previous: Timestamp | null; previousShared: Timestamp | null; numberRef: FirebaseFirestore.DocumentReference },
+  claim: {
+    previous: Timestamp | null;
+    previousShared: Timestamp | null;
+    stamp: Timestamp;
+    numberRef: FirebaseFirestore.DocumentReference;
+  },
 ): Promise<void> {
-  await Promise.all([
-    docRef.update({ lastNurtureAt: claim.previous }),
-    claim.numberRef.set({ lastNurtureAt: claim.previousShared }, { merge: true }),
-  ]);
+  await adminDb().runTransaction(async (tx) => {
+    const [customer, shared] = await Promise.all([tx.get(docRef), tx.get(claim.numberRef)]);
+    const customerStamp = customer.data()?.lastNurtureAt;
+    const sharedStamp = shared.data()?.lastNurtureAt;
+    const claimedMs = claim.stamp.toMillis();
+
+    if (
+      claimStillOwns(
+        customerStamp instanceof Timestamp ? customerStamp.toMillis() : null,
+        claimedMs,
+      )
+    ) {
+      tx.update(docRef, { lastNurtureAt: claim.previous });
+    }
+
+    if (
+      claimStillOwns(sharedStamp instanceof Timestamp ? sharedStamp.toMillis() : null, claimedMs)
+    ) {
+      tx.set(claim.numberRef, { lastNurtureAt: claim.previousShared }, { merge: true });
+    }
+  });
 }
 
 interface Outcome {
@@ -171,6 +206,8 @@ async function claimStep(
       kind: NurtureKind;
       /** The number the claim actually authorised, as read in the transaction. */
       phone: string;
+      /** The stamp this claim wrote — its receipt, for an ownership-checked release. */
+      stamp: Timestamp;
       numberRef: FirebaseFirestore.DocumentReference;
     }
   | { claimed: false; reason: string }
@@ -245,6 +282,7 @@ async function claimStep(
       step: decision.step,
       kind: decision.kind,
       phone,
+      stamp,
       numberRef,
     };
   });
@@ -363,6 +401,11 @@ export async function GET(request: Request): Promise<Response> {
       // nothing, and did it silently.
       let claim: Awaited<ReturnType<typeof claimStep>> | null = null;
       let texted = false;
+      // A claim is released once. The failed-send path releases and then
+      // writes a note about the failure; when that note write threw, the catch
+      // released the same claim again, and anything that had claimed the
+      // number in between lost its stamp.
+      let released = false;
 
       try {
         // A pre-filter only. The decision that authorises the text is made
@@ -426,6 +469,7 @@ export async function GET(request: Request): Promise<Response> {
         // somebody who had just answered, which is the worst thing it does.
         if (await hasReplyForPhone(claim.phone)) {
           await rollBackClaim(docRef, claim);
+          released = true;
           outcomes.push({
             customerId: lead.id,
             action: "skipped",
@@ -446,6 +490,7 @@ export async function GET(request: Request): Promise<Response> {
 
         if (!result.ok) {
           await rollBackClaim(docRef, claim);
+          released = true;
           await appendNote(
             lead.id,
             {
@@ -503,9 +548,10 @@ export async function GET(request: Request): Promise<Response> {
         // A claim that never became a text is given back. Leaving it would
         // block every record for this number for the minimum gap over a
         // failure that sent nothing — the opposite of what the claim is for.
-        if (claim?.claimed && !texted) {
+        if (claim?.claimed && !texted && !released) {
           try {
             await rollBackClaim(db.collection("customers").doc(lead.id), claim);
+            released = true;
           } catch {
             // The rollback itself failed, so the claim stands and this number
             // waits out the gap. Worth saying in the run's output rather than

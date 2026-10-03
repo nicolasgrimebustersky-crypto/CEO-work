@@ -565,3 +565,31 @@ export function claimDecision(request: ClaimRequest, nowMs: number): ClaimDecisi
     phoneKey: request.phoneKeys.fresh,
   };
 }
+
+/**
+ * Whether a claim still owns the stamp it wrote, and may therefore undo it.
+ *
+ * A release must not be a blind write. The claim's stamp is its receipt: if
+ * what is stored is still that exact value, nothing has happened since and
+ * putting the old value back is safe. If it is anything else, another run has
+ * claimed this number in the meantime and restoring the old value would erase
+ * a live claim — and a number with no recent stamp is a number that gets
+ * texted again inside the minimum gap.
+ *
+ * That was reachable, and by an ordinary route rather than a contrived one.
+ * A failed send released its claim and then wrote a note explaining the
+ * failure; when the note write threw, the catch released the same claim a
+ * second time. Between the two releases the number was free, so an
+ * overlapping run could claim it, and the second release then wiped that
+ * run's stamp.
+ *
+ * Both halves of the fix are needed. A release happens at most once, and even
+ * then only while the claim still owns what it is undoing.
+ */
+export function claimStillOwns(
+  storedMs: number | null,
+  claimedMs: number | null,
+): boolean {
+  if (storedMs == null || claimedMs == null) return false;
+  return storedMs === claimedMs;
+}

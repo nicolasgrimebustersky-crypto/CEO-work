@@ -279,3 +279,54 @@ describe("a claim never outlives the attempt that made it", () => {
     assert.match(perLeadCatch, /appendNote/, "the catch must record the failure on the timeline");
   });
 });
+
+describe("a claim is released once, and only by its owner", () => {
+  /*
+   * The failed-send path releases its claim and then writes a note about the
+   * failure. When that note write threw, the catch released the same claim a
+   * second time — and between the two releases the number was free for an
+   * overlapping run to claim, which the blind second release then erased.
+   *
+   * The ownership half of the fix is tested properly in
+   * tests/leadNurture.test.mjs via claimStillOwns. This is the route half: the
+   * flag, and the fact that the release is transactional rather than two
+   * independent writes.
+   */
+  const ROUTE = "app/api/cron/lead-nurture/route.ts";
+  const code = readFileSync(join(ROOT, ROUTE), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "");
+
+  test("the catch will not release a claim already given back", () => {
+    assert.match(code, /let released\s*=\s*false/, `${ROUTE} must track whether it released`);
+    assert.match(
+      code,
+      /claim\?\.claimed\s*&&\s*!texted\s*&&\s*!released/,
+      "the catch must skip a claim the failed-send path already released",
+    );
+  });
+
+  test("every release sets the flag", () => {
+    // Call sites only — the function's own declaration is not a release.
+    const releases = code.match(/await rollBackClaim\(/g) ?? [];
+    const flags = code.match(/released\s*=\s*true/g) ?? [];
+    assert.ok(releases.length >= 2, `expected every release site, found ${releases.length}`);
+    assert.equal(
+      flags.length,
+      releases.length,
+      "each release must mark itself, or a later one will repeat it",
+    );
+  });
+
+  test("the release is one transaction, checked against the claim's own stamp", () => {
+    const fn = code.slice(code.indexOf("async function rollBackClaim"));
+    const body = fn.slice(0, fn.indexOf("\ninterface "));
+    assert.match(body, /runTransaction/, "a two-write release is not atomic");
+    assert.match(
+      body,
+      /claimStillOwns/,
+      "a release must check it still owns what it is undoing, or it can erase a live claim",
+    );
+    assert.match(code, /stamp: Timestamp/, "the claim must carry the stamp it wrote");
+  });
+});
