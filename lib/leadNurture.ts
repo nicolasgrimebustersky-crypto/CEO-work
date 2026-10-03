@@ -227,12 +227,38 @@ export function hasInboundNote(kinds: readonly string[]): boolean {
  * Pure, and keyed on a `phoneKey` the caller computes, so this file stays
  * import-free and the rule can be tested by running it.
  */
+/**
+ * Whether this record *could* ever send, ignoring timing.
+ *
+ * Only the refusals that belong to the record itself: consent, a phone
+ * number, a do-not-knock mark. Not the step, not the gap, not whether
+ * anything is due — those belong to the phone number and are the same for
+ * every record on it.
+ *
+ * It exists so the grouping can prefer a record that is able to send. Picking
+ * purely by progress meant an older duplicate with no consent was chosen
+ * every night, refused every night, and permanently shadowed a newer
+ * duplicate from the same person who *had* ticked the box on the website.
+ * That lead was never nurtured at all — not a message sent wrongly, but work
+ * silently left on the table, which is the failure nobody notices.
+ */
+export function recordIsSendable(
+  record: Pick<NurtureInput, "status" | "phone" | "consent">,
+): boolean {
+  if (record.status === "do_not_knock") return false;
+  if (!record.phone.trim()) return false;
+  const consent = record.consent;
+  return Boolean(consent && consent.granted && MARKETING_CONSENT_METHODS.has(consent.method));
+}
+
 export interface PhoneGroupable {
   phoneKey: string;
   nurtureStep: number;
   lastNurtureAtMs: number | null;
   hasReplied: boolean;
   optedOut: boolean;
+  /** `recordIsSendable` for this record — the grouping prefers one that is. */
+  sendable: boolean;
   /**
    * Whether this record could be sent to at all.
    *
@@ -321,9 +347,14 @@ export function oneLeadPerPhone<T extends PhoneGroupable>(leads: readonly T[]): 
       .filter((ms) => typeof ms === "number");
     const effectiveLastNurtureAtMs = stamps.length > 0 ? Math.max(...stamps) : null;
 
-    // Furthest through the sequence wins; a stable tie-break so two runs over
-    // the same data make the same choice.
-    const sorted = [...candidates].sort((a, b) => b.nurtureStep - a.nurtureStep);
+    // A record that can send beats one that cannot, and only then does
+    // progress decide. Progress is computed above across every record, so
+    // preferring a less-advanced one here cannot replay anything — the step
+    // it will be told to send is the number's, not its own.
+    const sorted = [...candidates].sort(
+      (a, b) =>
+        Number(b.sendable) - Number(a.sendable) || b.nurtureStep - a.nurtureStep,
+    );
     chosen.push({ lead: sorted[0], effectiveStep, effectiveLastNurtureAtMs });
     for (const lead of sorted.slice(1)) {
       setAside.push({ lead, reason: "another record for this number is further along" });
@@ -414,10 +445,17 @@ export function claimVerdict(state: ClaimState, nowMs: number): ClaimVerdict {
  * it always was — a way to avoid doing this work for leads that obviously are
  * not due.
  *
- * Note what this cannot see: a reply recorded against a *different* record for
- * the same number during the run. That window is bounded by the length of one
- * run rather than closed, and it is the reason the per-number opt-out lookup
- * stays where it is.
+ * Note what this cannot see: a reply recorded against a *different* record
+ * for the same number during the run. That window is bounded by the length of
+ * one run rather than closed, and it is the reason the per-number opt-out
+ * lookup stays where it is.
+ *
+ * Note also what the shared document buys. Three rounds of review on this
+ * feature were all the same mistake in different clothes: nurture state was
+ * kept per customer record, and the thing it describes is a person. Duplicate
+ * records meant every per-record guard had a per-number hole behind it. The
+ * shared document is the state finally living where it belongs, which is why
+ * the fix for the third concurrency finding is not a fourth guard.
  *
  * Note also what is deliberately not solved here. The marketing-consent bar —
  * a web form or something written — is enforced by this function and not by
@@ -432,25 +470,69 @@ export interface ClaimRequest {
   cas: ClaimState;
   /** The lead as the transaction has just read it. */
   fresh: NurtureInput;
-  /** The number's progress, from the grouping pass. */
+  /** The number's progress, from the grouping pass — a snapshot, so a floor. */
   group: { effectiveStep: number; effectiveLastNurtureAtMs: number | null };
+  /**
+   * The phone number's own record of what it has been sent, read inside the
+   * same transaction and therefore authoritative.
+   *
+   * This is the per-number claim. The compare-and-swap above protects one
+   * customer document, which is not the invariant that matters: duplicates
+   * mean two overlapping runs can select two *different* records for one
+   * handset — one record changing stage between the runs is enough — and two
+   * independent documents give two independent claims, so both send. The
+   * shared document is what makes them collide instead.
+   */
+  shared: { step: number; lastNurtureAtMs: number | null };
+  /**
+   * The normalised number the grouping and the opt-out lookup were done
+   * against, and the one the record carries now.
+   *
+   * They can differ. Somebody edits a lead's phone number between the read at
+   * the top of the run and the claim, and every per-number check — the
+   * sibling reply, the sibling opt-out, the shared progress — was done against
+   * a number this record no longer has, while the send re-reads the record and
+   * texts the new one. A number whose sibling said STOP could be texted that
+   * way, having passed an opt-out check that looked at somebody else.
+   */
+  phoneKeys: { expected: string; fresh: string };
 }
 
 export type ClaimDecision =
-  | { claim: true; step: number; kind: NurtureKind; day: number }
+  | { claim: true; step: number; kind: NurtureKind; day: number; phoneKey: string }
   | { claim: false; reason: string };
 
 export function claimDecision(request: ClaimRequest, nowMs: number): ClaimDecision {
   const cas = claimVerdict(request.cas, nowMs);
   if (!cas.claim) return cas;
 
-  // The number's progress wins wherever it is further along than this record's
-  // own, so a duplicate cannot replay a step a sibling already sent.
-  const effectiveStep = Math.max(request.group.effectiveStep, request.fresh.nurtureStep);
-  const ownStamp = request.fresh.lastNurtureAtMs;
-  const groupStamp = request.group.effectiveLastNurtureAtMs;
-  const effectiveLastNurtureAtMs =
-    ownStamp == null ? groupStamp : groupStamp == null ? ownStamp : Math.max(ownStamp, groupStamp);
+  // The number must still be the number that was evaluated.
+  if (!request.phoneKeys.fresh) {
+    return { claim: false, reason: "this lead no longer has a usable phone number" };
+  }
+  if (request.phoneKeys.fresh !== request.phoneKeys.expected) {
+    return {
+      claim: false,
+      reason: "this lead's phone number changed during the run — it will be reconsidered tomorrow",
+    };
+  }
+
+  // Progress is the number's, and the furthest of the three readings of it
+  // wins. The shared document is authoritative; the other two are floors that
+  // cannot be walked backwards by a stale read.
+  const effectiveStep = Math.max(
+    request.group.effectiveStep,
+    request.fresh.nurtureStep,
+    request.shared.step,
+  );
+  const effectiveLastNurtureAtMs = [
+    request.fresh.lastNurtureAtMs,
+    request.group.effectiveLastNurtureAtMs,
+    request.shared.lastNurtureAtMs,
+  ].reduce<number | null>(
+    (latest, ms) => (ms == null ? latest : latest == null ? ms : Math.max(latest, ms)),
+    null,
+  );
 
   const verdict = nurtureDecision(
     { ...request.fresh, nurtureStep: effectiveStep, lastNurtureAtMs: effectiveLastNurtureAtMs },
@@ -458,5 +540,11 @@ export function claimDecision(request: ClaimRequest, nowMs: number): ClaimDecisi
   );
 
   if (!verdict.send) return { claim: false, reason: verdict.reason };
-  return { claim: true, step: verdict.step, kind: verdict.kind, day: verdict.day };
+  return {
+    claim: true,
+    step: verdict.step,
+    kind: verdict.kind,
+    day: verdict.day,
+    phoneKey: request.phoneKeys.fresh,
+  };
 }

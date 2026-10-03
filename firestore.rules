@@ -393,6 +393,20 @@ service cloud.firestore {
         && data.customerId is string;
     }
 
+    // One document per phone number, holding what the lead-nurture cron has
+    // sent to that person. It is the shared claim two overlapping runs
+    // contend on, and the record of a number's progress that survives its
+    // customer rows being edited, re-staged or deleted.
+    //
+    // Readable so the crew can see why a lead is or is not being nurtured.
+    // Never writable from a client: it is the one thing standing between a
+    // duplicated lead and the same text twice, and the cron that maintains it
+    // runs on the Admin SDK, which does not pass through these rules.
+    match /nurtureNumbers/{phoneKey} {
+      allow read: if isCrew();
+      allow write: if false;
+    }
+
     match /customers/{customerId} {
       allow read: if isCrew() && belongsToMyOrg(resource.data);
       allow create: if isCrew()

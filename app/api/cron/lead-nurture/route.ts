@@ -6,6 +6,7 @@ import {
   hasInboundNote,
   nurtureDecision,
   oneLeadPerPhone,
+  recordIsSendable,
   type NurtureConsent,
   type NurtureKind,
 } from "@/lib/leadNurture";
@@ -36,6 +37,25 @@ const SEND_INTERVAL_MS = 1100;
 const MAX_SENDS_PER_RUN = 10;
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Where a phone number's nurture history lives, one document per number.
+ *
+ * The counters on a customer record describe that row. What this feature
+ * actually needs to know is what has been sent to a *person*, and duplicate
+ * records mean those are not the same thing — which is why a per-record claim
+ * could be perfectly correct and still let two overlapping runs text one
+ * handset twice, by selecting two different rows for it.
+ *
+ * Reading this document inside the claim transaction is what makes those two
+ * runs collide instead: Firestore will not let both commit against the same
+ * read, so the second retries, sees the first one's stamp, and refuses on the
+ * gap. The customer counters are still written, because they are what the
+ * timeline and the crew see on a lead.
+ *
+ * Admin SDK only. firestore.rules denies clients any write to it.
+ */
+const NUMBERS = "nurtureNumbers";
 
 interface Outcome {
   customerId: string;
@@ -81,6 +101,8 @@ interface Candidate {
   optedOut: boolean;
   /** Could this record be texted, or is it only here to vote on its number? */
   eligible: boolean;
+  /** Could it ever send, consent and phone and do-not-knock aside from timing? */
+  sendable: boolean;
 }
 
 /**
@@ -119,18 +141,35 @@ async function claimStep(
   group: { effectiveStep: number; effectiveLastNurtureAtMs: number | null },
   nowMs: number,
 ): Promise<
-  | { claimed: true; previous: Timestamp | null; step: number; kind: NurtureKind }
+  | {
+      claimed: true;
+      previous: Timestamp | null;
+      previousShared: Timestamp | null;
+      step: number;
+      kind: NurtureKind;
+      numberRef: FirebaseFirestore.DocumentReference;
+    }
   | { claimed: false; reason: string }
 > {
-  return adminDb().runTransaction(async (tx) => {
-    const fresh = await tx.get(docRef);
+  const db = adminDb();
+  const numberRef = db.collection(NUMBERS).doc(lead.phoneKey);
+
+  return db.runTransaction(async (tx) => {
+    // Both documents are read inside the transaction, which puts the shared
+    // one in the read set of every run that touches this number. That is the
+    // whole mechanism: two runs holding two different customer records for one
+    // handset now contend on this document instead of proceeding in parallel.
+    const [fresh, sharedSnap] = await Promise.all([tx.get(docRef), tx.get(numberRef)]);
+
     const data = fresh.exists ? (fresh.data() ?? {}) : {};
     const previous = data.lastNurtureAt instanceof Timestamp ? data.lastNurtureAt : null;
     const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toMillis() : 0;
+    const phone = typeof data.phone === "string" ? data.phone : "";
 
-    // Everything the decision needs, read again here rather than trusted from
-    // the top of the run. A reply, a stage change, a do-not-knock mark or a
-    // withdrawn consent in the meantime all land in these fields.
+    const sharedData = sharedSnap.exists ? (sharedSnap.data() ?? {}) : {};
+    const previousShared =
+      sharedData.lastNurtureAt instanceof Timestamp ? sharedData.lastNurtureAt : null;
+
     const decision = claimDecision(
       {
         cas: {
@@ -140,6 +179,9 @@ async function claimStep(
           expectedStep: lead.nurtureStep,
           expectedLastNurtureAtMs: lead.lastNurtureAtMs,
         },
+        // Read again here rather than trusted from the top of the run: a
+        // reply, a stage change, a do-not-knock mark or a withdrawn consent in
+        // the meantime all land in these fields.
         fresh: {
           pipelineStage: typeof data.pipelineStage === "string" ? data.pipelineStage : "",
           status: typeof data.status === "string" ? data.status : "",
@@ -147,23 +189,38 @@ async function claimStep(
           nurtureStep: typeof data.nurtureStep === "number" ? data.nurtureStep : 0,
           lastNurtureAtMs: previous ? previous.toMillis() : null,
           hasReplied: hasInboundNote(noteKinds(data.notes)),
-          phone: typeof data.phone === "string" ? data.phone : "",
+          phone,
           consent: readConsent(data.smsConsent),
           optedOut: Boolean(data.smsOptOut),
         },
         group,
+        shared: {
+          step: typeof sharedData.step === "number" ? sharedData.step : 0,
+          lastNurtureAtMs: previousShared ? previousShared.toMillis() : null,
+        },
+        phoneKeys: { expected: lead.phoneKey, fresh: phoneKey(phone) },
       },
       nowMs,
     );
 
     if (!decision.claim) return { claimed: false as const, reason: decision.reason };
 
-    tx.update(docRef, { lastNurtureAt: Timestamp.now() });
+    const stamp = Timestamp.now();
+    tx.update(docRef, { lastNurtureAt: stamp });
+    // merge: the first text to a number is also the document's first write.
+    tx.set(
+      numberRef,
+      { phoneKey: decision.phoneKey, lastNurtureAt: stamp, step: decision.step },
+      { merge: true },
+    );
+
     return {
       claimed: true as const,
       previous,
+      previousShared,
       step: decision.step,
       kind: decision.kind,
+      numberRef,
     };
   });
 }
@@ -253,6 +310,11 @@ export async function GET(request: Request): Promise<Response> {
         consent: readConsent(data.smsConsent),
         optedOut: Boolean(data.smsOptOut),
         eligible,
+        sendable: recordIsSendable({
+          status: typeof data.status === "string" ? data.status : "",
+          phone,
+          consent: readConsent(data.smsConsent),
+        }),
       });
     }
 
@@ -326,9 +388,12 @@ export async function GET(request: Request): Promise<Response> {
         const result = await sendSmsToCustomerId(lead.id, body);
 
         if (!result.ok) {
-          // Put the claim back so this is retried rather than silently spent,
-          // and leave nurtureStep alone — it never advanced.
+          // Put the claim back — both halves of it — so this is retried rather
+          // than silently spent, and leave the step counters alone: they never
+          // advanced. Restoring the shared stamp matters most, because that is
+          // the one holding every record for this number back.
           await docRef.update({ lastNurtureAt: claim.previous });
+          await claim.numberRef.set({ lastNurtureAt: claim.previousShared }, { merge: true });
           await appendNote(
             lead.id,
             {
@@ -361,7 +426,14 @@ export async function GET(request: Request): Promise<Response> {
         // step, which can be ahead of this record's own — a duplicate whose
         // sibling sent step 1 sends step 2 from its own counter of 0, and
         // incrementing would leave it at 1 and send step 2 again tomorrow.
-        await docRef.update({ nurtureStep: step + 1 });
+        //
+        // The number's own document is advanced too, and it is the one that
+        // will still be right tomorrow if this record is edited, re-staged or
+        // deleted in the meantime.
+        await Promise.all([
+          docRef.update({ nurtureStep: step + 1 }),
+          claim.numberRef.set({ step: step + 1 }, { merge: true }),
+        ]);
 
         await appendNote(lead.id, {
           text: body,

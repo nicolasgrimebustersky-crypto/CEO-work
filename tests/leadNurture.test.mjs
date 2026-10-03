@@ -20,6 +20,7 @@ const {
   oneLeadPerPhone,
   claimVerdict,
   claimDecision,
+  recordIsSendable,
   NURTURE_STEPS,
   MIN_GAP_DAYS,
   MAX_AGE_TO_START_DAYS,
@@ -376,6 +377,7 @@ describe("one person, several records", () => {
     lastNurtureAtMs: null,
     hasReplied: false,
     optedOut: false,
+    sendable: true,
     eligible: true,
     ...patch,
   });
@@ -477,6 +479,7 @@ describe("a duplicate that has moved on still speaks for the person", () => {
     lastNurtureAtMs: null,
     hasReplied: false,
     optedOut: false,
+    sendable: true,
     eligible: true,
     ...patch,
   });
@@ -685,6 +688,8 @@ describe("a duplicate cannot replay what its sibling already sent", () => {
     },
     fresh: { ...base, ...(patch.fresh ?? {}) },
     group: { effectiveStep: 0, effectiveLastNurtureAtMs: null, ...group },
+    shared: { step: 0, lastNurtureAtMs: null, ...(patch.shared ?? {}) },
+    phoneKeys: { expected: "5025550147", fresh: "5025550147", ...(patch.phoneKeys ?? {}) },
   });
 
   test("a sibling that finished the sequence ends it for the number", () => {
@@ -767,6 +772,11 @@ describe("what changed during the run is checked before the text goes out", () =
         },
         fresh: { ...base, ...freshPatch },
         group: { effectiveStep: 0, effectiveLastNurtureAtMs: null },
+        shared: { step: 0, lastNurtureAtMs: null },
+        phoneKeys: {
+          expected: "5025550147",
+          fresh: freshPatch.phone === "" ? "" : "5025550147",
+        },
       },
       NOW,
     );
@@ -819,9 +829,12 @@ describe("what changed during the run is checked before the text goes out", () =
   });
 
   test("a phone number cleared during the run stops the text", () => {
+    // Caught by the number check now rather than the policy's own, because a
+    // cleared number also means every per-number check this run did was about
+    // a number this record no longer has.
     const decision = claim({ phone: "" });
     assert.equal(decision.claim, false);
-    assert.match(decision.reason, /no phone number/);
+    assert.match(decision.reason, /no longer has a usable phone number/);
   });
 
   test("the compare-and-swap is still checked first", () => {
@@ -838,10 +851,178 @@ describe("what changed during the run is checked before the text goes out", () =
         },
         fresh: { ...base, hasReplied: true },
         group: { effectiveStep: 0, effectiveLastNurtureAtMs: null },
+        shared: { step: 0, lastNurtureAtMs: null },
+        phoneKeys: { expected: "5025550147", fresh: "5025550147" },
       },
       NOW,
     );
     assert.equal(decision.claim, false);
     assert.match(decision.reason, /advanced this lead to step 1/);
+  });
+});
+
+describe("the record chosen to send is one that can send", () => {
+  // Confirmed by running it before fixing: given an older record with no
+  // consent and a newer one from the same person who ticked the box on the
+  // website, the old selection chose the unconsented record, was refused for
+  // no consent, and did that again every night. The consented duplicate was
+  // permanently shadowed and that lead was never nurtured at all — not a
+  // message sent wrongly, but work quietly left on the table.
+  const rec = (id, patch = {}) => ({
+    id,
+    phoneKey: "5025550147",
+    nurtureStep: 0,
+    lastNurtureAtMs: null,
+    hasReplied: false,
+    optedOut: false,
+    sendable: true,
+    eligible: true,
+    ...patch,
+  });
+
+  test("a consented duplicate is not shadowed by an unconsented one", () => {
+    const { chosen } = oneLeadPerPhone([
+      rec("older_no_consent", { sendable: false }),
+      rec("newer_web_form", { sendable: true }),
+    ]);
+    assert.equal(chosen.length, 1);
+    assert.equal(chosen[0].lead.id, "newer_web_form");
+  });
+
+  test("being able to send beats being further along", () => {
+    // Deliberate, and safe because progress is computed across the group: the
+    // chosen record is told the number's step, not its own.
+    const { chosen } = oneLeadPerPhone([
+      rec("ahead_no_consent", { nurtureStep: 2, sendable: false }),
+      rec("behind_consented", { nurtureStep: 0, sendable: true }),
+    ]);
+    assert.equal(chosen[0].lead.id, "behind_consented");
+    assert.equal(chosen[0].effectiveStep, 2, "the number has still had two messages");
+  });
+
+  test("among records that can all send, progress decides as before", () => {
+    const { chosen } = oneLeadPerPhone([
+      rec("behind", { nurtureStep: 0 }),
+      rec("ahead", { nurtureStep: 2 }),
+    ]);
+    assert.equal(chosen[0].lead.id, "ahead");
+  });
+
+  test("when none can send, one is still chosen so the reason is reported", () => {
+    // Silence here would be worse than a refusal: nobody would know why a
+    // lead was never contacted.
+    const { chosen } = oneLeadPerPhone([rec("a", { sendable: false })]);
+    assert.equal(chosen.length, 1);
+    assert.equal(chosen[0].lead.id, "a");
+  });
+
+  test("recordIsSendable is the rule the grouping is sorting on", () => {
+    const ok = { status: "active", phone: "+15025550147", consent: { granted: true, method: "web_form" } };
+    assert.equal(recordIsSendable(ok), true);
+    assert.equal(recordIsSendable({ ...ok, consent: { granted: true, method: "written" } }), true);
+    assert.equal(recordIsSendable({ ...ok, consent: null }), false);
+    assert.equal(recordIsSendable({ ...ok, consent: { granted: false, method: "web_form" } }), false);
+    assert.equal(recordIsSendable({ ...ok, consent: { granted: true, method: "verbal" } }), false);
+    assert.equal(recordIsSendable({ ...ok, phone: "   " }), false);
+    assert.equal(recordIsSendable({ ...ok, status: "do_not_knock" }), false);
+  });
+});
+
+describe("the claim belongs to the phone number, not the record", () => {
+  // The third concurrency finding, and the one that finally named the real
+  // shape of all of them: the compare-and-swap protected one customer
+  // document, but the thing that must not happen twice belongs to a person.
+  // Two overlapping runs can select two *different* records for one handset —
+  // one record changing stage between the runs is enough — and two
+  // independent documents gave two independent claims.
+  const base = {
+    pipelineStage: "new_lead",
+    status: "active",
+    createdAtMs: NOW - 10 * DAY,
+    nurtureStep: 0,
+    lastNurtureAtMs: null,
+    hasReplied: false,
+    phone: "+15025550147",
+    consent: { granted: true, method: "web_form" },
+    optedOut: false,
+  };
+  const req = (patch = {}) => ({
+    cas: {
+      exists: true,
+      freshStep: 0,
+      freshLastNurtureAtMs: null,
+      expectedStep: 0,
+      expectedLastNurtureAtMs: null,
+      ...(patch.cas ?? {}),
+    },
+    fresh: { ...base, ...(patch.fresh ?? {}) },
+    group: { effectiveStep: 0, effectiveLastNurtureAtMs: null, ...(patch.group ?? {}) },
+    shared: { step: 0, lastNurtureAtMs: null, ...(patch.shared ?? {}) },
+    phoneKeys: { expected: "5025550147", fresh: "5025550147", ...(patch.phoneKeys ?? {}) },
+  });
+
+  test("two runs on two different records for one number, only one sends", () => {
+    // Each run holds its own customer record, so neither compare-and-swap can
+    // see the other. The shared document is the only thing they have in
+    // common, and Firestore putting it in both read sets is what makes the
+    // second run retry and see the first one's stamp. Modelled here.
+    let shared = { step: 0, lastNurtureAtMs: null };
+    let sends = 0;
+    for (const recordId of ["record_a", "record_b"]) {
+      const decision = claimDecision(req({ shared: { ...shared } }), NOW);
+      if (decision.claim) {
+        shared = { step: decision.step + 1, lastNurtureAtMs: NOW };
+        sends += 1;
+      } else {
+        assert.match(decision.reason, new RegExp(`minimum gap is ${MIN_GAP_DAYS}`), recordId);
+      }
+    }
+    assert.equal(sends, 1, "one text to one person, not one per record");
+  });
+
+  test("the number's own record of its progress is authoritative", () => {
+    // Everything else about this record says step 0 and nothing ever sent.
+    const decision = claimDecision(
+      req({ shared: { step: NURTURE_STEPS.length, lastNurtureAtMs: NOW - 60 * DAY } }),
+      NOW,
+    );
+    assert.equal(decision.claim, false);
+    assert.match(decision.reason, /sequence is finished/);
+  });
+
+  test("the shared stamp holds a number back even on an untouched record", () => {
+    const decision = claimDecision(req({ shared: { step: 0, lastNurtureAtMs: NOW - DAY } }), NOW);
+    assert.equal(decision.claim, false);
+    assert.match(decision.reason, new RegExp(`minimum gap is ${MIN_GAP_DAYS}`));
+  });
+
+  test("a first text to a number, with nothing recorded against it, claims", () => {
+    const decision = claimDecision(req(), NOW);
+    assert.equal(decision.claim, true);
+    assert.equal(decision.step, 0);
+    assert.equal(decision.phoneKey, "5025550147");
+  });
+
+  test("a phone number edited during the run is refused", () => {
+    // Every per-number check this run did — the sibling reply, the sibling
+    // opt-out, the shared progress — was about a number this record no longer
+    // has, while the send would re-read the record and text the new one. A
+    // number whose sibling said STOP could be reached that way.
+    const decision = claimDecision(
+      req({ fresh: { phone: "+15025559999" }, phoneKeys: { fresh: "5025559999" } }),
+      NOW,
+    );
+    assert.equal(decision.claim, false);
+    assert.match(decision.reason, /phone number changed during the run/);
+  });
+
+  test("the claim names the number it authorised, so the send can be bound to it", () => {
+    const decision = claimDecision(req(), NOW);
+    assert.equal(decision.claim, true);
+    assert.equal(
+      decision.phoneKey,
+      "5025550147",
+      "the recipient is the number that was evaluated, not whatever is read later",
+    );
   });
 });

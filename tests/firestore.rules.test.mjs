@@ -1799,3 +1799,36 @@ describe("the audit log", () => {
     await assertFails(getDoc(doc(adminFresh, "auditLog/e1")));
   });
 });
+
+describe("a phone number's nurture history", () => {
+  // One document per number, holding what the lead-nurture cron has sent to
+  // that person. It is the shared claim two overlapping runs contend on, so a
+  // client that could write it could make one handset receive the same text
+  // twice — or hold a number back forever. The cron runs on the Admin SDK,
+  // which does not pass through these rules at all, so denying every client
+  // write costs the feature nothing.
+  test("crew can read it, to see why a lead is or is not being nurtured", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "nurtureNumbers/5025550147"), {
+        phoneKey: "5025550147",
+        step: 1,
+      });
+    });
+    await assertSucceeds(getDoc(doc(alice, "nurtureNumbers/5025550147")));
+  });
+
+  test("a signed-out stranger cannot read it — it is a list of phone numbers", async () => {
+    await assertFails(getDoc(doc(anon, "nurtureNumbers/5025550147")));
+  });
+
+  test("nobody can write it, not even the admin", async () => {
+    // Rewinding `step` would replay the whole sequence to somebody who has
+    // already had it; moving `lastNurtureAt` forward would silence a number.
+    await assertFails(updateDoc(doc(alice, "nurtureNumbers/5025550147"), { step: 0 }));
+    await assertFails(updateDoc(doc(admin, "nurtureNumbers/5025550147"), { step: 0 }));
+    await assertFails(
+      setDoc(doc(alice, "nurtureNumbers/5025559999"), { phoneKey: "5025559999", step: 0 }),
+    );
+    await assertFails(deleteDoc(doc(admin, "nurtureNumbers/5025550147")));
+  });
+});
