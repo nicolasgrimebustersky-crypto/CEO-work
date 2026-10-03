@@ -320,16 +320,33 @@ export function oneLeadPerPhone<T extends PhoneGroupable>(
     const replied = group.some((lead) => lead.hasReplied);
     const optedOut = group.some((lead) => lead.optedOut);
     const blocked = group.some((lead) => lead.status === "do_not_knock");
+    // Somebody on this number has been quoted, won or written off. The stage
+    // check in nurtureDecision already says why that ends nurture — quoted
+    // leads are chased by app/api/cron/quote-followups, and two crons texting
+    // one person about one job is the thing it exists to prevent. It was only
+    // ever asked of the record about to send, so a duplicate still at
+    // `new_lead` would ask somebody who already has a price whether they would
+    // like one.
+    const movedOn = group.some((lead) => lead.pipelineStage !== "new_lead");
+    // An explicit "no texts" is an instruction, and unlike missing consent it
+    // is a thing the person did. The fix that let a granted record beat an
+    // unconsented one had this edge behind it: a refusal recorded today lost
+    // to a grant from a form filled in last spring.
+    const refused = group.some((lead) => lead.consent?.granted === false);
     // Only a candidate can be sent to. The rest were context.
     const candidates = group.filter((lead) => lead.eligible);
     if (candidates.length === 0) continue;
 
-    if (optedOut || replied || blocked) {
+    if (optedOut || replied || blocked || refused || movedOn) {
       const reason = optedOut
         ? "this number replied STOP on one of its records"
         : replied
           ? "this number has replied on one of its records"
-          : "one of this number's records is marked do not knock";
+          : blocked
+            ? "one of this number's records is marked do not knock"
+            : refused
+              ? "one of this number's records says no texts"
+              : "this number has a record past new_lead — quote follow-ups have it";
       for (const lead of candidates) setAside.push({ lead, reason });
       continue;
     }

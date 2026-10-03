@@ -219,13 +219,23 @@ export interface NumberSuppression {
   blocked: boolean;
   /** A recorded STOP, if there is one. */
   optOut: SmsOptOut | null;
+  /** A record for this number says no texts — an explicit refusal, not absent consent. */
+  refused: boolean;
+  /** A record for this number has gone past new_lead: quote follow-ups have it. */
+  movedOn: boolean;
 }
 
 export async function numberSuppression(
   rawPhone: string,
   orgId: string,
 ): Promise<NumberSuppression> {
-  const none: NumberSuppression = { replied: false, blocked: false, optOut: null };
+  const none: NumberSuppression = {
+    replied: false,
+    blocked: false,
+    optOut: null,
+    refused: false,
+    movedOn: false,
+  };
   const digits = String(rawPhone ?? "").replace(/\D/g, "").slice(-10);
   if (digits.length !== 10) return none;
 
@@ -247,6 +257,12 @@ export async function numberSuppression(
     if (asOrgId(data.orgId) !== orgId) continue;
 
     if (data.status === "do_not_knock") found.blocked = true;
+    // An explicit refusal, as opposed to no consent recorded at all.
+    if (data.smsConsent && data.smsConsent.granted === false) found.refused = true;
+    // Quoted, won or lost. Nurture is for leads nobody has priced yet.
+    if (typeof data.pipelineStage === "string" && data.pipelineStage !== "new_lead") {
+      found.movedOn = true;
+    }
     if (!found.optOut) found.optOut = readOptOut(data.smsOptOut);
     if (!found.replied) {
       const notes = Array.isArray(data.notes) ? data.notes : [];

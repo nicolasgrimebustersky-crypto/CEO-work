@@ -531,7 +531,11 @@ export async function GET(request: Request): Promise<Response> {
             ? "this number replied during the run — a person takes it from here"
             : stop.blocked
               ? "a record for this number was marked do not knock during the run"
-              : null;
+              : stop.refused
+                ? "a record for this number was marked no texts during the run"
+                : stop.movedOn
+                  ? "this number was quoted during the run — quote follow-ups have it now"
+                  : null;
         if (stopReason) {
           await rollBackClaim(docRef, claim);
           released = true;

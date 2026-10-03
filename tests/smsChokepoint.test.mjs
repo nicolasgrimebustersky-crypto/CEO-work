@@ -213,7 +213,11 @@ describe("the lead nurture cron texts the number it actually checked", () => {
     assert.ok(check < send, "the check must come before the send, or it is decoration");
 
     const between = code.slice(check, send);
-    for (const field of ["optOut", "replied", "blocked"]) {
+    // Every field the scan answers. Reading one and ignoring it is worse than
+    // not reading it, because it looks covered — and a mutation run proved
+    // that: dropping the two newest from this branch failed nothing until
+    // they were added here.
+    for (const field of ["optOut", "replied", "blocked", "refused", "movedOn"]) {
       assert.match(
         between,
         new RegExp(`stop\\.${field}`),
@@ -601,6 +605,17 @@ describe("an opt-out belongs to the business it was told to", () => {
     // Pinned separately, for the same reason: each needs its own guard.
     const suppression = bodyOf(NOTES, "numberSuppression");
     assert.match(suppression, /if \(asOrgId\(data\.orgId\) !== orgId\) continue;/);
+  });
+
+  test("the scan answers every question the route asks it", () => {
+    // If the scan stops setting one of these, the route's check silently
+    // becomes a no-op rather than failing.
+    const suppression = bodyOf(NOTES, "numberSuppression");
+    assert.match(suppression, /found\.blocked = true/, "do not knock");
+    assert.match(suppression, /found\.refused = true/, "an explicit no-texts");
+    assert.match(suppression, /found\.movedOn = true/, "quoted, won or lost");
+    assert.match(suppression, /found\.replied = true/, "an inbound text");
+    assert.match(suppression, /found\.optOut = readOptOut/, "a recorded STOP");
   });
 
   test("the chokepoint passes it through rather than dropping it", () => {

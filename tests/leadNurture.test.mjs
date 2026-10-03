@@ -506,7 +506,7 @@ describe("a duplicate that has moved on still speaks for the person", () => {
 
   test("a replied estimate_sent duplicate suppresses the new_lead", () => {
     const { chosen, setAside } = oneLeadPerPhone([
-      rec("quoted", { hasReplied: true, eligible: false }),
+      rec("quoted", { pipelineStage: "estimate_sent", hasReplied: true, eligible: false }),
       rec("fresh"),
     ], NOW);
     assert.equal(chosen.length, 0, "this person already replied — nothing should send");
@@ -529,7 +529,10 @@ describe("a duplicate that has moved on still speaks for the person", () => {
 
   test("an ineligible record is never the one that sends", () => {
     // Even alone, and even though it looks like the furthest along.
-    const { chosen } = oneLeadPerPhone([rec("quoted", { nurtureStep: 2, eligible: false })], NOW);
+    const { chosen } = oneLeadPerPhone(
+      [rec("quoted", { pipelineStage: "estimate_sent", nurtureStep: 2, eligible: false })],
+      NOW,
+    );
     assert.equal(chosen.length, 0);
   });
 
@@ -552,7 +555,10 @@ describe("a duplicate that has moved on still speaks for the person", () => {
     // say 0. What stops the replay is the group figures returned here, so
     // those are what gets asserted.
     const { chosen } = oneLeadPerPhone([
-      rec("quoted", { nurtureStep: 2, lastNurtureAtMs: NOW - 2 * DAY, eligible: false }),
+      // Ineligible because it has no creation date, not because it moved on —
+      // a record past new_lead now suppresses the whole number, which would
+      // make this test pass for the wrong reason.
+      rec("no_created_at", { nurtureStep: 2, lastNurtureAtMs: NOW - 2 * DAY, eligible: false }),
       rec("fresh", { nurtureStep: 0, lastNurtureAtMs: null }),
     ], NOW);
     assert.equal(chosen.length, 1);
@@ -1102,7 +1108,11 @@ describe("do not knock is about the person, not the paperwork", () => {
     // and that is often the one that has moved past new_lead — the same
     // reason a reply hides on a record that moved on.
     const { chosen, setAside } = oneLeadPerPhone([
-      rec("marked_and_quoted", { status: "do_not_knock", eligible: false }),
+      rec("marked_and_quoted", {
+        pipelineStage: "estimate_sent",
+        status: "do_not_knock",
+        eligible: false,
+      }),
       rec("fresh_lead"),
     ], NOW);
     assert.equal(chosen.length, 0);
@@ -1579,5 +1589,149 @@ describe("whose STOP it was", () => {
       NOW,
     );
     assert.equal(chosen.length, 0);
+  });
+});
+
+describe("a number that has moved past being a lead", () => {
+  // nurtureDecision has always refused a record past `new_lead`, and its
+  // comment says why: quoted leads are chased by the quote-followups cron, and
+  // two crons texting one person about one job is the thing that rule exists
+  // to prevent. But it was only ever asked of the record about to send — so a
+  // duplicate still sitting at `new_lead` would ask somebody who already has a
+  // price whether they would like one, while the other cron chased the quote.
+  const rec = (id, patch = {}) => ({
+    id,
+    phoneKey: "5025550147",
+    nurtureStep: 0,
+    lastNurtureAtMs: null,
+    hasReplied: false,
+    optedOut: false,
+    eligible: true,
+    pipelineStage: "new_lead",
+    status: "active",
+    createdAtMs: NOW - 10 * DAY,
+    phone: "+15025550147",
+    consent: { granted: true, method: "web_form" },
+    ...patch,
+  });
+
+  test("a quoted duplicate stops the fresh one", () => {
+    const { chosen, setAside } = oneLeadPerPhone(
+      [rec("quoted", { pipelineStage: "estimate_sent", eligible: false }), rec("fresh")],
+      NOW,
+    );
+    assert.equal(chosen.length, 0, "this person already has a price");
+    assert.match(setAside[0].reason, /quote follow-ups have it/);
+  });
+
+  test("a won customer is not a lead to nurture", () => {
+    const { chosen } = oneLeadPerPhone(
+      [rec("won", { pipelineStage: "job_won", eligible: false }), rec("fresh")],
+      NOW,
+    );
+    assert.equal(chosen.length, 0);
+  });
+
+  test("a lost one either", () => {
+    const { chosen } = oneLeadPerPhone(
+      [rec("lost", { pipelineStage: "lost", eligible: false }), rec("fresh")],
+      NOW,
+    );
+    assert.equal(chosen.length, 0);
+  });
+
+  test("a number whose records are all still leads is unaffected", () => {
+    const { chosen } = oneLeadPerPhone([rec("a"), rec("b")], NOW);
+    assert.equal(chosen.length, 1);
+  });
+
+  test("a different number is unaffected by somebody else's quote", () => {
+    const { chosen } = oneLeadPerPhone(
+      [
+        rec("quoted", { pipelineStage: "estimate_sent", eligible: false }),
+        rec("someone_else", { phoneKey: "5025559999" }),
+      ],
+      NOW,
+    );
+    assert.deepEqual(chosen.map((c) => c.lead.id), ["someone_else"]);
+  });
+});
+
+describe("no texts means no texts, on any of this person's records", () => {
+  // The edge left behind by the fix that let a consented record beat an
+  // unconsented one. Absent consent and refused consent are not the same
+  // thing: the first is silence, the second is something the person did. A
+  // refusal recorded today was losing to a grant from a form filled in last
+  // spring, so ticking "no texts" left marketing switched on.
+  const rec = (id, patch = {}) => ({
+    id,
+    phoneKey: "5025550147",
+    nurtureStep: 0,
+    lastNurtureAtMs: null,
+    hasReplied: false,
+    optedOut: false,
+    eligible: true,
+    pipelineStage: "new_lead",
+    status: "active",
+    createdAtMs: NOW - 10 * DAY,
+    phone: "+15025550147",
+    consent: { granted: true, method: "web_form" },
+    ...patch,
+  });
+
+  test("a refusal on one record blocks an otherwise eligible duplicate", () => {
+    const { chosen, setAside } = oneLeadPerPhone(
+      [
+        rec("said_no", { consent: { granted: false, method: "web_form" } }),
+        rec("older_yes", { consent: { granted: true, method: "web_form" } }),
+      ],
+      NOW,
+    );
+    assert.equal(chosen.length, 0, "the person said no; the older yes does not outvote it");
+    for (const { reason } of setAside) assert.match(reason, /no texts/);
+  });
+
+  test("a refusal on a record that has moved on still counts", () => {
+    const { chosen } = oneLeadPerPhone(
+      [
+        rec("said_no", { consent: { granted: false, method: "written" }, eligible: false }),
+        rec("fresh"),
+      ],
+      NOW,
+    );
+    assert.equal(chosen.length, 0);
+  });
+
+  test("absent consent is not a refusal", () => {
+    // Still not sendable on its own — nurtureDecision refuses it — but it must
+    // not silence a sibling who did consent, which was the round-eight fix and
+    // has to keep working.
+    const { chosen } = oneLeadPerPhone(
+      [rec("no_record", { consent: null }), rec("consented")],
+      NOW,
+    );
+    assert.equal(chosen.length, 1);
+    assert.equal(chosen[0].lead.id, "consented");
+  });
+
+  test("a verbal yes is not a refusal either", () => {
+    // Too thin for marketing, which nurtureDecision enforces, but not a no.
+    const { chosen } = oneLeadPerPhone(
+      [rec("verbal", { consent: { granted: true, method: "verbal" } }), rec("web_form")],
+      NOW,
+    );
+    assert.equal(chosen.length, 1);
+    assert.equal(chosen[0].lead.id, "web_form");
+  });
+
+  test("a refusal on one number does not silence another", () => {
+    const { chosen } = oneLeadPerPhone(
+      [
+        rec("said_no", { consent: { granted: false, method: "web_form" } }),
+        rec("someone_else", { phoneKey: "5025559999" }),
+      ],
+      NOW,
+    );
+    assert.deepEqual(chosen.map((c) => c.lead.id), ["someone_else"]);
   });
 });
