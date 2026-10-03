@@ -19,6 +19,7 @@ const {
   hasInboundNote,
   oneLeadPerPhone,
   claimVerdict,
+  claimDecision,
   NURTURE_STEPS,
   MIN_GAP_DAYS,
   MAX_AGE_TO_START_DAYS,
@@ -372,6 +373,7 @@ describe("one person, several records", () => {
     id,
     phoneKey: "5025550147",
     nurtureStep: 0,
+    lastNurtureAtMs: null,
     hasReplied: false,
     optedOut: false,
     eligible: true,
@@ -394,7 +396,7 @@ describe("one person, several records", () => {
       lead("ahead", { nurtureStep: 2 }),
       lead("middle", { nurtureStep: 1 }),
     ]);
-    assert.equal(chosen[0].id, "ahead");
+    assert.equal(chosen[0].lead.id, "ahead");
   });
 
   test("a reply on ANY record stops the whole number", () => {
@@ -440,7 +442,7 @@ describe("one person, several records", () => {
       lead("replied", { phoneKey: "5025550147", hasReplied: true }),
       lead("innocent", { phoneKey: "5025559999" }),
     ]);
-    assert.deepEqual(chosen.map((l) => l.id), ["innocent"]);
+    assert.deepEqual(chosen.map((c) => c.lead.id), ["innocent"]);
   });
 
   test("a record with no usable number is set aside, not texted", () => {
@@ -472,6 +474,7 @@ describe("a duplicate that has moved on still speaks for the person", () => {
     id,
     phoneKey: "5025550147",
     nurtureStep: 0,
+    lastNurtureAtMs: null,
     hasReplied: false,
     optedOut: false,
     eligible: true,
@@ -519,23 +522,29 @@ describe("a duplicate that has moved on still speaks for the person", () => {
     assert.deepEqual(setAside, [], "records nobody asked to nurture are silent");
   });
 
-  test("an ineligible sibling's progress still holds the number back", () => {
-    // The sibling got step 1 before it moved on. Sending step 1 from this
-    // record would replay a message the person already has.
+  test("the number's progress travels with the record that sends", () => {
+    // The old version of this test asserted only that the fresh record was
+    // chosen, and a comment claimed the decision would handle the rest. It
+    // would not have: the decision was given the record's own counters, which
+    // say 0. What stops the replay is the group figures returned here, so
+    // those are what gets asserted.
     const { chosen } = oneLeadPerPhone([
-      rec("quoted", { nurtureStep: 1, eligible: false }),
-      rec("fresh", { nurtureStep: 0 }),
+      rec("quoted", { nurtureStep: 2, lastNurtureAtMs: NOW - 2 * DAY, eligible: false }),
+      rec("fresh", { nurtureStep: 0, lastNurtureAtMs: null }),
     ]);
     assert.equal(chosen.length, 1);
-    assert.equal(chosen[0].id, "fresh");
-    // The route then claims on THIS record's own step, so what stops the
-    // replay is nurtureDecision's gap rule plus the claim — not the grouping.
-    // Recorded here so the division of labour is not mistaken for coverage.
+    assert.equal(chosen[0].lead.id, "fresh");
+    assert.equal(chosen[0].effectiveStep, 2, "the number has had two messages, not none");
+    assert.equal(
+      chosen[0].effectiveLastNurtureAtMs,
+      NOW - 2 * DAY,
+      "the number was texted two days ago, even though this record never was",
+    );
   });
 
   test("an eligible lead with no ineligible siblings is unaffected", () => {
     const { chosen } = oneLeadPerPhone([rec("only")]);
-    assert.deepEqual(chosen.map((c) => c.id), ["only"]);
+    assert.deepEqual(chosen.map((c) => c.lead.id), ["only"]);
   });
 });
 
@@ -643,5 +652,196 @@ describe("two runs overlapping cannot send the same text twice", () => {
       NOW + DAY,
     );
     assert.deepEqual(verdict, { claim: true }, "a failure must not spend the step");
+  });
+});
+
+describe("a duplicate cannot replay what its sibling already sent", () => {
+  // The finding this group exists for. Filtering ineligible siblings out of
+  // the grouping meant the chosen record carried its own counters — which, for
+  // a freshly created duplicate, say nothing has ever been sent. So a sibling
+  // that had finished the whole sequence left the number open to starting it
+  // again from the top, and a sibling that texted yesterday left it open to
+  // texting again today. Both arrive at the exact harm this file exists to
+  // prevent, through the back door.
+  const base = {
+    pipelineStage: "new_lead",
+    status: "active",
+    createdAtMs: NOW - 40 * DAY,
+    nurtureStep: 0,
+    lastNurtureAtMs: null,
+    hasReplied: false,
+    phone: "+15025550147",
+    consent: { granted: true, method: "web_form" },
+    optedOut: false,
+  };
+  const req = (patch = {}, group = {}) => ({
+    cas: {
+      exists: true,
+      freshStep: 0,
+      freshLastNurtureAtMs: null,
+      expectedStep: 0,
+      expectedLastNurtureAtMs: null,
+      ...(patch.cas ?? {}),
+    },
+    fresh: { ...base, ...(patch.fresh ?? {}) },
+    group: { effectiveStep: 0, effectiveLastNurtureAtMs: null, ...group },
+  });
+
+  test("a sibling that finished the sequence ends it for the number", () => {
+    const decision = claimDecision(req({}, { effectiveStep: NURTURE_STEPS.length }), NOW);
+    assert.equal(decision.claim, false);
+    assert.match(decision.reason, /sequence is finished/);
+  });
+
+  test("a fresh duplicate cannot replay step 1 after a sibling sent it", () => {
+    // Own counter says 0, so without the group figure this would send the
+    // day-3 nudge to somebody who got it a fortnight ago.
+    const decision = claimDecision(
+      req({}, { effectiveStep: 1, effectiveLastNurtureAtMs: NOW - 14 * DAY }),
+      NOW,
+    );
+    assert.equal(decision.claim, true);
+    assert.equal(decision.step, 1, "step 2 of the sequence, not step 1 again");
+    assert.equal(decision.kind, NURTURE_STEPS[1].kind);
+  });
+
+  test("a duplicate cannot text one day after its sibling did", () => {
+    const decision = claimDecision(req({}, { effectiveLastNurtureAtMs: NOW - DAY }), NOW);
+    assert.equal(decision.claim, false);
+    assert.match(decision.reason, new RegExp(`minimum gap is ${MIN_GAP_DAYS}`));
+  });
+
+  test("the record's own progress still counts when it is the furthest along", () => {
+    // The group figure is a floor, not a replacement — a stale grouping pass
+    // must not walk a record backwards.
+    const decision = claimDecision(
+      req(
+        {
+          cas: { freshStep: 2, expectedStep: 2 },
+          fresh: { nurtureStep: 2, lastNurtureAtMs: NOW - 20 * DAY },
+        },
+        { effectiveStep: 0, effectiveLastNurtureAtMs: null },
+      ),
+      NOW,
+    );
+    assert.equal(decision.claim, true);
+    assert.equal(decision.step, 2);
+  });
+
+  test("with no siblings it behaves exactly as the lead's own record says", () => {
+    const decision = claimDecision(req(), NOW);
+    assert.equal(decision.claim, true);
+    assert.equal(decision.step, 0);
+  });
+});
+
+describe("what changed during the run is checked before the text goes out", () => {
+  // A run reads the customer collection, then spends minutes: an opt-out
+  // lookup and a transaction per lead, 1.1 seconds of pacing between sends,
+  // up to ten of them. In those minutes a lead can reply, be quoted, be marked
+  // do-not-knock, or have consent withdrawn. The claim used to re-check only
+  // the counters, so all four still permitted a send. These tests are the
+  // proof that each one now refuses — which is the level at which "Twilio is
+  // never called" can actually be asserted, since the call sits behind this
+  // returning a claim.
+  const base = {
+    pipelineStage: "new_lead",
+    status: "active",
+    createdAtMs: NOW - 10 * DAY,
+    nurtureStep: 0,
+    lastNurtureAtMs: null,
+    hasReplied: false,
+    phone: "+15025550147",
+    consent: { granted: true, method: "web_form" },
+    optedOut: false,
+  };
+  const claim = (freshPatch) =>
+    claimDecision(
+      {
+        cas: {
+          exists: true,
+          freshStep: 0,
+          freshLastNurtureAtMs: null,
+          expectedStep: 0,
+          expectedLastNurtureAtMs: null,
+        },
+        fresh: { ...base, ...freshPatch },
+        group: { effectiveStep: 0, effectiveLastNurtureAtMs: null },
+      },
+      NOW,
+    );
+
+  test("unchanged, it claims", () => {
+    // The control. Without this, every assertion below could pass for the
+    // wrong reason.
+    const decision = claim({});
+    assert.equal(decision.claim, true);
+    assert.equal(decision.step, 0);
+  });
+
+  test("a reply that landed during the run stops the text", () => {
+    const decision = claim({ hasReplied: true });
+    assert.equal(decision.claim, false);
+    assert.match(decision.reason, /replied/);
+  });
+
+  test("an opt-out that landed during the run stops the text", () => {
+    const decision = claim({ optedOut: true });
+    assert.equal(decision.claim, false);
+    assert.match(decision.reason, /STOP/);
+  });
+
+  test("a lead quoted during the run is handed to quote-followups", () => {
+    const decision = claim({ pipelineStage: "estimate_sent" });
+    assert.equal(decision.claim, false);
+    assert.match(decision.reason, /not a new lead any more/);
+  });
+
+  test("a do-not-knock mark added during the run stops the text", () => {
+    const decision = claim({ status: "do_not_knock" });
+    assert.equal(decision.claim, false);
+    assert.match(decision.reason, /do not knock/);
+  });
+
+  test("consent withdrawn during the run stops the text", () => {
+    const decision = claim({ consent: null });
+    assert.equal(decision.claim, false);
+    assert.match(decision.reason, /no written or web-form consent/);
+  });
+
+  test("consent downgraded to a verbal yes stops the text", () => {
+    // The shared SMS chokepoint would allow this one through — it guards job
+    // confirmations too, where a verbal yes is enough. The marketing bar is
+    // this function's job, and this test is why it cannot be moved.
+    const decision = claim({ consent: { granted: true, method: "verbal" } });
+    assert.equal(decision.claim, false);
+    assert.match(decision.reason, /need a web form or something written/);
+  });
+
+  test("a phone number cleared during the run stops the text", () => {
+    const decision = claim({ phone: "" });
+    assert.equal(decision.claim, false);
+    assert.match(decision.reason, /no phone number/);
+  });
+
+  test("the compare-and-swap is still checked first", () => {
+    // A changed field must not mask a lost race, or the reason reported for a
+    // refusal would send somebody looking in the wrong place.
+    const decision = claimDecision(
+      {
+        cas: {
+          exists: true,
+          freshStep: 1,
+          freshLastNurtureAtMs: null,
+          expectedStep: 0,
+          expectedLastNurtureAtMs: null,
+        },
+        fresh: { ...base, hasReplied: true },
+        group: { effectiveStep: 0, effectiveLastNurtureAtMs: null },
+      },
+      NOW,
+    );
+    assert.equal(decision.claim, false);
+    assert.match(decision.reason, /advanced this lead to step 1/);
   });
 });

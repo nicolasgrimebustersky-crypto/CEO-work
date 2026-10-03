@@ -230,6 +230,7 @@ export function hasInboundNote(kinds: readonly string[]): boolean {
 export interface PhoneGroupable {
   phoneKey: string;
   nurtureStep: number;
+  lastNurtureAtMs: number | null;
   hasReplied: boolean;
   optedOut: boolean;
   /**
@@ -247,15 +248,32 @@ export interface PhoneGroupable {
 }
 
 export interface PhoneGroupResult<T> {
-  /** The one record allowed to send, per number. */
-  chosen: T[];
+  /**
+   * The one record allowed to send, per number, carrying the number's progress
+   * rather than its own.
+   *
+   * The progress has to travel with it. A record's own `nurtureStep` is only
+   * what *that row* has sent, and duplicates mean one person's three messages
+   * can be spread across three rows — so a fresh duplicate whose sibling
+   * finished the sequence would read its own 0 and start again from the top,
+   * and one whose sibling texted yesterday would read its own null stamp and
+   * text again today. Both of those are the thing this whole file exists to
+   * prevent, arriving through the back door.
+   */
+  chosen: {
+    lead: T;
+    /** The furthest any record for this number has reached. */
+    effectiveStep: number;
+    /** The most recent nurture text to this number, by any record. */
+    effectiveLastNurtureAtMs: number | null;
+  }[];
   /** The rest, with why they were set aside. */
   setAside: { lead: T; reason: string }[];
 }
 
 export function oneLeadPerPhone<T extends PhoneGroupable>(leads: readonly T[]): PhoneGroupResult<T> {
   const byPhone = new Map<string, T[]>();
-  const chosen: T[] = [];
+  const chosen: PhoneGroupResult<T>["chosen"] = [];
   const setAside: { lead: T; reason: string }[] = [];
 
   for (const lead of leads) {
@@ -289,12 +307,24 @@ export function oneLeadPerPhone<T extends PhoneGroupable>(leads: readonly T[]): 
       continue;
     }
 
+    // The number's progress, not the record's — every row counts towards it,
+    // including the ones that are not candidates. A corrupt step is left in
+    // the maximum deliberately: it then fails nurtureDecision's whole-count
+    // check and the number is refused and reported, rather than a corrupt
+    // sibling being quietly ignored.
+    const effectiveStep = candidates.reduce(
+      (max, lead) => Math.max(max, lead.nurtureStep),
+      group.reduce((max, lead) => Math.max(max, lead.nurtureStep), 0),
+    );
+    const stamps = group
+      .map((lead) => lead.lastNurtureAtMs)
+      .filter((ms) => typeof ms === "number");
+    const effectiveLastNurtureAtMs = stamps.length > 0 ? Math.max(...stamps) : null;
+
     // Furthest through the sequence wins; a stable tie-break so two runs over
-    // the same data make the same choice. The step counted here is the whole
-    // number's, duplicates included, so a sibling that already had step 1
-    // stops this record from sending step 1 again.
+    // the same data make the same choice.
     const sorted = [...candidates].sort((a, b) => b.nurtureStep - a.nurtureStep);
-    chosen.push(sorted[0]);
+    chosen.push({ lead: sorted[0], effectiveStep, effectiveLastNurtureAtMs });
     for (const lead of sorted.slice(1)) {
       setAside.push({ lead, reason: "another record for this number is further along" });
     }
@@ -365,4 +395,68 @@ export function claimVerdict(state: ClaimState, nowMs: number): ClaimVerdict {
   }
 
   return { claim: true };
+}
+
+/**
+ * The whole authorisation for one nurture text, decided on fresh data.
+ *
+ * Everything above this is a filter. The cron reads the customer collection,
+ * groups it, and forms an opinion — and then spends time: a per-number opt-out
+ * lookup, a Firestore transaction, 1.1 seconds of pacing between sends, up to
+ * ten of them. By the time the tenth text goes out, the data behind the
+ * decision is minutes old, and in those minutes the lead can have replied,
+ * been quoted, been marked do-not-knock, or had their consent withdrawn. The
+ * first version of this re-checked only the counters, which meant all four of
+ * those still permitted a send.
+ *
+ * So the decision that actually authorises the message is made here, from the
+ * document as the transaction reads it, and the earlier one is demoted to what
+ * it always was — a way to avoid doing this work for leads that obviously are
+ * not due.
+ *
+ * Note what this cannot see: a reply recorded against a *different* record for
+ * the same number during the run. That window is bounded by the length of one
+ * run rather than closed, and it is the reason the per-number opt-out lookup
+ * stays where it is.
+ *
+ * Note also what is deliberately not solved here. The marketing-consent bar —
+ * a web form or something written — is enforced by this function and not by
+ * the shared SMS chokepoint, which permits a verbal yes. That is on purpose:
+ * `canSendTo` guards every text the business sends, job confirmations and
+ * on-my-way messages included, and raising its bar to written consent would
+ * block the messages customers actually want. The higher bar belongs to
+ * marketing, which is this file.
+ */
+export interface ClaimRequest {
+  /** The compare-and-swap, against the counters the decision was made on. */
+  cas: ClaimState;
+  /** The lead as the transaction has just read it. */
+  fresh: NurtureInput;
+  /** The number's progress, from the grouping pass. */
+  group: { effectiveStep: number; effectiveLastNurtureAtMs: number | null };
+}
+
+export type ClaimDecision =
+  | { claim: true; step: number; kind: NurtureKind; day: number }
+  | { claim: false; reason: string };
+
+export function claimDecision(request: ClaimRequest, nowMs: number): ClaimDecision {
+  const cas = claimVerdict(request.cas, nowMs);
+  if (!cas.claim) return cas;
+
+  // The number's progress wins wherever it is further along than this record's
+  // own, so a duplicate cannot replay a step a sibling already sent.
+  const effectiveStep = Math.max(request.group.effectiveStep, request.fresh.nurtureStep);
+  const ownStamp = request.fresh.lastNurtureAtMs;
+  const groupStamp = request.group.effectiveLastNurtureAtMs;
+  const effectiveLastNurtureAtMs =
+    ownStamp == null ? groupStamp : groupStamp == null ? ownStamp : Math.max(ownStamp, groupStamp);
+
+  const verdict = nurtureDecision(
+    { ...request.fresh, nurtureStep: effectiveStep, lastNurtureAtMs: effectiveLastNurtureAtMs },
+    nowMs,
+  );
+
+  if (!verdict.send) return { claim: false, reason: verdict.reason };
+  return { claim: true, step: verdict.step, kind: verdict.kind, day: verdict.day };
 }

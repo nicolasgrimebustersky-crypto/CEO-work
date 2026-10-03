@@ -1,12 +1,13 @@
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { Timestamp } from "firebase-admin/firestore";
 
 import { phoneKey } from "@/lib/inboundSms";
 import {
-  claimVerdict,
+  claimDecision,
   hasInboundNote,
   nurtureDecision,
   oneLeadPerPhone,
   type NurtureConsent,
+  type NurtureKind,
 } from "@/lib/leadNurture";
 import { leadNurtureText } from "@/lib/messages";
 import { adminDb } from "@/lib/server/admin";
@@ -114,32 +115,56 @@ interface Candidate {
  */
 async function claimStep(
   docRef: FirebaseFirestore.DocumentReference,
-  expectedStep: number,
-  expectedLastNurtureAtMs: number | null,
+  lead: Candidate,
+  group: { effectiveStep: number; effectiveLastNurtureAtMs: number | null },
   nowMs: number,
-): Promise<{ claimed: true; previous: Timestamp | null } | { claimed: false; reason: string }> {
+): Promise<
+  | { claimed: true; previous: Timestamp | null; step: number; kind: NurtureKind }
+  | { claimed: false; reason: string }
+> {
   return adminDb().runTransaction(async (tx) => {
     const fresh = await tx.get(docRef);
     const data = fresh.exists ? (fresh.data() ?? {}) : {};
     const previous = data.lastNurtureAt instanceof Timestamp ? data.lastNurtureAt : null;
+    const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toMillis() : 0;
 
-    // The decision itself lives in lib/leadNurture.ts, where it can be tested
-    // by running it. This function is only the read and the write around it.
-    const verdict = claimVerdict(
+    // Everything the decision needs, read again here rather than trusted from
+    // the top of the run. A reply, a stage change, a do-not-knock mark or a
+    // withdrawn consent in the meantime all land in these fields.
+    const decision = claimDecision(
       {
-        exists: fresh.exists,
-        freshStep: typeof data.nurtureStep === "number" ? data.nurtureStep : 0,
-        freshLastNurtureAtMs: previous ? previous.toMillis() : null,
-        expectedStep,
-        expectedLastNurtureAtMs,
+        cas: {
+          exists: fresh.exists,
+          freshStep: typeof data.nurtureStep === "number" ? data.nurtureStep : 0,
+          freshLastNurtureAtMs: previous ? previous.toMillis() : null,
+          expectedStep: lead.nurtureStep,
+          expectedLastNurtureAtMs: lead.lastNurtureAtMs,
+        },
+        fresh: {
+          pipelineStage: typeof data.pipelineStage === "string" ? data.pipelineStage : "",
+          status: typeof data.status === "string" ? data.status : "",
+          createdAtMs: createdAt,
+          nurtureStep: typeof data.nurtureStep === "number" ? data.nurtureStep : 0,
+          lastNurtureAtMs: previous ? previous.toMillis() : null,
+          hasReplied: hasInboundNote(noteKinds(data.notes)),
+          phone: typeof data.phone === "string" ? data.phone : "",
+          consent: readConsent(data.smsConsent),
+          optedOut: Boolean(data.smsOptOut),
+        },
+        group,
       },
       nowMs,
     );
 
-    if (!verdict.claim) return { claimed: false as const, reason: verdict.reason };
+    if (!decision.claim) return { claimed: false as const, reason: decision.reason };
 
     tx.update(docRef, { lastNurtureAt: Timestamp.now() });
-    return { claimed: true as const, previous };
+    return {
+      claimed: true as const,
+      previous,
+      step: decision.step,
+      kind: decision.kind,
+    };
   });
 }
 
@@ -238,14 +263,22 @@ export async function GET(request: Request): Promise<Response> {
 
     let sent = 0;
 
-    for (const lead of chosen) {
+    for (const { lead, effectiveStep, effectiveLastNurtureAtMs } of chosen) {
       // One lead's problem is one lead's problem. Before this, a single thrown
       // error — a corrupt counter was enough — ended the run and abandoned
       // every lead after it in the list.
       try {
-        const verdict = nurtureDecision(lead, now);
-        if (!verdict.send) {
-          outcomes.push({ customerId: lead.id, action: "skipped", reason: verdict.reason });
+        // A pre-filter only. The decision that authorises the text is made
+        // from fresh data inside the claim below; this one exists so the run
+        // does not pay for an opt-out lookup and a transaction on every lead
+        // in the business every night. It is asked using the number's
+        // progress, not this record's, or a duplicate would look overdue.
+        const preview = nurtureDecision(
+          { ...lead, nurtureStep: effectiveStep, lastNurtureAtMs: effectiveLastNurtureAtMs },
+          now,
+        );
+        if (!preview.send) {
+          outcomes.push({ customerId: lead.id, action: "skipped", reason: preview.reason });
           continue;
         }
 
@@ -268,20 +301,28 @@ export async function GET(request: Request): Promise<Response> {
           outcomes.push({
             customerId: lead.id,
             action: "deferred",
-            step: verdict.step + 1,
+            step: preview.step + 1,
             reason: `run cap of ${MAX_SENDS_PER_RUN} reached`,
           });
           continue;
         }
 
         const docRef = db.collection("customers").doc(lead.id);
-        const claim = await claimStep(docRef, lead.nurtureStep, lead.lastNurtureAtMs, now);
+        const claim = await claimStep(
+          docRef,
+          lead,
+          { effectiveStep, effectiveLastNurtureAtMs },
+          now,
+        );
         if (!claim.claimed) {
           outcomes.push({ customerId: lead.id, action: "skipped", reason: claim.reason });
           continue;
         }
 
-        const body = leadNurtureText(verdict.kind, lead.firstName);
+        // The claim's step and kind, not the preview's — the claim read the
+        // lead again and is the only one of the two that authorised anything.
+        const step = claim.step;
+        const body = leadNurtureText(claim.kind, lead.firstName);
         const result = await sendSmsToCustomerId(lead.id, body);
 
         if (!result.ok) {
@@ -292,8 +333,8 @@ export async function GET(request: Request): Promise<Response> {
             lead.id,
             {
               text: result.refused
-                ? `Nurture step ${verdict.step + 1} not sent: ${result.error}`
-                : `Nurture step ${verdict.step + 1} failed: ${result.error}`,
+                ? `Nurture step ${step + 1} not sent: ${result.error}`
+                : `Nurture step ${step + 1} failed: ${result.error}`,
               kind: "sms_out",
               authorUid: "system",
               authorName: "Lead nurture",
@@ -303,7 +344,7 @@ export async function GET(request: Request): Promise<Response> {
           outcomes.push({
             customerId: lead.id,
             action: "failed",
-            step: verdict.step + 1,
+            step: step + 1,
             reason: result.error,
           });
           continue;
@@ -316,16 +357,20 @@ export async function GET(request: Request): Promise<Response> {
         // bookkeeping ten times must not go on to send an eleventh.
         sent += 1;
 
-        await docRef.update({ nurtureStep: FieldValue.increment(1) });
+        // Set, not incremented. The step that was sent is the *number's*
+        // step, which can be ahead of this record's own — a duplicate whose
+        // sibling sent step 1 sends step 2 from its own counter of 0, and
+        // incrementing would leave it at 1 and send step 2 again tomorrow.
+        await docRef.update({ nurtureStep: step + 1 });
 
         await appendNote(lead.id, {
           text: body,
           kind: "sms_out",
           authorUid: "system",
-          authorName: `Lead nurture ${verdict.step + 1} of 3`,
+          authorName: `Lead nurture ${step + 1} of 3`,
         });
 
-        outcomes.push({ customerId: lead.id, action: "sent", step: verdict.step + 1 });
+        outcomes.push({ customerId: lead.id, action: "sent", step: step + 1 });
         await wait(SEND_INTERVAL_MS);
       } catch (error) {
         outcomes.push({
