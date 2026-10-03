@@ -657,27 +657,30 @@ export async function GET(request: Request): Promise<Response> {
     // One notification for the run, not one per lead. A nightly job that sent
     // three texts should not produce three buzzes over breakfast.
     const held = outcomes.filter((o) => o.action === "held");
-    if (held.length > 0) {
-      // Worth a buzz, unlike the rest of this job's output: these numbers are
-      // stuck and no further run will unstick them.
-      await notifyCrew({
-        type: "followup_sent",
-        actorName: "Lead nurture",
-        body:
-          held.length === 1
-            ? "1 lead is held: a text reached Twilio but was never recorded. Check whether it arrived."
-            : `${held.length} leads are held: texts reached Twilio but were never recorded. Check whether they arrived.`,
-      });
-    }
 
-    if (sent > 0) {
+    // One notification for the run. Not one per lead, and not one per kind of
+    // outcome either — a run that nudged three leads and held one used to
+    // send two, which is both the thing the comment here promised not to do
+    // and two buzzes over breakfast instead of one.
+    //
+    // The held count leads, because it is the part that needs somebody.
+    if (sent > 0 || held.length > 0) {
+      const nudged =
+        sent === 1 ? "1 quiet lead was nudged overnight" : `${sent} quiet leads were nudged overnight`;
+      const stuck =
+        held.length === 1
+          ? "1 is held: a text reached Twilio and was never recorded"
+          : `${held.length} are held: texts reached Twilio and were never recorded`;
+
       await notifyCrew({
         type: "followup_sent",
         actorName: "Lead nurture",
         body:
-          sent === 1
-            ? "1 quiet lead was nudged overnight."
-            : `${sent} quiet leads were nudged overnight.`,
+          held.length === 0
+            ? `${nudged}.`
+            : sent === 0
+              ? `${stuck}. Check whether ${held.length === 1 ? "it" : "they"} arrived.`
+              : `${nudged}, and ${stuck}. Check whether ${held.length === 1 ? "it" : "they"} arrived.`,
       });
     }
 

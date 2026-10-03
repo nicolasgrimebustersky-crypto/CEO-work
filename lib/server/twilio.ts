@@ -2,6 +2,8 @@ import "server-only";
 
 import twilio from "twilio";
 
+import { deliveryForFailure, type Delivery } from "@/lib/smsDelivery";
+
 import { readTwilioCredentials, twilioSetupHint } from "@/lib/twilio/credentials";
 
 /**
@@ -72,27 +74,10 @@ export function toE164(raw: string): string | null {
 }
 
 /**
- * What is actually known about where a message ended up.
- *
- * `ok: false` on its own is not enough to act on, and treating it as "nothing
- * was sent" caused a real bug. A failure can mean Twilio answered and refused,
- * or it can mean the request went out and the answer never came back — and in
- * the second case the text may well have been delivered. Code that undoes its
- * bookkeeping on every failure will, in that second case, send the same
- * message again.
- *
- *   "rejected" — nothing was sent, and that is known. Either the number or the
- *   body failed validation before Twilio was called at all, or Twilio replied
- *   with an error code of its own.
- *
- *   "unknown" — the request was made and no answer came back. A timeout, a
- *   dropped connection, a process killed mid-flight. The message may have been
- *   accepted. Nothing may be assumed.
- *
- *   "accepted" — Twilio took it and gave back a sid.
+ * Delivery and its classifier live in lib/smsDelivery.ts, which is pure, so
+ * the rule can be tested by running it rather than by matching this file with
+ * a regex. The rule was wrong and the regex passed, which is the argument.
  */
-export type Delivery = "accepted" | "rejected" | "unknown";
-
 export interface SendResult {
   ok: boolean;
   to: string;
@@ -109,11 +94,6 @@ export interface SendResult {
  * of those present means the service replied and declined, which is a fact.
  * Neither present means the failure happened in transit, which is not.
  */
-function answeredByTwilio(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const e = error as { code?: unknown; status?: unknown };
-  return typeof e.code === "number" || typeof e.status === "number";
-}
 
 export async function sendSms(rawTo: string, body: string): Promise<SendResult> {
   const to = toE164(rawTo);
@@ -133,7 +113,7 @@ export async function sendSms(rawTo: string, body: string): Promise<SendResult> 
       error: error instanceof Error ? error.message : "Twilio rejected the message.",
       // A timeout is not a refusal. Saying "rejected" here is what let a
       // message that may have been delivered be sent again.
-      delivery: answeredByTwilio(error) ? "rejected" : "unknown",
+      delivery: deliveryForFailure(error),
     };
   }
 }

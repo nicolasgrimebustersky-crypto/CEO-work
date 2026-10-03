@@ -357,46 +357,22 @@ describe("a lost answer from Twilio is not a refusal", () => {
    * number Twilio rejected and a request whose answer never came back were
    * indistinguishable downstream. The cron released its claim on both — and in
    * the second case the text may well have been delivered, so releasing the
-   * hold meant sending the same message again five days later. That is the
-   * exact replay the pending marker was added to stop, arriving through the
-   * failure path instead of the success path.
+   * hold meant sending the same message again five days later.
    *
-   * The distinction is made where the knowledge is: a Twilio REST error
-   * carries its own code and an HTTP status, and one of those being present
-   * means the service answered and declined. Neither present means the
-   * failure happened in transit and nothing may be assumed.
+   * The classification itself is tested by running it, in
+   * tests/smsDelivery.test.mjs. It used to be pinned here by matching
+   * lib/server/twilio.ts with a regex, and that was worth less than it looked:
+   * the rule it pinned was wrong — it called an HTTP 503 a rejection — and the
+   * regex passed anyway. What is left here is the part that is genuinely about
+   * this route: that it asks for the classification rather than re-deriving
+   * one.
    */
-  const TWILIO = readFileSync(join(ROOT, "lib/server/twilio.ts"), "utf8")
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/\/\/.*$/gm, "");
   const ROUTE = "app/api/cron/lead-nurture/route.ts";
   const code = readFileSync(join(ROOT, ROUTE), "utf8")
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/\/\/.*$/gm, "");
 
-  test("sendSms says what it knows about every outcome", () => {
-    assert.match(TWILIO, /delivery:\s*"accepted"/, "a sid back from Twilio is an acceptance");
-    assert.match(TWILIO, /delivery:\s*"rejected"/, "a validation failure never reached Twilio");
-    assert.match(
-      TWILIO,
-      /delivery:\s*answeredByTwilio\(error\)\s*\?\s*"rejected"\s*:\s*"unknown"/,
-      "a caught error must be classified by whether Twilio answered, not assumed to be a refusal",
-    );
-  });
-
-  test("an answer from Twilio is recognised by its own code or status", () => {
-    assert.match(
-      TWILIO,
-      /typeof e\.code === "number" \|\| typeof e\.status === "number"/,
-      "neither present means the request vanished in transit",
-    );
-  });
-
   test("the cron releases its claim only on a confirmed non-send", () => {
-    // The classification now lives in sendStateFrom and the rule in
-    // mayRelease, so what this pins is that the route asks them rather than
-    // re-deriving either at the call site — which is how both halves of this
-    // went wrong before.
     assert.match(
       code,
       /sendState = sendStateFrom\(result\)/,
@@ -418,5 +394,66 @@ describe("a lost answer from Twilio is not a refusal", () => {
       /action: certain \? "failed" : "held"/,
       `${ROUTE} must distinguish a failure from an unknown in what it reports`,
     );
+  });
+
+  test("the run sends one notification, whatever mix of outcomes it had", () => {
+    // A run that nudged three leads and held one used to send two.
+    const calls = code.match(/await notifyCrew\(/g) ?? [];
+    assert.equal(
+      calls.length,
+      1,
+      `${ROUTE} must notify once per run, not once per kind of outcome — found ${calls.length}`,
+    );
+  });
+});
+
+describe("a claim is released once, and only by its owner", () => {
+  /*
+   * The failed-send path releases its claim and then writes a note about the
+   * failure. When that note write threw, the catch released the same claim a
+   * second time — and between the two releases the number was free for an
+   * overlapping run to claim, which the blind second release then erased.
+   *
+   * The ownership half of the fix is tested properly in
+   * tests/leadNurture.test.mjs via claimStillOwns. This is the route half: the
+   * flag, and the fact that the release is transactional rather than two
+   * independent writes.
+   */
+  const ROUTE = "app/api/cron/lead-nurture/route.ts";
+  const code = readFileSync(join(ROOT, ROUTE), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "");
+
+  test("the catch will not release a claim already given back", () => {
+    assert.match(code, /let released\s*=\s*false/, `${ROUTE} must track whether it released`);
+    assert.match(
+      code,
+      /mayRelease\(sendState, released\)/,
+      "the catch must skip a claim the failed-send path already released",
+    );
+  });
+
+  test("every release sets the flag", () => {
+    // Call sites only — the function's own declaration is not a release.
+    const releases = code.match(/await rollBackClaim\(/g) ?? [];
+    const flags = code.match(/released\s*=\s*true/g) ?? [];
+    assert.ok(releases.length >= 2, `expected every release site, found ${releases.length}`);
+    assert.equal(
+      flags.length,
+      releases.length,
+      "each release must mark itself, or a later one will repeat it",
+    );
+  });
+
+  test("the release is one transaction, checked against the claim's own stamp", () => {
+    const fn = code.slice(code.indexOf("async function rollBackClaim"));
+    const body = fn.slice(0, fn.indexOf("\ninterface "));
+    assert.match(body, /runTransaction/, "a two-write release is not atomic");
+    assert.match(
+      body,
+      /claimStillOwns/,
+      "a release must check it still owns what it is undoing, or it can erase a live claim",
+    );
+    assert.match(code, /stamp: Timestamp/, "the claim must carry the stamp it wrote");
   });
 });
