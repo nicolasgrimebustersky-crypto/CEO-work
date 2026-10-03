@@ -56,6 +56,8 @@ export async function sendSmsToCustomer(
       to: customer.phone,
       error: verdict.reason,
       refused: true,
+      // Refused here, so Twilio was never called and nothing was sent.
+      delivery: "rejected" as const,
     };
   }
 
@@ -80,6 +82,8 @@ export async function sendSmsToCustomerId(
       to: "",
       error: "That customer no longer exists.",
       refused: true,
+      // Refused here, so Twilio was never called and nothing was sent.
+      delivery: "rejected" as const,
     };
   }
   return sendSmsToCustomer(customer, body);
@@ -103,19 +107,29 @@ export async function sendSmsToCustomerId(
 export async function sendSmsToPhone(
   phone: string,
   body: string,
+  orgId: string,
 ): Promise<CustomerSendResult> {
   const number = (phone ?? "").trim();
   if (!number) {
-    return { ok: false, to: "", error: "No phone number to send to.", refused: true };
+    return {
+      ok: false,
+      to: "",
+      error: "No phone number to send to.",
+      refused: true,
+      // Refused here, so Twilio was never called and nothing was sent.
+      delivery: "rejected" as const,
+    };
   }
 
-  const optOut = await optOutForPhone(number);
+  const optOut = await optOutForPhone(number, orgId);
   if (optOut) {
     return {
       ok: false,
       to: number,
       error: `This number replied ${optOut.keyword || "STOP"} and has not opted back in. Call instead.`,
       refused: true,
+      // Refused here, so Twilio was never called and nothing was sent.
+      delivery: "rejected" as const,
     };
   }
 

@@ -157,3 +157,40 @@ export function reviewRequestText(
   if (!url) return "";
   return `${greetingFor(customerFirstName)}, thanks — ${BUSINESS_NAME} has received your payment and the job is all wrapped up. If we did right by you, a quick Google review helps a small local business more than you'd think.${OPT_OUT}\n\n${url}`;
 }
+
+/**
+ * The three nurture texts, for a lead who asked for a price and went quiet.
+ *
+ * Written to be worth receiving, which is not decoration — it is what keeps
+ * them out of a spam report. Each one gives the person something (a decision
+ * made easy, a number, a way out) instead of asking again whether they have
+ * decided. "Just checking in" is the message that gets reported, because it
+ * costs the reader time and returns nothing.
+ *
+ * All three name the business, carry the opt-out, and stay inside one segment
+ * where they can. See lib/leadNurture.ts for when each is allowed to go.
+ */
+export function leadNurtureText(
+  kind: "nudge" | "value" | "last_call",
+  customerFirstName: string | null | undefined,
+): string {
+  const hello = greetingFor(customerFirstName);
+
+  switch (kind) {
+    // Day 3. The whole job of this one is to be easy to answer, so it asks a
+    // question with a one-word reply rather than "any thoughts?".
+    case "nudge":
+      return `${hello}, ${BUSINESS_NAME} here — you asked about a quote last week and I don't want to chase you. Still want a price? Reply YES and I'll get you one.${OPT_OUT}`;
+
+    // Day 10. Gives a number without being asked, because the real reason
+    // people go quiet is not knowing whether they can afford it.
+    case "value":
+      return `${hello}, ${BUSINESS_NAME}. Most driveways around Louisville run $150-$250 and take about an hour. If that's in the range you had in mind I can come look this week — just reply back.${OPT_OUT}`;
+
+    // Day 30. Says out loud that this is the last one. That sentence is why
+    // this sequence does not need a fourth message: it converts the people who
+    // were going to act, and it ends things cleanly for everybody else.
+    case "last_call":
+      return `${hello}, last one from ${BUSINESS_NAME} — I won't keep texting. If you'd like a quote later, call ${OWNER_PHONE} any time and we'll pick it up from there.${OPT_OUT}`;
+  }
+}

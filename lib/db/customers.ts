@@ -110,6 +110,11 @@ export function toCustomer(snap: QueryDocumentSnapshot<DocumentData>): Customer 
       ? (data.source as LeadSource)
       : "door_knock",
     sourceLeadId: typeof data.sourceLeadId === "string" ? data.sourceLeadId : null,
+    // Absent on every record written before lead nurture existed, which reads
+    // back as "none sent" — the truth, and the reading that leaves the age
+    // guard in lib/leadNurture.ts to decide whether a sequence may start.
+    nurtureStep: typeof data.nurtureStep === "number" ? data.nurtureStep : 0,
+    lastNurtureAt: data.lastNurtureAt instanceof Timestamp ? data.lastNurtureAt : null,
     updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt : null,
     updatedBy: typeof data.updatedBy === "string" ? data.updatedBy : null,
     updatedByName: typeof data.updatedByName === "string" ? data.updatedByName : null,

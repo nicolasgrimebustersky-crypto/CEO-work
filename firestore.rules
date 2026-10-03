@@ -185,6 +185,41 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasAll(['updatedAt']);
     }
 
+    // The nurture counters belong to the cron, not to a client.
+    //
+    // They decide whether somebody who has never replied gets a text and which
+    // one. A client that could reset nurtureStep to 0 could replay step 1 at a
+    // lead who already had it, and one that could backdate lastNurtureAt could
+    // step around the minimum gap between messages. Neither is a thing anybody
+    // would do on purpose from the app — nothing in the UI writes these — which
+    // is exactly why they should not be writable by accident.
+    //
+    // app/api/cron/lead-nurture runs on the Admin SDK and bypasses these rules,
+    // so locking them here costs no legitimate write. Restarting a sequence by
+    // hand is deliberately not possible from a screen; it would be a server
+    // change, which is the right amount of friction for re-texting somebody.
+    // A new lead starts the sequence at the beginning or not at all.
+    //
+    // keepsNurtureCounters() below stops a client *changing* these, which left
+    // create wide open: a record could be created at step -1, and until
+    // lib/leadNurture.ts was hardened that indexed past the end of the step
+    // list, threw, and took the whole nightly run down — so one planted record
+    // stopped every lead being nurtured. The pure code refuses corrupt
+    // counters now; this stops them being written in the first place.
+    //
+    // Absent is fine and is the normal case: nothing in the UI writes these,
+    // and a missing counter reads back as 0.
+    function safeNurtureStart() {
+      let data = request.resource.data;
+      return (!('nurtureStep' in data) || data.nurtureStep == 0)
+        && (!('lastNurtureAt' in data) || data.lastNurtureAt == null);
+    }
+
+    function keepsNurtureCounters() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['nurtureStep', 'lastNurtureAt']);
+    }
+
     // An opt-out is the customer's own instruction, and no client may touch it.
     //
     // lib/db/customers.ts leaves smsOptOut out of CustomerPatch and says in a
@@ -358,17 +393,42 @@ service cloud.firestore {
         && data.customerId is string;
     }
 
+    // One document per phone number, holding what the lead-nurture cron has
+    // sent to that person. It is the shared claim two overlapping runs
+    // contend on, and the record of a number's progress that survives its
+    // customer rows being edited, re-staged or deleted.
+    //
+    // Closed to clients entirely, reads included.
+    //
+    // It was briefly readable by any signed-in crew member, which leaked a
+    // list of phone numbers and their contact history across every business
+    // using this app — the document is keyed by the number alone and carries
+    // no orgId, so there is nothing here to scope an org check against, and a
+    // number is not inherently one business's anyway. The crew-facing reason
+    // for reading it was never real: nurtureStep sits on the customer record,
+    // which is already org-scoped, and that is where the crew looks.
+    //
+    // Writes were always denied and the reason stands: rewinding `step` would
+    // replay the whole sequence at somebody, and moving `lastNurtureAt`
+    // forward would silence a number. The cron runs on the Admin SDK, which
+    // does not pass through these rules, so closing this costs it nothing.
+    match /nurtureNumbers/{phoneKey} {
+      allow read, write: if false;
+    }
+
     match /customers/{customerId} {
       allow read: if isCrew() && belongsToMyOrg(resource.data);
       allow create: if isCrew()
         && stampedByCaller('createdBy')
         && validCustomer()
+        && safeNurtureStart()
         && createsInMyOrg(request.resource.data);
       allow update: if isCrew()
         && belongsToMyOrg(resource.data)
         && refreshesAuthorStamp()
         && validCustomer()
         && keepsOptOut()
+        && keepsNurtureCounters()
         && keepsOrg();
       allow delete: if isCrew() && belongsToMyOrg(resource.data);
     }

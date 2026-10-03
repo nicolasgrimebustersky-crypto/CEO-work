@@ -422,6 +422,78 @@ describe("customer author stamps", () => {
 
 /* -------------------------------------------------------------------- jobs */
 
+describe("a new lead starts the nurture sequence at the beginning", () => {
+  // Codex review on #60: keepsNurtureCounters() guarded changes and left
+  // create open, so a record could be born at step -1. Until the pure code was
+  // hardened that threw inside the nightly run and abandoned every other lead.
+  test("a negative step cannot be created", async () => {
+    await assertFails(
+      addDoc(collection(alice, "customers"), customerDoc("alice", { nurtureStep: -1 })),
+    );
+  });
+
+  test("nor a fractional one", async () => {
+    await assertFails(
+      addDoc(collection(alice, "customers"), customerDoc("alice", { nurtureStep: 0.5 })),
+    );
+  });
+
+  test("nor one part-way through the sequence", async () => {
+    await assertFails(
+      addDoc(collection(alice, "customers"), customerDoc("alice", { nurtureStep: 2 })),
+    );
+  });
+
+  test("nor a last-sent stamp on a lead nothing has been sent to", async () => {
+    await assertFails(
+      addDoc(
+        collection(alice, "customers"),
+        customerDoc("alice", { lastNurtureAt: serverTimestamp() }),
+      ),
+    );
+  });
+
+  test("zero is fine, and so is leaving them out entirely", async () => {
+    await assertSucceeds(
+      addDoc(collection(alice, "customers"), customerDoc("alice", { nurtureStep: 0 })),
+    );
+    await assertSucceeds(addDoc(collection(alice, "customers"), customerDoc("alice")));
+  });
+});
+
+describe("the lead-nurture counters belong to the cron", () => {
+  test("a crew member cannot reset the step counter", async () => {
+    // Resetting to 0 would let step 1 go out again to a lead who already had
+    // it — a second "still want a price?" to somebody who never answered the
+    // first.
+    await assertFails(
+      updateDoc(doc(alice, "customers/c1"), stampedUpdate("alice", { nurtureStep: 0 })),
+    );
+  });
+
+  test("nor advance it", async () => {
+    await assertFails(
+      updateDoc(doc(alice, "customers/c1"), stampedUpdate("alice", { nurtureStep: 2 })),
+    );
+  });
+
+  test("nor backdate the last-sent stamp", async () => {
+    // Backdating is how somebody would step around the minimum gap between
+    // messages without touching the step counter at all.
+    await assertFails(
+      updateDoc(doc(alice, "customers/c1"), stampedUpdate("alice", { lastNurtureAt: null })),
+    );
+  });
+
+  test("everything else about that lead stays editable", async () => {
+    // A rule that locked the whole record would be its own bug: the crew still
+    // needs to fix a phone number on a lead mid-sequence.
+    await assertSucceeds(
+      updateDoc(doc(alice, "customers/c1"), stampedUpdate("alice", { phone: "(502) 555-0199" })),
+    );
+  });
+});
+
 describe("an opt-out is the customer's own instruction", () => {
   /** Put a STOP on c1, the way the inbound webhook does (Admin SDK, no rules). */
   async function withOptOut() {
@@ -1725,5 +1797,62 @@ describe("the audit log", () => {
       .authenticatedContext("nicolas", { email: "nicolas.grimebustersky@gmail.com", auth_time: SIGNED_IN_AT + 9000 })
       .firestore();
     await assertFails(getDoc(doc(adminFresh, "auditLog/e1")));
+  });
+});
+
+describe("a phone number's nurture history", () => {
+  // One document per number, holding what the lead-nurture cron has sent to
+  // that person. Closed to clients in both directions.
+  //
+  // Reads were briefly allowed to any signed-in crew member. That leaked a
+  // list of phone numbers and their contact history across every business
+  // using this app: the document is keyed by the number alone, carries no
+  // orgId, and a number is not inherently one business's — so there was
+  // nothing to scope an org check against. The crew-facing reason was never
+  // real either, since nurtureStep sits on the customer record, which is
+  // org-scoped already.
+  test("the cron's own writes are unaffected — they bypass rules entirely", async () => {
+    // Establishes the document exists for the denial tests below, and records
+    // why denying everything costs the feature nothing: this is how the cron
+    // writes it, on the Admin SDK.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "nurtureNumbers/5025550147"), {
+        phoneKey: "5025550147",
+        step: 1,
+      });
+    });
+    await assertSucceeds(
+      testEnv.withSecurityRulesDisabled(async (ctx) =>
+        getDoc(doc(ctx.firestore(), "nurtureNumbers/5025550147")),
+      ),
+    );
+  });
+
+  test("no crew member can read it, in any organisation", async () => {
+    await assertFails(getDoc(doc(alice, "nurtureNumbers/5025550147")));
+    await assertFails(getDoc(doc(bob, "nurtureNumbers/5025550147")));
+    await assertFails(getDocs(collection(alice, "nurtureNumbers")));
+  });
+
+  test("the admin cannot read it either", async () => {
+    await assertFails(getDoc(doc(admin, "nurtureNumbers/5025550147")));
+    await assertFails(getDocs(collection(admin, "nurtureNumbers")));
+  });
+
+  test("a signed-out stranger cannot read it", async () => {
+    await assertFails(getDoc(doc(anon, "nurtureNumbers/5025550147")));
+    await assertFails(getDocs(collection(anon, "nurtureNumbers")));
+  });
+
+  test("nobody can write it, not even the admin", async () => {
+    // Rewinding `step` would replay the whole sequence to somebody who has
+    // already had it; moving `lastNurtureAt` forward would silence a number.
+    await assertFails(updateDoc(doc(alice, "nurtureNumbers/5025550147"), { step: 0 }));
+    await assertFails(updateDoc(doc(admin, "nurtureNumbers/5025550147"), { step: 0 }));
+    await assertFails(
+      setDoc(doc(alice, "nurtureNumbers/5025559999"), { phoneKey: "5025559999", step: 0 }),
+    );
+    await assertFails(deleteDoc(doc(admin, "nurtureNumbers/5025550147")));
+    await assertFails(setDoc(doc(anon, "nurtureNumbers/5025551111"), { step: 0 }));
   });
 });

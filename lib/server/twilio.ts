@@ -2,6 +2,8 @@ import "server-only";
 
 import twilio from "twilio";
 
+import { deliveryForFailure, type Delivery } from "@/lib/smsDelivery";
+
 import { readTwilioCredentials, twilioSetupHint } from "@/lib/twilio/credentials";
 
 /**
@@ -71,26 +73,47 @@ export function toE164(raw: string): string | null {
   return null;
 }
 
+/**
+ * Delivery and its classifier live in lib/smsDelivery.ts, which is pure, so
+ * the rule can be tested by running it rather than by matching this file with
+ * a regex. The rule was wrong and the regex passed, which is the argument.
+ */
 export interface SendResult {
   ok: boolean;
   to: string;
   sid?: string;
   error?: string;
+  /** What is known about delivery — see Delivery above. */
+  delivery: Delivery;
 }
+
+/**
+ * Did Twilio itself answer, or did the request vanish?
+ *
+ * A Twilio REST error carries its own numeric `code` and an HTTP `status`. One
+ * of those present means the service replied and declined, which is a fact.
+ * Neither present means the failure happened in transit, which is not.
+ */
 
 export async function sendSms(rawTo: string, body: string): Promise<SendResult> {
   const to = toE164(rawTo);
-  if (!to) return { ok: false, to: rawTo, error: "Not a valid US phone number." };
-  if (!body.trim()) return { ok: false, to, error: "Message body is empty." };
+  // Neither of these reached Twilio, so nothing was sent and that is known.
+  if (!to) {
+    return { ok: false, to: rawTo, error: "Not a valid US phone number.", delivery: "rejected" };
+  }
+  if (!body.trim()) return { ok: false, to, error: "Message body is empty.", delivery: "rejected" };
 
   try {
     const message = await client().messages.create({ to, from: fromNumber, body });
-    return { ok: true, to, sid: message.sid };
+    return { ok: true, to, sid: message.sid, delivery: "accepted" };
   } catch (error) {
     return {
       ok: false,
       to,
       error: error instanceof Error ? error.message : "Twilio rejected the message.",
+      // A timeout is not a refusal. Saying "rejected" here is what let a
+      // message that may have been delivered be sent again.
+      delivery: deliveryForFailure(error),
     };
   }
 }
