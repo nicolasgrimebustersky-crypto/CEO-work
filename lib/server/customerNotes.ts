@@ -2,6 +2,7 @@ import "server-only";
 
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
+import { asOrgId } from "@/lib/org";
 import { adminDb } from "./admin";
 import type { SmsConsent, SmsOptOut } from "@/lib/smsConsent";
 import type { NoteKind } from "@/lib/types";
@@ -193,7 +194,10 @@ export async function optOutForPhone(rawPhone: string): Promise<SmsOptOut | null
  * record in that window used to be invisible.
  *
  * One record saying stop is enough. A second record without the mark is not a
- * retraction of the first.
+ * retraction of the first — within one business. Records belonging to another
+ * org are skipped entirely: a number is shared between companies often enough
+ * (a landlord, a property manager, a spouse) and neither business's history is
+ * the other's to act on.
  */
 export interface NumberSuppression {
   /** Somebody on this number has written back. */
@@ -204,7 +208,10 @@ export interface NumberSuppression {
   optOut: SmsOptOut | null;
 }
 
-export async function numberSuppression(rawPhone: string): Promise<NumberSuppression> {
+export async function numberSuppression(
+  rawPhone: string,
+  orgId: string,
+): Promise<NumberSuppression> {
   const none: NumberSuppression = { replied: false, blocked: false, optOut: null };
   const digits = String(rawPhone ?? "").replace(/\D/g, "").slice(-10);
   if (digits.length !== 10) return none;
@@ -220,6 +227,11 @@ export async function numberSuppression(rawPhone: string): Promise<NumberSuppres
     const phone = data.phone;
     if (typeof phone !== "string") continue;
     if (phone.replace(/\D/g, "").slice(-10) !== digits) continue;
+    // A different business's record says nothing about this one's customer.
+    // Two companies can hold the same number and one of them having been told
+    // to stop is not the other's instruction — nor is one's reply a reason to
+    // halt the other's sequence.
+    if (asOrgId(data.orgId) !== orgId) continue;
 
     if (data.status === "do_not_knock") found.blocked = true;
     if (!found.optOut) found.optOut = readOptOut(data.smsOptOut);

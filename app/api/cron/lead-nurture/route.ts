@@ -1,6 +1,7 @@
 import { Timestamp } from "firebase-admin/firestore";
 
 import { phoneKey } from "@/lib/inboundSms";
+import { asOrgId, DEFAULT_ORG_ID } from "@/lib/org";
 import {
   claimDecision,
   claimStillOwns,
@@ -61,6 +62,20 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * Admin SDK only. firestore.rules denies clients any write to it.
  */
 const NUMBERS = "nurtureNumbers";
+
+/**
+ * The key for a number's nurture history.
+ *
+ * Scoped by org as well as by number, because a phone number is not unique
+ * across businesses — a landlord, a property manager or a spouse can be a
+ * customer of two companies using this app. Keying on the number alone meant
+ * one business's progress, replies and do-not-knock marks held up another's
+ * sequence, and one business's sends counted against a number it had never
+ * texted.
+ */
+function numberKey(orgId: string, key: string): string {
+  return `${orgId}__${key}`;
+}
 
 /**
  * Gives a claim back, so the step is retried rather than silently spent.
@@ -152,6 +167,7 @@ function noteKinds(value: unknown): string[] {
 /** What one candidate lead looks like once its document has been read. */
 interface Candidate {
   id: string;
+  orgId: string;
   phoneKey: string;
   phone: string;
   firstName: string;
@@ -218,7 +234,7 @@ async function claimStep(
   | { claimed: false; reason: string }
 > {
   const db = adminDb();
-  const numberRef = db.collection(NUMBERS).doc(lead.phoneKey);
+  const numberRef = db.collection(NUMBERS).doc(numberKey(lead.orgId, lead.phoneKey));
 
   return db.runTransaction(async (tx) => {
     // Both documents are read inside the transaction, which puts the shared
@@ -357,6 +373,17 @@ export async function GET(request: Request): Promise<Response> {
     const candidates: Candidate[] = [];
     for (const doc of snap.docs) {
       const data = doc.data();
+      // Another business's lead is not this deployment's to text. The cron
+      // runs on the Admin SDK, which bypasses the org checks in
+      // firestore.rules entirely, so the filter the rest of the app gets for
+      // free has to be written here — and without it a consented lead
+      // belonging to someone else would receive Grime Busters marketing from
+      // Grime Busters' own Twilio number.
+      //
+      // Skipped outright rather than kept as context: their replies and marks
+      // are not this org's to act on, and ours are not theirs.
+      if (asOrgId(data.orgId) !== DEFAULT_ORG_ID) continue;
+
       const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toMillis() : 0;
       const stage = typeof data.pipelineStage === "string" ? data.pipelineStage : "";
       // Only the one stage this feature touches. A quoted lead belongs to
@@ -375,6 +402,7 @@ export async function GET(request: Request): Promise<Response> {
       const phone = typeof data.phone === "string" ? data.phone : "";
       candidates.push({
         id: doc.id,
+        orgId: asOrgId(data.orgId),
         phoneKey: phoneKey(phone),
         phone,
         firstName: typeof data.firstName === "string" ? data.firstName : "",
@@ -497,7 +525,7 @@ export async function GET(request: Request): Promise<Response> {
         // All three in one scan. Checking only replies here was the gap: the
         // grouping caught a do-not-knock sibling at the top of the run and
         // nothing caught one that arrived during it.
-        const stop = await numberSuppression(claim.phone);
+        const stop = await numberSuppression(claim.phone, lead.orgId);
         const stopReason = stop.optOut
           ? `this number replied ${stop.optOut.keyword || "STOP"} during the run`
           : stop.replied

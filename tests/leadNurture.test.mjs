@@ -1464,3 +1464,66 @@ describe("a send whose answer never came back", () => {
     assert.equal(attempts, 14);
   });
 });
+
+describe("two businesses sharing one phone number", () => {
+  // A landlord, a property manager or a spouse can be a customer of two
+  // companies using this app. Grouping on the number alone meant one
+  // business's reply, do-not-knock mark or nurture progress suppressed the
+  // other's sequence — and the route's own org filter is what keeps the two
+  // sets of records apart before they ever reach this function. These tests
+  // are the other half of that: given only one org's records, as the route now
+  // supplies, the grouping behaves exactly as it should.
+  const rec = (id, patch = {}) => ({
+    id,
+    phoneKey: "5025550147",
+    nurtureStep: 0,
+    lastNurtureAtMs: null,
+    hasReplied: false,
+    optedOut: false,
+    eligible: true,
+    pipelineStage: "new_lead",
+    status: "active",
+    createdAtMs: NOW - 10 * DAY,
+    phone: "+15025550147",
+    consent: { granted: true, method: "web_form" },
+    ...patch,
+  });
+
+  test("our own lead still sends when only our records are supplied", () => {
+    // The control: the filter upstream must not have broken the ordinary case.
+    const { chosen } = oneLeadPerPhone([rec("ours")], NOW);
+    assert.equal(chosen.length, 1);
+    assert.equal(chosen[0].lead.id, "ours");
+  });
+
+  test("a reply only suppresses the records it was given with", () => {
+    // Modelling what the route now passes: the foreign org's replied record is
+    // simply not in the list. If it were, it would silence this number.
+    const withForeign = oneLeadPerPhone([rec("theirs_replied", { hasReplied: true }), rec("ours")], NOW);
+    assert.equal(withForeign.chosen.length, 0, "a replied record in the group silences it");
+
+    const scoped = oneLeadPerPhone([rec("ours")], NOW);
+    assert.equal(scoped.chosen.length, 1, "scoped to one org, the reply is not ours to act on");
+  });
+
+  test("a do-not-knock mark likewise", () => {
+    const withForeign = oneLeadPerPhone(
+      [rec("theirs_blocked", { status: "do_not_knock" }), rec("ours")],
+      NOW,
+    );
+    assert.equal(withForeign.chosen.length, 0);
+    assert.equal(oneLeadPerPhone([rec("ours")], NOW).chosen.length, 1);
+  });
+
+  test("and progress", () => {
+    // Their sequence being finished must not finish ours.
+    const withForeign = oneLeadPerPhone(
+      [rec("theirs_done", { nurtureStep: NURTURE_STEPS.length }), rec("ours")],
+      NOW,
+    );
+    assert.equal(withForeign.chosen[0].effectiveStep, NURTURE_STEPS.length);
+
+    const scoped = oneLeadPerPhone([rec("ours")], NOW);
+    assert.equal(scoped.chosen[0].effectiveStep, 0, "our sequence starts at the beginning");
+  });
+});

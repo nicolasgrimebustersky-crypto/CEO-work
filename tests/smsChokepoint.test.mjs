@@ -202,9 +202,13 @@ describe("the lead nurture cron texts the number it actually checked", () => {
     // All three, because checking only replies here was the gap that let the
     // third one through: the grouping caught a do-not-knock sibling at the top
     // of the run and nothing caught one that arrived during it.
-    const check = code.indexOf("numberSuppression(claim.phone)");
+    const check = code.indexOf("numberSuppression(claim.phone, lead.orgId)");
     const send = code.indexOf("sendSmsToPhone(claim.phone");
-    assert.ok(check > 0, `${ROUTE} must ask numberSuppression about the claimed number`);
+    assert.ok(
+      check > 0,
+      `${ROUTE} must ask numberSuppression about the claimed number, scoped to its org — ` +
+        "another business's replies and marks are not this one's to act on",
+    );
     assert.ok(send > 0, `${ROUTE} must send through sendSmsToPhone`);
     assert.ok(check < send, "the check must come before the send, or it is decoration");
 
@@ -455,5 +459,82 @@ describe("a claim is released once, and only by its owner", () => {
       "a release must check it still owns what it is undoing, or it can erase a live claim",
     );
     assert.match(code, /stamp: Timestamp/, "the claim must carry the stamp it wrote");
+  });
+});
+
+describe("one business cannot nurture another's leads", () => {
+  /*
+   * The cron runs on the Admin SDK, which bypasses firestore.rules entirely —
+   * so the org scoping the rest of the app gets for free has to be written
+   * into this route by hand. Without it, a consented lead belonging to another
+   * business would receive Grime Busters marketing from Grime Busters' own
+   * Twilio number, and one company's replies and do-not-knock marks would
+   * suppress another company's sequence.
+   *
+   * Route-level, so source assertions; the shape of the key and the filter are
+   * what they pin. The behaviour of the org comparison itself is asOrgId,
+   * which is covered in its own tests.
+   */
+  const ROUTE = "app/api/cron/lead-nurture/route.ts";
+  const code = readFileSync(join(ROOT, ROUTE), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "");
+
+  test("a record from another org is skipped before it becomes a candidate", () => {
+    assert.match(
+      code,
+      /if \(asOrgId\(data\.orgId\) !== DEFAULT_ORG_ID\) continue;/,
+      `${ROUTE} must drop foreign-org records while reading, not merely decline to text them`,
+    );
+    // Before the push, so a foreign lead never reaches the grouping — where it
+    // would vote on suppression and progress for a number it does not share.
+    const filter = code.indexOf("asOrgId(data.orgId) !== DEFAULT_ORG_ID");
+    const push = code.indexOf("candidates.push(");
+    assert.ok(filter > 0 && filter < push, "the filter must come before the candidate is built");
+  });
+
+  test("a legacy record with no orgId belongs to the default org", () => {
+    // asOrgId treats a missing orgId as the default, matching firestore.rules,
+    // which reads `data.get('orgId', 'grime-busters')`. Without that, every
+    // record written before the field existed would be foreign and nothing
+    // would ever be nurtured.
+    assert.match(code, /asOrgId\(data\.orgId\)/, `${ROUTE} must normalise a missing orgId`);
+    assert.doesNotMatch(
+      code,
+      /data\.orgId !== DEFAULT_ORG_ID/,
+      "comparing the raw field would exclude every legacy record",
+    );
+  });
+
+  test("the per-number claim is keyed by org as well as number", () => {
+    // A phone number is not unique across businesses — a landlord, a property
+    // manager or a spouse can be a customer of two of them.
+    assert.match(
+      code,
+      /function numberKey\(orgId: string, key: string\)/,
+      `${ROUTE} must key the shared claim by org and number`,
+    );
+    assert.match(
+      code,
+      /\.doc\(numberKey\(lead\.orgId, lead\.phoneKey\)\)/,
+      "the claim document must be looked up by that key",
+    );
+    assert.doesNotMatch(
+      code,
+      /\.doc\(lead\.phoneKey\)/,
+      "keying on the number alone lets one business's progress hold up another's",
+    );
+  });
+
+  test("the suppression scan is asked about one org's records", () => {
+    assert.match(
+      code,
+      /numberSuppression\(claim\.phone, lead\.orgId\)/,
+      `${ROUTE} must scope the pre-send check by org`,
+    );
+  });
+
+  test("the candidate carries its org, so nothing downstream has to guess", () => {
+    assert.match(code, /orgId: asOrgId\(data\.orgId\),/, "Candidate must record the org it came from");
   });
 });
