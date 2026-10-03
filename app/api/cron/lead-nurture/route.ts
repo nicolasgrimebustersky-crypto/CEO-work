@@ -2,6 +2,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 import { phoneKey } from "@/lib/inboundSms";
 import {
+  claimVerdict,
   hasInboundNote,
   nurtureDecision,
   oneLeadPerPhone,
@@ -77,6 +78,8 @@ interface Candidate {
   hasReplied: boolean;
   consent: NurtureConsent | null;
   optedOut: boolean;
+  /** Could this record be texted, or is it only here to vote on its number? */
+  eligible: boolean;
 }
 
 /**
@@ -88,14 +91,23 @@ interface Candidate {
  * endpoint is reachable by anyone holding CRON_SECRET, so two runs overlapping
  * is a thing that happens rather than a thing that theoretically could.
  *
- * The claim is `lastNurtureAt`, written inside a transaction that first
- * re-reads the document and checks the counter is still what the decision was
- * made on. A concurrent run then reads a fresh stamp and its own minimum-gap
- * check refuses — so the duplicate is prevented by the rule that already
- * exists rather than by a new one.
+ * The claim is a compare-and-swap on BOTH fields: the transaction re-reads the
+ * document and goes ahead only if `nurtureStep` and `lastNurtureAt` are still
+ * exactly what the decision was made on, and only if the stored stamp is
+ * outside the minimum gap.
  *
- * `nurtureStep` is deliberately NOT incremented here. It advances only after
- * Twilio has accepted the message, which is what keeps a failed send
+ * Checking the counter alone was not enough, and the reason is worth keeping
+ * written down. `nurtureStep` deliberately does not advance until Twilio has
+ * accepted, so between one run's claim and its increment the counter still
+ * reads 0 — a second run arriving in that window matched on the counter,
+ * claimed, and sent the same text. The minimum-gap rule did not catch it
+ * either: that check runs in `nurtureDecision`, before the transaction, on the
+ * copy of `lastNurtureAt` read at the top of the run. Re-reading the stamp
+ * here is what closes it, because the first run's claim is itself a write to
+ * that stamp.
+ *
+ * `nurtureStep` is still deliberately NOT incremented here. It advances only
+ * after Twilio has accepted the message, which is what keeps a failed send
  * retryable. The cost is that a failure delays the retry by the minimum gap
  * instead of a day, and that is the right side to err on: a message sent twice
  * cannot be recalled, where one sent late can still be sent.
@@ -103,21 +115,29 @@ interface Candidate {
 async function claimStep(
   docRef: FirebaseFirestore.DocumentReference,
   expectedStep: number,
+  expectedLastNurtureAtMs: number | null,
+  nowMs: number,
 ): Promise<{ claimed: true; previous: Timestamp | null } | { claimed: false; reason: string }> {
   return adminDb().runTransaction(async (tx) => {
     const fresh = await tx.get(docRef);
-    if (!fresh.exists) return { claimed: false as const, reason: "the lead was deleted mid-run" };
-
-    const data = fresh.data() ?? {};
-    const step = typeof data.nurtureStep === "number" ? data.nurtureStep : 0;
-    if (step !== expectedStep) {
-      return {
-        claimed: false as const,
-        reason: `another run already advanced this lead to step ${step}`,
-      };
-    }
-
+    const data = fresh.exists ? (fresh.data() ?? {}) : {};
     const previous = data.lastNurtureAt instanceof Timestamp ? data.lastNurtureAt : null;
+
+    // The decision itself lives in lib/leadNurture.ts, where it can be tested
+    // by running it. This function is only the read and the write around it.
+    const verdict = claimVerdict(
+      {
+        exists: fresh.exists,
+        freshStep: typeof data.nurtureStep === "number" ? data.nurtureStep : 0,
+        freshLastNurtureAtMs: previous ? previous.toMillis() : null,
+        expectedStep,
+        expectedLastNurtureAtMs,
+      },
+      nowMs,
+    );
+
+    if (!verdict.claim) return { claimed: false as const, reason: verdict.reason };
+
     tx.update(docRef, { lastNurtureAt: Timestamp.now() });
     return { claimed: true as const, previous };
   });
@@ -152,32 +172,53 @@ export async function GET(request: Request): Promise<Response> {
     }
 
     const db = adminDb();
-    // Only the one stage this feature touches. A quoted lead belongs to
-    // quote-followups, and a won or lost one belongs to nobody.
-    const snap = await db.collection("customers").where("pipelineStage", "==", "new_lead").get();
+    // Every customer, not just the new leads.
+    //
+    // A filtered query was the obvious thing and it was wrong. The Meta
+    // webhook creates a fresh record per form submission rather than matching
+    // an existing one, so one handset can sit here several times — and the
+    // record that carries the person's reply is very often the one that has
+    // since moved to `estimate_sent`, because moving it on is what somebody
+    // does after they reply. Querying `new_lead` alone hid exactly the records
+    // that should stop the sequence, leaving the duplicates still looking like
+    // somebody who had never answered.
+    //
+    // So the read is wide and the eligibility is narrow: every record votes on
+    // its phone number, only a `new_lead` with a creation date can be sent to.
+    // The cost is reading the customers collection once a night, which for a
+    // business of this size is cheaper than one wrong text.
+    const snap = await db.collection("customers").get();
 
     const now = Date.now();
     const outcomes: Outcome[] = [];
 
-    // Read every candidate first. Grouping by phone needs the whole set in
-    // hand: whether this record may send depends on its siblings.
+    // Read every record first. Grouping by phone needs the whole set in hand:
+    // whether this record may send depends on its siblings.
     const candidates: Candidate[] = [];
     for (const doc of snap.docs) {
       const data = doc.data();
       const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toMillis() : 0;
-      // A lead with no creation stamp has no measurable age, and guessing one
-      // would start a sequence from an invented date. Left alone, and reported.
-      if (!createdAt) {
+      const stage = typeof data.pipelineStage === "string" ? data.pipelineStage : "";
+      // Only the one stage this feature touches. A quoted lead belongs to
+      // quote-followups, and a won or lost one belongs to nobody. A lead with
+      // no creation stamp has no measurable age, and guessing one would start
+      // a sequence from an invented date.
+      const eligible = stage === "new_lead" && createdAt > 0;
+
+      // Worth reporting rather than passing over in silence — but only for the
+      // new leads, which are the records somebody expected to be nurtured. A
+      // won customer with no createdAt is not this job's business.
+      if (!eligible && stage === "new_lead") {
         outcomes.push({ customerId: doc.id, action: "skipped", reason: "no createdAt" });
-        continue;
       }
+
       const phone = typeof data.phone === "string" ? data.phone : "";
       candidates.push({
         id: doc.id,
         phoneKey: phoneKey(phone),
         phone,
         firstName: typeof data.firstName === "string" ? data.firstName : "",
-        pipelineStage: typeof data.pipelineStage === "string" ? data.pipelineStage : "",
+        pipelineStage: stage,
         status: typeof data.status === "string" ? data.status : "",
         createdAtMs: createdAt,
         nurtureStep: typeof data.nurtureStep === "number" ? data.nurtureStep : 0,
@@ -186,6 +227,7 @@ export async function GET(request: Request): Promise<Response> {
         hasReplied: hasInboundNote(noteKinds(data.notes)),
         consent: readConsent(data.smsConsent),
         optedOut: Boolean(data.smsOptOut),
+        eligible,
       });
     }
 
@@ -233,7 +275,7 @@ export async function GET(request: Request): Promise<Response> {
         }
 
         const docRef = db.collection("customers").doc(lead.id);
-        const claim = await claimStep(docRef, lead.nurtureStep);
+        const claim = await claimStep(docRef, lead.nurtureStep, lead.lastNurtureAtMs, now);
         if (!claim.claimed) {
           outcomes.push({ customerId: lead.id, action: "skipped", reason: claim.reason });
           continue;
@@ -267,6 +309,13 @@ export async function GET(request: Request): Promise<Response> {
           continue;
         }
 
+        // Counted here, before the writes below, because the cap exists to
+        // limit *texts*, and this text has already left. If the counter write
+        // or the timeline note then throws, this lead is handled by the catch
+        // below — but the message is out regardless, and a run that failed its
+        // bookkeeping ten times must not go on to send an eleventh.
+        sent += 1;
+
         await docRef.update({ nurtureStep: FieldValue.increment(1) });
 
         await appendNote(lead.id, {
@@ -276,7 +325,6 @@ export async function GET(request: Request): Promise<Response> {
           authorName: `Lead nurture ${verdict.step + 1} of 3`,
         });
 
-        sent += 1;
         outcomes.push({ customerId: lead.id, action: "sent", step: verdict.step + 1 });
         await wait(SEND_INTERVAL_MS);
       } catch (error) {
@@ -303,7 +351,8 @@ export async function GET(request: Request): Promise<Response> {
 
     return Response.json({
       ok: true,
-      examined: snap.size,
+      examined: candidates.filter((c) => c.eligible).length,
+      records: snap.size,
       sent,
       deferred: outcomes.filter((o) => o.action === "deferred").length,
       failed: outcomes.filter((o) => o.action === "failed").length,

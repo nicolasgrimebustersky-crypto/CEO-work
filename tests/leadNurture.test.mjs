@@ -18,6 +18,7 @@ const {
   nurtureDecision,
   hasInboundNote,
   oneLeadPerPhone,
+  claimVerdict,
   NURTURE_STEPS,
   MIN_GAP_DAYS,
   MAX_AGE_TO_START_DAYS,
@@ -373,6 +374,7 @@ describe("one person, several records", () => {
     nurtureStep: 0,
     hasReplied: false,
     optedOut: false,
+    eligible: true,
     ...patch,
   });
 
@@ -457,5 +459,189 @@ describe("one person, several records", () => {
     const first = oneLeadPerPhone(leads).chosen[0].id;
     const second = oneLeadPerPhone(leads).chosen[0].id;
     assert.equal(first, second);
+  });
+});
+
+describe("a duplicate that has moved on still speaks for the person", () => {
+  // The case the review named, and the one the first fix missed. Querying
+  // `new_lead` alone never read the record carrying the reply — and that
+  // record is *usually* the one that moved on, because moving it on is what
+  // somebody does after they reply. So the sequence kept running on the
+  // duplicates, texting a person who had already answered.
+  const rec = (id, patch = {}) => ({
+    id,
+    phoneKey: "5025550147",
+    nurtureStep: 0,
+    hasReplied: false,
+    optedOut: false,
+    eligible: true,
+    ...patch,
+  });
+
+  test("a replied estimate_sent duplicate suppresses the new_lead", () => {
+    const { chosen, setAside } = oneLeadPerPhone([
+      rec("quoted", { hasReplied: true, eligible: false }),
+      rec("fresh"),
+    ]);
+    assert.equal(chosen.length, 0, "this person already replied — nothing should send");
+    assert.deepEqual(
+      setAside.map((s) => s.lead.id),
+      ["fresh"],
+      "only the candidate is reported; the voter was never a candidate",
+    );
+    assert.match(setAside[0].reason, /replied/);
+  });
+
+  test("an opt-out on a duplicate that moved on suppresses the new_lead", () => {
+    const { chosen, setAside } = oneLeadPerPhone([
+      rec("won", { optedOut: true, eligible: false }),
+      rec("fresh"),
+    ]);
+    assert.equal(chosen.length, 0);
+    assert.match(setAside[0].reason, /STOP/);
+  });
+
+  test("an ineligible record is never the one that sends", () => {
+    // Even alone, and even though it looks like the furthest along.
+    const { chosen } = oneLeadPerPhone([rec("quoted", { nurtureStep: 2, eligible: false })]);
+    assert.equal(chosen.length, 0);
+  });
+
+  test("an ineligible record does not become noise in the run report", () => {
+    // Every customer in the business is read now. If each non-lead produced a
+    // 'skipped' line, the nightly output would be the customer list.
+    const { chosen, setAside } = oneLeadPerPhone([
+      rec("customer_a", { eligible: false }),
+      rec("customer_b", { eligible: false, phoneKey: "5025559999" }),
+      rec("nophone", { eligible: false, phoneKey: "" }),
+    ]);
+    assert.equal(chosen.length, 0);
+    assert.deepEqual(setAside, [], "records nobody asked to nurture are silent");
+  });
+
+  test("an ineligible sibling's progress still holds the number back", () => {
+    // The sibling got step 1 before it moved on. Sending step 1 from this
+    // record would replay a message the person already has.
+    const { chosen } = oneLeadPerPhone([
+      rec("quoted", { nurtureStep: 1, eligible: false }),
+      rec("fresh", { nurtureStep: 0 }),
+    ]);
+    assert.equal(chosen.length, 1);
+    assert.equal(chosen[0].id, "fresh");
+    // The route then claims on THIS record's own step, so what stops the
+    // replay is nurtureDecision's gap rule plus the claim — not the grouping.
+    // Recorded here so the division of labour is not mistaken for coverage.
+  });
+
+  test("an eligible lead with no ineligible siblings is unaffected", () => {
+    const { chosen } = oneLeadPerPhone([rec("only")]);
+    assert.deepEqual(chosen.map((c) => c.id), ["only"]);
+  });
+});
+
+describe("two runs overlapping cannot send the same text twice", () => {
+  // The first version of this fix claimed on `nurtureStep` alone and I said in
+  // writing that the minimum-gap rule would catch the rest. It would not: the
+  // counter deliberately does not advance until Twilio accepts, so in the
+  // window between one run's claim and its increment the counter still reads
+  // what the second run expects — and the gap check runs *before* the
+  // transaction, on a copy read at the top of the run. These tests exist
+  // because that was wrong in a way that read as correct.
+  const state = (patch = {}) => ({
+    exists: true,
+    freshStep: 0,
+    freshLastNurtureAtMs: null,
+    expectedStep: 0,
+    expectedLastNurtureAtMs: null,
+    ...patch,
+  });
+
+  test("a clean claim goes ahead", () => {
+    assert.deepEqual(claimVerdict(state(), NOW), { claim: true });
+  });
+
+  test("two runs reading the same lead, only one sends", () => {
+    // A tiny model of the document, claimed the way the transaction claims it.
+    let stored = { step: 0, lastNurtureAtMs: null };
+    // Both runs read before either wrote — this is the race.
+    const runA = { expectedStep: stored.step, expectedLastNurtureAtMs: stored.lastNurtureAtMs };
+    const runB = { expectedStep: stored.step, expectedLastNurtureAtMs: stored.lastNurtureAtMs };
+
+    let sends = 0;
+    for (const run of [runA, runB]) {
+      const verdict = claimVerdict(
+        {
+          exists: true,
+          freshStep: stored.step,
+          freshLastNurtureAtMs: stored.lastNurtureAtMs,
+          ...run,
+        },
+        NOW,
+      );
+      if (verdict.claim) {
+        // The claim writes the stamp. The counter does NOT move yet, which is
+        // exactly the condition that defeated the counter-only check.
+        stored = { ...stored, lastNurtureAtMs: NOW };
+        sends += 1;
+      }
+    }
+
+    assert.equal(sends, 1, "one text, not two");
+    assert.equal(stored.step, 0, "the counter has not advanced — Twilio has not answered yet");
+  });
+
+  test("the counter-only check would not have caught it", () => {
+    // Pinning the actual bug: step matches, stamp has moved. If this ever
+    // returns a claim again, the duplicate is back.
+    const verdict = claimVerdict(
+      state({ freshStep: 0, expectedStep: 0, freshLastNurtureAtMs: NOW }),
+      NOW,
+    );
+    assert.equal(verdict.claim, false);
+    assert.match(verdict.reason, /another run claimed/);
+  });
+
+  test("a counter that moved on is refused", () => {
+    const verdict = claimVerdict(state({ freshStep: 1 }), NOW);
+    assert.equal(verdict.claim, false);
+    assert.match(verdict.reason, /advanced this lead to step 1/);
+  });
+
+  test("a lead deleted mid-run is refused", () => {
+    const verdict = claimVerdict(state({ exists: false }), NOW);
+    assert.equal(verdict.claim, false);
+    assert.match(verdict.reason, /deleted mid-run/);
+  });
+
+  test("the gap is re-checked against what is stored, not what was read", () => {
+    // Both runs agree on the stamp, but it is two days old. Whatever the
+    // decision thought, the database says this person was texted on Saturday.
+    const twoDaysAgo = NOW - 2 * DAY;
+    const verdict = claimVerdict(
+      state({ freshLastNurtureAtMs: twoDaysAgo, expectedLastNurtureAtMs: twoDaysAgo }),
+      NOW,
+    );
+    assert.equal(verdict.claim, false);
+    assert.match(verdict.reason, new RegExp(`minimum gap is ${MIN_GAP_DAYS}`));
+  });
+
+  test("a stamp older than the gap claims normally", () => {
+    const old = NOW - (MIN_GAP_DAYS + 1) * DAY;
+    const verdict = claimVerdict(
+      state({ freshLastNurtureAtMs: old, expectedLastNurtureAtMs: old }),
+      NOW,
+    );
+    assert.deepEqual(verdict, { claim: true });
+  });
+
+  test("a failed send leaves the lead claimable again", () => {
+    // The route puts the stamp back on failure and never advances the counter,
+    // so the next run reads exactly what the failed one read.
+    const restored = { step: 0, lastNurtureAtMs: null };
+    const verdict = claimVerdict(
+      state({ freshStep: restored.step, freshLastNurtureAtMs: restored.lastNurtureAtMs }),
+      NOW + DAY,
+    );
+    assert.deepEqual(verdict, { claim: true }, "a failure must not spend the step");
   });
 });

@@ -232,6 +232,18 @@ export interface PhoneGroupable {
   nurtureStep: number;
   hasReplied: boolean;
   optedOut: boolean;
+  /**
+   * Whether this record could be sent to at all.
+   *
+   * An ineligible record — a duplicate that has moved on to `estimate_sent`,
+   * or one with no creation date — is still part of the person's history, and
+   * a reply recorded against it still means this person answered. So it votes
+   * on the group and is never chosen from. Leaving these out of the grouping
+   * entirely was the bug: the record carrying the reply is often exactly the
+   * one that moved on, because moving it on is what somebody does *after*
+   * they reply.
+   */
+  eligible: boolean;
 }
 
 export interface PhoneGroupResult<T> {
@@ -250,7 +262,9 @@ export function oneLeadPerPhone<T extends PhoneGroupable>(leads: readonly T[]): 
     // A record with no usable number cannot be grouped and cannot be texted.
     // It is set aside rather than silently treated as its own group.
     if (!lead.phoneKey) {
-      setAside.push({ lead, reason: "no usable phone number to group on" });
+      if (lead.eligible) {
+        setAside.push({ lead, reason: "no usable phone number to group on" });
+      }
       continue;
     }
     const group = byPhone.get(lead.phoneKey);
@@ -259,21 +273,27 @@ export function oneLeadPerPhone<T extends PhoneGroupable>(leads: readonly T[]): 
   }
 
   for (const group of byPhone.values()) {
-    // Any record saying this person replied or opted out speaks for the number.
+    // Any record saying this person replied or opted out speaks for the
+    // number — including a record that is not itself a candidate.
     const replied = group.some((lead) => lead.hasReplied);
     const optedOut = group.some((lead) => lead.optedOut);
+    // Only a candidate can be sent to. The rest were context.
+    const candidates = group.filter((lead) => lead.eligible);
+    if (candidates.length === 0) continue;
 
     if (optedOut || replied) {
       const reason = optedOut
         ? "this number replied STOP on one of its records"
         : "this number has replied on one of its records";
-      for (const lead of group) setAside.push({ lead, reason });
+      for (const lead of candidates) setAside.push({ lead, reason });
       continue;
     }
 
     // Furthest through the sequence wins; a stable tie-break so two runs over
-    // the same data make the same choice.
-    const sorted = [...group].sort((a, b) => b.nurtureStep - a.nurtureStep);
+    // the same data make the same choice. The step counted here is the whole
+    // number's, duplicates included, so a sibling that already had step 1
+    // stops this record from sending step 1 again.
+    const sorted = [...candidates].sort((a, b) => b.nurtureStep - a.nurtureStep);
     chosen.push(sorted[0]);
     for (const lead of sorted.slice(1)) {
       setAside.push({ lead, reason: "another record for this number is further along" });
@@ -281,4 +301,68 @@ export function oneLeadPerPhone<T extends PhoneGroupable>(leads: readonly T[]): 
   }
 
   return { chosen, setAside };
+}
+
+/**
+ * Whether a run may claim the step it decided to send, given what the database
+ * actually holds right now.
+ *
+ * Separated from the transaction that calls it so the overlap can be tested by
+ * running it. The route's version of this was a transaction on the Admin SDK,
+ * which no test in this repository can reach, and "reasoned about carefully"
+ * is not the same as "checked" — especially here, where the first attempt at
+ * it was wrong in a way that read as correct.
+ *
+ * What was wrong, kept written down because it is the whole point of the
+ * function: matching on `nurtureStep` alone does not stop a duplicate. The
+ * counter deliberately does not advance until Twilio accepts, so between one
+ * run's claim and its increment the counter still reads what the second run
+ * expects. The second run matched, claimed, and sent the same text. The
+ * minimum-gap rule did not save it either, because that check runs before the
+ * transaction on a copy of `lastNurtureAt` read at the top of the run.
+ *
+ * So the claim compares both fields against what was decided on, and re-checks
+ * the gap against the stored stamp. The first run's claim writes that stamp,
+ * which is what the second run then trips over.
+ */
+export interface ClaimState {
+  /** Does the document still exist? */
+  exists: boolean;
+  /** `nurtureStep` as stored right now. */
+  freshStep: number;
+  /** `lastNurtureAt` as stored right now, in ms. */
+  freshLastNurtureAtMs: number | null;
+  /** The step the decision was made on. */
+  expectedStep: number;
+  /** The stamp the decision was made on. */
+  expectedLastNurtureAtMs: number | null;
+}
+
+export type ClaimVerdict = { claim: true } | { claim: false; reason: string };
+
+export function claimVerdict(state: ClaimState, nowMs: number): ClaimVerdict {
+  if (!state.exists) return { claim: false, reason: "the lead was deleted mid-run" };
+
+  if (state.freshStep !== state.expectedStep) {
+    return { claim: false, reason: `another run already advanced this lead to step ${state.freshStep}` };
+  }
+
+  // The stamp moved since this run read it: somebody else has claimed.
+  if (state.freshLastNurtureAtMs !== state.expectedLastNurtureAtMs) {
+    return { claim: false, reason: "another run claimed this step while this one was deciding" };
+  }
+
+  // The gap, re-checked against what is stored rather than against the copy
+  // the decision was made on.
+  if (state.freshLastNurtureAtMs != null) {
+    const sinceLast = (nowMs - state.freshLastNurtureAtMs) / DAY_MS;
+    if (sinceLast < MIN_GAP_DAYS) {
+      return {
+        claim: false,
+        reason: `stored last message was ${Math.round(sinceLast)} days ago, minimum gap is ${MIN_GAP_DAYS}`,
+      };
+    }
+  }
+
+  return { claim: true };
 }
