@@ -8,7 +8,6 @@ import {
   MIN_GAP_DAYS,
   nurtureDecision,
   oneLeadPerPhone,
-  recordIsSendable,
   type NurtureConsent,
   type NurtureKind,
 } from "@/lib/leadNurture";
@@ -107,14 +106,20 @@ async function rollBackClaim(
     if (
       claimStillOwns(sharedStamp instanceof Timestamp ? sharedStamp.toMillis() : null, claimedMs)
     ) {
-      tx.set(claim.numberRef, { lastNurtureAt: claim.previousShared }, { merge: true });
+      // The pending marker goes with the claim: this attempt is known not to
+      // have sent, so there is nothing unresolved to hold the number for.
+      tx.set(
+        claim.numberRef,
+        { lastNurtureAt: claim.previousShared, pendingStep: null },
+        { merge: true },
+      );
     }
   });
 }
 
 interface Outcome {
   customerId: string;
-  action: "sent" | "skipped" | "failed" | "deferred";
+  action: "sent" | "skipped" | "failed" | "deferred" | "held";
   step?: number;
   reason?: string;
 }
@@ -156,10 +161,6 @@ interface Candidate {
   optedOut: boolean;
   /** Could this record be texted, or is it only here to vote on its number? */
   eligible: boolean;
-  /** Could it ever send, consent and phone and do-not-knock aside from timing? */
-  sendable: boolean;
-  /** Marked do not knock — which speaks for the whole number, not just this row. */
-  blocked: boolean;
 }
 
 /**
@@ -258,6 +259,8 @@ async function claimStep(
         shared: {
           step: typeof sharedData.step === "number" ? sharedData.step : 0,
           lastNurtureAtMs: previousShared ? previousShared.toMillis() : null,
+          pendingStep:
+            typeof sharedData.pendingStep === "number" ? sharedData.pendingStep : null,
         },
         phoneKeys: { expected: lead.phoneKey, fresh: phoneKey(phone) },
       },
@@ -269,9 +272,17 @@ async function claimStep(
     const stamp = Timestamp.now();
     tx.update(docRef, { lastNurtureAt: stamp });
     // merge: the first text to a number is also the document's first write.
+    // pendingStep is written before anything is handed to Twilio, so a crash
+    // anywhere between here and the counter write leaves the number held
+    // rather than quietly due again in five days.
     tx.set(
       numberRef,
-      { phoneKey: decision.phoneKey, lastNurtureAt: stamp, step: decision.step },
+      {
+        phoneKey: decision.phoneKey,
+        lastNurtureAt: stamp,
+        step: decision.step,
+        pendingStep: decision.step,
+      },
       { merge: true },
     );
 
@@ -373,16 +384,10 @@ export async function GET(request: Request): Promise<Response> {
         consent: readConsent(data.smsConsent),
         optedOut: Boolean(data.smsOptOut),
         eligible,
-        sendable: recordIsSendable({
-          status: typeof data.status === "string" ? data.status : "",
-          phone,
-          consent: readConsent(data.smsConsent),
-        }),
-        blocked: (typeof data.status === "string" ? data.status : "") === "do_not_knock",
       });
     }
 
-    const { chosen, setAside } = oneLeadPerPhone(candidates);
+    const { chosen, setAside } = oneLeadPerPhone(candidates, now);
     for (const { lead, reason } of setAside) {
       outcomes.push({ customerId: lead.id, action: "skipped", reason });
     }
@@ -455,7 +460,16 @@ export async function GET(request: Request): Promise<Response> {
           now,
         );
         if (!claim.claimed) {
-          outcomes.push({ customerId: lead.id, action: "skipped", reason: claim.reason });
+          // A number held by an unresolved send is not an ordinary skip. It
+          // needs somebody to check whether a text arrived, and it will stay
+          // stuck until they do, so it is reported as its own thing rather
+          // than sitting in a list of leads that were simply not due.
+          const held = claim.reason.includes("never recorded");
+          outcomes.push({
+            customerId: lead.id,
+            action: held ? "held" : "skipped",
+            reason: claim.reason,
+          });
           continue;
         }
 
@@ -528,10 +542,14 @@ export async function GET(request: Request): Promise<Response> {
         // The number's own document is advanced too, and it is the one that
         // will still be right tomorrow if this record is edited, re-staged or
         // deleted in the meantime.
-        await Promise.all([
-          docRef.update({ nurtureStep: step + 1 }),
-          claim.numberRef.set({ step: step + 1 }, { merge: true }),
-        ]);
+        // The number's document first, and in one write, because advancing
+        // the step and clearing the pending marker have to happen together.
+        // If this throws, pendingStep stays set and the number is held for a
+        // person to look at — which is the whole point of it. If it succeeds
+        // and the customer write below throws, progress is still correct,
+        // because this document is the authoritative one.
+        await claim.numberRef.set({ step: step + 1, pendingStep: null }, { merge: true });
+        await docRef.update({ nurtureStep: step + 1 });
 
         await appendNote(lead.id, {
           text: body,
@@ -590,6 +608,20 @@ export async function GET(request: Request): Promise<Response> {
 
     // One notification for the run, not one per lead. A nightly job that sent
     // three texts should not produce three buzzes over breakfast.
+    const held = outcomes.filter((o) => o.action === "held");
+    if (held.length > 0) {
+      // Worth a buzz, unlike the rest of this job's output: these numbers are
+      // stuck and no further run will unstick them.
+      await notifyCrew({
+        type: "followup_sent",
+        actorName: "Lead nurture",
+        body:
+          held.length === 1
+            ? "1 lead is held: a text reached Twilio but was never recorded. Check whether it arrived."
+            : `${held.length} leads are held: texts reached Twilio but were never recorded. Check whether they arrived.`,
+      });
+    }
+
     if (sent > 0) {
       await notifyCrew({
         type: "followup_sent",
@@ -607,6 +639,7 @@ export async function GET(request: Request): Promise<Response> {
       records: snap.size,
       sent,
       deferred: outcomes.filter((o) => o.action === "deferred").length,
+      held: held.length,
       failed: outcomes.filter((o) => o.action === "failed").length,
       outcomes,
     });

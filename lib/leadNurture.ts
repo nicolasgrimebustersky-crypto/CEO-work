@@ -251,28 +251,8 @@ export function recordIsSendable(
   return Boolean(consent && consent.granted && MARKETING_CONSENT_METHODS.has(consent.method));
 }
 
-export interface PhoneGroupable {
+export interface PhoneGroupable extends NurtureInput {
   phoneKey: string;
-  nurtureStep: number;
-  lastNurtureAtMs: number | null;
-  hasReplied: boolean;
-  optedOut: boolean;
-  /** `recordIsSendable` for this record — the grouping prefers one that is. */
-  sendable: boolean;
-  /**
-   * `do_not_knock` on this record.
-   *
-   * Separate from `sendable`, which it also fails, because this one speaks for
-   * the whole number rather than just disqualifying the row. Do not knock is
-   * an instruction about a person — leave them alone, by any channel — and
-   * somebody who gave it does not become contactable because a later form
-   * submission created a second record without the mark.
-   *
-   * Preferring a sendable record made this worse rather than better: the
-   * blocked row used to win sometimes and get refused, where afterwards the
-   * clean duplicate was actively chosen and texted.
-   */
-  blocked: boolean;
   /**
    * Whether this record could be sent to at all.
    *
@@ -311,7 +291,10 @@ export interface PhoneGroupResult<T> {
   setAside: { lead: T; reason: string }[];
 }
 
-export function oneLeadPerPhone<T extends PhoneGroupable>(leads: readonly T[]): PhoneGroupResult<T> {
+export function oneLeadPerPhone<T extends PhoneGroupable>(
+  leads: readonly T[],
+  nowMs: number,
+): PhoneGroupResult<T> {
   const byPhone = new Map<string, T[]>();
   const chosen: PhoneGroupResult<T>["chosen"] = [];
   const setAside: { lead: T; reason: string }[] = [];
@@ -331,11 +314,12 @@ export function oneLeadPerPhone<T extends PhoneGroupable>(leads: readonly T[]): 
   }
 
   for (const group of byPhone.values()) {
-    // Any record saying this person replied or opted out speaks for the
-    // number — including a record that is not itself a candidate.
+    // Any record saying this person replied, opted out, or asked not to be
+    // contacted speaks for the number — including a record that is not itself
+    // a candidate, which is usually where such a mark lives.
     const replied = group.some((lead) => lead.hasReplied);
     const optedOut = group.some((lead) => lead.optedOut);
-    const blocked = group.some((lead) => lead.blocked);
+    const blocked = group.some((lead) => lead.status === "do_not_knock");
     // Only a candidate can be sent to. The rest were context.
     const candidates = group.filter((lead) => lead.eligible);
     if (candidates.length === 0) continue;
@@ -355,23 +339,52 @@ export function oneLeadPerPhone<T extends PhoneGroupable>(leads: readonly T[]): 
     // the maximum deliberately: it then fails nurtureDecision's whole-count
     // check and the number is refused and reported, rather than a corrupt
     // sibling being quietly ignored.
-    const effectiveStep = candidates.reduce(
-      (max, lead) => Math.max(max, lead.nurtureStep),
-      group.reduce((max, lead) => Math.max(max, lead.nurtureStep), 0),
-    );
+    const effectiveStep = group.reduce((max, lead) => Math.max(max, lead.nurtureStep), 0);
     const stamps = group
       .map((lead) => lead.lastNurtureAtMs)
-      .filter((ms) => typeof ms === "number");
+      .filter((ms): ms is number => typeof ms === "number");
     const effectiveLastNurtureAtMs = stamps.length > 0 ? Math.max(...stamps) : null;
 
-    // A record that can send beats one that cannot, and only then does
-    // progress decide. Progress is computed above across every record, so
-    // preferring a less-advanced one here cannot replay anything — the step
-    // it will be told to send is the number's, not its own.
-    const sorted = [...candidates].sort(
-      (a, b) =>
-        Number(b.sendable) - Number(a.sendable) || b.nurtureStep - a.nurtureStep,
-    );
+    // Which of these records would actually send, asked of the policy itself
+    // under the number's progress and the current time.
+    //
+    // Ranking on proxies for this was wrong twice. Sorting by progress alone
+    // let an unconsented duplicate shadow a consented one; adding a
+    // consent-shaped flag fixed that and left the next proxy gap behind it —
+    // two equally consented step-0 records, one sixty days old and one four
+    // days old, were separated by input order, and if the stale one won it
+    // failed the age guard every night while the fresh lead was never
+    // contacted. Both of those are the same mistake: guessing at the decision
+    // instead of asking it.
+    //
+    // So the decision is asked. There is no third proxy to get wrong, and a
+    // new refusal added to nurtureDecision is accounted for here for free.
+    const verdicts = new Map<T, NurtureVerdict>();
+    for (const lead of candidates) {
+      verdicts.set(
+        lead,
+        nurtureDecision(
+          { ...lead, nurtureStep: effectiveStep, lastNurtureAtMs: effectiveLastNurtureAtMs },
+          nowMs,
+        ),
+      );
+    }
+
+    // One that would send beats one that would not. Among equals, the record
+    // furthest along its own sequence, which keeps the choice stable across
+    // two runs over the same data.
+    const sorted = [...candidates].sort((a, b) => {
+      const sendsA = verdicts.get(a)?.send === true;
+      const sendsB = verdicts.get(b)?.send === true;
+      if (sendsA !== sendsB) return sendsA ? -1 : 1;
+      // Then one that is at least able to send, so when nothing is due the
+      // reason reported is the useful one rather than a stale record's.
+      const ableA = recordIsSendable(a);
+      const ableB = recordIsSendable(b);
+      if (ableA !== ableB) return ableA ? -1 : 1;
+      return b.nurtureStep - a.nurtureStep;
+    });
+
     chosen.push({ lead: sorted[0], effectiveStep, effectiveLastNurtureAtMs });
     for (const lead of sorted.slice(1)) {
       setAside.push({ lead, reason: "another record for this number is further along" });
@@ -500,7 +513,30 @@ export interface ClaimRequest {
    * independent documents give two independent claims, so both send. The
    * shared document is what makes them collide instead.
    */
-  shared: { step: number; lastNurtureAtMs: number | null };
+  shared: {
+    step: number;
+    lastNurtureAtMs: number | null;
+    /**
+     * A step that was handed to Twilio and whose bookkeeping never finished.
+     *
+     * Written by the claim, cleared when the counters are written or the send
+     * is known to have failed. If it is still set, the only honest reading is
+     * that a text may have gone out and the record of it may be wrong, and
+     * nobody knows which.
+     *
+     * It blocks this number until a person clears it. The alternative is what
+     * the code did before: the claim held the number for the minimum gap and
+     * then, with the step counter never advanced, the same message became due
+     * again — and again every five days after that, for as long as nothing
+     * fixed it. For the last message in the sequence that is a stranger
+     * receiving "I won't keep texting" every five days indefinitely.
+     *
+     * Blocking is the safe failure here. A nurture text not sent costs a
+     * maybe-lead; one sent on a loop costs the number, and with it every
+     * message the business actually needs to send.
+     */
+    pendingStep: number | null;
+  };
   /**
    * The normalised number the grouping and the opt-out lookup were done
    * against, and the one the record carries now.
@@ -522,6 +558,17 @@ export type ClaimDecision =
 export function claimDecision(request: ClaimRequest, nowMs: number): ClaimDecision {
   const cas = claimVerdict(request.cas, nowMs);
   if (!cas.claim) return cas;
+
+  // An earlier attempt reached Twilio and never finished writing down what it
+  // did. Nothing automatic happens on this number again until somebody looks.
+  if (request.shared.pendingStep != null) {
+    return {
+      claim: false,
+      reason:
+        `step ${request.shared.pendingStep + 1} was sent to Twilio but never recorded — ` +
+        "this number is held until somebody checks whether it arrived",
+    };
+  }
 
   // The number must still be the number that was evaluated.
   if (!request.phoneKeys.fresh) {

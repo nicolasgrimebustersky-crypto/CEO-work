@@ -378,14 +378,21 @@ describe("one person, several records", () => {
     lastNurtureAtMs: null,
     hasReplied: false,
     optedOut: false,
-    sendable: true,
-    blocked: false,
     eligible: true,
+    // The grouping asks nurtureDecision which records would send, so a
+    // fixture has to be a record the policy can actually judge. These
+    // defaults are a lead that would send: a web-form consent, a phone
+    // number, ten days old and never nurtured.
+    pipelineStage: "new_lead",
+    status: "active",
+    createdAtMs: NOW - 10 * DAY,
+    phone: "+15025550147",
+    consent: { granted: true, method: "web_form" },
     ...patch,
   });
 
   test("three records for one number send at most one text", () => {
-    const { chosen, setAside } = oneLeadPerPhone([lead("a"), lead("b"), lead("c")]);
+    const { chosen, setAside } = oneLeadPerPhone([lead("a"), lead("b"), lead("c")], NOW);
     assert.equal(chosen.length, 1);
     assert.equal(setAside.length, 2);
     for (const entry of setAside) {
@@ -399,7 +406,7 @@ describe("one person, several records", () => {
       lead("behind", { nurtureStep: 0 }),
       lead("ahead", { nurtureStep: 2 }),
       lead("middle", { nurtureStep: 1 }),
-    ]);
+    ], NOW);
     assert.equal(chosen[0].lead.id, "ahead");
   });
 
@@ -410,7 +417,7 @@ describe("one person, several records", () => {
       lead("replied", { hasReplied: true }),
       lead("duplicate"),
       lead("another"),
-    ]);
+    ], NOW);
     assert.deepEqual(chosen, []);
     assert.equal(setAside.length, 3);
     for (const entry of setAside) assert.match(entry.reason, /has replied/);
@@ -420,7 +427,7 @@ describe("one person, several records", () => {
     const { chosen, setAside } = oneLeadPerPhone([
       lead("duplicate"),
       lead("stopped", { optedOut: true }),
-    ]);
+    ], NOW);
     assert.deepEqual(chosen, []);
     for (const entry of setAside) assert.match(entry.reason, /STOP/);
   });
@@ -429,7 +436,7 @@ describe("one person, several records", () => {
     const { chosen } = oneLeadPerPhone([
       lead("x", { hasReplied: true, optedOut: true }),
       lead("y"),
-    ]);
+    ], NOW);
     assert.deepEqual(chosen, []);
   });
 
@@ -437,7 +444,7 @@ describe("one person, several records", () => {
     const { chosen } = oneLeadPerPhone([
       lead("a", { phoneKey: "5025550147" }),
       lead("b", { phoneKey: "5025559999" }),
-    ]);
+    ], NOW);
     assert.equal(chosen.length, 2);
   });
 
@@ -445,18 +452,18 @@ describe("one person, several records", () => {
     const { chosen } = oneLeadPerPhone([
       lead("replied", { phoneKey: "5025550147", hasReplied: true }),
       lead("innocent", { phoneKey: "5025559999" }),
-    ]);
+    ], NOW);
     assert.deepEqual(chosen.map((c) => c.lead.id), ["innocent"]);
   });
 
   test("a record with no usable number is set aside, not texted", () => {
-    const { chosen, setAside } = oneLeadPerPhone([lead("nophone", { phoneKey: "" })]);
+    const { chosen, setAside } = oneLeadPerPhone([lead("nophone", { phoneKey: "" })], NOW);
     assert.deepEqual(chosen, []);
     assert.match(setAside[0].reason, /no usable phone number/);
   });
 
   test("nothing in, nothing out", () => {
-    assert.deepEqual(oneLeadPerPhone([]), { chosen: [], setAside: [] });
+    assert.deepEqual(oneLeadPerPhone([], NOW), { chosen: [], setAside: [] });
   });
 
   test("the choice is stable across runs over the same data", () => {
@@ -481,9 +488,16 @@ describe("a duplicate that has moved on still speaks for the person", () => {
     lastNurtureAtMs: null,
     hasReplied: false,
     optedOut: false,
-    sendable: true,
-    blocked: false,
     eligible: true,
+    // The grouping asks nurtureDecision which records would send, so a
+    // fixture has to be a record the policy can actually judge. These
+    // defaults are a lead that would send: a web-form consent, a phone
+    // number, ten days old and never nurtured.
+    pipelineStage: "new_lead",
+    status: "active",
+    createdAtMs: NOW - 10 * DAY,
+    phone: "+15025550147",
+    consent: { granted: true, method: "web_form" },
     ...patch,
   });
 
@@ -491,7 +505,7 @@ describe("a duplicate that has moved on still speaks for the person", () => {
     const { chosen, setAside } = oneLeadPerPhone([
       rec("quoted", { hasReplied: true, eligible: false }),
       rec("fresh"),
-    ]);
+    ], NOW);
     assert.equal(chosen.length, 0, "this person already replied — nothing should send");
     assert.deepEqual(
       setAside.map((s) => s.lead.id),
@@ -505,14 +519,14 @@ describe("a duplicate that has moved on still speaks for the person", () => {
     const { chosen, setAside } = oneLeadPerPhone([
       rec("won", { optedOut: true, eligible: false }),
       rec("fresh"),
-    ]);
+    ], NOW);
     assert.equal(chosen.length, 0);
     assert.match(setAside[0].reason, /STOP/);
   });
 
   test("an ineligible record is never the one that sends", () => {
     // Even alone, and even though it looks like the furthest along.
-    const { chosen } = oneLeadPerPhone([rec("quoted", { nurtureStep: 2, eligible: false })]);
+    const { chosen } = oneLeadPerPhone([rec("quoted", { nurtureStep: 2, eligible: false })], NOW);
     assert.equal(chosen.length, 0);
   });
 
@@ -523,7 +537,7 @@ describe("a duplicate that has moved on still speaks for the person", () => {
       rec("customer_a", { eligible: false }),
       rec("customer_b", { eligible: false, phoneKey: "5025559999" }),
       rec("nophone", { eligible: false, phoneKey: "" }),
-    ]);
+    ], NOW);
     assert.equal(chosen.length, 0);
     assert.deepEqual(setAside, [], "records nobody asked to nurture are silent");
   });
@@ -537,7 +551,7 @@ describe("a duplicate that has moved on still speaks for the person", () => {
     const { chosen } = oneLeadPerPhone([
       rec("quoted", { nurtureStep: 2, lastNurtureAtMs: NOW - 2 * DAY, eligible: false }),
       rec("fresh", { nurtureStep: 0, lastNurtureAtMs: null }),
-    ]);
+    ], NOW);
     assert.equal(chosen.length, 1);
     assert.equal(chosen[0].lead.id, "fresh");
     assert.equal(chosen[0].effectiveStep, 2, "the number has had two messages, not none");
@@ -549,7 +563,7 @@ describe("a duplicate that has moved on still speaks for the person", () => {
   });
 
   test("an eligible lead with no ineligible siblings is unaffected", () => {
-    const { chosen } = oneLeadPerPhone([rec("only")]);
+    const { chosen } = oneLeadPerPhone([rec("only")], NOW);
     assert.deepEqual(chosen.map((c) => c.lead.id), ["only"]);
   });
 });
@@ -878,17 +892,24 @@ describe("the record chosen to send is one that can send", () => {
     lastNurtureAtMs: null,
     hasReplied: false,
     optedOut: false,
-    sendable: true,
-    blocked: false,
     eligible: true,
+    // The grouping asks nurtureDecision which records would send, so a
+    // fixture has to be a record the policy can actually judge. These
+    // defaults are a lead that would send: a web-form consent, a phone
+    // number, ten days old and never nurtured.
+    pipelineStage: "new_lead",
+    status: "active",
+    createdAtMs: NOW - 10 * DAY,
+    phone: "+15025550147",
+    consent: { granted: true, method: "web_form" },
     ...patch,
   });
 
   test("a consented duplicate is not shadowed by an unconsented one", () => {
     const { chosen } = oneLeadPerPhone([
-      rec("older_no_consent", { sendable: false }),
-      rec("newer_web_form", { sendable: true }),
-    ]);
+      rec("older_no_consent", { consent: null }),
+      rec("newer_web_form", { consent: { granted: true, method: "web_form" } }),
+    ], NOW);
     assert.equal(chosen.length, 1);
     assert.equal(chosen[0].lead.id, "newer_web_form");
   });
@@ -897,9 +918,9 @@ describe("the record chosen to send is one that can send", () => {
     // Deliberate, and safe because progress is computed across the group: the
     // chosen record is told the number's step, not its own.
     const { chosen } = oneLeadPerPhone([
-      rec("ahead_no_consent", { nurtureStep: 2, sendable: false }),
-      rec("behind_consented", { nurtureStep: 0, sendable: true }),
-    ]);
+      rec("ahead_no_consent", { nurtureStep: 2, consent: null }),
+      rec("behind_consented", { nurtureStep: 0, consent: { granted: true, method: "web_form" } }),
+    ], NOW);
     assert.equal(chosen[0].lead.id, "behind_consented");
     assert.equal(chosen[0].effectiveStep, 2, "the number has still had two messages");
   });
@@ -908,14 +929,14 @@ describe("the record chosen to send is one that can send", () => {
     const { chosen } = oneLeadPerPhone([
       rec("behind", { nurtureStep: 0 }),
       rec("ahead", { nurtureStep: 2 }),
-    ]);
+    ], NOW);
     assert.equal(chosen[0].lead.id, "ahead");
   });
 
   test("when none can send, one is still chosen so the reason is reported", () => {
     // Silence here would be worse than a refusal: nobody would know why a
     // lead was never contacted.
-    const { chosen } = oneLeadPerPhone([rec("a", { sendable: false })]);
+    const { chosen } = oneLeadPerPhone([rec("a", { consent: null })], NOW);
     assert.equal(chosen.length, 1);
     assert.equal(chosen[0].lead.id, "a");
   });
@@ -1048,17 +1069,24 @@ describe("do not knock is about the person, not the paperwork", () => {
     lastNurtureAtMs: null,
     hasReplied: false,
     optedOut: false,
-    sendable: true,
-    blocked: false,
     eligible: true,
+    // The grouping asks nurtureDecision which records would send, so a
+    // fixture has to be a record the policy can actually judge. These
+    // defaults are a lead that would send: a web-form consent, a phone
+    // number, ten days old and never nurtured.
+    pipelineStage: "new_lead",
+    status: "active",
+    createdAtMs: NOW - 10 * DAY,
+    phone: "+15025550147",
+    consent: { granted: true, method: "web_form" },
     ...patch,
   });
 
   test("a marked record silences the number, even from a clean duplicate", () => {
     const { chosen, setAside } = oneLeadPerPhone([
-      rec("marked", { blocked: true, sendable: false }),
+      rec("marked", { status: "do_not_knock" }),
       rec("clean_consented"),
-    ]);
+    ], NOW);
     assert.equal(chosen.length, 0, "this person asked not to be contacted");
     // Both are new leads somebody expected to be nurtured, so both get a
     // reason in the run's output rather than one vanishing.
@@ -1071,29 +1099,29 @@ describe("do not knock is about the person, not the paperwork", () => {
     // and that is often the one that has moved past new_lead — the same
     // reason a reply hides on a record that moved on.
     const { chosen, setAside } = oneLeadPerPhone([
-      rec("marked_and_quoted", { blocked: true, sendable: false, eligible: false }),
+      rec("marked_and_quoted", { status: "do_not_knock", eligible: false }),
       rec("fresh_lead"),
-    ]);
+    ], NOW);
     assert.equal(chosen.length, 0);
     assert.match(setAside[0].reason, /do not knock/);
   });
 
   test("being the only record does not make the mark negotiable", () => {
-    const { chosen, setAside } = oneLeadPerPhone([rec("marked", { blocked: true, sendable: false })]);
+    const { chosen, setAside } = oneLeadPerPhone([rec("marked", { status: "do_not_knock" })], NOW);
     assert.equal(chosen.length, 0);
     assert.match(setAside[0].reason, /do not knock/);
   });
 
   test("a mark on one number does not silence a different number", () => {
     const { chosen } = oneLeadPerPhone([
-      rec("marked", { blocked: true, sendable: false }),
+      rec("marked", { status: "do_not_knock" }),
       rec("someone_else", { phoneKey: "5025559999" }),
-    ]);
+    ], NOW);
     assert.deepEqual(chosen.map((c) => c.lead.id), ["someone_else"]);
   });
 
   test("an unmarked number is unaffected", () => {
-    const { chosen } = oneLeadPerPhone([rec("a"), rec("b")]);
+    const { chosen } = oneLeadPerPhone([rec("a"), rec("b")], NOW);
     assert.equal(chosen.length, 1);
   });
 });
@@ -1169,5 +1197,174 @@ describe("a released claim cannot erase somebody else's", () => {
     };
     release(FIRST, before);
     assert.equal(stored, before);
+  });
+});
+
+describe("a stale duplicate cannot shadow a fresh one", () => {
+  // The third version of this mistake, and the one that showed the mistake
+  // was the method rather than the rule. Ranking by progress let an
+  // unconsented record shadow a consented one; adding a consent-shaped flag
+  // fixed that case and left the next proxy gap behind it. Two equally
+  // consented step-0 records, one sixty days old and one four days old, were
+  // separated by nothing but input order — and if the stale one won, it failed
+  // the age guard every night while the fresh lead was never contacted at all.
+  //
+  // The selection asks nurtureDecision now, so there is no proxy left to be
+  // wrong about.
+  const rec = (id, patch = {}) => ({
+    id,
+    phoneKey: "5025550147",
+    nurtureStep: 0,
+    lastNurtureAtMs: null,
+    hasReplied: false,
+    optedOut: false,
+    eligible: true,
+    pipelineStage: "new_lead",
+    status: "active",
+    createdAtMs: NOW - 10 * DAY,
+    phone: "+15025550147",
+    consent: { granted: true, method: "web_form" },
+    ...patch,
+  });
+
+  test("the fresh lead is chosen even when the stale record is listed first", () => {
+    const stale = rec("stale", { createdAtMs: NOW - 60 * DAY });
+    const fresh = rec("fresh", { createdAtMs: NOW - 4 * DAY });
+    const { chosen } = oneLeadPerPhone([stale, fresh], NOW);
+    assert.equal(chosen.length, 1);
+    assert.equal(chosen[0].lead.id, "fresh", "the stale record would fail the age guard nightly");
+  });
+
+  test("and when it is listed second", () => {
+    // Input order must not decide anything.
+    const { chosen } = oneLeadPerPhone(
+      [rec("fresh", { createdAtMs: NOW - 4 * DAY }), rec("stale", { createdAtMs: NOW - 60 * DAY })],
+      NOW,
+    );
+    assert.equal(chosen[0].lead.id, "fresh");
+  });
+
+  test("a record that is not yet due loses to one that is", () => {
+    // Two fresh leads, one a day old. Day 3 has not arrived for it.
+    const { chosen } = oneLeadPerPhone(
+      [rec("yesterday", { createdAtMs: NOW - DAY }), rec("last_week", { createdAtMs: NOW - 7 * DAY })],
+      NOW,
+    );
+    assert.equal(chosen[0].lead.id, "last_week");
+  });
+
+  test("when none would send, one is still chosen so the reason is reported", () => {
+    const { chosen, setAside } = oneLeadPerPhone(
+      [rec("a", { createdAtMs: NOW - 60 * DAY }), rec("b", { createdAtMs: NOW - 70 * DAY })],
+      NOW,
+    );
+    assert.equal(chosen.length, 1, "silence would leave nobody knowing why");
+    assert.equal(setAside.length, 1);
+  });
+
+  test("a consented fresh lead still beats an unconsented fresh one", () => {
+    // The previous round's case, re-asserted through the new mechanism rather
+    // than left to the old flag.
+    const { chosen } = oneLeadPerPhone(
+      [rec("no_consent", { consent: null }), rec("consented")],
+      NOW,
+    );
+    assert.equal(chosen[0].lead.id, "consented");
+  });
+
+  test("the choice is still stable across two runs over the same data", () => {
+    const leads = [rec("a"), rec("b"), rec("c")];
+    const first = oneLeadPerPhone(leads, NOW).chosen[0].lead.id;
+    const second = oneLeadPerPhone(leads, NOW).chosen[0].lead.id;
+    assert.equal(first, second);
+  });
+});
+
+describe("a text that reached Twilio but was never recorded holds the number", () => {
+  // Twilio accepts the message, then both counter writes fail. The claim's
+  // stamp holds the number for the minimum gap — and then, with the step
+  // counter never advanced, the same message becomes due again. And again
+  // every five days after that, for as long as nothing fixes it. For the last
+  // message in the sequence that is a stranger receiving "I won't keep
+  // texting you" every five days, indefinitely.
+  //
+  // So the claim writes a pending marker before Twilio is called, and only a
+  // completed bookkeeping write clears it. While it is set the number is held
+  // for a person to look at, because the honest reading of that state is that
+  // a text may have gone out and the record of it may be wrong, and nobody
+  // knows which.
+  const base = {
+    pipelineStage: "new_lead",
+    status: "active",
+    createdAtMs: NOW - 10 * DAY,
+    nurtureStep: 0,
+    lastNurtureAtMs: null,
+    hasReplied: false,
+    phone: "+15025550147",
+    consent: { granted: true, method: "web_form" },
+    optedOut: false,
+  };
+  const req = (shared = {}) => ({
+    cas: {
+      exists: true,
+      freshStep: 0,
+      freshLastNurtureAtMs: null,
+      expectedStep: 0,
+      expectedLastNurtureAtMs: null,
+    },
+    fresh: { ...base },
+    group: { effectiveStep: 0, effectiveLastNurtureAtMs: null },
+    shared: { step: 0, lastNurtureAtMs: null, pendingStep: null, ...shared },
+    phoneKeys: { expected: "5025550147", fresh: "5025550147" },
+  });
+
+  test("nothing pending, and it claims as usual", () => {
+    assert.equal(claimDecision(req(), NOW).claim, true);
+  });
+
+  test("a pending step holds the number, gap or no gap", () => {
+    // The gap has long passed — this is exactly the moment the old code
+    // resent the same message.
+    const decision = claimDecision(
+      req({ pendingStep: 0, lastNurtureAtMs: NOW - 30 * DAY }),
+      NOW,
+    );
+    assert.equal(decision.claim, false);
+    assert.match(decision.reason, /never recorded/);
+    assert.match(decision.reason, /held until somebody checks/);
+  });
+
+  test("the hold names the step so somebody knows what to look for", () => {
+    const decision = claimDecision(req({ pendingStep: 2, lastNurtureAtMs: NOW - 30 * DAY }), NOW);
+    assert.equal(decision.claim, false);
+    assert.match(decision.reason, /step 3 was sent to Twilio/);
+  });
+
+  test("a pending step of 0 is a hold, not a falsy nothing", () => {
+    // The step is an index, so the first one is 0. Testing truthiness here
+    // would release the hold on exactly the message most likely to be stuck.
+    const decision = claimDecision(req({ pendingStep: 0 }), NOW);
+    assert.equal(decision.claim, false);
+    assert.match(decision.reason, /never recorded/);
+  });
+
+  test("the hold outlasts the sequence being otherwise finished", () => {
+    const decision = claimDecision(
+      req({ pendingStep: 1, step: NURTURE_STEPS.length, lastNurtureAtMs: NOW - 90 * DAY }),
+      NOW,
+    );
+    assert.equal(decision.claim, false);
+    assert.match(decision.reason, /never recorded/);
+  });
+
+  test("a lost race is still reported ahead of the hold", () => {
+    // The compare-and-swap comes first, so the reason points at the race
+    // rather than sending somebody to check a text that was never this run's.
+    const decision = claimDecision(
+      { ...req({ pendingStep: 0 }), cas: { ...req().cas, freshStep: 1 } },
+      NOW,
+    );
+    assert.equal(decision.claim, false);
+    assert.match(decision.reason, /advanced this lead to step 1/);
   });
 });
