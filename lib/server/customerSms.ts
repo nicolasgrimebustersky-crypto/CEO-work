@@ -107,6 +107,7 @@ export async function sendSmsToCustomerId(
 export async function sendSmsToPhone(
   phone: string,
   body: string,
+  orgId: string,
 ): Promise<CustomerSendResult> {
   const number = (phone ?? "").trim();
   if (!number) {
@@ -120,7 +121,7 @@ export async function sendSmsToPhone(
     };
   }
 
-  const optOut = await optOutForPhone(number);
+  const optOut = await optOutForPhone(number, orgId);
   if (optOut) {
     return {
       ok: false,

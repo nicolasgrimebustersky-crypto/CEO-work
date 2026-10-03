@@ -151,10 +151,21 @@ export async function appendNote(
  * timeline says "they asked us to stop" rather than "sent", which is the
  * difference between a record and a lie.
  *
- * Returns the opt-out from any matching record. One STOP is enough; a second
- * record without one is not a retraction.
+ * Returns the opt-out from any matching record *in this org*. One STOP is
+ * enough; a second record without one is not a retraction.
+ *
+ * Scoped by org, and the org is required rather than defaulted, because
+ * getting this wrong is silent in both directions. Unscoped, a STOP recorded
+ * by another business silenced our consented lead permanently — not delayed,
+ * silenced, and reported as an ordinary skip nobody would look at twice. An
+ * opt-out is a thing somebody told one business; it is not a global flag, and
+ * a person who asked one company to stop has not revoked the consent they
+ * gave another.
  */
-export async function optOutForPhone(rawPhone: string): Promise<SmsOptOut | null> {
+export async function optOutForPhone(
+  rawPhone: string,
+  orgId: string,
+): Promise<SmsOptOut | null> {
   const digits = String(rawPhone ?? "").replace(/\D/g, "").slice(-10);
   if (digits.length !== 10) return null;
 
@@ -167,6 +178,8 @@ export async function optOutForPhone(rawPhone: string): Promise<SmsOptOut | null
     const phone = data.phone;
     if (typeof phone !== "string") continue;
     if (phone.replace(/\D/g, "").slice(-10) !== digits) continue;
+    // Another business's STOP is not this business's instruction.
+    if (asOrgId(data.orgId) !== orgId) continue;
     const optOut = readOptOut(data.smsOptOut);
     if (optOut) return optOut;
   }

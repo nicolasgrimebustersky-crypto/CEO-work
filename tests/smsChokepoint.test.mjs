@@ -538,3 +538,104 @@ describe("one business cannot nurture another's leads", () => {
     assert.match(code, /orgId: asOrgId\(data\.orgId\),/, "Candidate must record the org it came from");
   });
 });
+
+describe("an opt-out belongs to the business it was told to", () => {
+  /*
+   * I argued the other way one round ago and was wrong, so the reasoning is
+   * recorded here rather than in a commit message nobody will reread.
+   *
+   * Leaving the opt-out lookup unscoped was defended as erring toward not
+   * texting somebody, which sounds like the safe direction and is not. The
+   * cost is not a delayed message: a lead who gave *us* written consent is
+   * silenced permanently because a different company's record for that number
+   * carries a STOP — and silenced invisibly, reported as an ordinary skip in a
+   * nightly run nobody reads twice. It is the consent-shadowing failure again
+   * with a different mechanism, and that one was the worst finding in this PR
+   * for the business.
+   *
+   * It is also simply not what an opt-out is. A person who told one company to
+   * stop has not withdrawn the consent they gave another; STOP is a thing said
+   * to a sender, not a global flag on a phone number.
+   */
+  const NOTES = readFileSync(join(ROOT, "lib/server/customerNotes.ts"), "utf8");
+  const SMS = readFileSync(join(ROOT, "lib/server/customerSms.ts"), "utf8");
+  const ROUTE = "app/api/cron/lead-nurture/route.ts";
+  const code = readFileSync(join(ROOT, ROUTE), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "");
+
+  /**
+   * One function's body, so a guard in a neighbouring function cannot stand in
+   * for a missing one here.
+   *
+   * The first version of the test below searched the whole file, and
+   * numberSuppression carries a byte-identical guard — so deleting the one in
+   * optOutForPhone left every assertion passing. My own mutation run caught
+   * it, which is the second time in two rounds that a source match has looked
+   * like a test and not been one.
+   */
+  const bodyOf = (text, name) => {
+    const start = text.indexOf(`export async function ${name}(`);
+    assert.ok(start > 0, `${name} not found`);
+    const next = text.indexOf("\nexport ", start + 1);
+    return text.slice(start, next === -1 ? undefined : next);
+  };
+
+  test("the org is required on the lookup, not defaulted", () => {
+    // Required so typecheck names every caller. A default is how an unscoped
+    // read survives a review: nothing fails, and the gap is invisible.
+    const optOut = bodyOf(NOTES, "optOutForPhone");
+    assert.match(
+      optOut,
+      /optOutForPhone\(\s*rawPhone: string,\s*orgId: string,\s*\)/,
+      "optOutForPhone must take the org, and take it as a required argument",
+    );
+    assert.match(
+      optOut,
+      /if \(asOrgId\(data\.orgId\) !== orgId\) continue;/,
+      "and must skip records outside it — checked inside this function's own body",
+    );
+  });
+
+  test("the suppression scan is scoped in its own right", () => {
+    // Pinned separately, for the same reason: each needs its own guard.
+    const suppression = bodyOf(NOTES, "numberSuppression");
+    assert.match(suppression, /if \(asOrgId\(data\.orgId\) !== orgId\) continue;/);
+  });
+
+  test("the chokepoint passes it through rather than dropping it", () => {
+    assert.match(
+      SMS,
+      /export async function sendSmsToPhone\(\s*phone: string,\s*body: string,\s*orgId: string,\s*\)/,
+      "sendSmsToPhone must take the org",
+    );
+    assert.match(
+      SMS,
+      /optOutForPhone\(number, orgId\)/,
+      "and hand it to the lookup — its own opt-out check was the second unscoped read",
+    );
+  });
+
+  test("the cron scopes both of its lookups", () => {
+    // Two separate reads on the nurture path, both of which were unscoped: the
+    // pre-claim check and the one inside the send.
+    assert.match(code, /optOutForPhone\(lead\.phone, lead\.orgId\)/, `${ROUTE} pre-claim check`);
+    assert.match(code, /sendSmsToPhone\(claim\.phone, body, lead\.orgId\)/, `${ROUTE} send`);
+    assert.doesNotMatch(
+      code,
+      /optOutForPhone\(lead\.phone\)/,
+      "an unscoped lookup silences a consented lead permanently",
+    );
+  });
+
+  test("every caller of either was made to decide", () => {
+    // The Meta webhook is the other one. It writes its leads into the default
+    // org, so that is the org whose opt-outs apply to them.
+    const META = readFileSync(join(ROOT, "app/api/meta/leads/route.ts"), "utf8");
+    assert.match(
+      META,
+      /sendSmsToPhone\(parsed\.phone, message, DEFAULT_ORG_ID\)/,
+      "the Meta webhook must name the org it writes into",
+    );
+  });
+});

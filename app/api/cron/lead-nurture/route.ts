@@ -468,7 +468,7 @@ export async function GET(request: Request): Promise<Response> {
 
         // Asked of the number rather than the record, because an opt-out can
         // be recorded against a duplicate this lead does not know about.
-        const numberOptOut = await optOutForPhone(lead.phone);
+        const numberOptOut = await optOutForPhone(lead.phone, lead.orgId);
         if (numberOptOut) {
           outcomes.push({
             customerId: lead.id,
@@ -546,9 +546,10 @@ export async function GET(request: Request): Promise<Response> {
         // phone edit between the claim and the send meant marketing going to a
         // number whose consent, opt-out state and nurture history had never
         // been looked at. sendSmsToPhone still runs the number's own opt-out
-        // check, and the marketing-consent check that authorised this belongs
-        // to the same number, because the claim refused any change to it.
-        const result = await sendSmsToPhone(claim.phone, body);
+        // check — this org's, not every org's — and the marketing-consent
+        // check that authorised this belongs to the same number, because the
+        // claim refused any change to it.
+        const result = await sendSmsToPhone(claim.phone, body, lead.orgId);
 
         sendState = sendStateFrom(result);
         if (consumesCapacity(sendState)) spent += 1;

@@ -1527,3 +1527,57 @@ describe("two businesses sharing one phone number", () => {
     assert.equal(scoped.chosen[0].effectiveStep, 0, "our sequence starts at the beginning");
   });
 });
+
+describe("whose STOP it was", () => {
+  // The behavioural half: given the records of one org, a STOP in that org
+  // stops the sequence and a STOP outside it is not in the set at all. The
+  // route supplies the scoping; this is what the policy then does with it.
+  const rec = (id, patch = {}) => ({
+    id,
+    phoneKey: "5025550147",
+    nurtureStep: 0,
+    lastNurtureAtMs: null,
+    hasReplied: false,
+    optedOut: false,
+    eligible: true,
+    pipelineStage: "new_lead",
+    status: "active",
+    createdAtMs: NOW - 10 * DAY,
+    phone: "+15025550147",
+    consent: { granted: true, method: "web_form" },
+    ...patch,
+  });
+
+  test("our own STOP stops our sequence", () => {
+    const { chosen, setAside } = oneLeadPerPhone([rec("ours", { optedOut: true })], NOW);
+    assert.equal(chosen.length, 0);
+    assert.match(setAside[0].reason, /STOP/);
+  });
+
+  test("a STOP on a sibling record of ours stops it too", () => {
+    const { chosen } = oneLeadPerPhone(
+      [rec("ours_old", { optedOut: true, eligible: false }), rec("ours_new")],
+      NOW,
+    );
+    assert.equal(chosen.length, 0, "one STOP in this business is enough");
+  });
+
+  test("a consented lead sends when no STOP of ours exists", () => {
+    // What the unscoped lookup used to prevent, permanently: the only STOP on
+    // this number belonged to another company, so it was never ours to act on
+    // and is not in this set.
+    const { chosen } = oneLeadPerPhone([rec("ours")], NOW);
+    assert.equal(chosen.length, 1);
+    assert.equal(chosen[0].lead.id, "ours");
+  });
+
+  test("a STOP is not retracted by a later record without one", () => {
+    // The direction that must not loosen while fixing the one that was too
+    // tight: a second form submission is not a change of mind.
+    const { chosen } = oneLeadPerPhone(
+      [rec("said_stop", { optedOut: true }), rec("fresh_form")],
+      NOW,
+    );
+    assert.equal(chosen.length, 0);
+  });
+});
