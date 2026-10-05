@@ -214,6 +214,35 @@ describe("the lead nurture cron texts the number it actually checked", () => {
     );
   });
 
+  test("the grouping is told the newest estimate, not the open one", () => {
+    // Two different questions. The open estimate says what this record could
+    // be chased about; the newest one says what the person most recently
+    // decided, and only the second can stop a duplicate.
+    //
+    // Handing the open estimate to both would typecheck and would silently
+    // restore the bug: a person with an ignored May estimate on one record and
+    // an accepted June one on another gets chased about May, because the open
+    // estimate is real and `setQuoteStatus` leaves the accepting record at
+    // `estimate_sent`.
+    assert.match(
+      code,
+      /latestQuote: latestQuotes\.get\(doc\.id\) \?\? null/,
+      `${ROUTE} must pass the newest estimate on the record to the grouping`,
+    );
+    assert.doesNotMatch(
+      code,
+      /latestQuote: quote\b/,
+      `${ROUTE} must not pass the open estimate as the newest one: a decided ` +
+        "newer estimate on a duplicate is what stops an older open one",
+    );
+    assert.match(
+      code,
+      /if \(quote\.sentAtMs <= 0\) continue;/,
+      `${ROUTE} must skip undated estimates when finding the newest, or an ` +
+        "undated one could be read as the latest decision",
+    );
+  });
+
   test("the estimates are read unfiltered by status", () => {
     // Asking only for the open ones is the obvious query and it leaves a
     // message going out wrongly: a customer with an ignored May estimate and

@@ -1890,3 +1890,150 @@ describe("which estimate the sequence is about", () => {
     assert.equal(pickOpenQuote([q({ status: "no_response" })]).id, "q1");
   });
 });
+
+describe("a number whose newest estimate is already decided", () => {
+  // Codex's finding on 999e5f8, and the per-record hole one last time.
+  //
+  // pickOpenQuote is asked per customer record. The Meta webhook creates a
+  // fresh record per form submission, so one person can hold an ignored May
+  // estimate on record A and an accepted June estimate on record B — and A's
+  // open estimate is real, so A gets chased about a price this person has
+  // already settled.
+  //
+  // The stage check does not save it. `setQuoteStatus` writes the status and
+  // nothing else, so B stays at `estimate_sent` and reads as somebody who has
+  // decided nothing. That is why every fixture below leaves the stages alone:
+  // fixing them would make the test pass for the wrong reason.
+  const q = (sentAtMs, status, patch = {}) => ({
+    id: `${status}_${sentAtMs}`,
+    customerId: "c",
+    status,
+    sentAtMs,
+    convertedToId: null,
+    ...patch,
+  });
+
+  const rec = (id, patch = {}) => ({
+    id,
+    phoneKey: "5025550147",
+    nurtureStep: 0,
+    lastNurtureAtMs: null,
+    hasReplied: false,
+    optedOut: false,
+    eligible: true,
+    pipelineStage: "estimate_sent",
+    quoteStatus: "sent",
+    quoteSentAtMs: NOW - 40 * DAY,
+    latestQuote: q(NOW - 40 * DAY, "sent"),
+    status: "active",
+    phone: "+15025550147",
+    consent: { granted: true, method: "web_form" },
+    ...patch,
+  });
+
+  test("an accepted estimate on a duplicate stops the older open one", () => {
+    const { chosen, setAside } = oneLeadPerPhone(
+      [
+        rec("may", { eligible: true }),
+        rec("june", {
+          // Accepted, and still sitting at estimate_sent, because accepting a
+          // quote does not move the stage.
+          quoteStatus: "accepted",
+          quoteSentAtMs: NOW - 4 * DAY,
+          latestQuote: q(NOW - 4 * DAY, "accepted"),
+          eligible: false,
+        }),
+      ],
+      NOW,
+    );
+    assert.equal(chosen.length, 0, "this person has already accepted a price");
+    assert.match(setAside[0].reason, /newest estimate is already decided/);
+  });
+
+  test("a declined estimate on a duplicate stops it too", () => {
+    const { chosen } = oneLeadPerPhone(
+      [
+        rec("may"),
+        rec("june", {
+          quoteStatus: "declined",
+          quoteSentAtMs: NOW - 4 * DAY,
+          latestQuote: q(NOW - 4 * DAY, "declined"),
+          eligible: false,
+        }),
+      ],
+      NOW,
+    );
+    assert.equal(chosen.length, 0);
+  });
+
+  test("so does one converted to an invoice", () => {
+    const { chosen } = oneLeadPerPhone(
+      [
+        rec("may"),
+        rec("june", {
+          quoteStatus: "sent",
+          quoteSentAtMs: NOW - 4 * DAY,
+          latestQuote: q(NOW - 4 * DAY, "sent", { convertedToId: "inv_3" }),
+          eligible: false,
+        }),
+      ],
+      NOW,
+    );
+    assert.equal(chosen.length, 0);
+  });
+
+  test("an OLDER accepted estimate does not stop a newer open one", () => {
+    // They accepted in May and were quoted again in June. The June estimate is
+    // a live decision and chasing it is the whole feature.
+    const { chosen } = oneLeadPerPhone(
+      [
+        rec("june", {
+          quoteSentAtMs: NOW - 4 * DAY,
+          latestQuote: q(NOW - 4 * DAY, "sent"),
+        }),
+        rec("may", {
+          quoteStatus: "accepted",
+          latestQuote: q(NOW - 40 * DAY, "accepted"),
+          eligible: false,
+        }),
+      ],
+      NOW,
+    );
+    assert.deepEqual(chosen.map((c) => c.lead.id), ["june"]);
+  });
+
+  test("a decision on somebody else's number is not this number's", () => {
+    const { chosen } = oneLeadPerPhone(
+      [
+        rec("ours"),
+        rec("theirs", {
+          phoneKey: "5025559999",
+          quoteStatus: "accepted",
+          quoteSentAtMs: NOW - 4 * DAY,
+          latestQuote: q(NOW - 4 * DAY, "accepted"),
+          eligible: false,
+        }),
+      ],
+      NOW,
+    );
+    assert.deepEqual(chosen.map((c) => c.lead.id), ["ours"]);
+  });
+
+  test("a number with no estimates anywhere is silent, not suppressed", () => {
+    // The route marks a record with no open estimate ineligible, so it is a
+    // voter and never a candidate. Nothing is chosen and nothing is reported:
+    // every customer in the business is read, and a 'skipped' line for each
+    // unquoted one would make the nightly output the customer list.
+    //
+    // Asserted because this suppressor must not be what stops them. Its
+    // reason names a decided estimate, and reporting that about somebody who
+    // has never been quoted would send whoever read it looking for an
+    // estimate that does not exist.
+    const { chosen, setAside } = oneLeadPerPhone(
+      [rec("bare", { quoteStatus: "", quoteSentAtMs: 0, latestQuote: null, eligible: false })],
+      NOW,
+    );
+    assert.equal(chosen.length, 0);
+    assert.deepEqual(setAside, []);
+  });
+});

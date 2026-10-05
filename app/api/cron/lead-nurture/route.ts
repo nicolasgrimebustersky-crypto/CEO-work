@@ -199,6 +199,14 @@ interface Candidate {
   optedOut: boolean;
   /** The estimate being chased, or null when there is nothing to chase. */
   quote: OpenQuote | null;
+  /**
+   * The newest estimate on this record whatever its status, for the group.
+   *
+   * What the person most recently decided, which is a different question from
+   * what this record could be chased about — and the one the pipeline stage
+   * cannot answer, because accepting a quote does not move it.
+   */
+  latestQuote: OpenQuote | null;
   /** Could this record be texted, or is it only here to vote on its number? */
   eligible: boolean;
 }
@@ -474,9 +482,22 @@ export async function GET(request: Request): Promise<Response> {
     );
 
     const openQuotes = new Map<string, OpenQuote>();
+    // The newest estimate per record regardless of status, kept alongside, so
+    // the grouping can ask what this *number* most recently decided. Without
+    // it, a person with an ignored May estimate on one record and an accepted
+    // June one on another is chased about May: the open estimate is real, and
+    // every stage-based check reads the accepting record as undecided because
+    // setQuoteStatus does not move the stage.
+    const latestQuotes = new Map<string, OpenQuote>();
     for (const [customerId, quotes] of byCustomer) {
       const open = pickOpenQuote(quotes);
       if (open) openQuotes.set(customerId, open);
+      let newest: OpenQuote | null = null;
+      for (const quote of quotes) {
+        if (quote.sentAtMs <= 0) continue;
+        if (!newest || quote.sentAtMs > newest.sentAtMs) newest = quote;
+      }
+      if (newest) latestQuotes.set(customerId, newest);
     }
 
     const now = Date.now();
@@ -519,6 +540,7 @@ export async function GET(request: Request): Promise<Response> {
         quoteStatus: quote?.status ?? "",
         quoteSentAtMs: quote?.sentAtMs ?? 0,
         quote,
+        latestQuote: latestQuotes.get(doc.id) ?? null,
         nurtureStep: typeof data.nurtureStep === "number" ? data.nurtureStep : 0,
         lastNurtureAtMs:
           data.lastNurtureAt instanceof Timestamp ? data.lastNurtureAt.toMillis() : null,

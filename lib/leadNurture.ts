@@ -397,6 +397,19 @@ export interface PhoneGroupable extends NurtureInput {
    * they reply.
    */
   eligible: boolean;
+  /**
+   * The newest estimate on this record, whatever its status, or null.
+   *
+   * Not the open one. The open one says what this record could be chased
+   * about; this says what the person most recently decided, which is the
+   * question the group has to answer and the one the stage cannot.
+   *
+   * `setQuoteStatus` writes the status and nothing else, so accepting a quote
+   * leaves its customer sitting at `estimate_sent`. A person with two records
+   * — an ignored estimate on one, an accepted one on the other — therefore
+   * looks, to every stage-based check, like somebody who has decided nothing.
+   */
+  latestQuote: QuoteRecord | null;
 }
 
 export interface PhoneGroupResult<T> {
@@ -464,11 +477,33 @@ export function oneLeadPerPhone<T extends PhoneGroupable>(
     // unconsented one had this edge behind it: a refusal recorded today lost
     // to a grant from a form filled in last spring.
     const refused = group.some((lead) => lead.consent?.granted === false);
+    // The newest estimate on the *number*, not on the record.
+    //
+    // This is the per-record hole again, in the one place left that had it.
+    // pickOpenQuote is asked per customer record, so a person with two records
+    // — an ignored May estimate on one, an accepted June estimate on the other
+    // — still has an open estimate on the first, and the first is chased. The
+    // stage check above does not catch it: `setQuoteStatus` writes the status
+    // and nothing else, so accepting leaves that record at `estimate_sent`,
+    // which reads as somebody who has decided nothing.
+    //
+    // So the same rule is applied to the number: gather the newest estimate
+    // each record carries and ask pickOpenQuote about the set. It returns null
+    // when the newest of them is accepted, declined, void, paid or converted,
+    // and a null there means this person has decided and nothing on this
+    // number is chased.
+    const latest = group
+      .map((lead) => lead.latestQuote)
+      .filter((quote): quote is QuoteRecord => quote != null);
+    // Only when there is something to decide from. No estimates anywhere on
+    // the number is an ordinary "nothing to chase", which nurtureDecision
+    // reports per record with a better reason than this one.
+    const decided = latest.length > 0 && pickOpenQuote(latest) === null;
     // Only a candidate can be sent to. The rest were context.
     const candidates = group.filter((lead) => lead.eligible);
     if (candidates.length === 0) continue;
 
-    if (optedOut || replied || blocked || refused || movedOn) {
+    if (optedOut || replied || blocked || refused || movedOn || decided) {
       const reason = optedOut
         ? "this number replied STOP on one of its records"
         : replied
@@ -477,7 +512,9 @@ export function oneLeadPerPhone<T extends PhoneGroupable>(
             ? "one of this number's records is marked do not knock"
             : refused
               ? "one of this number's records says no texts"
-              : "this number has a record that accepted, was won, or was written off";
+              : movedOn
+                ? "this number has a record that accepted, was won, or was written off"
+                : "this number's newest estimate is already decided — a duplicate record holds an older open one";
       for (const lead of candidates) setAside.push({ lead, reason });
       continue;
     }
