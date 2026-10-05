@@ -25,6 +25,7 @@ const {
   mayRelease,
   consumesCapacity,
   recordIsSendable,
+  pickOpenQuote,
   NURTURE_STEPS,
   MIN_GAP_DAYS,
   MAX_AGE_TO_START_DAYS,
@@ -36,9 +37,10 @@ const NOW = Date.parse("2026-06-15T14:00:00Z");
 
 /** A lead who ticked the box on the website four days ago and went quiet. */
 const quietLead = {
-  pipelineStage: "new_lead",
+  pipelineStage: "estimate_sent",
+  quoteStatus: "sent",
   status: "lead",
-  createdAtMs: NOW - 4 * DAY,
+  quoteSentAtMs: NOW - 4 * DAY,
   nurtureStep: 0,
   lastNurtureAtMs: null,
   hasReplied: false,
@@ -73,7 +75,7 @@ describe("the sequence itself", () => {
   });
 
   test("each step waits for its own day", () => {
-    const old = { createdAtMs: NOW - 40 * DAY, lastNurtureAtMs: NOW - 10 * DAY };
+    const old = { quoteSentAtMs: NOW - 40 * DAY, lastNurtureAtMs: NOW - 10 * DAY };
     assert.equal(decide({ ...old, nurtureStep: 1 }).kind, "value");
     assert.equal(decide({ ...old, nurtureStep: 2 }).kind, "last_call");
   });
@@ -87,7 +89,7 @@ describe("the sequence itself", () => {
   test("after the third, the sequence is over", () => {
     const verdict = decide({
       nurtureStep: 3,
-      createdAtMs: NOW - 200 * DAY,
+      quoteSentAtMs: NOW - 200 * DAY,
       lastNurtureAtMs: NOW - 100 * DAY,
     });
     assert.equal(verdict.send, false);
@@ -101,7 +103,7 @@ describe("the sequence itself", () => {
       for (const age of [31, 90, 400]) {
         const verdict = decide({
           nurtureStep: step,
-          createdAtMs: NOW - age * DAY,
+          quoteSentAtMs: NOW - age * DAY,
           lastNurtureAtMs: NOW - 60 * DAY,
         });
         assert.equal(verdict.send, false, `step ${step}, age ${age}`);
@@ -135,21 +137,56 @@ describe("the ways this must refuse", () => {
     assert.match(verdict.reason, /replied/);
   });
 
-  test("a lead who has moved past new_lead", () => {
-    // quote-followups chases these. Two crons texting one person about one
-    // quote on one day is the thing this check exists to prevent.
-    for (const stage of [
-      "estimate_sent",
-      "estimate_accepted",
-      "job_scheduled",
-      "awaiting_payment",
-      "paid",
-      "lost",
-    ]) {
+  test("a customer who has nothing open to follow up on", () => {
+    // The whole correction this feature needed. The sequence used to target
+    // leads with no price against them and refuse the quoted ones, which is
+    // backwards: an unanswered estimate is the thing worth chasing, and a
+    // stranger with no estimate is the text that gets reported.
+    const verdict = decide({ quoteStatus: "" });
+    assert.equal(verdict.send, false);
+    assert.match(verdict.reason, /no estimate or quote/);
+  });
+
+  test("an estimate that is no longer open", () => {
+    // `accepted` matters most of the six. Asking somebody to consider a price
+    // they have already agreed to is the message that makes a business look
+    // like it does not know it won the work.
+    for (const status of ["accepted", "declined", "void", "partial", "paid", "draft"]) {
+      const verdict = decide({ quoteStatus: status });
+      assert.equal(verdict.send, false, status);
+      assert.match(verdict.reason, /not open/);
+    }
+  });
+
+  test("the two open statuses are the only ones that send", () => {
+    for (const status of ["sent", "no_response"]) {
+      assert.equal(decide({ quoteStatus: status }).send, true, status);
+    }
+  });
+
+  test("a customer who has moved past being quoted", () => {
+    // They said yes, or somebody wrote them off. Either way the decision has
+    // been made and a cron does not get to reopen it.
+    for (const stage of ["estimate_accepted", "job_scheduled", "awaiting_payment", "paid", "lost"]) {
       const verdict = decide({ pipelineStage: stage });
       assert.equal(verdict.send, false, stage);
-      assert.match(verdict.reason, /not a new lead/);
+      assert.match(verdict.reason, /moved on/);
     }
+  });
+
+  test("but an open estimate behind a stale new_lead stage still sends", () => {
+    // A quote written straight onto a customer nobody moved along the board.
+    // Refusing it would mean the feature silently does nothing for exactly the
+    // people it is for.
+    assert.equal(decide({ pipelineStage: "new_lead" }).send, true);
+  });
+
+  test("an estimate with no sent date", () => {
+    // There is no day 3 without a day 0, and inventing one would start the
+    // ladder from a date nobody chose.
+    const verdict = decide({ quoteSentAtMs: 0 });
+    assert.equal(verdict.send, false);
+    assert.match(verdict.reason, /no sent date/);
   });
 
   test("do not knock means do not text either", () => {
@@ -200,13 +237,13 @@ describe("the two guards that stop a burst", () => {
     // The day this ships, the database holds every lead ever entered. Without
     // this, the first run would text all of them — a spam pattern arriving by
     // accident on day one, on a number whose A2P campaign took weeks to get.
-    const verdict = decide({ createdAtMs: NOW - (MAX_AGE_TO_START_DAYS + 1) * DAY });
+    const verdict = decide({ quoteSentAtMs: NOW - (MAX_AGE_TO_START_DAYS + 1) * DAY });
     assert.equal(verdict.send, false);
     assert.match(verdict.reason, /too old to start/);
   });
 
   test("a lead just inside the window still starts", () => {
-    const verdict = decide({ createdAtMs: NOW - (MAX_AGE_TO_START_DAYS - 1) * DAY });
+    const verdict = decide({ quoteSentAtMs: NOW - (MAX_AGE_TO_START_DAYS - 1) * DAY });
     assert.equal(verdict.send, true);
   });
 
@@ -215,7 +252,7 @@ describe("the two guards that stop a burst", () => {
     // sequence working, not a stale lead, so the guard must not catch it.
     const verdict = decide({
       nurtureStep: 2,
-      createdAtMs: NOW - 60 * DAY,
+      quoteSentAtMs: NOW - 60 * DAY,
       lastNurtureAtMs: NOW - 20 * DAY,
     });
     assert.equal(verdict.send, true);
@@ -228,7 +265,7 @@ describe("the two guards that stop a burst", () => {
     // on three consecutive days would send all three.
     const verdict = decide({
       nurtureStep: 1,
-      createdAtMs: NOW - 40 * DAY,
+      quoteSentAtMs: NOW - 40 * DAY,
       lastNurtureAtMs: NOW - 1 * DAY,
     });
     assert.equal(verdict.send, false);
@@ -241,12 +278,12 @@ describe("the two guards that stop a burst", () => {
     let step = 0;
     let lastAt = null;
     let sends = 0;
-    const createdAtMs = NOW - 40 * DAY;
+    const quoteSentAtMs = NOW - 40 * DAY;
 
     for (let day = 0; day < 14; day += 1) {
       const at = NOW + day * DAY;
       const verdict = nurtureDecision(
-        { ...quietLead, createdAtMs, nurtureStep: step, lastNurtureAtMs: lastAt },
+        { ...quietLead, quoteSentAtMs, nurtureStep: step, lastNurtureAtMs: lastAt },
         at,
       );
       if (verdict.send) {
@@ -268,13 +305,15 @@ describe("the two guards that stop a burst", () => {
       { optedOut: true },
       { hasReplied: true },
       { pipelineStage: "paid" },
+      { quoteStatus: "" },
+      { quoteStatus: "accepted" },
       { status: "do_not_knock" },
       { phone: "" },
       { consent: null },
       { consent: { granted: true, method: "verbal" } },
       { nurtureStep: 3 },
-      { createdAtMs: NOW - 400 * DAY },
-      { nurtureStep: 1, lastNurtureAtMs: NOW - 1 * DAY, createdAtMs: NOW - 40 * DAY },
+      { quoteSentAtMs: NOW - 400 * DAY },
+      { nurtureStep: 1, lastNurtureAtMs: NOW - 1 * DAY, quoteSentAtMs: NOW - 40 * DAY },
       { nurtureStep: 1 },
     ];
     for (const patch of refusals) {
@@ -386,9 +425,10 @@ describe("one person, several records", () => {
     // fixture has to be a record the policy can actually judge. These
     // defaults are a lead that would send: a web-form consent, a phone
     // number, ten days old and never nurtured.
-    pipelineStage: "new_lead",
+    pipelineStage: "estimate_sent",
+  quoteStatus: "sent",
     status: "active",
-    createdAtMs: NOW - 10 * DAY,
+    quoteSentAtMs: NOW - 10 * DAY,
     phone: "+15025550147",
     consent: { granted: true, method: "web_form" },
     ...patch,
@@ -496,17 +536,21 @@ describe("a duplicate that has moved on still speaks for the person", () => {
     // fixture has to be a record the policy can actually judge. These
     // defaults are a lead that would send: a web-form consent, a phone
     // number, ten days old and never nurtured.
-    pipelineStage: "new_lead",
+    pipelineStage: "estimate_sent",
+  quoteStatus: "sent",
     status: "active",
-    createdAtMs: NOW - 10 * DAY,
+    quoteSentAtMs: NOW - 10 * DAY,
     phone: "+15025550147",
     consent: { granted: true, method: "web_form" },
     ...patch,
   });
 
-  test("a replied estimate_sent duplicate suppresses the new_lead", () => {
+  test("a reply on a duplicate with no estimate suppresses the quoted one", () => {
+    // The voter is ineligible because it has no estimate of its own, not
+    // because it moved on — a record that moved on suppresses the whole number
+    // by itself, which would make this test pass for the wrong reason.
     const { chosen, setAside } = oneLeadPerPhone([
-      rec("quoted", { pipelineStage: "estimate_sent", hasReplied: true, eligible: false }),
+      rec("no_estimate", { quoteStatus: "", hasReplied: true, eligible: false }),
       rec("fresh"),
     ], NOW);
     assert.equal(chosen.length, 0, "this person already replied — nothing should send");
@@ -518,9 +562,9 @@ describe("a duplicate that has moved on still speaks for the person", () => {
     assert.match(setAside[0].reason, /replied/);
   });
 
-  test("an opt-out on a duplicate that moved on suppresses the new_lead", () => {
+  test("an opt-out on a duplicate with no estimate suppresses the quoted one", () => {
     const { chosen, setAside } = oneLeadPerPhone([
-      rec("won", { optedOut: true, eligible: false }),
+      rec("no_estimate", { quoteStatus: "", optedOut: true, eligible: false }),
       rec("fresh"),
     ], NOW);
     assert.equal(chosen.length, 0);
@@ -530,19 +574,20 @@ describe("a duplicate that has moved on still speaks for the person", () => {
   test("an ineligible record is never the one that sends", () => {
     // Even alone, and even though it looks like the furthest along.
     const { chosen } = oneLeadPerPhone(
-      [rec("quoted", { pipelineStage: "estimate_sent", nurtureStep: 2, eligible: false })],
+      [rec("no_estimate", { quoteStatus: "", nurtureStep: 2, eligible: false })],
       NOW,
     );
     assert.equal(chosen.length, 0);
   });
 
   test("an ineligible record does not become noise in the run report", () => {
-    // Every customer in the business is read now. If each non-lead produced a
-    // 'skipped' line, the nightly output would be the customer list.
+    // Every customer in the business is read now. If each unquoted one
+    // produced a 'skipped' line, the nightly output would be the customer
+    // list.
     const { chosen, setAside } = oneLeadPerPhone([
-      rec("customer_a", { eligible: false }),
-      rec("customer_b", { eligible: false, phoneKey: "5025559999" }),
-      rec("nophone", { eligible: false, phoneKey: "" }),
+      rec("customer_a", { quoteStatus: "", eligible: false }),
+      rec("customer_b", { quoteStatus: "", eligible: false, phoneKey: "5025559999" }),
+      rec("nophone", { quoteStatus: "", eligible: false, phoneKey: "" }),
     ], NOW);
     assert.equal(chosen.length, 0);
     assert.deepEqual(setAside, [], "records nobody asked to nurture are silent");
@@ -555,10 +600,10 @@ describe("a duplicate that has moved on still speaks for the person", () => {
     // say 0. What stops the replay is the group figures returned here, so
     // those are what gets asserted.
     const { chosen } = oneLeadPerPhone([
-      // Ineligible because it has no creation date, not because it moved on —
-      // a record past new_lead now suppresses the whole number, which would
-      // make this test pass for the wrong reason.
-      rec("no_created_at", { nurtureStep: 2, lastNurtureAtMs: NOW - 2 * DAY, eligible: false }),
+      // Ineligible because it has no estimate of its own, not because it
+      // moved on — a record that moved on suppresses the whole number, which
+      // would make this test pass for the wrong reason.
+      rec("no_estimate", { quoteStatus: "", nurtureStep: 2, lastNurtureAtMs: NOW - 2 * DAY, eligible: false }),
       rec("fresh", { nurtureStep: 0, lastNurtureAtMs: null }),
     ], NOW);
     assert.equal(chosen.length, 1);
@@ -693,9 +738,10 @@ describe("a duplicate cannot replay what its sibling already sent", () => {
   // texting again today. Both arrive at the exact harm this file exists to
   // prevent, through the back door.
   const base = {
-    pipelineStage: "new_lead",
+    pipelineStage: "estimate_sent",
+  quoteStatus: "sent",
     status: "active",
-    createdAtMs: NOW - 40 * DAY,
+    quoteSentAtMs: NOW - 40 * DAY,
     nurtureStep: 0,
     lastNurtureAtMs: null,
     hasReplied: false,
@@ -776,9 +822,10 @@ describe("what changed during the run is checked before the text goes out", () =
   // never called" can actually be asserted, since the call sits behind this
   // returning a claim.
   const base = {
-    pipelineStage: "new_lead",
+    pipelineStage: "estimate_sent",
+  quoteStatus: "sent",
     status: "active",
-    createdAtMs: NOW - 10 * DAY,
+    quoteSentAtMs: NOW - 10 * DAY,
     nurtureStep: 0,
     lastNurtureAtMs: null,
     hasReplied: false,
@@ -827,10 +874,34 @@ describe("what changed during the run is checked before the text goes out", () =
     assert.match(decision.reason, /STOP/);
   });
 
-  test("a lead quoted during the run is handed to quote-followups", () => {
-    const decision = claim({ pipelineStage: "estimate_sent" });
+  test("an estimate accepted during the run stops the text", () => {
+    // The one change here nobody on the crew has to make. A customer taps
+    // Accept on their own share link at 9:01 and the run reaches them at 9:04;
+    // without re-reading the estimate inside the claim, they get asked
+    // whether they have thought about it.
+    const decision = claim({ quoteStatus: "accepted" });
     assert.equal(decision.claim, false);
-    assert.match(decision.reason, /not a new lead any more/);
+    assert.match(decision.reason, /not open/);
+  });
+
+  test("an estimate declined during the run stops the text", () => {
+    const decision = claim({ quoteStatus: "declined" });
+    assert.equal(decision.claim, false);
+    assert.match(decision.reason, /not open/);
+  });
+
+  test("an estimate deleted during the run stops the text", () => {
+    // Reads back as no estimate at all, which is the honest reading: the
+    // reason for the message is gone.
+    const decision = claim({ quoteStatus: "", quoteSentAtMs: 0 });
+    assert.equal(decision.claim, false);
+    assert.match(decision.reason, /no estimate or quote/);
+  });
+
+  test("a customer moved on during the run stops the text", () => {
+    const decision = claim({ pipelineStage: "estimate_accepted" });
+    assert.equal(decision.claim, false);
+    assert.match(decision.reason, /moved on/);
   });
 
   test("a do-not-knock mark added during the run stops the text", () => {
@@ -906,9 +977,10 @@ describe("the record chosen to send is one that can send", () => {
     // fixture has to be a record the policy can actually judge. These
     // defaults are a lead that would send: a web-form consent, a phone
     // number, ten days old and never nurtured.
-    pipelineStage: "new_lead",
+    pipelineStage: "estimate_sent",
+  quoteStatus: "sent",
     status: "active",
-    createdAtMs: NOW - 10 * DAY,
+    quoteSentAtMs: NOW - 10 * DAY,
     phone: "+15025550147",
     consent: { granted: true, method: "web_form" },
     ...patch,
@@ -970,9 +1042,10 @@ describe("the claim belongs to the phone number, not the record", () => {
   // one record changing stage between the runs is enough — and two
   // independent documents gave two independent claims.
   const base = {
-    pipelineStage: "new_lead",
+    pipelineStage: "estimate_sent",
+  quoteStatus: "sent",
     status: "active",
-    createdAtMs: NOW - 10 * DAY,
+    quoteSentAtMs: NOW - 10 * DAY,
     nurtureStep: 0,
     lastNurtureAtMs: null,
     hasReplied: false,
@@ -1083,9 +1156,10 @@ describe("do not knock is about the person, not the paperwork", () => {
     // fixture has to be a record the policy can actually judge. These
     // defaults are a lead that would send: a web-form consent, a phone
     // number, ten days old and never nurtured.
-    pipelineStage: "new_lead",
+    pipelineStage: "estimate_sent",
+  quoteStatus: "sent",
     status: "active",
-    createdAtMs: NOW - 10 * DAY,
+    quoteSentAtMs: NOW - 10 * DAY,
     phone: "+15025550147",
     consent: { granted: true, method: "web_form" },
     ...patch,
@@ -1232,17 +1306,18 @@ describe("a stale duplicate cannot shadow a fresh one", () => {
     hasReplied: false,
     optedOut: false,
     eligible: true,
-    pipelineStage: "new_lead",
+    pipelineStage: "estimate_sent",
+  quoteStatus: "sent",
     status: "active",
-    createdAtMs: NOW - 10 * DAY,
+    quoteSentAtMs: NOW - 10 * DAY,
     phone: "+15025550147",
     consent: { granted: true, method: "web_form" },
     ...patch,
   });
 
   test("the fresh lead is chosen even when the stale record is listed first", () => {
-    const stale = rec("stale", { createdAtMs: NOW - 60 * DAY });
-    const fresh = rec("fresh", { createdAtMs: NOW - 4 * DAY });
+    const stale = rec("stale", { quoteSentAtMs: NOW - 60 * DAY });
+    const fresh = rec("fresh", { quoteSentAtMs: NOW - 4 * DAY });
     const { chosen } = oneLeadPerPhone([stale, fresh], NOW);
     assert.equal(chosen.length, 1);
     assert.equal(chosen[0].lead.id, "fresh", "the stale record would fail the age guard nightly");
@@ -1251,7 +1326,7 @@ describe("a stale duplicate cannot shadow a fresh one", () => {
   test("and when it is listed second", () => {
     // Input order must not decide anything.
     const { chosen } = oneLeadPerPhone(
-      [rec("fresh", { createdAtMs: NOW - 4 * DAY }), rec("stale", { createdAtMs: NOW - 60 * DAY })],
+      [rec("fresh", { quoteSentAtMs: NOW - 4 * DAY }), rec("stale", { quoteSentAtMs: NOW - 60 * DAY })],
       NOW,
     );
     assert.equal(chosen[0].lead.id, "fresh");
@@ -1260,7 +1335,7 @@ describe("a stale duplicate cannot shadow a fresh one", () => {
   test("a record that is not yet due loses to one that is", () => {
     // Two fresh leads, one a day old. Day 3 has not arrived for it.
     const { chosen } = oneLeadPerPhone(
-      [rec("yesterday", { createdAtMs: NOW - DAY }), rec("last_week", { createdAtMs: NOW - 7 * DAY })],
+      [rec("yesterday", { quoteSentAtMs: NOW - DAY }), rec("last_week", { quoteSentAtMs: NOW - 7 * DAY })],
       NOW,
     );
     assert.equal(chosen[0].lead.id, "last_week");
@@ -1268,7 +1343,7 @@ describe("a stale duplicate cannot shadow a fresh one", () => {
 
   test("when none would send, one is still chosen so the reason is reported", () => {
     const { chosen, setAside } = oneLeadPerPhone(
-      [rec("a", { createdAtMs: NOW - 60 * DAY }), rec("b", { createdAtMs: NOW - 70 * DAY })],
+      [rec("a", { quoteSentAtMs: NOW - 60 * DAY }), rec("b", { quoteSentAtMs: NOW - 70 * DAY })],
       NOW,
     );
     assert.equal(chosen.length, 1, "silence would leave nobody knowing why");
@@ -1307,9 +1382,10 @@ describe("a text that reached Twilio but was never recorded holds the number", (
   // a text may have gone out and the record of it may be wrong, and nobody
   // knows which.
   const base = {
-    pipelineStage: "new_lead",
+    pipelineStage: "estimate_sent",
+  quoteStatus: "sent",
     status: "active",
-    createdAtMs: NOW - 10 * DAY,
+    quoteSentAtMs: NOW - 10 * DAY,
     nurtureStep: 0,
     lastNurtureAtMs: null,
     hasReplied: false,
@@ -1491,9 +1567,10 @@ describe("two businesses sharing one phone number", () => {
     hasReplied: false,
     optedOut: false,
     eligible: true,
-    pipelineStage: "new_lead",
+    pipelineStage: "estimate_sent",
+  quoteStatus: "sent",
     status: "active",
-    createdAtMs: NOW - 10 * DAY,
+    quoteSentAtMs: NOW - 10 * DAY,
     phone: "+15025550147",
     consent: { granted: true, method: "web_form" },
     ...patch,
@@ -1550,9 +1627,10 @@ describe("whose STOP it was", () => {
     hasReplied: false,
     optedOut: false,
     eligible: true,
-    pipelineStage: "new_lead",
+    pipelineStage: "estimate_sent",
+  quoteStatus: "sent",
     status: "active",
-    createdAtMs: NOW - 10 * DAY,
+    quoteSentAtMs: NOW - 10 * DAY,
     phone: "+15025550147",
     consent: { granted: true, method: "web_form" },
     ...patch,
@@ -1592,13 +1670,13 @@ describe("whose STOP it was", () => {
   });
 });
 
-describe("a number that has moved past being a lead", () => {
-  // nurtureDecision has always refused a record past `new_lead`, and its
-  // comment says why: quoted leads are chased by the quote-followups cron, and
-  // two crons texting one person about one job is the thing that rule exists
-  // to prevent. But it was only ever asked of the record about to send — so a
-  // duplicate still sitting at `new_lead` would ask somebody who already has a
-  // price whether they would like one, while the other cron chased the quote.
+describe("a number that has already decided", () => {
+  // nurtureDecision refuses a record that has accepted, been scheduled, paid
+  // or been written off: the decision has been made and a cron does not get to
+  // reopen it. But it is only ever asked of the record about to send — so
+  // without the group-wide check, a customer who accepted one estimate on
+  // Monday gets chased about an older open one on Tuesday, because the
+  // acceptance is recorded on a different row of the same person.
   const rec = (id, patch = {}) => ({
     id,
     phoneKey: "5025550147",
@@ -1607,29 +1685,32 @@ describe("a number that has moved past being a lead", () => {
     hasReplied: false,
     optedOut: false,
     eligible: true,
-    pipelineStage: "new_lead",
+    pipelineStage: "estimate_sent",
+  quoteStatus: "sent",
     status: "active",
-    createdAtMs: NOW - 10 * DAY,
+    quoteSentAtMs: NOW - 10 * DAY,
     phone: "+15025550147",
     consent: { granted: true, method: "web_form" },
     ...patch,
   });
 
-  test("a quoted duplicate stops the fresh one", () => {
+  test("an accepted duplicate stops the fresh one", () => {
     const { chosen, setAside } = oneLeadPerPhone(
-      [rec("quoted", { pipelineStage: "estimate_sent", eligible: false }), rec("fresh")],
+      [rec("accepted", { pipelineStage: "estimate_accepted", eligible: false }), rec("fresh")],
       NOW,
     );
-    assert.equal(chosen.length, 0, "this person already has a price");
-    assert.match(setAside[0].reason, /quote follow-ups have it/);
+    assert.equal(chosen.length, 0, "this person has already said yes");
+    assert.match(setAside[0].reason, /accepted, was won, or was written off/);
   });
 
-  test("a won customer is not a lead to nurture", () => {
-    const { chosen } = oneLeadPerPhone(
-      [rec("won", { pipelineStage: "job_won", eligible: false }), rec("fresh")],
-      NOW,
-    );
-    assert.equal(chosen.length, 0);
+  test("a won customer is not somebody to chase for a decision", () => {
+    for (const stage of ["job_scheduled", "awaiting_payment", "paid"]) {
+      const { chosen } = oneLeadPerPhone(
+        [rec("won", { pipelineStage: stage, eligible: false }), rec("fresh")],
+        NOW,
+      );
+      assert.equal(chosen.length, 0, stage);
+    }
   });
 
   test("a lost one either", () => {
@@ -1640,15 +1721,15 @@ describe("a number that has moved past being a lead", () => {
     assert.equal(chosen.length, 0);
   });
 
-  test("a number whose records are all still leads is unaffected", () => {
+  test("a number whose records are all still awaiting a decision is unaffected", () => {
     const { chosen } = oneLeadPerPhone([rec("a"), rec("b")], NOW);
     assert.equal(chosen.length, 1);
   });
 
-  test("a different number is unaffected by somebody else's quote", () => {
+  test("a different number is unaffected by somebody else's acceptance", () => {
     const { chosen } = oneLeadPerPhone(
       [
-        rec("quoted", { pipelineStage: "estimate_sent", eligible: false }),
+        rec("accepted", { pipelineStage: "estimate_accepted", eligible: false }),
         rec("someone_else", { phoneKey: "5025559999" }),
       ],
       NOW,
@@ -1671,9 +1752,10 @@ describe("no texts means no texts, on any of this person's records", () => {
     hasReplied: false,
     optedOut: false,
     eligible: true,
-    pipelineStage: "new_lead",
+    pipelineStage: "estimate_sent",
+  quoteStatus: "sent",
     status: "active",
-    createdAtMs: NOW - 10 * DAY,
+    quoteSentAtMs: NOW - 10 * DAY,
     phone: "+15025550147",
     consent: { granted: true, method: "web_form" },
     ...patch,
@@ -1733,5 +1815,78 @@ describe("no texts means no texts, on any of this person's records", () => {
       NOW,
     );
     assert.deepEqual(chosen.map((c) => c.lead.id), ["someone_else"]);
+  });
+});
+
+describe("which estimate the sequence is about", () => {
+  // The route hands this every estimate a customer has, closed ones included,
+  // because deciding needs them. Every case below is a text that would have
+  // gone out wrongly without it.
+  const q = (patch = {}) => ({
+    id: "q1",
+    customerId: "cust",
+    status: "sent",
+    sentAtMs: NOW - 10 * DAY,
+    convertedToId: null,
+    ...patch,
+  });
+
+  test("nothing at all is nothing to chase", () => {
+    assert.equal(pickOpenQuote([]), null);
+  });
+
+  test("one open estimate is the one", () => {
+    assert.equal(pickOpenQuote([q()]).id, "q1");
+  });
+
+  test("the newer of two open estimates wins", () => {
+    // One person, one decision — about the newer price. Chasing both is two
+    // texts about two numbers for the same work.
+    const picked = pickOpenQuote([
+      q({ id: "may", sentAtMs: NOW - 40 * DAY }),
+      q({ id: "june", sentAtMs: NOW - 4 * DAY }),
+    ]);
+    assert.equal(picked.id, "june");
+  });
+
+  test("an accepted newer estimate closes the whole customer out", () => {
+    // The bug the first version of the query had. Asking only for the open
+    // estimates returns the May one on its own, and the run chases somebody
+    // about a price while the June one they accepted is already scheduled.
+    const picked = pickOpenQuote([
+      q({ id: "may", sentAtMs: NOW - 40 * DAY, status: "sent" }),
+      q({ id: "june", sentAtMs: NOW - 4 * DAY, status: "accepted" }),
+    ]);
+    assert.equal(picked, null, "they accepted the newer one — there is nothing to chase");
+  });
+
+  test("a declined newer estimate closes them out too", () => {
+    const picked = pickOpenQuote([
+      q({ id: "may", sentAtMs: NOW - 40 * DAY }),
+      q({ id: "june", sentAtMs: NOW - 4 * DAY, status: "declined" }),
+    ]);
+    assert.equal(picked, null);
+  });
+
+  test("every closed status closes them out", () => {
+    for (const status of ["accepted", "declined", "void", "partial", "paid", "draft"]) {
+      assert.equal(pickOpenQuote([q({ status })]), null, status);
+    }
+  });
+
+  test("an estimate turned into an invoice is closed whatever its status says", () => {
+    // Converting is acceptance in all but name, and the status field is not
+    // always the record of it.
+    assert.equal(pickOpenQuote([q({ status: "sent", convertedToId: "inv_9" })]), null);
+  });
+
+  test("an estimate with no sent date is not an anchor", () => {
+    // And does not shadow a real one: there is no day 3 without a day 0.
+    assert.equal(pickOpenQuote([q({ sentAtMs: 0 })]), null);
+    assert.equal(pickOpenQuote([q({ id: "undated", sentAtMs: 0 }), q({ id: "real" })]).id, "real");
+  });
+
+  test("a legacy quote marked unanswered by hand is open", () => {
+    assert.equal(pickOpenQuote([q({ status: "no_response" })]).id, "q1");
   });
 });

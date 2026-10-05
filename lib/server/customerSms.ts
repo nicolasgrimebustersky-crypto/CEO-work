@@ -12,7 +12,7 @@ import { sendSms, type SendResult } from "./twilio";
  * others were missed, and they are the ones that matter most, because nobody
  * is watching when they fire:
  *
- *   the nightly quote follow-up cron, which texts every silent quote;
+ *   the nightly follow-up cron, which texts every unanswered estimate;
  *   the Meta lead webhook, which texts whoever filled in a Facebook form;
  *   the MCP `send_sms` tool, which any holder of an API key can call.
  *

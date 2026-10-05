@@ -30,13 +30,12 @@ const OPT_OUT = "Reply STOP to opt out.";
 const CALLS = {
   jobConfirmationText: ["Pressure washing", new Date("2026-05-04T14:00:00Z")],
   jobRescheduledText: ["Pressure washing", new Date("2026-05-06T09:30:00Z")],
-  quoteFollowUpText: ["Landscaping", 450, 1],
   greetingFor: ["Marta"],
   enRouteText: ["Marta"],
   jobStartedText: ["Noah"],
   jobFinishedText: ["Noah"],
   reviewRequestText: ["Marta", "https://g.page/r/ExampleToken/review"],
-  leadNurtureText: ["nudge", "Marta"],
+  leadNurtureText: ["nudge", "Marta", 450],
 };
 
 /** greetingFor is a fragment used to build other texts, not a message itself. */

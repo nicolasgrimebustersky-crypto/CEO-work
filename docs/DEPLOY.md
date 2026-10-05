@@ -144,7 +144,7 @@ Both cause confusing failures if skipped.
 
 ## Notes on the Hobby plan
 
-- The daily quote follow-up cron in `vercel.json` runs once a day, which is
+- The daily estimate follow-up cron in `vercel.json` runs once a day, which is
   exactly what Hobby allows. Nothing to change.
 - Preview deployments are public by default. This app is full of customers'
   names and addresses, so turn on **Settings → Deployment Protection → Vercel

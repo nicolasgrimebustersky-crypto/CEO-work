@@ -140,7 +140,6 @@ describe("every customer text goes through the consent check", () => {
     // generic rule alone would pass if somebody reverted one of them to a
     // helper that happened not to import sendSms by that name.
     for (const path of [
-      "app/api/cron/quote-followups/route.ts",
       "app/api/meta/leads/route.ts",
       "lib/mcp/handlers.ts",
       "app/api/sms/send/route.ts",
@@ -190,6 +189,52 @@ describe("the lead nurture cron texts the number it actually checked", () => {
       /sendSmsToCustomerId/,
       `${ROUTE} must not re-read the customer to find a recipient: the number ` +
         "it was authorised to text is the one the claim returned",
+    );
+  });
+
+  test("the claim re-reads the estimate the text is about", () => {
+    // The one field that changes without anybody on the crew touching the
+    // app: the customer taps Accept or Decline on their own share link. A run
+    // works through its list for minutes, so trusting the copy read at the top
+    // of it means somebody who accepted at 9:01 is asked at 9:04 whether they
+    // have thought about it.
+    const read = code.indexOf("quoteRef ? tx.get(quoteRef)");
+    const claimCall = code.indexOf("claimDecision(");
+    assert.ok(
+      read > 0,
+      `${ROUTE} must read the estimate inside the claim transaction, not trust ` +
+        "the copy from the top of the run",
+    );
+    assert.ok(claimCall > read, "and must read it before the decision is made on it");
+    assert.match(
+      code,
+      /quoteStatus: converted \? "accepted" : freshQuoteStatus/,
+      `${ROUTE} must pass the freshly read status to the decision — and read a ` +
+        "converted estimate as accepted, because converting is acceptance in all but name",
+    );
+  });
+
+  test("the estimates are read unfiltered by status", () => {
+    // Asking only for the open ones is the obvious query and it leaves a
+    // message going out wrongly: a customer with an ignored May estimate and
+    // an accepted June one has exactly one open record, and chasing it texts
+    // somebody about a price while their accepted one is already scheduled.
+    // pickOpenQuote needs the closed ones in hand to refuse.
+    assert.match(
+      code,
+      /collection\("documents"\)\s*\.where\("kind", "==", "estimate"\)\s*\.get\(\)/,
+      `${ROUTE} must read every estimate, not only the open ones — a newer ` +
+        "accepted estimate is what stops an older open one being chased",
+    );
+    assert.doesNotMatch(
+      code,
+      /\.where\("status", "==", "sent"\)/,
+      `${ROUTE} must not filter estimates to the sent ones`,
+    );
+    assert.match(
+      code,
+      /pickOpenQuote\(quotes\)/,
+      `${ROUTE} must let pickOpenQuote decide which estimate the sequence is about`,
     );
   });
 
@@ -584,6 +629,31 @@ describe("an opt-out belongs to the business it was told to", () => {
     const next = text.indexOf("\nexport ", start + 1);
     return text.slice(start, next === -1 ? undefined : next);
   };
+
+  test("the mid-run stage check asks the same set the policy asks", () => {
+    // Two copies of one rule, and they drifted. numberSuppression said
+    // "anything but new_lead has moved on", which was right while the sequence
+    // chased unpriced leads and became wrong the moment it started chasing
+    // estimates: it then suppressed `estimate_sent`, the one stage the feature
+    // is for, so every text would have been held mid-run. Nothing in this
+    // suite failed, because this function needs a database to run.
+    //
+    // So the assertion is that there is no second copy to drift: the shared
+    // set is what gets asked, inside this function's own body.
+    const scan = bodyOf(NOTES, "numberSuppression");
+    assert.match(
+      scan,
+      /!NURTURE_STAGES\.has\(data\.pipelineStage\)/,
+      "numberSuppression must decide 'moved on' through the policy's own " +
+        "NURTURE_STAGES set, not a stage comparison written out again here",
+    );
+    assert.doesNotMatch(
+      scan,
+      /data\.pipelineStage !== "[a-z_]+"/,
+      "a hand-written stage comparison here is a second copy of the rule, and " +
+        "the first time the two disagreed the whole feature stopped sending",
+    );
+  });
 
   test("the org is required on the lookup, not defaulted", () => {
     // Required so typecheck names every caller. A default is how an unscoped

@@ -1,28 +1,38 @@
 /**
- * Keeping a lead warm without becoming the business that pesters people.
+ * Chasing a price nobody answered, without becoming the business that pesters
+ * people.
  *
- * A lead who never replied is the hardest case in the whole app. Doing nothing
- * loses work that was there to be won — somebody asked for a price, got busy,
- * and would still say yes if reminded. Doing too much loses the phone number:
- * texting a stranger who has never answered, six times over three months, is
- * what gets a message reported as spam, and enough reports gets an A2P 10DLC
+ * An estimate sent and never answered is the hardest case in the whole app.
+ * Doing nothing loses work that was there to be won — somebody asked for a
+ * price, got a number, got busy, and would still say yes if reminded. Doing
+ * too much loses the phone number: texting six times over three months is what
+ * gets a message reported as spam, and enough reports gets an A2P 10DLC
  * campaign filtered or pulled. That is not one feature failing; it is every
  * text the business sends, including the job confirmations people actually
  * want.
  *
- * So this is deliberately short. Three touches in the first month and then
- * nothing: a nudge, something useful, and a last call. After that the lead
- * belongs to a seasonal list, because for pressure washing and gutters and
- * snow, *when* matters more than *again* — a March lead is worth a word in
- * April and October, not a "just checking in" every thirty days forever.
+ * Who this is for is the whole point, and it was wrong once. The sequence is
+ * for customers who have *been quoted* and have not accepted — an estimate or
+ * a quote sitting open with their name on it. Not somebody just entered on a
+ * door knock with no price against them: there is nothing to follow up on
+ * there, and "still want a quote?" to a stranger is the message that gets
+ * reported. The ladder ends the moment they accept, decline, reply, or the
+ * estimate stops being open.
+ *
+ * So this is deliberately short. Three touches in the estimate's first month
+ * and then nothing: a nudge, something useful, and a last call. After that the
+ * customer belongs to a seasonal list, because for pressure washing and
+ * gutters and snow, *when* matters more than *again* — a March estimate is
+ * worth a word in April and October, not a "just checking in" every thirty
+ * days forever.
  *
  * Pure and import-free, so every refusal below can be tested by running it.
  * That matters more here than anywhere else in the app: this is the only code
- * that texts somebody nobody has spoken to, and every bug in it is a message
- * that cannot be recalled.
+ * that texts somebody nobody has spoken to since the price went out, and every
+ * bug in it is a message that cannot be recalled.
  */
 
-/** What goes out, and how long after the lead was created. */
+/** What goes out, and how long after the estimate was sent. */
 export const NURTURE_STEPS = [
   { day: 3, kind: "nudge" },
   { day: 10, kind: "value" },
@@ -34,28 +44,111 @@ export type NurtureKind = (typeof NURTURE_STEPS)[number]["kind"];
 /**
  * The least time allowed between two nurture texts to one person.
  *
- * The step days are measured from when the lead was created, which means a
- * lead who has sat untouched for forty days satisfies day 3, day 10 and day 30
- * all at once. Without this, the first cron run after that would send one text,
- * the next run the second, the next the third — three messages in three days to
- * somebody who has never replied. That is the worst version of this feature,
- * and it would arrive by accident rather than by anybody choosing it.
+ * The step days are measured from when the estimate was sent, which means an
+ * estimate that has sat unanswered for forty days satisfies day 3, day 10 and
+ * day 30 all at once. Without this, the first cron run after that would send
+ * one text, the next run the second, the next the third — three messages in
+ * three days to somebody who has never replied. That is the worst version of
+ * this feature, and it would arrive by accident rather than by anybody
+ * choosing it.
  */
 export const MIN_GAP_DAYS = 5;
 
 /**
- * How old a lead may be for the sequence to *start* at all.
+ * How old an estimate may be for the sequence to *start* at all.
  *
- * The day this ships, the database holds every lead ever entered. Most are
+ * The day this ships, the database holds every estimate ever sent. Many are
  * months old and none have been through this. Starting all of them at once
- * would send a burst of "still want that estimate?" to people who asked in the
+ * would send a burst of "about that estimate" to people who were quoted in the
  * spring — the exact traffic pattern carriers treat as spam, on the exact day
  * the feature goes live.
  *
- * So the ladder is for leads that are actually new. Anything older is stale,
- * and a stale lead is a seasonal-list problem rather than a day-3 nudge.
+ * So the ladder is for estimates that are actually recent. Anything older is
+ * stale, and a stale estimate is a seasonal-list problem rather than a day-3
+ * nudge.
  */
 export const MAX_AGE_TO_START_DAYS = 45;
+
+/**
+ * The statuses an estimate can be in and still be worth following up.
+ *
+ * `sent` is the ordinary case. `no_response` is the legacy `quotes`
+ * collection's way of saying the same thing — somebody marked it unanswered by
+ * hand, which is a stronger statement of the same fact, not a different one.
+ *
+ * Everything else ends the sequence, and each for its own reason:
+ * `accepted` is the outcome this was chasing, `declined` is an explicit no,
+ * `void` means the estimate was withdrawn, `partial` and `paid` mean it became
+ * an invoice and money has moved, and `draft` was never sent to anybody — a
+ * draft is a note to self, and texting somebody about a price they have never
+ * seen is worse than not texting them at all.
+ */
+export const OPEN_QUOTE_STATUSES: ReadonlySet<string> = new Set(["sent", "no_response"]);
+
+/**
+ * The pipeline stages where chasing an estimate still makes sense.
+ *
+ * `estimate_sent` is the stage this feature is for. `new_lead` is here because
+ * the stage and the estimate are two records that can disagree: a quote
+ * written straight onto a customer who was never moved along the board leaves
+ * a real open estimate sitting behind a stale stage, and refusing it would
+ * mean the feature silently does nothing for the people who need it most.
+ *
+ * Every later stage ends the sequence. `estimate_accepted`, `job_scheduled`,
+ * `awaiting_payment` and `paid` all mean they said yes — chasing them about
+ * the price now reads as a business that does not know it won the work. `lost`
+ * means somebody wrote it off deliberately, and that decision is theirs, not
+ * a cron's to overturn.
+ */
+export const NURTURE_STAGES: ReadonlySet<string> = new Set(["new_lead", "estimate_sent"]);
+
+/** An estimate or quote as the cron reads it, before anything is decided. */
+export interface QuoteRecord {
+  id: string;
+  customerId: string;
+  status: string;
+  sentAtMs: number;
+  /** Set on an estimate that has been turned into an invoice. */
+  convertedToId?: string | null;
+}
+
+/**
+ * Which of a customer's estimates the sequence is about.
+ *
+ * The newest open one, and only when it is open. Three rules, each of which is
+ * a message that would otherwise go out wrongly:
+ *
+ *   Newest, because a customer quoted twice is one person with one decision to
+ *   make, and the newer price is the one they are deciding about. Chasing both
+ *   is two texts about two numbers for the same work.
+ *
+ *   Open only. A closed estimate is not a reason to text anybody, and the
+ *   newest one being closed is the common shape of "they accepted": an older
+ *   `sent` estimate sitting behind it must not become the thing they are
+ *   chased about. Picking the newest *open* one out of a set whose newest is
+ *   accepted would do exactly that, which is why acceptance is read from the
+ *   newest record rather than searched past.
+ *
+ *   Converted estimates are closed whatever their status says. Turning an
+ *   estimate into an invoice is acceptance in all but name, and the status
+ *   field is not always the record of it.
+ *
+ * Pure, so each of those can be tested by running it rather than by reading
+ * the cron and believing it.
+ */
+export function pickOpenQuote<T extends QuoteRecord>(quotes: readonly T[]): T | null {
+  let newest: T | null = null;
+  for (const quote of quotes) {
+    // No date is no anchor: the day counts are measured from here, and
+    // guessing one would start the ladder from a date nobody chose.
+    if (quote.sentAtMs <= 0) continue;
+    if (!newest || quote.sentAtMs > newest.sentAtMs) newest = quote;
+  }
+  if (!newest) return null;
+  if (newest.convertedToId) return null;
+  if (!OPEN_QUOTE_STATUSES.has(newest.status)) return null;
+  return newest;
+}
 
 /** The consent methods strong enough for a marketing text. */
 const MARKETING_CONSENT_METHODS = new Set(["web_form", "written"]);
@@ -66,11 +159,27 @@ export interface NurtureConsent {
 }
 
 export interface NurtureInput {
-  /** Where the lead sits. Only `new_lead` is nurtured — see the verdict below. */
+  /** Where the customer sits. See NURTURE_STAGES — a won job ends this. */
   pipelineStage: string;
   /** The map-pin status. `do_not_knock` means leave them alone, by any channel. */
   status: string;
-  createdAtMs: number;
+  /**
+   * The status of the open estimate being chased. See OPEN_QUOTE_STATUSES.
+   *
+   * Empty string when this customer has no estimate at all, which is the
+   * common case and a refusal rather than an error: there is nothing to follow
+   * up on, and that is exactly who this sequence must not text.
+   */
+  quoteStatus: string;
+  /**
+   * When that estimate went out. The day counts are measured from here.
+   *
+   * Not when the customer record was created, which is what this used to be
+   * and was the whole mistake: a lead entered on a door knock in March and
+   * quoted in June would have had its "day 3" nudge in March, about a price
+   * that did not exist yet.
+   */
+  quoteSentAtMs: number;
   /** How many steps have already gone out. The index of the next one. */
   nurtureStep: number;
   lastNurtureAtMs: number | null;
@@ -110,14 +219,34 @@ export function nurtureDecision(input: NurtureInput, nowMs: number): NurtureVerd
   // who writes back is in a conversation, and a scheduled text landing in the
   // middle of one reads as nobody being home.
   if (input.hasReplied) {
-    return { send: false, reason: "this lead has replied — a person takes it from here" };
+    return { send: false, reason: "this customer has replied — a person takes it from here" };
   }
 
-  // Past `new_lead` means a quote went out, and quoted leads are chased by
-  // app/api/cron/quote-followups. Nurturing them too would be two different
-  // crons texting the same person about the same thing on the same day.
-  if (input.pipelineStage !== "new_lead") {
-    return { send: false, reason: `not a new lead any more (${input.pipelineStage})` };
+  // The estimate is the reason for the message. No open estimate, no message:
+  // this sequence exists to chase a price somebody was given and has not
+  // answered, and without one there is nothing to say that is not a cold
+  // marketing text to somebody who never asked for a number.
+  if (!input.quoteStatus) {
+    return { send: false, reason: "no estimate or quote on this customer to follow up on" };
+  }
+
+  // Accepted is the outcome this was chasing, and declined is an explicit no.
+  // Both end it — and ending on accepted matters most, because a text asking
+  // somebody to consider a price they already said yes to is the one that
+  // makes a business look like it is not paying attention.
+  if (!OPEN_QUOTE_STATUSES.has(input.quoteStatus)) {
+    return { send: false, reason: `the estimate is ${input.quoteStatus}, not open` };
+  }
+
+  // The board agreeing with the estimate. Where they disagree in the other
+  // direction — an open estimate behind a won or written-off stage — the stage
+  // is the later statement of the two, because somebody moved it there by hand.
+  if (!NURTURE_STAGES.has(input.pipelineStage)) {
+    return { send: false, reason: `this customer has moved on (${input.pipelineStage})` };
+  }
+
+  if (input.quoteSentAtMs <= 0) {
+    return { send: false, reason: "the estimate has no sent date to count days from" };
   }
 
   if (input.status === "do_not_knock") {
@@ -125,7 +254,7 @@ export function nurtureDecision(input: NurtureInput, nowMs: number): NurtureVerd
   }
 
   if (!input.phone.trim()) {
-    return { send: false, reason: "no phone number on this lead" };
+    return { send: false, reason: "no phone number on this customer" };
   }
 
   // A nurture text is marketing, not transactional — it exists to win work,
@@ -162,12 +291,14 @@ export function nurtureDecision(input: NurtureInput, nowMs: number): NurtureVerd
     return { send: false, reason: "the sequence is finished — seasonal from here" };
   }
 
-  const ageDays = (nowMs - input.createdAtMs) / DAY_MS;
+  // Age of the estimate, not of the customer record. A customer on the books
+  // for two years who was quoted on Monday is a day-3 nudge on Thursday.
+  const ageDays = (nowMs - input.quoteSentAtMs) / DAY_MS;
 
   if (input.nurtureStep === 0 && ageDays > MAX_AGE_TO_START_DAYS) {
     return {
       send: false,
-      reason: `too old to start a sequence (${Math.round(ageDays)} days)`,
+      reason: `the estimate is too old to start a sequence (${Math.round(ageDays)} days)`,
     };
   }
 
@@ -256,8 +387,9 @@ export interface PhoneGroupable extends NurtureInput {
   /**
    * Whether this record could be sent to at all.
    *
-   * An ineligible record — a duplicate that has moved on to `estimate_sent`,
-   * or one with no creation date — is still part of the person's history, and
+   * An ineligible record — a duplicate with no open estimate on it, or one
+   * that has moved on to `estimate_accepted` — is still part of the person's
+   * history, and
    * a reply recorded against it still means this person answered. So it votes
    * on the group and is never chosen from. Leaving these out of the grouping
    * entirely was the bug: the record carrying the reply is often exactly the
@@ -320,14 +452,13 @@ export function oneLeadPerPhone<T extends PhoneGroupable>(
     const replied = group.some((lead) => lead.hasReplied);
     const optedOut = group.some((lead) => lead.optedOut);
     const blocked = group.some((lead) => lead.status === "do_not_knock");
-    // Somebody on this number has been quoted, won or written off. The stage
-    // check in nurtureDecision already says why that ends nurture — quoted
-    // leads are chased by app/api/cron/quote-followups, and two crons texting
-    // one person about one job is the thing it exists to prevent. It was only
-    // ever asked of the record about to send, so a duplicate still at
-    // `new_lead` would ask somebody who already has a price whether they would
-    // like one.
-    const movedOn = group.some((lead) => lead.pipelineStage !== "new_lead");
+    // Somebody on this number has accepted, been scheduled, paid, or been
+    // written off. That is the end of the sequence for the person, not just
+    // for the row it is recorded on — and it has to be asked of the whole
+    // group, because the record carrying the acceptance is very often not the
+    // one holding the open estimate. Without this, a customer who accepted one
+    // estimate on Monday would be chased about an older open one on Tuesday.
+    const movedOn = group.some((lead) => !NURTURE_STAGES.has(lead.pipelineStage));
     // An explicit "no texts" is an instruction, and unlike missing consent it
     // is a thing the person did. The fix that let a granted record beat an
     // unconsented one had this edge behind it: a refusal recorded today lost
@@ -346,7 +477,7 @@ export function oneLeadPerPhone<T extends PhoneGroupable>(
             ? "one of this number's records is marked do not knock"
             : refused
               ? "one of this number's records says no texts"
-              : "this number has a record past new_lead — quote follow-ups have it";
+              : "this number has a record that accepted, was won, or was written off";
       for (const lead of candidates) setAside.push({ lead, reason });
       continue;
     }

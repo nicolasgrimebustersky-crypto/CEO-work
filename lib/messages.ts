@@ -67,21 +67,6 @@ export function documentText(
   return `${BUSINESS_NAME}: your invoice for ${service.toLowerCase()} is ${money}. Thanks for your business — reply here with any questions.${OPT_OUT}${tail}`;
 }
 
-export function quoteFollowUpText(
-  service: string,
-  amount: number,
-  attempt: number,
-): string {
-  const money = `$${Math.round(amount)}`;
-  if (attempt === 1) {
-    return `${BUSINESS_NAME}: just checking in on the ${money} ${service.toLowerCase()} quote we sent over. Happy to answer any questions.${OPT_OUT}`;
-  }
-  if (attempt === 2) {
-    return `${BUSINESS_NAME}: still interested in the ${money} ${service.toLowerCase()} quote? We have openings this week.${OPT_OUT}`;
-  }
-  return `${BUSINESS_NAME}: last check on that ${money} ${service.toLowerCase()} quote. Reply any time if you'd like to book — otherwise we'll leave you be.${OPT_OUT}`;
-}
-
 /* ------------------------------------------------------------ on the job */
 
 /**
@@ -159,13 +144,19 @@ export function reviewRequestText(
 }
 
 /**
- * The three nurture texts, for a lead who asked for a price and went quiet.
+ * The three nurture texts, for a customer who was quoted and has not answered.
  *
  * Written to be worth receiving, which is not decoration — it is what keeps
  * them out of a spam report. Each one gives the person something (a decision
- * made easy, a number, a way out) instead of asking again whether they have
- * decided. "Just checking in" is the message that gets reported, because it
- * costs the reader time and returns nothing.
+ * made easy, a reason the number is what it is, a way out) instead of asking
+ * again whether they have decided. "Just checking in" is the message that gets
+ * reported, because it costs the reader time and returns nothing.
+ *
+ * Every one of them names the price. That is the single most useful thing in
+ * the message: it tells somebody which of the three estimates in their inbox
+ * this is about, and it is the figure they are actually deciding on. An amount
+ * of 0 means the record carried no total, and those messages fall back to
+ * naming the estimate without a figure rather than texting somebody "$0".
  *
  * All three name the business, carry the opt-out, and stay inside one segment
  * where they can. See lib/leadNurture.ts for when each is allowed to go.
@@ -173,24 +164,27 @@ export function reviewRequestText(
 export function leadNurtureText(
   kind: "nudge" | "value" | "last_call",
   customerFirstName: string | null | undefined,
+  amount: number,
 ): string {
   const hello = greetingFor(customerFirstName);
+  const priced = Number.isFinite(amount) && amount > 0;
+  const forAmount = priced ? ` for $${Math.round(amount)}` : "";
 
   switch (kind) {
     // Day 3. The whole job of this one is to be easy to answer, so it asks a
     // question with a one-word reply rather than "any thoughts?".
     case "nudge":
-      return `${hello}, ${BUSINESS_NAME} here — you asked about a quote last week and I don't want to chase you. Still want a price? Reply YES and I'll get you one.${OPT_OUT}`;
+      return `${hello}, ${BUSINESS_NAME} here — just making sure you got the estimate we sent${forAmount}. Reply YES to get it on the books, or with any questions.${OPT_OUT}`;
 
-    // Day 10. Gives a number without being asked, because the real reason
-    // people go quiet is not knowing whether they can afford it.
+    // Day 10. Says why the number is the number, because the real reason
+    // people go quiet on an estimate is not knowing whether it is fair.
     case "value":
-      return `${hello}, ${BUSINESS_NAME}. Most driveways around Louisville run $150-$250 and take about an hour. If that's in the range you had in mind I can come look this week — just reply back.${OPT_OUT}`;
+      return `${hello}, ${BUSINESS_NAME}. Your estimate${forAmount} covers the labour, our equipment and the cleanup, and it holds for 30 days. If the price or the timing needs moving, reply and tell me what works.${OPT_OUT}`;
 
     // Day 30. Says out loud that this is the last one. That sentence is why
     // this sequence does not need a fourth message: it converts the people who
     // were going to act, and it ends things cleanly for everybody else.
     case "last_call":
-      return `${hello}, last one from ${BUSINESS_NAME} — I won't keep texting. If you'd like a quote later, call ${OWNER_PHONE} any time and we'll pick it up from there.${OPT_OUT}`;
+      return `${hello}, last one from ${BUSINESS_NAME} — I won't keep texting about the estimate. Whenever you're ready, call ${OWNER_PHONE} and we'll pick it up from there.${OPT_OUT}`;
   }
 }

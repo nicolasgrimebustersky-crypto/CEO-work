@@ -12,6 +12,8 @@ import {
   hasInboundNote,
   nurtureDecision,
   oneLeadPerPhone,
+  pickOpenQuote,
+  type QuoteRecord,
   type NurtureConsent,
   type NurtureKind,
 } from "@/lib/leadNurture";
@@ -163,7 +165,23 @@ function noteKinds(value: unknown): string[] {
     .filter(Boolean);
 }
 
-/** What one candidate lead looks like once its document has been read. */
+/**
+ * The open estimate behind one customer's sequence.
+ *
+ * Two collections can hold one, and they are both real. `documents` is the
+ * estimate-and-invoice model with the public accept link and Stripe behind it;
+ * `quotes` is the older amount-and-service quote written from the customer
+ * screen, still created today. A customer quoted either way has been quoted,
+ * so both are read and the most recent open one is the one chased.
+ */
+interface OpenQuote extends QuoteRecord {
+  /** Which collection it came from, so the claim can re-read the right one. */
+  collection: "documents" | "quotes";
+  /** What they were quoted, for the message. 0 when the record has no total. */
+  amount: number;
+}
+
+/** What one candidate customer looks like once its document has been read. */
 interface Candidate {
   id: string;
   orgId: string;
@@ -172,12 +190,15 @@ interface Candidate {
   firstName: string;
   pipelineStage: string;
   status: string;
-  createdAtMs: number;
+  quoteStatus: string;
+  quoteSentAtMs: number;
   nurtureStep: number;
   lastNurtureAtMs: number | null;
   hasReplied: boolean;
   consent: NurtureConsent | null;
   optedOut: boolean;
+  /** The estimate being chased, or null when there is nothing to chase. */
+  quote: OpenQuote | null;
   /** Could this record be texted, or is it only here to vote on its number? */
   eligible: boolean;
 }
@@ -235,16 +256,44 @@ async function claimStep(
   const db = adminDb();
   const numberRef = db.collection(NUMBERS).doc(numberKey(lead.orgId, lead.phoneKey));
 
+  // The estimate this text is about, re-read inside the transaction. The
+  // whole sequence exists because of it, and it is the one field that can
+  // change without anybody on the crew touching the app: the customer taps
+  // Accept or Decline on their own share link. Trusting the copy read at the
+  // top of the run meant a customer who accepted at 9:01 could still be asked
+  // at 9:04 whether they had thought about it.
+  const quoteRef = lead.quote
+    ? db.collection(lead.quote.collection).doc(lead.quote.id)
+    : null;
+
   return db.runTransaction(async (tx) => {
-    // Both documents are read inside the transaction, which puts the shared
-    // one in the read set of every run that touches this number. That is the
-    // whole mechanism: two runs holding two different customer records for one
-    // handset now contend on this document instead of proceeding in parallel.
-    const [fresh, sharedSnap] = await Promise.all([tx.get(docRef), tx.get(numberRef)]);
+    // All three documents are read inside the transaction, which puts the
+    // shared one in the read set of every run that touches this number. That
+    // is the whole mechanism: two runs holding two different customer records
+    // for one handset now contend on this document instead of proceeding in
+    // parallel.
+    const [fresh, sharedSnap, quoteSnap] = await Promise.all([
+      tx.get(docRef),
+      tx.get(numberRef),
+      quoteRef ? tx.get(quoteRef) : Promise.resolve(null),
+    ]);
+
+    // An estimate that has been deleted mid-run reads as no estimate at all,
+    // which nurtureDecision refuses. That is the right reading: the reason for
+    // the message is gone.
+    const quoteData = quoteSnap?.exists ? (quoteSnap.data() ?? {}) : {};
+    const freshQuoteStatus =
+      typeof quoteData.status === "string" ? quoteData.status : "";
+    const freshQuoteSentAt =
+      quoteData.sentAt instanceof Timestamp ? quoteData.sentAt.toMillis() : 0;
+    // An estimate turned into an invoice was accepted in all but name, and the
+    // status on the estimate is not always the record of that. Reading it as
+    // closed here means a converted estimate stops the sequence even if
+    // nothing updated its status.
+    const converted = typeof quoteData.convertedToId === "string" && quoteData.convertedToId;
 
     const data = fresh.exists ? (fresh.data() ?? {}) : {};
     const previous = data.lastNurtureAt instanceof Timestamp ? data.lastNurtureAt : null;
-    const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toMillis() : 0;
     const phone = typeof data.phone === "string" ? data.phone : "";
 
     const sharedData = sharedSnap.exists ? (sharedSnap.data() ?? {}) : {};
@@ -261,12 +310,13 @@ async function claimStep(
           expectedLastNurtureAtMs: lead.lastNurtureAtMs,
         },
         // Read again here rather than trusted from the top of the run: a
-        // reply, a stage change, a do-not-knock mark or a withdrawn consent in
-        // the meantime all land in these fields.
+        // reply, a stage change, a do-not-knock mark, a withdrawn consent or
+        // an accepted estimate in the meantime all land in these fields.
         fresh: {
           pipelineStage: typeof data.pipelineStage === "string" ? data.pipelineStage : "",
           status: typeof data.status === "string" ? data.status : "",
-          createdAtMs: createdAt,
+          quoteStatus: converted ? "accepted" : freshQuoteStatus,
+          quoteSentAtMs: freshQuoteSentAt,
           nurtureStep: typeof data.nurtureStep === "number" ? data.nurtureStep : 0,
           lastNurtureAtMs: previous ? previous.toMillis() : null,
           hasReplied: hasInboundNote(noteKinds(data.notes)),
@@ -347,22 +397,87 @@ export async function GET(request: Request): Promise<Response> {
     }
 
     const db = adminDb();
-    // Every customer, not just the new leads.
+    // Every customer, not just the quoted ones.
     //
     // A filtered query was the obvious thing and it was wrong. The Meta
     // webhook creates a fresh record per form submission rather than matching
     // an existing one, so one handset can sit here several times — and the
-    // record that carries the person's reply is very often the one that has
-    // since moved to `estimate_sent`, because moving it on is what somebody
-    // does after they reply. Querying `new_lead` alone hid exactly the records
-    // that should stop the sequence, leaving the duplicates still looking like
-    // somebody who had never answered.
+    // record that carries the person's reply is very often not the one holding
+    // the open estimate. Querying only the quoted records hid exactly the
+    // records that should stop the sequence, leaving the duplicates still
+    // looking like somebody who had never answered.
     //
     // So the read is wide and the eligibility is narrow: every record votes on
-    // its phone number, only a `new_lead` with a creation date can be sent to.
-    // The cost is reading the customers collection once a night, which for a
+    // its phone number, only one with an open estimate can be sent to. The
+    // cost is reading the customers collection once a night, which for a
     // business of this size is cheaper than one wrong text.
-    const snap = await db.collection("customers").get();
+    //
+    // The estimates are read unfiltered by status, which is deliberate and was
+    // the second version of this query.
+    //
+    // Filtering to `status == "sent"` is the obvious thing and it leaves a
+    // message going out wrongly. A customer quoted twice — an estimate in May
+    // they ignored, a second one in June they accepted — has one open record
+    // and one accepted one, and a query for the open ones returns the May
+    // estimate on its own. The run then chases somebody about a price while
+    // their newer, accepted one is already on the schedule.
+    //
+    // So every estimate is read and pickOpenQuote decides, because deciding
+    // needs the closed ones in hand. Invoices are excluded by kind: an unpaid
+    // invoice is money owed on work already agreed, which is
+    // app/api/cron/money-reminders, not a decision anybody is waiting on.
+    const [snap, estimateSnap, legacySnap] = await Promise.all([
+      db.collection("customers").get(),
+      db.collection("documents").where("kind", "==", "estimate").get(),
+      db.collection("quotes").get(),
+    ]);
+
+    // Every estimate a customer has, both collections together, so
+    // pickOpenQuote can see the closed ones it needs in order to refuse.
+    const byCustomer = new Map<string, OpenQuote[]>();
+    const collect = (
+      docs: FirebaseFirestore.QueryDocumentSnapshot[],
+      collection: "documents" | "quotes",
+      amountOf: (data: FirebaseFirestore.DocumentData) => number,
+    ): void => {
+      for (const doc of docs) {
+        const data = doc.data();
+        // Another business's estimate is not this deployment's to chase. The
+        // cron runs on the Admin SDK, which bypasses firestore.rules entirely,
+        // so the org filter the rest of the app gets for free is written here.
+        if (asOrgId(data.orgId) !== DEFAULT_ORG_ID) continue;
+        const customerId = typeof data.customerId === "string" ? data.customerId : "";
+        if (!customerId) continue;
+        const list = byCustomer.get(customerId);
+        const record = {
+          collection,
+          id: doc.id,
+          customerId,
+          status: typeof data.status === "string" ? data.status : "",
+          sentAtMs: data.sentAt instanceof Timestamp ? data.sentAt.toMillis() : 0,
+          amount: amountOf(data),
+          convertedToId:
+            typeof data.convertedToId === "string" && data.convertedToId
+              ? data.convertedToId
+              : null,
+        };
+        if (list) list.push(record);
+        else byCustomer.set(customerId, [record]);
+      }
+    };
+
+    collect(estimateSnap.docs, "documents", (data) =>
+      typeof data.total === "number" ? data.total : 0,
+    );
+    collect(legacySnap.docs, "quotes", (data) =>
+      typeof data.amount === "number" ? data.amount : 0,
+    );
+
+    const openQuotes = new Map<string, OpenQuote>();
+    for (const [customerId, quotes] of byCustomer) {
+      const open = pickOpenQuote(quotes);
+      if (open) openQuotes.set(customerId, open);
+    }
 
     const now = Date.now();
     const outcomes: Outcome[] = [];
@@ -383,20 +498,14 @@ export async function GET(request: Request): Promise<Response> {
       // are not this org's to act on, and ours are not theirs.
       if (asOrgId(data.orgId) !== DEFAULT_ORG_ID) continue;
 
-      const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toMillis() : 0;
       const stage = typeof data.pipelineStage === "string" ? data.pipelineStage : "";
-      // Only the one stage this feature touches. A quoted lead belongs to
-      // quote-followups, and a won or lost one belongs to nobody. A lead with
-      // no creation stamp has no measurable age, and guessing one would start
-      // a sequence from an invented date.
-      const eligible = stage === "new_lead" && createdAt > 0;
-
-      // Worth reporting rather than passing over in silence — but only for the
-      // new leads, which are the records somebody expected to be nurtured. A
-      // won customer with no createdAt is not this job's business.
-      if (!eligible && stage === "new_lead") {
-        outcomes.push({ customerId: doc.id, action: "skipped", reason: "no createdAt" });
-      }
+      // An open estimate is the reason for the message, so a record without
+      // one is here only to vote on its number. The stage is checked by
+      // nurtureDecision rather than here: a record that has moved on still has
+      // to be able to stop its siblings, and dropping it from the candidates
+      // is what used to hide exactly that.
+      const quote = openQuotes.get(doc.id) ?? null;
+      const eligible = quote !== null;
 
       const phone = typeof data.phone === "string" ? data.phone : "";
       candidates.push({
@@ -407,7 +516,9 @@ export async function GET(request: Request): Promise<Response> {
         firstName: typeof data.firstName === "string" ? data.firstName : "",
         pipelineStage: stage,
         status: typeof data.status === "string" ? data.status : "",
-        createdAtMs: createdAt,
+        quoteStatus: quote?.status ?? "",
+        quoteSentAtMs: quote?.sentAtMs ?? 0,
+        quote,
         nurtureStep: typeof data.nurtureStep === "number" ? data.nurtureStep : 0,
         lastNurtureAtMs:
           data.lastNurtureAt instanceof Timestamp ? data.lastNurtureAt.toMillis() : null,
@@ -534,7 +645,7 @@ export async function GET(request: Request): Promise<Response> {
               : stop.refused
                 ? "a record for this number was marked no texts during the run"
                 : stop.movedOn
-                  ? "this number was quoted during the run — quote follow-ups have it now"
+                  ? "this number accepted or was written off during the run"
                   : null;
         if (stopReason) {
           await rollBackClaim(docRef, claim);
@@ -543,7 +654,7 @@ export async function GET(request: Request): Promise<Response> {
           continue;
         }
 
-        const body = leadNurtureText(claim.kind, lead.firstName);
+        const body = leadNurtureText(claim.kind, lead.firstName, lead.quote?.amount ?? 0);
         // Sent to the number the claim validated, not to whatever the customer
         // record says by now. sendSmsToCustomerId re-read the document, so a
         // phone edit between the claim and the send meant marketing going to a
@@ -704,11 +815,13 @@ export async function GET(request: Request): Promise<Response> {
     // The held count leads, because it is the part that needs somebody.
     if (sent > 0 || held.length > 0) {
       const nudged =
-        sent === 1 ? "1 quiet lead was nudged overnight" : `${sent} quiet leads were nudged overnight`;
+        sent === 1
+          ? "1 unanswered estimate was followed up overnight"
+          : `${sent} unanswered estimates were followed up overnight`;
       const blocked =
         held.length === 1
-          ? "1 lead is held and needs a person: a text may have gone out without being recorded"
-          : `${held.length} leads are held and need a person: texts may have gone out without being recorded`;
+          ? "1 customer is held and needs a person: a text may have gone out without being recorded"
+          : `${held.length} customers are held and need a person: texts may have gone out without being recorded`;
 
       await notifyCrew({
         type: "followup_sent",

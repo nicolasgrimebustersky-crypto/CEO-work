@@ -59,7 +59,7 @@ live, and every note, text and job carries the name of whoever did it.
 |---|---|
 | `POST /api/sms/send` — one-off text to a customer | |
 | `POST /api/sms/blast` — text the filtered group currently on screen | Skips do-not-knock and missing numbers, capped at 200 |
-| `GET /api/cron/quote-followups` — chases silent quotes | Every 4 days, 3 attempts, then marks declined |
+| `GET /api/cron/lead-nurture` — chases an estimate nobody answered | Days 3, 10 and 30 from the estimate, then stops. Ends on accept, decline or any reply |
 | `GET /api/cron/money-reminders` — an invoice going past due, and a Monday total | Called out once per invoice, not daily |
 | `POST /api/sms/inbound` — Twilio webhook for replies | Signature-verified |
 | Every SMS in or out is logged to the customer timeline with the sender's name | |
@@ -515,8 +515,8 @@ Vercel preview and open that.
    (step 5.4) and to **Firebase → Authentication → Settings → Authorised
    domains**. Sign-in fails with `auth/unauthorized-domain` until you do.
 
-4. The quote follow-up cron is declared in `vercel.json` and picks itself up on
-   deploy. It runs daily at **15:00 UTC** — 10am Eastern in winter, 11am in
+4. The estimate follow-up cron is declared in `vercel.json` and picks itself up
+   on deploy. It runs daily at **14:00 UTC** — 9am Eastern in winter, 10am in
    summer. Vercel cron schedules are always UTC; edit `vercel.json` to move it.
 
 `NEXT_PUBLIC_` variables are inlined at build time, so changing one in Vercel
@@ -572,7 +572,7 @@ app/
   api/sms/send            one-off text
   api/sms/blast           filtered group text
   api/sms/inbound         Twilio reply webhook
-  api/cron/quote-followups  nightly quote chaser
+  api/cron/lead-nurture     nightly chase of unanswered estimates
   api/cron/money-reminders  overdue invoices and Monday's outstanding total
   api/push/send           fans a notification out to the crew's devices
 components/

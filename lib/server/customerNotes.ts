@@ -2,6 +2,7 @@ import "server-only";
 
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
+import { NURTURE_STAGES } from "@/lib/leadNurture";
 import { asOrgId } from "@/lib/org";
 import { adminDb } from "./admin";
 import type { SmsConsent, SmsOptOut } from "@/lib/smsConsent";
@@ -198,7 +199,7 @@ export async function optOutForPhone(
  *   an inbound text is matched to one record, so a reply hides on that one;
  *   an opt-out is written to one record, so STOP hides on that one;
  *   do not knock is set by somebody opening one record, so the mark hides on
- *   that one — usually the record that has since moved past `new_lead`,
+ *   that one — usually the record that has since been accepted or won,
  *   because moving it on is what you do after you have spoken to someone.
  *
  * Asked immediately before a nurture text goes out, not only when the nightly
@@ -221,7 +222,7 @@ export interface NumberSuppression {
   optOut: SmsOptOut | null;
   /** A record for this number says no texts — an explicit refusal, not absent consent. */
   refused: boolean;
-  /** A record for this number has gone past new_lead: quote follow-ups have it. */
+  /** A record for this number has accepted, been won, or been written off. */
   movedOn: boolean;
 }
 
@@ -259,8 +260,16 @@ export async function numberSuppression(
     if (data.status === "do_not_knock") found.blocked = true;
     // An explicit refusal, as opposed to no consent recorded at all.
     if (data.smsConsent && data.smsConsent.granted === false) found.refused = true;
-    // Quoted, won or lost. Nurture is for leads nobody has priced yet.
-    if (typeof data.pipelineStage === "string" && data.pipelineStage !== "new_lead") {
+    // Accepted, scheduled, paid or written off — the decision has been made.
+    //
+    // Asked through the same NURTURE_STAGES set the policy uses, not through a
+    // comparison written out again here. The two have to agree, and they did
+    // not: this said "anything but new_lead has moved on", which was right
+    // when the sequence chased unpriced leads and became wrong the moment it
+    // started chasing estimates. It then suppressed `estimate_sent` — the one
+    // stage the whole feature is for — so every text would have been held
+    // mid-run, and nothing in the suite would have said a word.
+    if (typeof data.pipelineStage === "string" && !NURTURE_STAGES.has(data.pipelineStage)) {
       found.movedOn = true;
     }
     if (!found.optOut) found.optOut = readOptOut(data.smsOptOut);
