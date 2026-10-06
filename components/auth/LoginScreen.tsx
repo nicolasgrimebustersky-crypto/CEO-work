@@ -4,7 +4,7 @@ import { FirebaseError } from "firebase/app";
 import { useState, type FormEvent, type InputHTMLAttributes, type ReactNode } from "react";
 
 import { useAuth } from "@/components/providers/AuthProvider";
-import { BRAND_PROFILE } from "@/lib/brand";
+import { BRAND_ID, BRAND_PROFILE } from "@/lib/brand";
 import { isDemoMode } from "@/lib/demo/enabled";
 import { MIN_PASSWORD, registerProblem, resetProblem, signInProblem } from "@/lib/loginForm";
 import { LoginBackdrop } from "./LoginBackdrop";
@@ -174,7 +174,7 @@ export function LoginScreen() {
   const { signIn, signUp, resetPassword } = useAuth();
   const [registering, setRegistering] = useState(false);
   const [name, setName] = useState("");
-  const [email, setEmail] = useState(isDemoMode ? "nick@grimebusters.demo" : "");
+  const [email, setEmail] = useState(isDemoMode ? (BRAND_ID === "rda" ? "ryland@rdalandscape.demo" : "nick@grimebusters.demo") : "");
   const [password, setPassword] = useState(isDemoMode ? "demo" : "");
   const [confirm, setConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);

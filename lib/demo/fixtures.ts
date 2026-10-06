@@ -1,5 +1,6 @@
 import { Timestamp } from "firebase/firestore";
 
+import { BRAND_ID } from "@/lib/brand";
 import { DEFAULT_ORG_ID } from "@/lib/org";
 import type { AppNotification } from "@/lib/db/notifications";
 import type { SavedService } from "@/lib/db/services";
@@ -14,6 +15,7 @@ import {
   type Payment,
 } from "@/lib/documents";
 import type { PipelineStage } from "@/lib/pipeline";
+import { RDA_DEMO, rebrandInPlace } from "./rebrand";
 import type {
   AppUser,
   Customer,
@@ -1306,3 +1308,23 @@ export const demoChatMessages: (ChatMessage & { conversationId: string })[] = [
     createdAt: hoursAgo(2),
   },
 ];
+
+// Another brand's demo is the same dataset in its own trade's words — see
+// lib/demo/rebrand.ts.
+if (BRAND_ID === "rda") {
+  for (const list of [
+    demoUsers,
+    demoCustomers,
+    demoJobs,
+    demoQuotes,
+    demoServices,
+    demoDocuments,
+    demoKnockRoutes,
+    demoTerritories,
+    demoNotifications,
+    demoConversations,
+    demoChatMessages,
+  ]) {
+    rebrandInPlace(list, RDA_DEMO);
+  }
+}

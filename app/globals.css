@@ -139,6 +139,15 @@
   --color-login-accent-ink: #000000;
 }
 
+/* The Money screen's big buttons carry fixed end stops either side of the
+   token, so they need the brand's own. */
+:root[data-brand="rda"] .gb-cta-accent {
+  background: linear-gradient(100deg, #9c7638 0%, var(--color-accent) 55%, #e2c084 100%);
+}
+:root[data-brand="rda"] .gb-cta-money {
+  background: linear-gradient(100deg, #447226 0%, var(--color-money) 55%, #8fd166 100%);
+}
+
 html,
 body {
   height: 100%;
