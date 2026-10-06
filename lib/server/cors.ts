@@ -1,4 +1,5 @@
 import "server-only";
+import { BRAND_PROFILE } from "@/lib/brand";
 
 /**
  * CORS for the iOS build.
@@ -19,9 +20,9 @@ const ALLOWED_ORIGINS = new Set([
   "http://localhost",
   "http://localhost:3000",
   // The marketing site hosts the customer account portal, which calls
-  // /api/portal/* here with a Firebase session.
-  "https://grimebusterskyllc.com",
-  "https://www.grimebusterskyllc.com",
+  // /api/portal/* here with a Firebase session. Each brand lists its own, so
+  // one business's site can never call another's API.
+  ...BRAND_PROFILE.siteOrigins,
 ]);
 
 function isAllowed(origin: string | null): origin is string {

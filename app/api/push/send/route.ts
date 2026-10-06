@@ -1,3 +1,4 @@
+import { BRAND_ID } from "@/lib/brand";
 import { audit } from "@/lib/server/audit";
 import { ApiError, errorResponse, requireCrew } from "@/lib/server/auth";
 import { preflight, withCors } from "@/lib/server/cors";
@@ -58,7 +59,7 @@ export async function POST(request: Request): Promise<Response> {
       title: text(payload.title, "title"),
       body: text(payload.body, "body", false),
       url,
-      tag: text(payload.tag, "tag", false) || "grime-busters",
+      tag: text(payload.tag, "tag", false) || BRAND_ID,
     });
 
     await audit({

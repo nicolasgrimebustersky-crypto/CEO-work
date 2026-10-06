@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chips";
 import { SelectField, TextAreaField, TextField } from "@/components/ui/Field";
 import { Sheet } from "@/components/ui/Sheet";
+import { DEFAULT_SERVICE, OFFERED_SERVICES } from "@/lib/brand";
 import { advancePipeline } from "@/lib/db/customers";
 import {
   createJob,
@@ -24,7 +25,6 @@ import { DEFAULT_JOB_MINUTES } from "@/lib/schedule";
 import { jobConfirmationText, jobRescheduledText } from "@/lib/messages";
 import { SERVICE_LABEL } from "@/lib/status";
 import { trySendSms } from "@/lib/smsClient";
-import { SERVICE_TYPES } from "@/lib/types";
 import type { Job, ServiceType } from "@/lib/types";
 import { JobPhotos } from "./JobPhotos";
 import { JobStatusActions } from "./JobStatusActions";
@@ -62,7 +62,7 @@ export function JobSheet({
   const job = jobProp ? (jobsById.get(jobProp.id) ?? jobProp) : null;
 
   const [selectedCustomer, setSelectedCustomer] = useState("");
-  const [serviceType, setServiceType] = useState<ServiceType>("pressure_washing");
+  const [serviceType, setServiceType] = useState<ServiceType>(DEFAULT_SERVICE);
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [price, setPrice] = useState("");
@@ -91,7 +91,7 @@ export function JobSheet({
 
     const begin = defaultStart ?? addMinutes(new Date(), 60);
     setSelectedCustomer(customerId ?? "");
-    setServiceType("pressure_washing");
+    setServiceType(DEFAULT_SERVICE);
     setStart(toLocalInput(begin));
     setEnd(toLocalInput(addMinutes(begin, DEFAULT_JOB_MINUTES)));
     setPrice("");
@@ -334,7 +334,7 @@ export function JobSheet({
         <div>
           <p className="mb-1.5 text-sm font-semibold text-muted">Service</p>
           <div className="flex flex-wrap gap-2">
-            {SERVICE_TYPES.map((service) => (
+            {OFFERED_SERVICES.map((service) => (
               <Chip
                 key={service}
                 active={serviceType === service}

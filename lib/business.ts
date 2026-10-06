@@ -1,3 +1,5 @@
+import { BRAND_PROFILE } from "./brand";
+
 /**
  * What goes at the top of a printed estimate or invoice.
  *
@@ -16,19 +18,15 @@
  * cannot — it draws into a file, with no stylesheet anywhere near it. These
  * are the same values as the `@theme` block in app/globals.css, and the green
  * is sampled from the logo artwork rather than chosen. Change both together.
+ *
+ * Per brand — see `colors` in lib/brand.ts:
+ *   ink       near-black; the header band, the canvas, the logo's own field
+ *   accent    what you tap in the app; the accent rule on paper
+ *   money     the logo's green; money, everywhere
+ *   moneyWash a pale green for the total box, so it reads on white paper
+ *   cream     the banner text in the lockup
  */
-export const BRAND = {
-  /** Near-black. The header band, the app's canvas, and the logo's own field. */
-  ink: "#050607",
-  /** Cyan — what you tap in the app, the accent rule on paper. */
-  accent: "#00d9ff",
-  /** The logo's green, sampled from the artwork. Money, everywhere. */
-  money: "#06a143",
-  /** A pale green for the total box, so it reads on white paper. */
-  moneyWash: "#eaf7ef",
-  /** The banner text in the lockup. */
-  cream: "#f1e3cd",
-} as const;
+export const BRAND = BRAND_PROFILE.colors;
 
 /**
  * The one timezone the business works in.
@@ -40,19 +38,17 @@ export const BRAND = {
 export const BUSINESS_TIMEZONE = "America/New_York";
 
 export const BUSINESS = {
-  name: process.env.NEXT_PUBLIC_BUSINESS_NAME || "Grime Busters KY LLC",
-  tagline:
-    process.env.NEXT_PUBLIC_BUSINESS_TAGLINE ||
-    "Pressure washing · Landscaping · Snow removal",
-  phone: process.env.NEXT_PUBLIC_BUSINESS_PHONE || "",
+  name: process.env.NEXT_PUBLIC_BUSINESS_NAME || BRAND_PROFILE.legalName,
+  tagline: process.env.NEXT_PUBLIC_BUSINESS_TAGLINE || BRAND_PROFILE.tagline,
+  phone: process.env.NEXT_PUBLIC_BUSINESS_PHONE || BRAND_PROFILE.phone,
   email: process.env.NEXT_PUBLIC_BUSINESS_EMAIL || "",
-  address: process.env.NEXT_PUBLIC_BUSINESS_ADDRESS || "Oldham County, Kentucky",
+  address: process.env.NEXT_PUBLIC_BUSINESS_ADDRESS || BRAND_PROFILE.address,
   /**
    * Printed on every estimate and invoice. A customer holding a quote three
    * weeks later looks for the website before they look for the phone number,
    * and it is the cheapest possible way to make the document check out.
    */
-  website: process.env.NEXT_PUBLIC_BUSINESS_WEBSITE || "grimebusterskyllc.com",
+  website: process.env.NEXT_PUBLIC_BUSINESS_WEBSITE || BRAND_PROFILE.website,
   /** Printed under the totals — payment instructions, licence number, whatever. */
   footer:
     process.env.NEXT_PUBLIC_BUSINESS_FOOTER ||

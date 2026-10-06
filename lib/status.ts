@@ -67,12 +67,18 @@ export const SERVICE_LABEL: Record<ServiceType, string> = {
   pressure_washing: "Pressure washing",
   landscaping: "Landscaping",
   snow_removal: "Snow removal",
+  mowing: "Mowing",
+  aeration: "Aeration",
+  window_cleaning: "Window cleaning",
 };
 
 export const SERVICE_SHORT_LABEL: Record<ServiceType, string> = {
   pressure_washing: "Wash",
   landscaping: "Lawn",
   snow_removal: "Snow",
+  mowing: "Mow",
+  aeration: "Aerate",
+  window_cleaning: "Windows",
 };
 
 export const PROPERTY_TYPE_LABEL: Record<PropertyType, string> = {

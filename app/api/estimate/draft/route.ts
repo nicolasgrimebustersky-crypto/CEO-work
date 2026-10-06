@@ -4,11 +4,13 @@ import {
   draftProblem,
   isAllowedImageType,
 } from "@/lib/estimateDraft";
+import { DEFAULT_SERVICE, OFFERED_SERVICES } from "@/lib/brand";
 import { audit } from "@/lib/server/audit";
 import { ApiError, errorResponse, requireCrew } from "@/lib/server/auth";
 import { preflight, withCors } from "@/lib/server/cors";
 import { draftEstimate, isEstimateAIConfigured } from "@/lib/server/estimateAI";
 import { consumeRateLimit, ESTIMATE_DRAFT_LIMIT } from "@/lib/server/rateLimit";
+import type { ServiceType } from "@/lib/types";
 
 export const runtime = "nodejs";
 /** Never cached — every call is a fresh job in a driveway. */
@@ -20,8 +22,6 @@ interface DraftBody {
   serviceType?: unknown;
   photos?: unknown;
 }
-
-const SERVICE_TYPES = ["pressure_washing", "landscaping", "snow_removal"];
 
 /**
  * Drafts estimate line items from a spoken description, a price and up to four
@@ -51,9 +51,9 @@ export async function POST(request: Request): Promise<Response> {
     const description = typeof payload.description === "string" ? payload.description : "";
     const total = typeof payload.total === "number" ? payload.total : Number.NaN;
     const serviceType =
-      typeof payload.serviceType === "string" && SERVICE_TYPES.includes(payload.serviceType)
+      typeof payload.serviceType === "string" && OFFERED_SERVICES.includes(payload.serviceType as ServiceType)
         ? payload.serviceType
-        : "pressure_washing";
+        : DEFAULT_SERVICE;
 
     // Photos are validated before the size check so a wrong *type* is named as
     // such rather than reported as being too big.

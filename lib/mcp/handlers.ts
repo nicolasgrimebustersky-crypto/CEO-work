@@ -2,6 +2,7 @@ import "server-only";
 
 import { Timestamp } from "firebase-admin/firestore";
 
+import { BRAND_PROFILE, DEFAULT_SERVICE } from "@/lib/brand";
 import { agentAuthor, type Scope } from "@/lib/apiKeys";
 import { computeTotals, type LineItem } from "@/lib/documents";
 import { grossFor, outstanding } from "@/lib/money/summary";
@@ -315,7 +316,7 @@ async function draftEstimateTool(args: Args, key: AuthorisedKey) {
     discountPct: Math.min(100, Math.max(0, numberOf(line, "discountPct") ?? 0)),
   }));
 
-  const serviceType = str(args, "serviceType") || "pressure_washing";
+  const serviceType = str(args, "serviceType") || DEFAULT_SERVICE;
   const totals = computeTotals(lineItems, 0, 6);
   const now = Timestamp.now();
 
@@ -428,7 +429,7 @@ async function scheduleJobTool(args: Args, key: AuthorisedKey) {
   const price = numberOf(args, "price");
   if (price === null || price < 0) throw new ApiError(400, "Give a price of zero or more.");
 
-  const serviceType = str(args, "serviceType") || "pressure_washing";
+  const serviceType = str(args, "serviceType") || DEFAULT_SERVICE;
   const assignedTo = Array.isArray(args.assignedTo)
     ? (args.assignedTo as unknown[]).filter((uid): uid is string => typeof uid === "string")
     : [];
@@ -482,7 +483,7 @@ async function scheduleJobTool(args: Args, key: AuthorisedKey) {
     });
     const result = await sendSmsToCustomer(
       customer,
-      `Grime Busters: your ${serviceType.replace(/_/g, " ")} is scheduled for ${when}. Reply here if you need to change it.`,
+      `${BRAND_PROFILE.shortName}: your ${serviceType.replace(/_/g, " ")} is scheduled for ${when}. Reply here if you need to change it.`,
     );
     texted = result.ok;
     textProblem = result.ok ? null : (result.error ?? "Twilio refused the message.");

@@ -11,10 +11,10 @@ import { PropertyTypePicker } from "./PropertyTypePicker";
 import { StatusPicker } from "./StatusPicker";
 import { TextAreaField, TextField } from "@/components/ui/Field";
 import { Sheet } from "@/components/ui/Sheet";
+import { OFFERED_SERVICES } from "@/lib/brand";
 import { customerEntryProblem, willGeocode } from "@/lib/customerEntry";
 import { createCustomer } from "@/lib/db/customers";
 import { SERVICE_LABEL, STATUS_LABEL } from "@/lib/status";
-import { SERVICE_TYPES } from "@/lib/types";
 import type { CustomerLocation, CustomerStatus, PropertyType, ServiceType } from "@/lib/types";
 
 /**
@@ -240,7 +240,7 @@ export function NewCustomerSheet({
         <div>
           <p className="mb-1.5 text-sm font-semibold text-muted">Interested in</p>
           <div className="flex flex-wrap gap-2">
-            {SERVICE_TYPES.map((service) => (
+            {OFFERED_SERVICES.map((service) => (
               <Chip
                 key={service}
                 active={serviceTypes.includes(service)}

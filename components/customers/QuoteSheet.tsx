@@ -7,12 +7,12 @@ import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chips";
 import { TextField } from "@/components/ui/Field";
 import { Sheet } from "@/components/ui/Sheet";
+import { BRAND_PROFILE, DEFAULT_SERVICE, OFFERED_SERVICES } from "@/lib/brand";
 import { addNote, advancePipeline } from "@/lib/db/customers";
 import { createQuote } from "@/lib/db/quotes";
 import { formatMoney } from "@/lib/format";
 import { SERVICE_LABEL } from "@/lib/status";
 import { trySendSms } from "@/lib/smsClient";
-import { SERVICE_TYPES } from "@/lib/types";
 import type { Customer, ServiceType } from "@/lib/types";
 
 /**
@@ -30,7 +30,7 @@ export function QuoteSheet({
   onClose: () => void;
 }) {
   const { author } = useTeam();
-  const [serviceType, setServiceType] = useState<ServiceType>("pressure_washing");
+  const [serviceType, setServiceType] = useState<ServiceType>(DEFAULT_SERVICE);
   const [amount, setAmount] = useState("");
   const [alsoText, setAlsoText] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -39,7 +39,7 @@ export function QuoteSheet({
 
   useEffect(() => {
     if (!open) return;
-    setServiceType(customer.serviceTypes[0] ?? "pressure_washing");
+    setServiceType(customer.serviceTypes[0] ?? DEFAULT_SERVICE);
     setAmount("");
     setAlsoText(Boolean(customer.phone));
     setError(null);
@@ -76,7 +76,7 @@ export function QuoteSheet({
       if (alsoText && customer.phone) {
         smsProblem = await trySendSms(
           customer.id,
-          `Grime Busters: your quote for ${SERVICE_LABEL[serviceType].toLowerCase()} is ${formatMoney(value)}. Reply here to book it in.`,
+          `${BRAND_PROFILE.shortName}: your quote for ${SERVICE_LABEL[serviceType].toLowerCase()} is ${formatMoney(value)}. Reply here to book it in.`,
           "quote",
         );
       }
@@ -113,7 +113,7 @@ export function QuoteSheet({
         <div>
           <p className="mb-1.5 text-sm font-semibold text-muted">Service</p>
           <div className="flex flex-wrap gap-2">
-            {SERVICE_TYPES.map((service) => (
+            {OFFERED_SERVICES.map((service) => (
               <Chip
                 key={service}
                 active={serviceType === service}

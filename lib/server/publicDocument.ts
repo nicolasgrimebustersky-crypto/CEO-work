@@ -2,6 +2,7 @@ import "server-only";
 
 import type { DocumentSnapshot } from "firebase-admin/firestore";
 
+import { DEFAULT_SERVICE } from "@/lib/brand";
 import { adminDb } from "@/lib/server/admin";
 import { looksLikeShareToken, normalizeShareToken } from "@/lib/shareLinks";
 import { DEFAULT_TAX_RATE_PCT, type BusinessDocument, type DocumentStatus } from "@/lib/documents";
@@ -133,7 +134,7 @@ export function serializeDocument(hit: DocumentSnapshot): SerialDocument | null 
 
   const serviceType = SERVICE_TYPES.includes(text(data.serviceType) as ServiceType)
     ? (text(data.serviceType) as ServiceType)
-    : SERVICE_TYPES[0];
+    : DEFAULT_SERVICE;
 
   const document: SerialDocument = {
     id: hit.id,

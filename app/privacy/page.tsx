@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 
+import { BRAND_PROFILE } from "@/lib/brand";
+
 export const metadata: Metadata = {
-  title: "Privacy Policy · Grime Busters CRM",
+  title: `Privacy Policy · ${BRAND_PROFILE.appName}`,
 };
 
 /**
@@ -19,15 +21,14 @@ export default function PrivacyPage() {
         <div className="mb-3 h-1.5 w-12 rounded-full bg-accent" />
         <h1 className="text-3xl font-extrabold tracking-tight text-ink">Privacy Policy</h1>
         <p className="mt-2 text-base font-semibold text-muted">
-          Grime Busters CRM · Last updated [DATE]
+          {BRAND_PROFILE.appName} · Last updated [DATE]
         </p>
 
         <Section title="Who this covers">
           <P>
-            Grime Busters CRM is a private tool used by the two owners of
-            [LEGAL BUSINESS NAME] (&ldquo;we&rdquo;) to run a pressure washing,
-            landscaping and snow removal business in Oldham County, Kentucky. It
-            is not offered to the public and has no other users.
+            {BRAND_PROFILE.appName} is a private tool used by the owners of
+            [LEGAL BUSINESS NAME] (&ldquo;we&rdquo;) to run {BRAND_PROFILE.aiBusiness}.
+            It is not offered to the public and has no other users.
           </P>
           <P>
             Questions about this policy or about data we hold:{" "}

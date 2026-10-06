@@ -17,8 +17,19 @@
  * still shows something rather than returning quietly.
  */
 
+/**
+ * Which brand registered this worker — see PUSH_WORKER in lib/push/client.ts.
+ * Absent means Grime Busters, whose icons sit at the root of public/.
+ */
+const BRAND =
+  new URLSearchParams(self.location.search || "").get("brand") === "rda" ? "rda" : "grime-busters";
+const BRANDS = {
+  "grime-busters": { title: "Grime Busters", icon: "/icons/icon-192.png" },
+  rda: { title: "RDA Landscape", icon: "/brands/rda/icons/icon-192.png" },
+};
+
 const FALLBACK = {
-  title: "Grime Busters",
+  title: BRANDS[BRAND].title,
   body: "Something happened in the app.",
   url: "/dashboard",
 };
@@ -43,7 +54,7 @@ function readPayload(event) {
     title: fields.title || FALLBACK.title,
     body: fields.body || "",
     url: fields.url || FALLBACK.url,
-    tag: fields.tag || "grime-busters",
+    tag: fields.tag || BRAND,
   };
 }
 
@@ -52,8 +63,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(payload.title, {
       body: payload.body,
-      icon: "/icons/icon-192.png",
-      badge: "/icons/icon-192.png",
+      icon: BRANDS[BRAND].icon,
+      badge: BRANDS[BRAND].icon,
       // Same tag per event type, so five payments landing in a minute collapse
       // into one line on the lock screen instead of burying everything else.
       tag: payload.tag,

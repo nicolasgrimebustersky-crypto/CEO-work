@@ -4,6 +4,7 @@ import { FirebaseError } from "firebase/app";
 import { useState, type FormEvent, type InputHTMLAttributes, type ReactNode } from "react";
 
 import { useAuth } from "@/components/providers/AuthProvider";
+import { BRAND_ID, BRAND_PROFILE } from "@/lib/brand";
 import { isDemoMode } from "@/lib/demo/enabled";
 import { MIN_PASSWORD, registerProblem, resetProblem, signInProblem } from "@/lib/loginForm";
 import { LoginBackdrop } from "./LoginBackdrop";
@@ -173,7 +174,7 @@ export function LoginScreen() {
   const { signIn, signUp, resetPassword } = useAuth();
   const [registering, setRegistering] = useState(false);
   const [name, setName] = useState("");
-  const [email, setEmail] = useState(isDemoMode ? "nick@grimebusters.demo" : "");
+  const [email, setEmail] = useState(isDemoMode ? (BRAND_ID === "rda" ? "ryland@rdalandscape.demo" : "nick@grimebusters.demo") : "");
   const [password, setPassword] = useState(isDemoMode ? "demo" : "");
   const [confirm, setConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -261,7 +262,7 @@ export function LoginScreen() {
         <header className="mb-6">
           <p className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/50">
             <span className="h-1 w-6 rounded-full bg-login-accent" />
-            Grime Busters · Crew
+            {BRAND_PROFILE.shortName} · Crew
           </p>
           <h1 id="login-heading" className="text-3xl font-bold tracking-tight text-ink">
             {registering ? (
@@ -387,7 +388,7 @@ export function LoginScreen() {
           <button
             type="submit"
             disabled={busy}
-            className="tap-target mt-1 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-login-accent py-3.5 text-base font-semibold text-login-accent-ink shadow-[0_14px_34px_-12px_rgba(6,161,67,0.65)] transition hover:brightness-105 active:brightness-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+            className="tap-target mt-1 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-login-accent py-3.5 text-base font-semibold text-login-accent-ink shadow-[0_14px_34px_-12px_color-mix(in_srgb,var(--color-login-accent)_65%,transparent)] transition hover:brightness-105 active:brightness-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
           >
             {busy
               ? registering

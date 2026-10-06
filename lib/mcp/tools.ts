@@ -69,6 +69,18 @@ const object = (
 const str = (description: string) => ({ type: "string", description });
 const num = (description: string) => ({ type: "number", description });
 
+/**
+ * The services this deployment offers, in the words an agent should send, and
+ * a line item in its trade. Per brand (see lib/brand.ts), inline rather than
+ * imported because this file is loaded straight into the test runner;
+ * `tests/brand.test.mjs` checks both agree with the brand profile.
+ */
+const IS_RDA = process.env.NEXT_PUBLIC_BRAND === "rda";
+const SERVICE_CHOICES = IS_RDA
+  ? "mowing, landscaping, aeration, snow_removal or window_cleaning."
+  : "pressure_washing, landscaping or snow_removal.";
+const EXAMPLE_LINE_ITEM = IS_RDA ? "Weekly mow and trim" : "Driveway pressure wash";
+
 export const TOOLS: readonly ToolSpec[] = [
   /* ------------------------------------------------------------------ read */
   {
@@ -159,13 +171,13 @@ export const TOOLS: readonly ToolSpec[] = [
     inputSchema: object(
       {
         customerId: str("From find_customer."),
-        serviceType: str("pressure_washing, landscaping or snow_removal."),
+        serviceType: str(SERVICE_CHOICES),
         lines: {
           type: "array",
           description: "The work, one entry per line.",
           items: object(
             {
-              name: str("Short name, e.g. 'Driveway pressure wash'."),
+              name: str(`Short name, e.g. '${EXAMPLE_LINE_ITEM}'.`),
               description: str("What it covers, specifically."),
               unitPrice: num("Price for this line, before tax."),
               discountPct: num("Optional discount on this line alone, 0-100."),
@@ -189,7 +201,7 @@ export const TOOLS: readonly ToolSpec[] = [
     inputSchema: object(
       {
         customerId: str("From find_customer."),
-        serviceType: str("pressure_washing, landscaping or snow_removal."),
+        serviceType: str(SERVICE_CHOICES),
         start: str("Start time, ISO 8601, e.g. 2026-08-24T09:00:00-04:00."),
         end: str("End time, ISO 8601."),
         price: num("Agreed price."),

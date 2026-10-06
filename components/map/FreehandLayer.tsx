@@ -3,6 +3,7 @@
 import { useMap } from "@vis.gl/react-google-maps";
 import { useCallback, useEffect, useRef } from "react";
 
+import { BRAND_PROFILE } from "@/lib/brand";
 import { isTap, simplifyToLimit, type Pixel } from "@/lib/knock/territory";
 import type { LatLng } from "@/lib/types";
 
@@ -115,10 +116,12 @@ export function FreehandLayer({
     // enclosed is obvious before you let go — a trailing open line reads as a
     // route rather than an area.
     context.closePath();
-    context.fillStyle = "rgba(0, 217, 255, 0.16)";
+    context.globalAlpha = 0.16;
+    context.fillStyle = BRAND_PROFILE.colors.accent;
     context.fill();
+    context.globalAlpha = 1;
 
-    context.strokeStyle = "#00d9ff";
+    context.strokeStyle = BRAND_PROFILE.colors.accent;
     context.lineWidth = 3;
     context.lineJoin = "round";
     context.lineCap = "round";

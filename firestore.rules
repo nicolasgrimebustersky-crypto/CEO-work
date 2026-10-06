@@ -337,7 +337,7 @@ service cloud.firestore {
     function validJob() {
       let data = request.resource.data;
       return data.status in ['scheduled', 'in_progress', 'complete', 'cancelled']
-        && data.serviceType in ['pressure_washing', 'landscaping', 'snow_removal']
+        && data.serviceType in ['pressure_washing', 'landscaping', 'snow_removal', 'mowing', 'aeration', 'window_cleaning']
         && data.price is number
         && data.price >= 0
         && data.customerId is string
@@ -351,7 +351,7 @@ service cloud.firestore {
       let data = request.resource.data;
       return data.kind in ['estimate', 'invoice']
         && data.status in ['draft', 'sent', 'accepted', 'declined', 'partial', 'paid', 'void']
-        && data.serviceType in ['pressure_washing', 'landscaping', 'snow_removal']
+        && data.serviceType in ['pressure_washing', 'landscaping', 'snow_removal', 'mowing', 'aeration', 'window_cleaning']
         && data.customerId is string
         && data.number is string
         && data.lineItems is list
@@ -378,7 +378,7 @@ service cloud.firestore {
         && data.description is string
         && data.unitPrice is number
         && data.unitPrice >= 0
-        && data.serviceType in ['pressure_washing', 'landscaping', 'snow_removal']
+        && data.serviceType in ['pressure_washing', 'landscaping', 'snow_removal', 'mowing', 'aeration', 'window_cleaning']
         && data.taxable is bool
         && data.timesUsed is number
         && data.timesUsed >= 0;
@@ -387,7 +387,7 @@ service cloud.firestore {
     function validQuote() {
       let data = request.resource.data;
       return data.status in ['sent', 'accepted', 'declined', 'no_response']
-        && data.serviceType in ['pressure_washing', 'landscaping', 'snow_removal']
+        && data.serviceType in ['pressure_washing', 'landscaping', 'snow_removal', 'mowing', 'aeration', 'window_cleaning']
         && data.amount is number
         && data.amount >= 0
         && data.customerId is string;

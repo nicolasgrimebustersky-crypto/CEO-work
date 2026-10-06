@@ -1,5 +1,6 @@
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
+import { BRAND_PROFILE } from "@/lib/brand";
 import { formatMoneyExact } from "@/lib/format";
 import { hourInBusinessTimezone, BUSINESS_TIMEZONE } from "@/lib/notifications/quietHours";
 import { adminDb } from "@/lib/server/admin";
@@ -100,7 +101,7 @@ export async function GET(request: Request): Promise<Response> {
       const late = daysLate(invoice.dueAt as Timestamp, now);
       await notifyCrew({
         type: "invoice_overdue",
-        actorName: "Grime Busters",
+        actorName: BRAND_PROFILE.shortName,
         body: `${invoice.customerName} · ${formatMoneyExact(invoice.balanceDue)} · #${invoice.number} · ${
           late <= 0 ? "due today" : `${late} day${late === 1 ? "" : "s"} late`
         }`,
@@ -134,7 +135,7 @@ export async function GET(request: Request): Promise<Response> {
 
       await notifyCrew({
         type: "money_summary",
-        actorName: "Grime Busters",
+        actorName: BRAND_PROFILE.shortName,
         body:
           `${formatMoneyExact(total)} across ${open.length} invoice${open.length === 1 ? "" : "s"}` +
           (overdue.length > 0

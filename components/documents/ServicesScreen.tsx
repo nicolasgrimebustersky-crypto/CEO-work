@@ -15,9 +15,10 @@ import {
   updateService,
   type SavedService,
 } from "@/lib/db/services";
+import { DEFAULT_SERVICE, OFFERED_SERVICES } from "@/lib/brand";
 import { formatMoneyExact, formatRelative } from "@/lib/format";
 import { SERVICE_LABEL } from "@/lib/status";
-import { SERVICE_TYPES, type ServiceType } from "@/lib/types";
+import type { ServiceType } from "@/lib/types";
 import { toNumber } from "./draft";
 
 const INPUT =
@@ -144,7 +145,7 @@ function ServiceSheet({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
-  const [serviceType, setServiceType] = useState<ServiceType>("pressure_washing");
+  const [serviceType, setServiceType] = useState<ServiceType>(DEFAULT_SERVICE);
   const [taxable, setTaxable] = useState(true);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -159,7 +160,7 @@ function ServiceSheet({
     setName(service?.name ?? "");
     setDescription(service?.description ?? "");
     setPrice(service ? String(service.unitPrice) : "");
-    setServiceType(service?.serviceType ?? "pressure_washing");
+    setServiceType(service?.serviceType ?? DEFAULT_SERVICE);
     setTaxable(service?.taxable ?? true);
     setConfirmDelete(false);
     setError(null);
@@ -267,7 +268,7 @@ function ServiceSheet({
         <div>
           <span className="mb-1.5 block text-sm font-semibold text-muted">Kind of work</span>
           <div className="flex flex-wrap gap-2">
-            {SERVICE_TYPES.map((option) => (
+            {OFFERED_SERVICES.map((option) => (
               <Chip
                 key={option}
                 active={serviceType === option}

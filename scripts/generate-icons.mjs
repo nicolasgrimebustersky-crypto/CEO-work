@@ -3,6 +3,12 @@
  * artwork in assets/logo-source.png.
  *
  *   npm i --no-save playwright && node scripts/generate-icons.mjs
+ *   npm i --no-save playwright && node scripts/generate-icons.mjs --brand rda
+ *
+ * Without --brand it is the Grime Busters set, read from assets/ and written
+ * to the root of public/ and app/favicon.ico, where it always lived. Any other
+ * brand reads assets/brands/<id>/logo-source.png and writes everything under
+ * public/brands/<id>/, the folder `assetBase` in lib/brand.ts points at.
  *
  * One source of truth: replace the source file, run this, commit what changes.
  * Doing it by hand across a dozen files is how an icon set drifts — you update
@@ -17,7 +23,7 @@
  * artwork needs cropping, scaling and re-encoding, and a browser does all
  * three without adding a dependency this project would otherwise never need.
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -33,12 +39,28 @@ try {
 }
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const PUBLIC = join(ROOT, "public");
 
-/** The logo's own background, sampled from its corner. */
-const CANVAS = "#050607";
+const brandFlag = process.argv.indexOf("--brand");
+const BRAND = brandFlag === -1 ? "grime-busters" : process.argv[brandFlag + 1];
+const IS_DEFAULT_BRAND = BRAND === "grime-busters";
+if (!/^[a-z0-9-]+$/.test(BRAND ?? "")) {
+  console.error(`--brand needs an id like "rda", got ${JSON.stringify(BRAND)}.`);
+  process.exit(1);
+}
 
-const source = readFileSync(join(ROOT, "assets", "logo-source.png")).toString("base64");
+const PUBLIC = IS_DEFAULT_BRAND ? join(ROOT, "public") : join(ROOT, "public", "brands", BRAND);
+const SOURCE_DIR = IS_DEFAULT_BRAND ? join(ROOT, "assets") : join(ROOT, "assets", "brands", BRAND);
+const FAVICON = IS_DEFAULT_BRAND ? join(ROOT, "app", "favicon.ico") : join(PUBLIC, "favicon.ico");
+
+/**
+ * The logo's own background, sampled from its corner. Letterboxing on any
+ * other shade leaves a faint rectangle around the mark.
+ */
+const CANVAS = { "grime-busters": "#050607", rda: "#000000" }[BRAND] ?? "#000000";
+
+for (const dir of ["icons", "splash"]) mkdirSync(join(PUBLIC, dir), { recursive: true });
+
+const source = readFileSync(join(SOURCE_DIR, "logo-source.png")).toString("base64");
 const sourceUrl = `data:image/png;base64,${source}`;
 
 // CHROMIUM_PATH lets this run against a browser already on the machine.
@@ -281,9 +303,9 @@ async function favicon(out) {
   });
 
   writeFileSync(out, Buffer.concat([header, ...entries, ...pngs]));
-  console.log(`app/favicon.ico  ${sizes.join("/")}`);
+  console.log(`${out.slice(ROOT.length + 1)}  ${sizes.join("/")}`);
 }
 
-await favicon(join(ROOT, "app", "favicon.ico"));
+await favicon(FAVICON);
 
 await browser.close();

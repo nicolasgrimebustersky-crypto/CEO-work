@@ -16,6 +16,7 @@ import { NotificationsProvider } from "@/components/providers/NotificationsProvi
 import { ServicesProvider } from "@/components/providers/ServicesProvider";
 import { TeamProvider } from "@/components/providers/TeamProvider";
 import { AppShell } from "@/components/shell/AppShell";
+import { BRAND_ID, BRAND_PROFILE, brandAsset } from "@/lib/brand";
 import "./globals.css";
 
 /**
@@ -35,37 +36,40 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: "Grime Busters CRM",
-  description:
-    "Door-to-door CRM for pressure washing, landscaping and snow removal in Oldham County, KY.",
-  applicationName: "Grime Busters CRM",
-  manifest: "/manifest.json",
+  title: BRAND_PROFILE.appName,
+  description: BRAND_PROFILE.description,
+  applicationName: BRAND_PROFILE.appName,
+  manifest: brandAsset("/manifest.json"),
   appleWebApp: {
     capable: true,
-    title: "Grime Busters",
+    title: BRAND_PROFILE.shortName,
     statusBarStyle: "black-translucent",
     // Safari shows a white screen while an installed web app boots unless it
     // finds a launch image matching the exact device resolution. Without these
     // every cold start flashes white against a near-black UI.
     startupImage: [
-      { url: "/splash/iphone15.png", media: "(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)" },
-      { url: "/splash/iphone14plus.png", media: "(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)" },
-      { url: "/splash/iphone13.png", media: "(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)" },
-      { url: "/splash/iphonex.png", media: "(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)" },
-      { url: "/splash/iphone8plus.png", media: "(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3)" },
-      { url: "/splash/iphone8.png", media: "(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)" },
+      { url: brandAsset("/splash/iphone15.png"), media: "(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)" },
+      { url: brandAsset("/splash/iphone14plus.png"), media: "(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)" },
+      { url: brandAsset("/splash/iphone13.png"), media: "(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)" },
+      { url: brandAsset("/splash/iphonex.png"), media: "(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)" },
+      { url: brandAsset("/splash/iphone8plus.png"), media: "(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3)" },
+      { url: brandAsset("/splash/iphone8.png"), media: "(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)" },
     ],
   },
   icons: {
-    icon: "/icons/icon-192.png",
-    apple: "/icons/apple-touch-icon.png",
+    // app/favicon.ico is Grime Busters' and Next always links it; another
+    // brand lists its own first so the tab shows the right mark.
+    icon: BRAND_PROFILE.assetBase
+      ? [brandAsset("/favicon.ico"), brandAsset("/icons/icon-192.png")]
+      : brandAsset("/icons/icon-192.png"),
+    apple: brandAsset("/icons/apple-touch-icon.png"),
   },
   // A private CRM full of customers' addresses has no business being indexed.
   robots: { index: false, follow: false },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#050607",
+  themeColor: BRAND_PROFILE.colors.ink,
   colorScheme: "dark",
   width: "device-width",
   initialScale: 1,
@@ -76,7 +80,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`h-full ${poppins.variable}`}>
+    // data-brand switches the colour tokens in globals.css.
+    <html lang="en" data-brand={BRAND_ID} className={`h-full ${poppins.variable}`}>
       <body className="min-h-full antialiased">
         {/* Above every provider and every screen: somebody on a replaced
             link needs to be told before they trust anything they see. */}

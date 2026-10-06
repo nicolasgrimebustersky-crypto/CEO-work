@@ -17,6 +17,7 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 
+import { DEFAULT_SERVICE } from "@/lib/brand";
 import { chunkIds } from "@/lib/bulkDelete";
 import { isDemoMode } from "@/lib/demo/enabled";
 import { SHARE_TOKEN_BYTES } from "@/lib/shareLinks";
@@ -116,7 +117,7 @@ export function toDocument(snap: QueryDocumentSnapshot<DocumentData>): BusinessD
   const data = snap.data();
   const serviceType = SERVICE_TYPES.includes(data.serviceType as ServiceType)
     ? (data.serviceType as ServiceType)
-    : "pressure_washing";
+    : DEFAULT_SERVICE;
 
   return {
     id: snap.id,

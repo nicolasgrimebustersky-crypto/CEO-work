@@ -1,5 +1,6 @@
 "use client";
 
+import { BRAND_ID } from "@/lib/brand";
 import { apiUrl } from "@/lib/apiBase";
 import { isDemoMode } from "@/lib/demo/enabled";
 import { deletePushToken, savePushToken, touchPushToken } from "@/lib/db/pushTokens";
@@ -40,7 +41,12 @@ const VAPID_KEY = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY ?? "";
  * matching, and nothing is ever fetched from it.
  */
 const PUSH_SCOPE = "/gb-push-scope";
-const PUSH_WORKER = "/push-sw.js";
+/**
+ * Grime Busters' worker keeps its original URL: a changed script URL is a new
+ * registration on every phone that already has one. Another brand passes its
+ * id, which the worker reads for its fallback title and icon.
+ */
+const PUSH_WORKER = BRAND_ID === "grime-busters" ? "/push-sw.js" : `/push-sw.js?brand=${BRAND_ID}`;
 
 export type PushBlocker =
   | "demo"

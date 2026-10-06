@@ -1,5 +1,6 @@
 "use client";
 
+import { BRAND_PROFILE } from "@/lib/brand";
 import { STATUS_COLOR, STATUS_INK } from "@/lib/status";
 import type { Customer, CustomerStatus, ServiceType } from "@/lib/types";
 
@@ -26,6 +27,15 @@ export const SERVICE_GLYPH: Record<ServiceType, string> = {
   // A snowflake.
   snow_removal:
     "M12 1.5a1 1 0 0 1 1 1v2.4l1.7-1a1 1 0 1 1 1 1.7L13 7.2v3.1l2.7-1.6.1-3.1a1 1 0 1 1 2 .1l-.1 2 2.1-1.2a1 1 0 1 1 1 1.7L18.7 9.4l1.7 1a1 1 0 1 1-1 1.7l-2.7-1.5L14 12l2.7 1.6 2.7-1.6a1 1 0 1 1 1 1.7l-1.7 1 2.1 1.2a1 1 0 1 1-1 1.7l-2.1-1.2.1 2a1 1 0 1 1-2 .1l-.1-3.1L13 13.7v3.1l2.7 1.6a1 1 0 1 1-1 1.7l-1.7-1v2.4a1 1 0 1 1-2 0v-2.4l-1.7 1a1 1 0 1 1-1-1.7l2.7-1.6v-3.1l-2.7 1.6-.1 3.1a1 1 0 1 1-2-.1l.1-2-2.1 1.2a1 1 0 1 1-1-1.7l1.7-1-2.1-1.2a1 1 0 1 1 1-1.7l2.1 1.2-.1-2a1 1 0 1 1 2-.1l.1 3.1 2.7 1.6L10 12 7.3 10.4l-2.7 1.5a1 1 0 1 1-1-1.7l1.7-1L3.2 8a1 1 0 1 1 1-1.7l2.1 1.2-.1-2a1 1 0 1 1 2-.1l.1 3.1L11 10.3V7.2L8.3 5.6a1 1 0 1 1 1-1.7l1.7 1V2.5a1 1 0 0 1 1-1Z",
+  // Three blades of grass on the ground line.
+  mowing:
+    "M3 19.5h18a1 1 0 1 1 0 2H3a1 1 0 1 1 0-2ZM5.5 18.5c0-4.6 1-8.2 3.2-11.3.3 3.5.1 7.3-.8 11.3H5.5Zm4.9 0c-.3-5.5.4-10.4 2.3-15 1.4 4.6 1.6 9.5.6 15h-2.9Zm5.4 0c.1-3.8 1.1-7 3.3-9.7.4 3.3-.1 6.5-1.2 9.7h-2.1Z",
+  // The turf line with cores pulled out of it, sitting on top.
+  aeration:
+    "M3 11h18a1 1 0 1 1 0 2H3a1 1 0 1 1 0-2Zm2.5 3.5h2v5a1 1 0 1 1-2 0v-5Zm5.5 0h2v5a1 1 0 1 1-2 0v-5Zm5.5 0h2v5a1 1 0 1 1-2 0v-5ZM6.5 4a1.5 1.5 0 0 1 1.5 1.5v2a1.5 1.5 0 0 1-3 0v-2A1.5 1.5 0 0 1 6.5 4Zm5.5 1a1.5 1.5 0 0 1 1.5 1.5v1a1.5 1.5 0 0 1-3 0v-1A1.5 1.5 0 0 1 12 5Zm5.5-1A1.5 1.5 0 0 1 19 5.5v2a1.5 1.5 0 0 1-3 0v-2A1.5 1.5 0 0 1 17.5 4Z",
+  // A four-pane window.
+  window_cleaning:
+    "M4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm1 2v6h6V5H5Zm8 0v6h6V5h-6ZM5 13v6h6v-6H5Zm8 0v6h6v-6h-6Z",
 };
 
 /** A house: a lead nobody has talked to yet, or one with no service noted. */
@@ -118,10 +128,10 @@ export function PinMark({
   draft?: boolean;
   className?: string;
 }) {
-  const fill = status === "draft" ? "#00d9ff" : STATUS_COLOR[status];
-  const ink = status === "draft" ? "#00181f" : STATUS_INK[status];
+  const fill = status === "draft" ? BRAND_PROFILE.colors.accent : STATUS_COLOR[status];
+  const ink = status === "draft" ? BRAND_PROFILE.colors.accentInk : STATUS_INK[status];
   // Black on black needs a visible edge even when nothing is selected.
-  const ring = selected ? "#00d9ff" : status === "do_not_knock" ? "#9ba7b4" : "#ffffff";
+  const ring = selected ? BRAND_PROFILE.colors.accent : status === "do_not_knock" ? "#9ba7b4" : "#ffffff";
 
   return (
     <svg
@@ -130,7 +140,7 @@ export function PinMark({
       aria-hidden="true"
       style={{ filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.55))" }}
     >
-      {selected ? <circle cx="20" cy="20" r="19.5" fill="#00d9ff" opacity={0.35} /> : null}
+      {selected ? <circle cx="20" cy="20" r="19.5" fill={BRAND_PROFILE.colors.accent} opacity={0.35} /> : null}
       <circle
         cx="20"
         cy="20"
