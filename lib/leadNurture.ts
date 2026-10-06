@@ -412,7 +412,7 @@ export interface PhoneGroupable extends NurtureInput {
   latestQuote: QuoteRecord | null;
 }
 
-export interface PhoneGroupResult<T> {
+export interface PhoneGroupResult<T extends PhoneGroupable> {
   /**
    * The one record allowed to send, per number, carrying the number's progress
    * rather than its own.
@@ -431,6 +431,23 @@ export interface PhoneGroupResult<T> {
     effectiveStep: number;
     /** The most recent nurture text to this number, by any record. */
     effectiveLastNurtureAtMs: number | null;
+    /**
+     * The newest open estimate on the *number*, which is the one the text is
+     * about — not whichever one the chosen record happens to carry.
+     *
+     * Duplicates mean those differ, and the difference is a wrong price in
+     * somebody's hand. A person with a 40-day-old estimate on one record and
+     * a replacement sent yesterday on another has two open estimates; judging
+     * each record on its own meant the 40-day-old one was due and the new one
+     * was not, so the run texted the obsolete price two days before the
+     * replacement's day 3. The newer estimate is the live one by definition —
+     * it was written to supersede the other.
+     *
+     * Typed off the record's own quote field, so a caller carrying extra
+     * detail on it (the amount, which collection it came from) gets that
+     * detail back rather than a narrowed copy.
+     */
+    effectiveQuote: T["latestQuote"];
   }[];
   /** The rest, with why they were set aside. */
   setAside: { lead: T; reason: string }[];
@@ -498,7 +515,15 @@ export function oneLeadPerPhone<T extends PhoneGroupable>(
     // Only when there is something to decide from. No estimates anywhere on
     // the number is an ordinary "nothing to chase", which nurtureDecision
     // reports per record with a better reason than this one.
-    const decided = latest.length > 0 && pickOpenQuote(latest) === null;
+    //
+    // The same call also answers which estimate the number is being chased
+    // about, and that is the one every candidate is judged on below. Asking
+    // each record about its own was the next finding after this suppressor:
+    // two open estimates on one number, 40 days and 1 day old, and the older
+    // one is past day 3 while the newer is not — so the obsolete price went
+    // out, two days before the replacement was due to be chased.
+    const groupQuote = latest.length > 0 ? pickOpenQuote(latest) : null;
+    const decided = latest.length > 0 && groupQuote === null;
     // Only a candidate can be sent to. The rest were context.
     const candidates = group.filter((lead) => lead.eligible);
     if (candidates.length === 0) continue;
@@ -549,7 +574,14 @@ export function oneLeadPerPhone<T extends PhoneGroupable>(
       verdicts.set(
         lead,
         nurtureDecision(
-          { ...lead, nurtureStep: effectiveStep, lastNurtureAtMs: effectiveLastNurtureAtMs },
+          {
+            ...lead,
+            nurtureStep: effectiveStep,
+            lastNurtureAtMs: effectiveLastNurtureAtMs,
+            // The number's estimate, not this record's. See effectiveQuote.
+            quoteStatus: groupQuote?.status ?? "",
+            quoteSentAtMs: groupQuote?.sentAtMs ?? 0,
+          },
           nowMs,
         ),
       );
@@ -567,10 +599,29 @@ export function oneLeadPerPhone<T extends PhoneGroupable>(
       const ableA = recordIsSendable(a);
       const ableB = recordIsSendable(b);
       if (ableA !== ableB) return ableA ? -1 : 1;
+      // Then the record that actually holds the number's live estimate.
+      //
+      // Everything that reaches the customer is already bound to that
+      // estimate — the price in the message, the document the claim re-reads
+      // — so this does not decide what is sent. What it decides is which
+      // record the timeline note and the counters land on, and putting them
+      // on the record that holds the estimate is the difference between a
+      // trail somebody can follow and a note about a June price filed under a
+      // May one.
+      if (groupQuote) {
+        const holdsA = a.latestQuote?.id === groupQuote.id;
+        const holdsB = b.latestQuote?.id === groupQuote.id;
+        if (holdsA !== holdsB) return holdsA ? -1 : 1;
+      }
       return b.nurtureStep - a.nurtureStep;
     });
 
-    chosen.push({ lead: sorted[0], effectiveStep, effectiveLastNurtureAtMs });
+    chosen.push({
+      lead: sorted[0],
+      effectiveStep,
+      effectiveLastNurtureAtMs,
+      effectiveQuote: groupQuote,
+    });
     for (const lead of sorted.slice(1)) {
       setAside.push({ lead, reason: "another record for this number is further along" });
     }

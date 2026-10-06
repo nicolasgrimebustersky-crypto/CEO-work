@@ -344,47 +344,77 @@ describe("spotting a reply", () => {
   });
 });
 
-describe("what the lead actually reads", () => {
+describe("what the customer actually reads", () => {
   const kinds = ["nudge", "value", "last_call"];
+  const PRICE = 450;
 
   test("all three carry the opt-out line", () => {
     // tests/messages.test.mjs walks the module and only exercises one branch of
     // this template, so the other two are checked here.
     for (const kind of kinds) {
-      assert.match(leadNurtureText(kind, "Marta"), /Reply STOP to opt out\./, kind);
+      assert.match(leadNurtureText(kind, "Marta", PRICE), /Reply STOP to opt out\./, kind);
     }
   });
 
   test("all three name the business", () => {
     for (const kind of kinds) {
-      assert.match(leadNurtureText(kind, "Marta"), /Grime Busters/, kind);
+      assert.match(leadNurtureText(kind, "Marta", PRICE), /Grime Busters/, kind);
     }
   });
 
   test("a lead with no first name still gets a sentence", () => {
     for (const kind of kinds) {
-      assert.match(leadNurtureText(kind, null), /^Hi there,/, kind);
+      assert.match(leadNurtureText(kind, null, PRICE), /^Hi there,/, kind);
     }
   });
 
   test("the last one says it is the last one", () => {
     // The promise that makes a three-step sequence defensible. If this wording
     // goes, the sequence is just three texts that stop for no stated reason.
-    assert.match(leadNurtureText("last_call", "Marta"), /won't keep texting/);
+    assert.match(leadNurtureText("last_call", "Marta", PRICE), /won't keep texting/);
   });
 
   test("none of them asks whether they have decided yet", () => {
     // "Just checking in" is the message that gets reported as spam: it costs
     // the reader attention and gives them nothing.
     for (const kind of kinds) {
-      const text = leadNurtureText(kind, "Marta").toLowerCase();
+      const text = leadNurtureText(kind, "Marta", PRICE).toLowerCase();
       assert.ok(!text.includes("just checking in"), kind);
       assert.ok(!text.includes("following up"), kind);
     }
   });
 
+  test("all three name the price", () => {
+    // Including the last one, which did not. The PR description promised every
+    // step names the amount and the day-30 text was the exception — Codex's
+    // third finding on c6ae5a6. It is the most useful thing in the message:
+    // it says which of the estimates in somebody's inbox this is about, and on
+    // the last one it says which price is lapsing.
+    for (const kind of kinds) {
+      assert.match(leadNurtureText(kind, "Marta", PRICE), /\$450/, kind);
+    }
+  });
+
+  test("a record with no total is never texted a price of nothing", () => {
+    // "$0" reads as a mistake, because it is one. The message falls back to
+    // naming the estimate without a figure.
+    for (const kind of kinds) {
+      for (const amount of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+        const text = leadNurtureText(kind, "Marta", amount);
+        assert.doesNotMatch(text, /\$0\b|\$-|\$NaN|\$Infinity/, `${kind} with ${amount}`);
+        assert.match(text, /estimate/, `${kind} with ${amount} must still say what it is about`);
+      }
+    }
+  });
+
+  test("the price is rounded to the dollar", () => {
+    // A cents figure in a text invites a reply about the cents.
+    assert.match(leadNurtureText("nudge", "Marta", 449.73), /\$450/);
+    assert.doesNotMatch(leadNurtureText("nudge", "Marta", 449.73), /449\.73/);
+  });
+
   test("each is a distinct message", () => {
-    const texts = kinds.map((k) => leadNurtureText(k, "Marta"));
+    const texts = kinds.map((k) => leadNurtureText(k, "Marta", PRICE));
     assert.equal(new Set(texts).size, 3);
   });
 });
@@ -1298,6 +1328,15 @@ describe("a stale duplicate cannot shadow a fresh one", () => {
   //
   // The selection asks nurtureDecision now, so there is no proxy left to be
   // wrong about.
+  const quote = (sentAtMs, patch = {}) => ({
+    id: `q${sentAtMs}`,
+    customerId: "c",
+    status: "sent",
+    sentAtMs,
+    convertedToId: null,
+    ...patch,
+  });
+
   const rec = (id, patch = {}) => ({
     id,
     phoneKey: "5025550147",
@@ -1307,45 +1346,93 @@ describe("a stale duplicate cannot shadow a fresh one", () => {
     optedOut: false,
     eligible: true,
     pipelineStage: "estimate_sent",
-  quoteStatus: "sent",
+    quoteStatus: "sent",
     status: "active",
     quoteSentAtMs: NOW - 10 * DAY,
+    latestQuote: quote(NOW - 10 * DAY),
     phone: "+15025550147",
     consent: { granted: true, method: "web_form" },
     ...patch,
   });
 
-  test("the fresh lead is chosen even when the stale record is listed first", () => {
-    const stale = rec("stale", { quoteSentAtMs: NOW - 60 * DAY });
-    const fresh = rec("fresh", { quoteSentAtMs: NOW - 4 * DAY });
-    const { chosen } = oneLeadPerPhone([stale, fresh], NOW);
+  /** A record whose own estimate is `age` days old. */
+  const aged = (id, days, patch = {}) =>
+    rec(id, {
+      quoteSentAtMs: NOW - days * DAY,
+      latestQuote: quote(NOW - days * DAY),
+      ...patch,
+    });
+
+  test("the number is chased about its newest estimate, not the stale one", () => {
+    // Was "the fresh lead is chosen": each record used to carry its own age,
+    // from its own creation date, and the selection's job was to avoid picking
+    // the stale one. An estimate is not like that. Two open estimates on one
+    // number are one person holding a price and its replacement, and the
+    // replacement is the live one — so the number has a single age, and it is
+    // the newer estimate's.
+    const { chosen } = oneLeadPerPhone([aged("stale", 60), aged("fresh", 4)], NOW);
     assert.equal(chosen.length, 1);
-    assert.equal(chosen[0].lead.id, "fresh", "the stale record would fail the age guard nightly");
+    assert.equal(chosen[0].effectiveQuote.sentAtMs, NOW - 4 * DAY);
+    assert.equal(chosen[0].effectiveQuote.id, quote(NOW - 4 * DAY).id);
   });
 
-  test("and when it is listed second", () => {
-    // Input order must not decide anything.
-    const { chosen } = oneLeadPerPhone(
-      [rec("fresh", { quoteSentAtMs: NOW - 4 * DAY }), rec("stale", { quoteSentAtMs: NOW - 60 * DAY })],
-      NOW,
-    );
-    assert.equal(chosen[0].lead.id, "fresh");
+  test("and that does not depend on input order", () => {
+    const { chosen } = oneLeadPerPhone([aged("fresh", 4), aged("stale", 60)], NOW);
+    assert.equal(chosen[0].effectiveQuote.sentAtMs, NOW - 4 * DAY);
   });
 
-  test("a record that is not yet due loses to one that is", () => {
-    // Two fresh leads, one a day old. Day 3 has not arrived for it.
-    const { chosen } = oneLeadPerPhone(
-      [rec("yesterday", { quoteSentAtMs: NOW - DAY }), rec("last_week", { quoteSentAtMs: NOW - 7 * DAY })],
+  test("a replacement sent yesterday means nothing is due yet", () => {
+    // Codex's finding on c6ae5a6, and the reason the estimate moved to the
+    // group. A 40-day-old estimate is past day 3 and a 1-day-old one is not,
+    // so judging each record on its own sent the obsolete price two days
+    // before the replacement was due to be chased at all.
+    const { chosen } = oneLeadPerPhone([aged("old", 40), aged("yesterday", 1)], NOW);
+    assert.equal(chosen.length, 1);
+    assert.equal(chosen[0].effectiveQuote.sentAtMs, NOW - DAY);
+    // And the selection itself must have been made on that estimate. Asked of
+    // each record's own, the 40-day-old one is past day 3 and therefore the
+    // record that "would send", so it wins the sort and the obsolete price
+    // goes out — with the group's estimate reported alongside it, which is the
+    // shape this assertion exists to rule out.
+    assert.equal(
+      chosen[0].lead.id,
+      "yesterday",
+      "the record holding the live estimate, not the one whose own estimate is overdue",
+    );
+    const verdict = nurtureDecision(
+      {
+        ...chosen[0].lead,
+        nurtureStep: chosen[0].effectiveStep,
+        lastNurtureAtMs: chosen[0].effectiveLastNurtureAtMs,
+        quoteStatus: chosen[0].effectiveQuote.status,
+        quoteSentAtMs: chosen[0].effectiveQuote.sentAtMs,
+      },
       NOW,
     );
-    assert.equal(chosen[0].lead.id, "last_week");
+    assert.equal(verdict.send, false, "day 3 of the replacement has not arrived");
+    assert.match(verdict.reason, /not due until day 3/);
+  });
+
+  test("and once the replacement is past day 3, it is the one chased", () => {
+    // The other half, which the finding asked for by name: the fix must not
+    // be "a newer estimate silences the number".
+    const { chosen } = oneLeadPerPhone([aged("old", 40), aged("newer", 5)], NOW);
+    const verdict = nurtureDecision(
+      {
+        ...chosen[0].lead,
+        nurtureStep: chosen[0].effectiveStep,
+        lastNurtureAtMs: chosen[0].effectiveLastNurtureAtMs,
+        quoteStatus: chosen[0].effectiveQuote.status,
+        quoteSentAtMs: chosen[0].effectiveQuote.sentAtMs,
+      },
+      NOW,
+    );
+    assert.equal(verdict.send, true);
+    assert.equal(chosen[0].effectiveQuote.sentAtMs, NOW - 5 * DAY, "the newer price, not the old one");
   });
 
   test("when none would send, one is still chosen so the reason is reported", () => {
-    const { chosen, setAside } = oneLeadPerPhone(
-      [rec("a", { quoteSentAtMs: NOW - 60 * DAY }), rec("b", { quoteSentAtMs: NOW - 70 * DAY })],
-      NOW,
-    );
+    const { chosen, setAside } = oneLeadPerPhone([aged("a", 60), aged("b", 70)], NOW);
     assert.equal(chosen.length, 1, "silence would leave nobody knowing why");
     assert.equal(setAside.length, 1);
   });
