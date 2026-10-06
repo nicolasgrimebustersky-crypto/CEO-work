@@ -244,7 +244,11 @@ interface Candidate {
 async function claimStep(
   docRef: FirebaseFirestore.DocumentReference,
   lead: Candidate,
-  group: { effectiveStep: number; effectiveLastNurtureAtMs: number | null },
+  group: {
+    effectiveStep: number;
+    effectiveLastNurtureAtMs: number | null;
+    effectiveQuote: OpenQuote | null;
+  },
   nowMs: number,
 ): Promise<
   | {
@@ -270,8 +274,13 @@ async function claimStep(
   // Accept or Decline on their own share link. Trusting the copy read at the
   // top of the run meant a customer who accepted at 9:01 could still be asked
   // at 9:04 whether they had thought about it.
-  const quoteRef = lead.quote
-    ? db.collection(lead.quote.collection).doc(lead.quote.id)
+  // The number's newest open estimate, not whichever one this record carries.
+  // Those differ when one person holds two records, and re-reading the
+  // record's own would leave an acceptance on the newer one invisible — the
+  // very case numberSuppression cannot see, because it reads customer stages
+  // and accepting a quote does not move one.
+  const quoteRef = group.effectiveQuote
+    ? db.collection(group.effectiveQuote.collection).doc(group.effectiveQuote.id)
     : null;
 
   return db.runTransaction(async (tx) => {
@@ -561,7 +570,7 @@ export async function GET(request: Request): Promise<Response> {
     let sent = 0;
     let spent = 0;
 
-    for (const { lead, effectiveStep, effectiveLastNurtureAtMs } of chosen) {
+    for (const { lead, effectiveStep, effectiveLastNurtureAtMs, effectiveQuote } of chosen) {
       // One lead's problem is one lead's problem. Before this, a single thrown
       // error — a corrupt counter was enough — ended the run and abandoned
       // every lead after it in the list.
@@ -590,7 +599,14 @@ export async function GET(request: Request): Promise<Response> {
         // in the business every night. It is asked using the number's
         // progress, not this record's, or a duplicate would look overdue.
         const preview = nurtureDecision(
-          { ...lead, nurtureStep: effectiveStep, lastNurtureAtMs: effectiveLastNurtureAtMs },
+          {
+            ...lead,
+            nurtureStep: effectiveStep,
+            lastNurtureAtMs: effectiveLastNurtureAtMs,
+            // The number's estimate, which is the one the text is about.
+            quoteStatus: effectiveQuote?.status ?? "",
+            quoteSentAtMs: effectiveQuote?.sentAtMs ?? 0,
+          },
           now,
         );
         if (!preview.send) {
@@ -627,7 +643,7 @@ export async function GET(request: Request): Promise<Response> {
         claim = await claimStep(
           docRef,
           lead,
-          { effectiveStep, effectiveLastNurtureAtMs },
+          { effectiveStep, effectiveLastNurtureAtMs, effectiveQuote },
           now,
         );
         if (!claim.claimed) {
@@ -676,7 +692,9 @@ export async function GET(request: Request): Promise<Response> {
           continue;
         }
 
-        const body = leadNurtureText(claim.kind, lead.firstName, lead.quote?.amount ?? 0);
+        // The amount from the estimate the decision was made on, so the price
+        // in the message is the price the day counts were measured from.
+        const body = leadNurtureText(claim.kind, lead.firstName, effectiveQuote?.amount ?? 0);
         // Sent to the number the claim validated, not to whatever the customer
         // record says by now. sendSmsToCustomerId re-read the document, so a
         // phone edit between the claim and the send meant marketing going to a
