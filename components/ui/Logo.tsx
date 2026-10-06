@@ -1,10 +1,12 @@
 import Image from "next/image";
 
+import { BRAND_PROFILE, brandAsset } from "@/lib/brand";
+
 /**
- * The Grime Busters lockup.
+ * The brand's lockup.
  *
- * public/logo.png, written by scripts/generate-icons.mjs from the artwork in
- * assets/. The source is a 1.1MB print-resolution render and has no business
+ * logo.png in the brand's asset folder, written by scripts/generate-icons.mjs
+ * from the artwork in assets/. The source is a 1.1MB print-resolution render and has no business
  * being fetched by a phone to fill a drawer header.
  *
  * This copy has the black field keyed out to alpha, so the mark belongs to
@@ -13,9 +15,9 @@ import Image from "next/image";
  * that one goes on a black band, and PDF can carry JPEG bytes verbatim.
  */
 
-/** Intrinsic size of public/logo.png, so Next can reserve the right box. */
-export const LOGO_WIDTH = 420;
-export const LOGO_HEIGHT = 310;
+/** Intrinsic size of the logo, so Next can reserve the right box. */
+export const LOGO_WIDTH = BRAND_PROFILE.logoSize.width;
+export const LOGO_HEIGHT = BRAND_PROFILE.logoSize.height;
 export const LOGO_ASPECT = LOGO_WIDTH / LOGO_HEIGHT;
 
 export function Logo({
@@ -30,8 +32,8 @@ export function Logo({
 }) {
   return (
     <Image
-      src="/logo.png"
-      alt="Grime Busters KY — pressure washing"
+      src={brandAsset("/logo.png")}
+      alt={BRAND_PROFILE.logoAlt}
       width={LOGO_WIDTH}
       height={LOGO_HEIGHT}
       priority={priority}

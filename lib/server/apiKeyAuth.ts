@@ -14,6 +14,8 @@ import {
   type Scope,
   type StoredKey,
 } from "@/lib/apiKeys";
+import { BRAND_PROFILE } from "@/lib/brand";
+
 import { adminDb } from "./admin";
 import { audit } from "./audit";
 import { ApiError } from "./auth";
@@ -80,7 +82,7 @@ export async function requireApiKey(request: Request): Promise<AuthorisedKey> {
   if (!looksLikeKey(presented)) {
     throw new ApiError(
       401,
-      `That does not look like a Grime Busters API key — they start with "${KEY_PREFIX}". Generate one on the Account screen.`,
+      `That does not look like a ${BRAND_PROFILE.shortName} API key — they start with "${KEY_PREFIX}". Generate one on the Account screen.`,
     );
   }
 

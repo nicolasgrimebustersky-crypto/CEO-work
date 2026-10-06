@@ -1,3 +1,4 @@
+import { DEFAULT_SERVICE } from "@/lib/brand";
 import { adminDb } from "@/lib/server/admin";
 import { ApiError } from "@/lib/server/auth";
 import { preflight, withCors } from "@/lib/server/cors";
@@ -49,7 +50,7 @@ export async function GET(request: Request): Promise<Response> {
         const serviceType = text(data.serviceType) as ServiceType;
         return {
           id: doc.id,
-          serviceType: SERVICE_TYPES.includes(serviceType) ? serviceType : SERVICE_TYPES[0],
+          serviceType: SERVICE_TYPES.includes(serviceType) ? serviceType : DEFAULT_SERVICE,
           status: text(data.status),
           scheduledStartMs: millis(data.scheduledStart),
           scheduledEndMs: millis(data.scheduledEnd),

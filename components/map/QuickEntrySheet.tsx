@@ -8,12 +8,13 @@ import { useNotify } from "@/components/providers/NotificationsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { SelectField, TextAreaField, TextField } from "@/components/ui/Field";
 import { Sheet } from "@/components/ui/Sheet";
+import { OFFERED_SERVICES } from "@/lib/brand";
 import { createCustomer } from "@/lib/db/customers";
 import { formatCoords } from "@/lib/geo";
 import { reverseGeocode } from "@/lib/geocode";
 import { routes } from "@/lib/routes";
 import { SERVICE_SHORT_LABEL, STATUS_LABEL } from "@/lib/status";
-import { CUSTOMER_STATUSES, SERVICE_TYPES } from "@/lib/types";
+import { CUSTOMER_STATUSES } from "@/lib/types";
 import type { CustomerStatus, LatLng, PropertyType, ServiceType } from "@/lib/types";
 import { PropertyTypePicker } from "@/components/customers/PropertyTypePicker";
 import { StatusPicker } from "@/components/customers/StatusPicker";
@@ -227,7 +228,7 @@ export function QuickEntrySheet({ position, onClose, onCreated }: QuickEntryShee
         <fieldset>
           <legend className="mb-2 text-sm font-bold text-muted">Interested in</legend>
           <div className="grid grid-cols-3 gap-2">
-            {SERVICE_TYPES.map((service) => {
+            {OFFERED_SERVICES.map((service) => {
               const active = serviceTypes.includes(service);
               return (
                 <button

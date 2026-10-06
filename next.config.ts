@@ -3,6 +3,16 @@ import path from "node:path";
 import withPWAInit from "@ducanh2912/next-pwa";
 import type { NextConfig } from "next";
 
+import { brandDeploymentProblem } from "./lib/brandGuard";
+
+/**
+ * A build for one brand must not be pointed at another brand's Firebase
+ * project — see lib/brandGuard.ts. Thrown here so the deployment fails at
+ * build time, with the reason in the build log, rather than going live.
+ */
+const brandProblem = brandDeploymentProblem(process.env);
+if (brandProblem) throw new Error(brandProblem);
+
 /**
  * Demo mode ships an invented dataset instead of talking to Firebase. See
  * lib/demo/enabled.ts. The flag is read here as well so the fixtures can be

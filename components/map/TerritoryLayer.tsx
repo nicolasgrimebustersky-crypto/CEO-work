@@ -3,6 +3,7 @@
 import { useMap } from "@vis.gl/react-google-maps";
 import { useEffect, useRef } from "react";
 
+import { BRAND_PROFILE } from "@/lib/brand";
 import { colorForUser, buildUserColorMap, FALLBACK_USER_COLOR } from "@/lib/userColor";
 import type { AppUser, LatLng, Territory } from "@/lib/types";
 
@@ -98,7 +99,7 @@ export function DraftTerritory({ boundary }: { boundary: LatLng[] }) {
 
     const common = {
       map,
-      strokeColor: "#00d9ff",
+      strokeColor: BRAND_PROFILE.colors.accent,
       strokeOpacity: 1,
       strokeWeight: 3,
       clickable: false,
@@ -110,7 +111,7 @@ export function DraftTerritory({ boundary }: { boundary: LatLng[] }) {
         ? new google.maps.Polygon({
             ...common,
             paths: boundary,
-            fillColor: "#00d9ff",
+            fillColor: BRAND_PROFILE.colors.accent,
             fillOpacity: 0.18,
           })
         : new google.maps.Polyline({ ...common, path: boundary });
@@ -135,7 +136,7 @@ export function DraftTerritory({ boundary }: { boundary: LatLng[] }) {
           icon: {
             path: google.maps.SymbolPath.CIRCLE,
             scale: 9,
-            fillColor: "#00d9ff",
+            fillColor: BRAND_PROFILE.colors.accent,
             fillOpacity: 1,
             strokeColor: "#ffffff",
             strokeWeight: 2,

@@ -19,6 +19,7 @@ import {
   subscribeApiKeys,
   type ApiKeyRecord,
 } from "@/lib/db/apiKeys";
+import { BRAND_PROFILE } from "@/lib/brand";
 import { friendlyError } from "@/lib/db/errors";
 import { formatRelative } from "@/lib/format";
 
@@ -151,7 +152,7 @@ export function ApiKeys() {
           label="What is it for?"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
-          placeholder="Grime Busters Ops Agent"
+          placeholder={`${BRAND_PROFILE.shortName} Ops Agent`}
         />
 
         <p className="mt-3 mb-1.5 text-sm font-semibold text-muted">What it can do</p>

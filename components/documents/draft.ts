@@ -6,6 +6,7 @@ import {
   type LineItem,
   type Totals,
 } from "@/lib/documents";
+import { DEFAULT_SERVICE } from "@/lib/brand";
 import type { ServiceType } from "@/lib/types";
 
 /**
@@ -67,7 +68,7 @@ export function emptyDraft(kind: DocumentKind, customerId: string): Draft {
   return {
     kind,
     customerId,
-    serviceType: "pressure_washing",
+    serviceType: DEFAULT_SERVICE,
     lines: [blankLine()],
     discount: "",
     taxRatePct: String(DEFAULT_TAX_RATE_PCT),

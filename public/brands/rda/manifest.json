@@ -1,0 +1,36 @@
+{
+  "name": "RDA Landscape CRM",
+  "short_name": "RDA Landscape",
+  "description": "CRM for mowing, landscaping, aeration, snow removal and window cleaning.",
+  "start_url": "/map",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "/brands/rda/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/brands/rda/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/brands/rda/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    { "name": "Map", "url": "/map" },
+    { "name": "Today", "url": "/dashboard" },
+    { "name": "Schedule", "url": "/schedule" }
+  ]
+}

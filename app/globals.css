@@ -100,6 +100,45 @@
   --radius-3xl: 1.5rem;
 }
 
+/* ---------------------------------------------------------------------------
+   RDA Landscape — the same app on a different crew's deployment. `data-brand`
+   is set on <html> from NEXT_PUBLIC_BRAND (lib/brand.ts); only the brand's own
+   tokens change, and every status, user and warning colour above stays put.
+
+   Sampled from the RDA artwork: a true-black field, forest-green pines, a
+   grass-green swoosh and a gold phone number. The same two-hue rule holds:
+
+     gold  — what you TAP. 7.8:1 on the canvas.
+     green — what you EARN. The swoosh green is 3.55:1 on black, too dim for a
+             figure read in sunlight, so this is the same hue lifted to 6.15:1.
+
+   The surfaces carry a trace of the pines' green rather than the blue-grey
+   cast the Grime Busters ones have. Keep in step with `colors` in lib/brand.ts,
+   which the PDF writer and the map overlays read.
+--------------------------------------------------------------------------- */
+
+:root[data-brand="rda"] {
+  --color-canvas: #000000;
+  --color-surface: #080b07;
+  --color-surface-2: #10150e;
+  --color-surface-3: #1a2217;
+  --color-line: #253021;
+
+  --color-muted: #a3ad9c;
+
+  --color-accent: #c39a55;
+  --color-accent-ink: #1a1206;
+
+  --color-money: #5a9e33;
+  --color-money-ink: #000000;
+
+  --color-cream: #f4efe4;
+  --color-gold: #ae8442;
+
+  --color-login-accent: #5a9e33;
+  --color-login-accent-ink: #000000;
+}
+
 html,
 body {
   height: 100%;

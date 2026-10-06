@@ -524,6 +524,42 @@ needs a redeploy to take effect.
 
 ---
 
+## Running it for another business (brands)
+
+The same codebase runs more than one crew's CRM. `NEXT_PUBLIC_BRAND` picks the
+profile in `lib/brand.ts` — name, colours, logo, services offered, the wording
+of customer texts — and each brand gets its **own** Vercel project, Firebase
+project and Twilio number. Customer data never shares a database.
+
+| Brand | `NEXT_PUBLIC_BRAND` | Services |
+|---|---|---|
+| Grime Busters KY LLC | unset (or `grime-busters`) | pressure washing, landscaping, snow removal |
+| RDA Landscape | `rda` | mowing, landscaping, aeration, snow removal, window cleaning |
+
+The build refuses a non-default brand that is still pointed at the Grime
+Busters Firebase project, which `.env.production` would otherwise hand it (see
+`lib/brandGuard.ts`). A demo build (`NEXT_PUBLIC_DEMO_MODE=true`) reaches no
+Firebase project and is exempt, so a brand can be previewed before its
+accounts exist.
+
+**Not yet per-brand — required before RDA can sign anyone in:** the admin
+email (`ADMIN_EMAIL` in `lib/auth/roles.ts`), the founding crew uids
+(`BOOTSTRAP_CREW` / `OWNER_UID`), and the same values in `firestore.rules` and
+`storage.rules` are still Grime Busters'. They need the new owner's email and
+the uids of accounts created in the new Firebase project, so they follow once
+those exist.
+
+Adding a brand: a profile in `lib/brand.ts`, the matching `CONTACTS` entries in
+`lib/messages.ts` and the names in `lib/emailNotice.ts` and `lib/mcp/tools.ts`
+(import-free for the test runner), a `:root[data-brand="…"]` token block in
+`app/globals.css`, the artwork at `assets/brands/<id>/logo-source.png`, then:
+
+```bash
+npm i --no-save playwright && node scripts/generate-icons.mjs --brand <id>
+```
+
+`tests/brand.test.mjs` fails if any of those disagree.
+
 ## Local development
 
 ```bash

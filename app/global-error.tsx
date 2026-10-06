@@ -1,5 +1,7 @@
 "use client";
 
+import { BRAND_PROFILE } from "@/lib/brand";
+
 /**
  * Last resort: an error thrown in the root layout itself, above the point
  * where app/error.tsx can catch it. Next replaces the whole document here, so
@@ -30,7 +32,7 @@ export default function GlobalError({
       >
         <div style={{ maxWidth: "24rem", width: "100%" }}>
           <h1 style={{ fontSize: "1.5rem", fontWeight: 900, margin: "0 0 0.5rem" }}>
-            Grime Busters could not start
+            {BRAND_PROFILE.shortName} could not start
           </h1>
           <p style={{ margin: "0 0 1rem", color: "#9aa7b4", fontWeight: 600 }}>
             Your data is safe. This is the app failing to load, not a lost record.

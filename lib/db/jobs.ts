@@ -15,6 +15,7 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 
+import { DEFAULT_SERVICE } from "@/lib/brand";
 import { isDemoMode } from "@/lib/demo/enabled";
 import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
@@ -41,7 +42,7 @@ export function toJob(snap: QueryDocumentSnapshot<DocumentData>): Job {
   const data = snap.data();
   const serviceType = SERVICE_TYPES.includes(data.serviceType as ServiceType)
     ? (data.serviceType as ServiceType)
-    : "pressure_washing";
+    : DEFAULT_SERVICE;
   const status = JOB_STATUSES.includes(data.status as JobStatus)
     ? (data.status as JobStatus)
     : "scheduled";

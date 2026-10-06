@@ -1,5 +1,6 @@
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
+import { BRAND_PROFILE } from "@/lib/brand";
 import { phoneKey } from "@/lib/portalMatch";
 import { adminDb } from "@/lib/server/admin";
 import { DEFAULT_ORG_ID } from "@/lib/org";
@@ -209,7 +210,7 @@ async function acknowledge(
 ): Promise<void> {
   const greeting = parsed.firstName ? `Hi ${parsed.firstName}, ` : "Hi, ";
   const message =
-    `${greeting}thanks for your enquiry with Grime Busters. ` +
+    `${greeting}thanks for your enquiry with ${BRAND_PROFILE.shortName}. ` +
     `We've got your details and one of us will call you shortly to talk it through. ` +
     `Reply STOP to opt out.`;
 

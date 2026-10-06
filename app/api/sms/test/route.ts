@@ -1,3 +1,4 @@
+import { BRAND_PROFILE } from "@/lib/brand";
 import { audit } from "@/lib/server/audit";
 import { errorResponse, requireCrew, ApiError } from "@/lib/server/auth";
 import { adminDb } from "@/lib/server/admin";
@@ -106,7 +107,7 @@ export async function POST(request: Request): Promise<Response> {
 
     const result = await sendSms(
       phone,
-      "Grime Busters CRM: texting is working. Nothing was sent to a customer.",
+      `${BRAND_PROFILE.appName}: texting is working. Nothing was sent to a customer.`,
     );
 
     // Deliberately not thrown. A failed send is the answer to the question the

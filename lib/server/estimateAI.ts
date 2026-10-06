@@ -2,6 +2,7 @@ import "server-only";
 
 import Anthropic from "@anthropic-ai/sdk";
 
+import { BRAND_PROFILE } from "@/lib/brand";
 import {
   isAllowedImageType,
   priceItems,
@@ -28,6 +29,9 @@ export const isEstimateAIConfigured = Boolean(
   (process.env.ANTHROPIC_API_KEY ?? "").trim(),
 );
 
+/** Two invoice-style names from this brand's trade, quoted for the model. */
+const EXAMPLES = BRAND_PROFILE.exampleLineItems.map((name) => `'${name}'`).join(", ");
+
 /** What the model is asked to produce, enforced by the API rather than hoped for. */
 const DRAFT_SCHEMA = {
   type: "object",
@@ -41,7 +45,7 @@ const DRAFT_SCHEMA = {
           name: {
             type: "string",
             description:
-              "What the service is called, as it would appear on an invoice. Three or four words: 'Driveway pressure wash', 'Gutter clear-out'.",
+              "What the service is called, as it would appear on an invoice. Three or four words: " + EXAMPLES + ".",
           },
           description: {
             type: "string",
@@ -63,12 +67,12 @@ const DRAFT_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-const SYSTEM = `You write line items for a small pressure-washing, landscaping and snow-removal business in Oldham County, Kentucky. Two people run it and they are usually standing in a customer's driveway when they use this.
+const SYSTEM = `You write line items for ${BRAND_PROFILE.aiBusiness}. A small crew runs it and they are usually standing in a customer's driveway when they use this.
 
 Turn what they tell you into estimate line items a homeowner will read.
 
 Rules:
-- Plain, concrete language. "Driveway pressure wash", not "Exterior Surface Restoration Service".
+- Plain, concrete language. "${BRAND_PROFILE.exampleLineItems[0]}", not "Exterior Surface Restoration Service".
 - Describe only work that was actually described or is plainly visible in the photos. Never invent a service to pad the estimate.
 - If the job is one thing, return one line. Do not split a simple job to look thorough.
 - The description settles later disagreements: name the specific surfaces and areas covered.

@@ -10,13 +10,14 @@ import { useTeam } from "@/components/providers/TeamProvider";
 import { ScreenHeader } from "@/components/shell/ScreenHeader";
 import { UserChip } from "@/components/ui/Chips";
 import { Spinner } from "@/components/ui/Spinner";
+import { OFFERED_SERVICES } from "@/lib/brand";
 import { fetchJobsBetween } from "@/lib/db/jobs";
 import { quoteCloseRate, subscribeAllQuotes } from "@/lib/db/quotes";
 import { formatMoney } from "@/lib/format";
 import { grossFor } from "@/lib/money/summary";
 import { zipFromAddress } from "@/lib/geocode";
 import { SERVICE_LABEL } from "@/lib/status";
-import { SERVICE_TYPES, type Job, type Quote, type ServiceType } from "@/lib/types";
+import type { Job, Quote, ServiceType } from "@/lib/types";
 
 const MONTHS_BACK = 12;
 
@@ -59,7 +60,7 @@ export function ReportsScreen() {
 
   const byService = useMemo(() => {
     const totals = new Map<ServiceType, number>(
-      SERVICE_TYPES.map((service) => [service, 0]),
+      OFFERED_SERVICES.map((service) => [service, 0]),
     );
     for (const job of completed) {
       totals.set(job.serviceType, (totals.get(job.serviceType) ?? 0) + job.price);

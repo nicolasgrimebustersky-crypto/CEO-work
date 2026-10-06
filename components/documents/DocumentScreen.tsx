@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chips";
 import { Sheet } from "@/components/ui/Sheet";
 import { Spinner } from "@/components/ui/Spinner";
+import { OFFERED_SERVICES } from "@/lib/brand";
 import { advancePipeline, setPipelineStage } from "@/lib/db/customers";
 import {
   convertToInvoice,
@@ -44,7 +45,7 @@ import { shareUrl } from "@/lib/shareLinks";
 import { downloadPdf } from "@/lib/pdf/share";
 import { routes } from "@/lib/routes";
 import { SERVICE_LABEL } from "@/lib/status";
-import { SERVICE_TYPES, type ServiceType } from "@/lib/types";
+import type { ServiceType } from "@/lib/types";
 import { CustomerPickerSheet } from "./CustomerPickerSheet";
 import { DocumentPreview } from "./DocumentPreview";
 import { ScheduleJobSheet } from "./ScheduleJobSheet";
@@ -489,7 +490,7 @@ export function DocumentScreen() {
                   Service
                 </span>
                 <div className="flex flex-wrap gap-2">
-                  {SERVICE_TYPES.map((service) => (
+                  {OFFERED_SERVICES.map((service) => (
                     <Chip
                       key={service}
                       active={draft.serviceType === service}

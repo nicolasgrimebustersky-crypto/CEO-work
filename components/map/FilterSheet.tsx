@@ -5,10 +5,10 @@ import { Button } from "@/components/ui/Button";
 import { StatusPicker } from "@/components/customers/StatusPicker";
 import { Chip } from "@/components/ui/Chips";
 import { Sheet } from "@/components/ui/Sheet";
+import { OFFERED_SERVICES } from "@/lib/brand";
 import { CONTACT_RECENCY_OPTIONS, EMPTY_FILTERS } from "@/lib/filters";
 import type { ContactRecency, CustomerFilters } from "@/lib/filters";
 import { SERVICE_LABEL } from "@/lib/status";
-import { SERVICE_TYPES } from "@/lib/types";
 import type { ServiceType } from "@/lib/types";
 
 interface FilterSheetProps {
@@ -62,7 +62,7 @@ export function FilterSheet({
         <section>
           <h3 className="mb-2 text-base font-bold text-ink">Service</h3>
           <div className="flex flex-wrap gap-2">
-            {SERVICE_TYPES.map((service: ServiceType) => (
+            {OFFERED_SERVICES.map((service: ServiceType) => (
               <Chip
                 key={service}
                 active={filters.serviceTypes.includes(service)}

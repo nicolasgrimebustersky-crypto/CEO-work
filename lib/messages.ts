@@ -6,7 +6,41 @@ import { format } from "date-fns";
  * nightly follow-up cron.
  */
 
-const BUSINESS_NAME = "Grime Busters";
+/**
+ * Who the texts say they are from, and who a customer is pointed at — per
+ * brand, because one codebase serves more than one crew (see lib/brand.ts).
+ *
+ * Kept here rather than imported from lib/brand.ts because this file is loaded
+ * straight into the test runner, which cannot resolve an extensionless import;
+ * like the rest of this file, it stays import-free. `tests/brand.test.mjs`
+ * checks the names agree with lib/brand.ts.
+ *
+ * A handle a brand does not have is null, and its line is left out of the
+ * text. It must never fall back to another brand's: a customer paying the
+ * wrong business's Venmo is not a support call, it is lost money.
+ */
+const CONTACTS = {
+  "grime-busters": {
+    name: "Grime Busters",
+    legalName: "Grime Busters KY LLC",
+    ownerName: "Nicolas",
+    ownerPhone: "502-599-6855",
+    venmo: "@NicolasTimmons" as string | null,
+    cashApp: "$GrimeBustersKYLLC" as string | null,
+  },
+  rda: {
+    name: "RDA Landscape",
+    legalName: "RDA Landscape",
+    ownerName: "Ryland",
+    ownerPhone: "502-881-2021",
+    venmo: null as string | null,
+    cashApp: null as string | null,
+  },
+} as const;
+
+export const CONTACT = process.env.NEXT_PUBLIC_BRAND === "rda" ? CONTACTS.rda : CONTACTS["grime-busters"];
+
+const BUSINESS_NAME = CONTACT.name;
 
 /**
  * The opt-out line, on every outbound template.
@@ -78,11 +112,11 @@ export function documentText(
  * cheque needs the name their bank will accept, and somebody deciding whether
  * an unknown number is a scam needs the name on the invoice they were sent.
  */
-const LEGAL_NAME = "Grime Busters KY LLC";
+const LEGAL_NAME = CONTACT.legalName;
 
 /** Who a customer is pointed at when the person on site cannot help. */
-const OWNER_NAME = "Nicolas";
-const OWNER_PHONE = "502-599-6855";
+const OWNER_NAME = CONTACT.ownerName;
+const OWNER_PHONE = CONTACT.ownerPhone;
 
 /**
  * How to pay. Deliberately not secrets and deliberately not in the environment:
@@ -90,9 +124,21 @@ const OWNER_PHONE = "502-599-6855";
  * handle that differs between the text and the invoice is a support call.
  */
 export const PAYMENT_HANDLES = {
-  venmo: "@NicolasTimmons",
-  cashApp: "$GrimeBustersKYLLC",
-} as const;
+  venmo: CONTACT.venmo,
+  cashApp: CONTACT.cashApp,
+};
+
+/** "checks made out to …, cash, Venmo …, Cash App …" — only what this brand takes. */
+function paymentMethods(): string {
+  return [
+    `checks made out to ${LEGAL_NAME}`,
+    "cash",
+    PAYMENT_HANDLES.venmo ? `Venmo ${PAYMENT_HANDLES.venmo}` : null,
+    PAYMENT_HANDLES.cashApp ? `Cash App ${PAYMENT_HANDLES.cashApp}` : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
 
 /**
  * "Hi Marta" where we know the name, "Hi there" where we do not.
@@ -114,7 +160,7 @@ export function jobStartedText(technicianFirstName: string): string {
 }
 
 export function jobFinishedText(technicianFirstName: string): string {
-  return `Hey! This is ${technicianFirstName} from ${LEGAL_NAME}. We just finished and are ready awaiting payment. We accept checks made out to ${LEGAL_NAME}, cash, Venmo ${PAYMENT_HANDLES.venmo}, Cash App ${PAYMENT_HANDLES.cashApp}. If you have none of these please reach out to ${OWNER_NAME} at ${OWNER_PHONE}.${OPT_OUT}`;
+  return `Hey! This is ${technicianFirstName} from ${LEGAL_NAME}. We just finished and are ready awaiting payment. We accept ${paymentMethods()}. If you have none of these please reach out to ${OWNER_NAME} at ${OWNER_PHONE}.${OPT_OUT}`;
 }
 
 /**

@@ -10,10 +10,10 @@ import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chips";
 import { TextField } from "@/components/ui/Field";
 import { Sheet } from "@/components/ui/Sheet";
+import { OFFERED_SERVICES } from "@/lib/brand";
 import { updateCustomer } from "@/lib/db/customers";
 import { forwardGeocode } from "@/lib/geocode";
 import { SERVICE_LABEL } from "@/lib/status";
-import { SERVICE_TYPES } from "@/lib/types";
 import type { Customer, CustomerLocation, PropertyType, ServiceType } from "@/lib/types";
 
 interface EditCustomerSheetProps {
@@ -201,7 +201,7 @@ function EditCustomerForm({ customer, open, onClose }: EditCustomerSheetProps) {
         <div>
           <p className="mb-1.5 text-sm font-semibold text-muted">Services</p>
           <div className="flex flex-wrap gap-2">
-            {SERVICE_TYPES.map((service) => (
+            {OFFERED_SERVICES.map((service) => (
               <Chip
                 key={service}
                 active={serviceTypes.includes(service)}

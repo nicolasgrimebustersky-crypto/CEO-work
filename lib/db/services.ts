@@ -13,6 +13,7 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 
+import { DEFAULT_SERVICE } from "@/lib/brand";
 import { isDemoMode } from "@/lib/demo/enabled";
 import * as demo from "@/lib/demo/store";
 import type { LineItem } from "@/lib/documents";
@@ -74,7 +75,7 @@ export function toService(snap: QueryDocumentSnapshot<DocumentData>): SavedServi
     unitPrice: typeof data.unitPrice === "number" ? data.unitPrice : 0,
     serviceType: SERVICE_TYPES.includes(data.serviceType as ServiceType)
       ? (data.serviceType as ServiceType)
-      : "pressure_washing",
+      : DEFAULT_SERVICE,
     taxable: data.taxable !== false,
     timesUsed: typeof data.timesUsed === "number" ? data.timesUsed : 1,
     lastUsedAt: data.lastUsedAt instanceof Timestamp ? data.lastUsedAt : Timestamp.now(),

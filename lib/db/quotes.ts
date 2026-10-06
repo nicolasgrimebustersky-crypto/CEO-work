@@ -13,6 +13,7 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 
+import { DEFAULT_SERVICE } from "@/lib/brand";
 import { isDemoMode } from "@/lib/demo/enabled";
 import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
@@ -28,7 +29,7 @@ export function toQuote(snap: QueryDocumentSnapshot<DocumentData>): Quote {
     customerId: typeof data.customerId === "string" ? data.customerId : "",
     serviceType: SERVICE_TYPES.includes(data.serviceType as ServiceType)
       ? (data.serviceType as ServiceType)
-      : "pressure_washing",
+      : DEFAULT_SERVICE,
     amount: typeof data.amount === "number" ? data.amount : 0,
     sentAt: data.sentAt instanceof Timestamp ? data.sentAt : Timestamp.now(),
     sentBy: typeof data.sentBy === "string" ? data.sentBy : "",

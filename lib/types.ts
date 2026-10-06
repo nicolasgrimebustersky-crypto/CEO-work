@@ -22,10 +22,21 @@ export const CUSTOMER_STATUSES = [
 ] as const;
 export type CustomerStatus = (typeof CUSTOMER_STATUSES)[number];
 
+/**
+ * Every service any brand offers — what a stored record may hold. Which of
+ * these a deployment's pickers show is its brand's call: see
+ * `OFFERED_SERVICES` in lib/brand.ts. Kept as one union rather than one list
+ * per brand so the rules, the readers and the reports have one vocabulary.
+ *
+ * Mirrored in firestore.rules — add here, add there.
+ */
 export const SERVICE_TYPES = [
   "pressure_washing",
   "landscaping",
   "snow_removal",
+  "mowing",
+  "aeration",
+  "window_cleaning",
 ] as const;
 export type ServiceType = (typeof SERVICE_TYPES)[number];
 

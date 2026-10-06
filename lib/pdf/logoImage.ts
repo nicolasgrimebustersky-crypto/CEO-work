@@ -1,3 +1,4 @@
+import { brandAsset } from "@/lib/brand";
 import type { JpegImage } from "./writer";
 
 /**
@@ -16,7 +17,7 @@ export function loadLogoImage(): Promise<JpegImage | null> {
 
 async function fetchLogo(): Promise<JpegImage | null> {
   try {
-    const response = await fetch("/logo.jpg");
+    const response = await fetch(brandAsset("/logo.jpg"));
     if (!response.ok) return null;
     const data = new Uint8Array(await response.arrayBuffer());
     const size = readJpegSize(data);
