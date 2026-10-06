@@ -216,7 +216,9 @@ async function acknowledge(
   // By number, not by the record just created: that record is seconds old and
   // cannot carry an opt-out, so checking it would always pass. See
   // sendSmsToPhone.
-  const result = await sendSmsToPhone(parsed.phone, message);
+  // The org this webhook writes its leads into, which is also the org whose
+  // opt-outs apply to them. Another business's STOP is not this one's.
+  const result = await sendSmsToPhone(parsed.phone, message, DEFAULT_ORG_ID);
 
   await db
     .collection("customers")

@@ -500,6 +500,11 @@ export const demoCustomers: Customer[] = seeds.map((s) => ({
   pipelineValue: s.value,
   source: s.source ?? "door_knock",
   sourceLeadId: s.source === "meta_lead_ad" ? `demo-${s.id}` : null,
+  // The demo has nobody mid-sequence on purpose: a seeded lead on step 2
+  // would read as the nurture cron having run against demo data, which it
+  // never does.
+  nurtureStep: 0,
+  lastNurtureAt: null,
   updatedAt: s.createdAt ?? ago(s.contactedDays ?? 3),
   updatedBy: s.by,
   updatedByName: s.byName,

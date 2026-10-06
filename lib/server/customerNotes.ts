@@ -2,6 +2,8 @@ import "server-only";
 
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
+import { NURTURE_STAGES } from "@/lib/leadNurture";
+import { asOrgId } from "@/lib/org";
 import { adminDb } from "./admin";
 import type { SmsConsent, SmsOptOut } from "@/lib/smsConsent";
 import type { NoteKind } from "@/lib/types";
@@ -150,10 +152,21 @@ export async function appendNote(
  * timeline says "they asked us to stop" rather than "sent", which is the
  * difference between a record and a lie.
  *
- * Returns the opt-out from any matching record. One STOP is enough; a second
- * record without one is not a retraction.
+ * Returns the opt-out from any matching record *in this org*. One STOP is
+ * enough; a second record without one is not a retraction.
+ *
+ * Scoped by org, and the org is required rather than defaulted, because
+ * getting this wrong is silent in both directions. Unscoped, a STOP recorded
+ * by another business silenced our consented lead permanently — not delayed,
+ * silenced, and reported as an ordinary skip nobody would look at twice. An
+ * opt-out is a thing somebody told one business; it is not a global flag, and
+ * a person who asked one company to stop has not revoked the consent they
+ * gave another.
  */
-export async function optOutForPhone(rawPhone: string): Promise<SmsOptOut | null> {
+export async function optOutForPhone(
+  rawPhone: string,
+  orgId: string,
+): Promise<SmsOptOut | null> {
   const digits = String(rawPhone ?? "").replace(/\D/g, "").slice(-10);
   if (digits.length !== 10) return null;
 
@@ -166,10 +179,109 @@ export async function optOutForPhone(rawPhone: string): Promise<SmsOptOut | null
     const phone = data.phone;
     if (typeof phone !== "string") continue;
     if (phone.replace(/\D/g, "").slice(-10) !== digits) continue;
+    // Another business's STOP is not this business's instruction.
+    if (asOrgId(data.orgId) !== orgId) continue;
     const optOut = readOptOut(data.smsOptOut);
     if (optOut) return optOut;
   }
   return null;
+}
+
+/**
+ * Everything on this phone number that says "do not send", across every record
+ * that carries it.
+ *
+ * One scan answering three questions, because a number is not a customer and
+ * each of the three has already been got wrong separately. The Meta lead
+ * webhook creates a fresh record per form submission rather than matching an
+ * existing one, so one handset can sit in the database several times:
+ *
+ *   an inbound text is matched to one record, so a reply hides on that one;
+ *   an opt-out is written to one record, so STOP hides on that one;
+ *   do not knock is set by somebody opening one record, so the mark hides on
+ *   that one — usually the record that has since been accepted or won,
+ *   because moving it on is what you do after you have spoken to someone.
+ *
+ * Asked immediately before a nurture text goes out, not only when the nightly
+ * run starts. The run reads the whole customer collection and then works
+ * through it for minutes, and any of these three arriving on a *different*
+ * record in that window used to be invisible.
+ *
+ * One record saying stop is enough. A second record without the mark is not a
+ * retraction of the first — within one business. Records belonging to another
+ * org are skipped entirely: a number is shared between companies often enough
+ * (a landlord, a property manager, a spouse) and neither business's history is
+ * the other's to act on.
+ */
+export interface NumberSuppression {
+  /** Somebody on this number has written back. */
+  replied: boolean;
+  /** A record for this number is marked do_not_knock. */
+  blocked: boolean;
+  /** A recorded STOP, if there is one. */
+  optOut: SmsOptOut | null;
+  /** A record for this number says no texts — an explicit refusal, not absent consent. */
+  refused: boolean;
+  /** A record for this number has accepted, been won, or been written off. */
+  movedOn: boolean;
+}
+
+export async function numberSuppression(
+  rawPhone: string,
+  orgId: string,
+): Promise<NumberSuppression> {
+  const none: NumberSuppression = {
+    replied: false,
+    blocked: false,
+    optOut: null,
+    refused: false,
+    movedOn: false,
+  };
+  const digits = String(rawPhone ?? "").replace(/\D/g, "").slice(-10);
+  if (digits.length !== 10) return none;
+
+  // The same full scan as findCustomerByPhone, and for the same reason:
+  // numbers are stored however they were typed, so there is nothing to query
+  // on. One scan for all three, rather than one each.
+  const snap = await adminDb().collection("customers").get();
+  const found: NumberSuppression = { ...none };
+
+  for (const doc of snap.docs) {
+    const data = doc.data();
+    const phone = data.phone;
+    if (typeof phone !== "string") continue;
+    if (phone.replace(/\D/g, "").slice(-10) !== digits) continue;
+    // A different business's record says nothing about this one's customer.
+    // Two companies can hold the same number and one of them having been told
+    // to stop is not the other's instruction — nor is one's reply a reason to
+    // halt the other's sequence.
+    if (asOrgId(data.orgId) !== orgId) continue;
+
+    if (data.status === "do_not_knock") found.blocked = true;
+    // An explicit refusal, as opposed to no consent recorded at all.
+    if (data.smsConsent && data.smsConsent.granted === false) found.refused = true;
+    // Accepted, scheduled, paid or written off — the decision has been made.
+    //
+    // Asked through the same NURTURE_STAGES set the policy uses, not through a
+    // comparison written out again here. The two have to agree, and they did
+    // not: this said "anything but new_lead has moved on", which was right
+    // when the sequence chased unpriced leads and became wrong the moment it
+    // started chasing estimates. It then suppressed `estimate_sent` — the one
+    // stage the whole feature is for — so every text would have been held
+    // mid-run, and nothing in the suite would have said a word.
+    if (typeof data.pipelineStage === "string" && !NURTURE_STAGES.has(data.pipelineStage)) {
+      found.movedOn = true;
+    }
+    if (!found.optOut) found.optOut = readOptOut(data.smsOptOut);
+    if (!found.replied) {
+      const notes = Array.isArray(data.notes) ? data.notes : [];
+      if (notes.some((note) => note && typeof note === "object" && note.kind === "sms_in")) {
+        found.replied = true;
+      }
+    }
+  }
+
+  return found;
 }
 
 /** Finds a customer by phone number, for matching inbound texts. */

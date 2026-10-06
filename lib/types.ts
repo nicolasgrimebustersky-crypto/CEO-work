@@ -215,6 +215,17 @@ export interface Customer {
   source: LeadSource;
   /** Meta's leadgen id, kept so the same lead can never be imported twice. */
   sourceLeadId: string | null;
+  /**
+   * How many lead-nurture texts have gone out. See lib/leadNurture.ts.
+   *
+   * Absent on every record written before this existed, which reads back as 0
+   * — the right reading, because none of them has had one. The sequence will
+   * not start for an old lead regardless: MAX_AGE_TO_START_DAYS stops the day
+   * this shipped from being a mass text to everybody ever entered.
+   */
+  nurtureStep: number;
+  /** When the last one went, for the minimum gap between touches. */
+  lastNurtureAt: Timestamp | null;
   /** Last-write-wins conflict stamp, surfaced in the UI. */
   updatedAt: Timestamp | null;
   updatedBy: string | null;

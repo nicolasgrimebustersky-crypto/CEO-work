@@ -2,12 +2,12 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
-      "path": "/api/cron/quote-followups",
-      "schedule": "0 15 * * *"
-    },
-    {
       "path": "/api/cron/money-reminders",
       "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/lead-nurture",
+      "schedule": "0 14 * * *"
     }
   ]
 }

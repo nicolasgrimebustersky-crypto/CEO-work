@@ -218,12 +218,12 @@ describe("POST /api/sms/blast", () => {
   });
 });
 
-describe("GET /api/cron/quote-followups", () => {
+describe("GET /api/cron/lead-nurture", () => {
   test("rejects a missing or wrong secret", async () => {
-    assert.equal((await fetch(`${BASE}/api/cron/quote-followups`)).status, 401);
+    assert.equal((await fetch(`${BASE}/api/cron/lead-nurture`)).status, 401);
     assert.equal(
       (
-        await fetch(`${BASE}/api/cron/quote-followups`, {
+        await fetch(`${BASE}/api/cron/lead-nurture`, {
           headers: { Authorization: "Bearer wrong-secret" },
         })
       ).status,
@@ -234,14 +234,14 @@ describe("GET /api/cron/quote-followups", () => {
   test("does not accept a crew ID token in place of the cron secret", async () => {
     // Different trust domains: a user session must not be able to trigger the
     // automated sender.
-    const res = await fetch(`${BASE}/api/cron/quote-followups`, {
+    const res = await fetch(`${BASE}/api/cron/lead-nurture`, {
       headers: { Authorization: `Bearer ${crewToken}` },
     });
     assert.equal(res.status, 401);
   });
 
   test("accepts the correct secret", async () => {
-    const res = await fetch(`${BASE}/api/cron/quote-followups`, {
+    const res = await fetch(`${BASE}/api/cron/lead-nurture`, {
       headers: { Authorization: `Bearer ${CRON_SECRET}` },
     });
     assert.equal(res.status, 200);
