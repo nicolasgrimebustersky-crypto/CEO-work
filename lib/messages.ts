@@ -231,6 +231,6 @@ export function leadNurtureText(
     // this sequence does not need a fourth message: it converts the people who
     // were going to act, and it ends things cleanly for everybody else.
     case "last_call":
-      return `${hello}, last one from ${BUSINESS_NAME} — I won't keep texting about the estimate. Whenever you're ready, call ${OWNER_PHONE} and we'll pick it up from there.${OPT_OUT}`;
+      return `${hello}, last one from ${BUSINESS_NAME} — I won't keep texting about the${priced ? ` $${Math.round(amount)}` : ""} estimate. Whenever you're ready, call ${OWNER_PHONE} and we'll pick it up from there.${OPT_OUT}`;
   }
 }

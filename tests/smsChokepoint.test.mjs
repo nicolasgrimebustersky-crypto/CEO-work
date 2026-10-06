@@ -214,6 +214,24 @@ describe("the lead nurture cron texts the number it actually checked", () => {
     );
   });
 
+  test("the price in the message is the price the decision was made on", () => {
+    // The amount and the day counts have to come from the same estimate. The
+    // chosen record can carry a different one — that is what duplicates mean —
+    // so taking the figure from the record while judging the number's estimate
+    // puts last month's price in a message about this month's.
+    assert.match(
+      code,
+      /leadNurtureText\(\s*claim\.kind,\s*lead\.firstName,\s*effectiveQuote\?\.amount \?\? 0,?\s*\)/,
+      `${ROUTE} must take the amount from the estimate the decision was made ` +
+        "on, not from whichever one the chosen record happens to hold",
+    );
+    assert.doesNotMatch(
+      code,
+      /leadNurtureText\([^)]*lead\.quote/,
+      `${ROUTE} must not price the message from the record's own estimate`,
+    );
+  });
+
   test("the grouping is told the newest estimate, not the open one", () => {
     // Two different questions. The open estimate says what this record could
     // be chased about; the newest one says what the person most recently
