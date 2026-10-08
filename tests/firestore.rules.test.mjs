@@ -572,6 +572,24 @@ describe("jobs", () => {
     await assertSucceeds(deleteDoc(doc(alice, `jobs/${ref.id}`)));
   });
 
+  test("a job with no orgId at all is denied", async () => {
+    // The bug behind "Missing or insufficient permissions." on the Schedule
+    // the job sheet. createsInMyOrg asks that orgId `is string` before it
+    // compares anything, so a payload that simply omits the field fails at
+    // that first clause — and lib/db/documents.ts built exactly such a payload
+    // when turning an estimate into a job.
+    //
+    // Every other fixture here hard-codes orgId, which is why the whole suite
+    // stayed green while the real write was denied on every attempt.
+    const noOrg = jobDoc("alice");
+    delete noOrg.orgId;
+    await assertFails(addDoc(collection(alice, "jobs"), noOrg));
+  });
+
+  test("a job with an empty orgId is denied", async () => {
+    await assertFails(addDoc(collection(alice, "jobs"), jobDoc("alice", { orgId: "" })));
+  });
+
   test("a job cannot be created under someone else's name", async () => {
     await assertFails(addDoc(collection(alice, "jobs"), jobDoc("bob")));
   });

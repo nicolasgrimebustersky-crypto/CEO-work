@@ -13,6 +13,7 @@
  */
 import assert from "node:assert/strict";
 import { test, describe } from "node:test";
+import { readFileSync } from "node:fs";
 
 const {
   computeTotals,
@@ -320,5 +321,59 @@ describe("what the preview and the PDF both read", () => {
     const old = { id: "o", name: "o", description: "", quantity: 1, unitPrice: 400, taxable: true };
     assert.equal(documentLineDiscounts([old]), 0);
     assert.equal(documentSaved({ lineItems: [old], discount: 0 }), 0);
+  });
+});
+
+/* --------------------------------------------- the write the rules will take */
+
+describe("scheduling an estimate as a job stamps the org", () => {
+  /**
+   * A source assertion, and weaker than running the code — lib/db/documents.ts
+   * imports firebase and uses `@/` path aliases, so node cannot load it the way
+   * it loads the pure modules above. It is here because the thing it guards
+   * broke in production and nothing in this repository noticed.
+   *
+   * What broke: scheduleAsJob builds its job payload by hand from an estimate
+   * rather than going through createJob, and it never set orgId. firestore.rules
+   * requires `orgId is string` before it compares the value, so every "Schedule
+   * the job" was denied outright — the sheet showed "Missing or insufficient
+   * permissions." and no job was ever created.
+   *
+   * Why the rules suite missed it: its jobDoc fixture hard-codes orgId, so the
+   * rule was tested against a payload the app never actually sent. The rules
+   * suite now also has the matching deny test.
+   */
+  const SOURCE = readFileSync(
+    new URL("../lib/db/documents.ts", import.meta.url),
+    "utf8",
+  );
+
+  /** One exported function's body, so a sibling's orgId cannot satisfy this. */
+  function bodyOf(name) {
+    const start = SOURCE.indexOf(`export async function ${name}(`);
+    assert.ok(start > 0, `${name} not found`);
+    const next = SOURCE.indexOf("\nexport ", start + 1);
+    return SOURCE.slice(start, next === -1 ? undefined : next);
+  }
+
+  test("the job payload carries an orgId", () => {
+    const body = bodyOf("scheduleAsJob");
+    assert.match(
+      body,
+      /orgId: DEFAULT_ORG_ID/,
+      "scheduleAsJob must stamp the job with an org, or firestore.rules denies " +
+        "the write and the estimate can never be put on the calendar",
+    );
+  });
+
+  test("it is on the job, not only on the estimate patch", () => {
+    // The payload and the patch are both in this function. Asserting on the
+    // function alone would pass if orgId were added to the wrong one — the
+    // patch must NOT set it, because keepsOrg requires the estimate's org to
+    // be unchanged.
+    const body = bodyOf("scheduleAsJob");
+    const payload = body.slice(body.indexOf("const jobPayload"), body.indexOf("const estimatePatch"));
+    assert.ok(payload.length > 0, "jobPayload block not found");
+    assert.match(payload, /orgId: DEFAULT_ORG_ID/, "the job itself must be stamped");
   });
 });

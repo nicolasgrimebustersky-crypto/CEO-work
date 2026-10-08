@@ -639,6 +639,13 @@ export async function scheduleAsJob(
   if (estimate.scheduledJobId) return estimate.scheduledJobId;
 
   const jobPayload = {
+    // Which business owns the job. Without it every "Schedule the job" was
+    // denied outright: firestore.rules' createsInMyOrg asks that orgId is a
+    // non-empty string matching the caller's org, and a missing field fails
+    // the `is string` test before the comparison is ever reached. createJob in
+    // lib/db/jobs.ts stamps it; this path, which builds its payload by hand
+    // from an estimate rather than going through that function, did not.
+    orgId: DEFAULT_ORG_ID,
     customerId: estimate.customerId,
     serviceType: estimate.serviceType,
     scheduledStart: Timestamp.fromDate(when.start),
