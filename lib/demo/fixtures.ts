@@ -677,6 +677,11 @@ function demoDoc(
     number,
     kind,
     status,
+    // A demo estimate that has been sent reads as opened, so the walkthrough
+    // shows the state the feature exists for rather than only the empty one.
+    firstViewedAt: status === "sent" ? Timestamp.fromDate(new Date(2026, 8, 30, 19, 12)) : null,
+    lastViewedAt: status === "sent" ? Timestamp.fromDate(new Date(2026, 8, 30, 19, 12)) : null,
+    viewCount: status === "sent" ? 1 : 0,
     customerId,
     customerName,
     serviceType,
