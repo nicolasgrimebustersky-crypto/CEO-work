@@ -697,6 +697,34 @@ describe("estimates and invoices", () => {
     );
   });
 
+  test("a document cannot be created already stamped as opened", async () => {
+    // The gap behind keepsViewStamps: guarding the update and forgetting the
+    // create. A document that arrives pre-stamped reads Opened from the
+    // moment it is made, about a customer who has never seen it.
+    for (const forged of [
+      { firstViewedAt: serverTimestamp() },
+      { lastViewedAt: serverTimestamp() },
+      { viewCount: 7 },
+    ]) {
+      await assertFails(
+        addDoc(collection(alice, "documents"), businessDoc("alice", forged)),
+        `creating with ${Object.keys(forged)[0]} must be refused`,
+      );
+    }
+  });
+
+  test("an ordinary create, and the app's own explicit nulls, still work", async () => {
+    // The rule must refuse a forged stamp without refusing the client that
+    // initialises the fields honestly — lib/db/documents.ts writes null and 0.
+    await assertSucceeds(addDoc(collection(alice, "documents"), businessDoc("alice")));
+    await assertSucceeds(
+      addDoc(
+        collection(alice, "documents"),
+        businessDoc("alice", { firstViewedAt: null, lastViewedAt: null, viewCount: 0 }),
+      ),
+    );
+  });
+
   test("a crew client cannot write the view stamps", async () => {
     // They are evidence, and evidence a crew account can edit from a Firebase
     // console is not evidence. Only the Admin SDK — writing from a customer's

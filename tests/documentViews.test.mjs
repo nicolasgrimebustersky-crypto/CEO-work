@@ -210,12 +210,52 @@ describe("the stamps that would have been wrong", () => {
       /document\.visibilityState !== "visible"/,
       "visibility must be checked",
     );
-    const check = beacon.indexOf('visibilityState !== "visible"');
-    const timer = beacon.indexOf("setTimeout");
-    assert.ok(
-      timer > 0 && check > timer,
-      "and checked when the timer fires, not when it was set — a tab opened in " +
-        "the background and never looked at must not count",
+    // Inside the timer's own callback, not only before it is armed. There is
+    // a check in both places now and both earn their keep: the first stops a
+    // hidden page starting the clock at all, and this one stops a page that
+    // was backgrounded a second after opening from counting as read.
+    const body = beacon.slice(beacon.indexOf("setTimeout("), beacon.indexOf("}, DWELL_MS)"));
+    assert.ok(body.length > 0, "the dwell timer was not found");
+    assert.match(
+      body,
+      /document\.visibilityState !== "visible"/,
+      "the check must be re-made when the timer fires — a tab backgrounded a " +
+        "second after opening is not a read quote",
+    );
+  });
+
+  test("coming back to a page you left still counts", () => {
+    // Codex's finding on the first version. A link tapped from a message
+    // thread can open behind the messages app, and a prerender is a page
+    // nobody has chosen to look at yet. Returning on either and never trying
+    // again meant a customer who opened the quote, got distracted, and came
+    // back to read it properly was recorded as never having seen it — which
+    // reads on the board as "the text never arrived".
+    assert.match(
+      beacon,
+      /addEventListener\("visibilitychange"/,
+      "becoming visible must be able to start the clock",
+    );
+    assert.match(
+      beacon,
+      /addEventListener\("prerenderingchange"/,
+      "and so must a prerender being activated",
+    );
+    assert.match(
+      beacon,
+      /removeEventListener\("visibilitychange"/,
+      "and both must be removed on unmount",
+    );
+    assert.match(beacon, /removeEventListener\("prerenderingchange"/);
+  });
+
+  test("going away mid-dwell restarts the clock rather than banking it", () => {
+    // Three seconds of someone actually looking, not three seconds of elapsed
+    // time with the page behind something else.
+    assert.match(
+      beacon,
+      /document\.visibilityState === "visible" \? arm\(\) : clear\(\)/,
+      "hidden must clear the pending timer",
     );
   });
 

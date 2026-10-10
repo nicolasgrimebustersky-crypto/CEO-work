@@ -52,37 +52,74 @@ export function RecordView({ token }: { token: string }) {
   useEffect(() => {
     // The crew's own check of the link they just made. Not a customer.
     if (new URLSearchParams(window.location.search).has("crew")) return;
-
-    // A speculative load the reader has not chosen to make. The browser tells
-    // us outright, so there is no need to guess.
-    const prerendering = (document as Document & { prerendering?: boolean }).prerendering;
-    if (prerendering) return;
-
     // Guarded by a ref rather than by the effect's dependencies: React runs
     // effects twice in development's strict mode, and a count that reads 2 for
     // one visit is a small lie in the same direction as the big one.
     if (sent.current) return;
 
-    const timer = window.setTimeout(() => {
-      // Checked when the timer fires, not when it was set: a tab opened in the
-      // background and never looked at is not a read quote.
+    const page = document as Document & { prerendering?: boolean };
+    let timer = 0;
+
+    const clear = () => {
+      if (timer) {
+        window.clearTimeout(timer);
+        timer = 0;
+      }
+    };
+
+    /**
+     * Start the clock, if this is a real reader looking at the page now.
+     *
+     * Re-entrant on purpose. It runs at mount and again every time the page
+     * becomes visible or a prerender is activated, because the first attempt
+     * very often is not the real one: a link tapped from a message thread can
+     * open behind the messages app, and a prerender is a page nobody has
+     * chosen to look at yet. The first version returned on both of those and
+     * never tried again, so a customer who opened the quote, got distracted,
+     * and came back to read it properly was recorded as never having seen it
+     * — which reads on the board as "the text never arrived" and sends
+     * somebody chasing the wrong problem.
+     */
+    const arm = () => {
+      if (sent.current || timer) return;
+      if (page.prerendering) return;
       if (document.visibilityState !== "visible") return;
-      if (sent.current) return;
-      sent.current = true;
 
-      // keepalive so the record survives a customer who reads the price and
-      // immediately swipes back to their messages.
-      void fetch(`/api/quote/${encodeURIComponent(token)}/viewed`, {
-        method: "POST",
-        keepalive: true,
-      }).catch(() => {
-        // Silent on purpose. The customer came here to read their quote, and a
-        // missing stamp is a gap in the crew's bookkeeping, not something to
-        // put an error on a stranger's screen about.
-      });
-    }, DWELL_MS);
+      timer = window.setTimeout(() => {
+        timer = 0;
+        if (sent.current) return;
+        // Re-checked at the end of the dwell, not only at the start: a tab
+        // backgrounded a second after opening is not a read quote.
+        if (document.visibilityState !== "visible") return;
+        sent.current = true;
 
-    return () => window.clearTimeout(timer);
+        // keepalive so the record survives a customer who reads the price and
+        // immediately swipes back to their messages.
+        void fetch(`/api/quote/${encodeURIComponent(token)}/viewed`, {
+          method: "POST",
+          keepalive: true,
+        }).catch(() => {
+          // Silent on purpose. The customer came here to read their quote, and
+          // a missing stamp is a gap in the crew's bookkeeping, not something
+          // to put an error on a stranger's screen about.
+        });
+      }, DWELL_MS);
+    };
+
+    // Hidden again before the dwell is up: the clock starts over next time
+    // they look, so the three seconds are three seconds of someone actually
+    // looking rather than three seconds of elapsed time.
+    const onVisibility = () => (document.visibilityState === "visible" ? arm() : clear());
+
+    arm();
+    document.addEventListener("visibilitychange", onVisibility);
+    document.addEventListener("prerenderingchange", arm);
+
+    return () => {
+      clear();
+      document.removeEventListener("visibilitychange", onVisibility);
+      document.removeEventListener("prerenderingchange", arm);
+    };
   }, [token]);
 
   return null;

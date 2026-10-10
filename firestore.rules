@@ -487,6 +487,26 @@ service cloud.firestore {
     //
     // Absent is fine and is the normal case: nothing in the UI writes them,
     // and a missing stamp reads back as never opened.
+    // The same fields, on the way in.
+    //
+    // keepsViewStamps() below stops a client *changing* them, which left
+    // create wide open: a crew client could write a document that arrives
+    // already stamped, and an estimate nobody has seen would read Opened from
+    // the moment it was made. This is the same gap that safeNurtureStart()
+    // exists for on customers, found the same way — guarding the update and
+    // forgetting the create.
+    //
+    // Absent is the normal case and is what the app writes; null and 0 are
+    // allowed because lib/db/documents.ts initialises them explicitly, and a
+    // rule that refused its own client's create would be a rule nobody could
+    // ship behind.
+    function safeViewStart() {
+      let data = request.resource.data;
+      return data.get('firstViewedAt', null) == null
+        && data.get('lastViewedAt', null) == null
+        && data.get('viewCount', 0) == 0;
+    }
+
     function keepsViewStamps() {
       return !request.resource.data.diff(resource.data).affectedKeys()
         .hasAny(['firstViewedAt', 'lastViewedAt', 'viewCount']);
@@ -497,6 +517,7 @@ service cloud.firestore {
       allow create: if isCrew()
         && stampedByCaller('createdBy')
         && validDocument()
+        && safeViewStart()
         && createsInMyOrg(request.resource.data);
       allow update: if isCrew()
         && belongsToMyOrg(resource.data)
