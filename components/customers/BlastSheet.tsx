@@ -32,6 +32,9 @@ export function BlastSheet({
   /** Taken out by hand on this screen. Ids, so the set survives a re-filter. */
   const [removed, setRemoved] = useState<ReadonlySet<string>>(new Set());
   const [listOpen, setListOpen] = useState(false);
+  /** Whether the already-had-it list is expanded. Separate from the recipients
+   *  list, so checking one does not collapse the other. */
+  const [sentOpen, setSentOpen] = useState(false);
   /**
    * Whether to send to people who already had this exact message.
    *
@@ -49,6 +52,7 @@ export function BlastSheet({
     setResult(null);
     setRemoved(new Set());
     setListOpen(false);
+    setSentOpen(false);
     setIncludeSent(false);
   }, [open]);
 
@@ -214,31 +218,70 @@ export function BlastSheet({
               </ul>
             ) : null}
 
-            {/* The answer to "who has not had this yet". It only appears once
+            {/* The answer to "who has not had this yet", and it has to be the
+                whole answer. Showing three names of nine told you a number you
+                could not check, and the only way to see the rest was to flip
+                them into the send — which is the one thing somebody checking
+                the list is trying not to do by accident. It only appears once
                 there is a message to compare against, because before that
                 every customer trivially has not had it. */}
             {audience.alreadySent.length > 0 ? (
-              <div className="border-t border-line px-3 py-2.5">
-                <p className="text-sm font-semibold text-ink">
-                  {audience.alreadySent.length} already had this exact message
-                  {includeSent ? " — and will get it again" : " and are being skipped"}.
-                </p>
-                <p className="mt-0.5 text-sm font-semibold text-muted">
-                  {audience.alreadySent
-                    .slice(0, 3)
-                    .map((customer) => customerName(customer))
-                    .join(", ")}
-                  {audience.alreadySent.length > 3
-                    ? ` and ${audience.alreadySent.length - 3} more`
-                    : ""}
-                </p>
+              <div className="border-t border-line">
                 <button
                   type="button"
-                  onClick={() => setIncludeSent((v) => !v)}
-                  className="tap-target mt-1 text-sm font-bold text-accent underline"
+                  onClick={() => setSentOpen((v) => !v)}
+                  aria-expanded={sentOpen}
+                  className="tap-target flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
                 >
-                  {includeSent ? "Skip them" : "Send to them anyway"}
+                  <span>
+                    <span className="block text-sm font-semibold text-ink">
+                      {audience.alreadySent.length} already had this exact message
+                      {includeSent ? " — and will get it again" : " and are being skipped"}.
+                    </span>
+                    <span className="block text-sm font-semibold text-muted">
+                      {audience.alreadySent
+                        .slice(0, 3)
+                        .map((customer) => customerName(customer))
+                        .join(", ")}
+                      {audience.alreadySent.length > 3
+                        ? ` and ${audience.alreadySent.length - 3} more`
+                        : ""}
+                    </span>
+                  </span>
+                  <span aria-hidden="true" className="text-muted">
+                    {sentOpen ? "Hide" : "See all"}
+                  </span>
                 </button>
+
+                {sentOpen ? (
+                  <ul className="max-h-56 overflow-y-auto border-t border-line">
+                    {audience.alreadySent.map((customer) => (
+                      <li
+                        key={customer.id}
+                        className="flex items-center justify-between gap-3 border-b border-line px-3 py-2 last:border-b-0"
+                      >
+                        <span>
+                          <span className="block text-base font-semibold text-ink">
+                            {customerName(customer)}
+                          </span>
+                          <span className="block text-sm font-semibold text-muted">
+                            {formatPhone(customer.phone)}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+
+                <div className="px-3 pb-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIncludeSent((v) => !v)}
+                    className="tap-target text-sm font-bold text-accent underline"
+                  >
+                    {includeSent ? "Skip them" : "Send to them anyway"}
+                  </button>
+                </div>
               </div>
             ) : null}
 

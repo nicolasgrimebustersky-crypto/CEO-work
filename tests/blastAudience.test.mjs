@@ -10,6 +10,7 @@
  */
 import assert from "node:assert/strict";
 import { test, describe } from "node:test";
+import { readFileSync } from "node:fs";
 
 const { sameMessage, hasReceivedMessage, blockReason, splitAudience } = await import(
   "../lib/blastAudience.ts"
@@ -170,5 +171,55 @@ describe("splitting the group on screen", () => {
     // The sheet needs the full Customer to show a name and a number.
     const out = splitAudience([who("a", { firstName: "Marta" })], FALL, new Set());
     assert.equal(out.sendable[0].firstName, "Marta");
+  });
+});
+
+describe("the skipped list is inspectable, not just counted", () => {
+  // Codex's finding on the first version of the sheet. It showed three names
+  // of however many, and the only way to see the rest was "Send to them
+  // anyway" — which is the one thing somebody checking the list is trying not
+  // to do by accident. A number you cannot check is not an answer to "tell me
+  // who has not had this".
+  const SOURCE = readFileSync(
+    new URL("../components/customers/BlastSheet.tsx", import.meta.url),
+    "utf8",
+  );
+  const code = SOURCE.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+
+  test("splitAudience reports every match, not a sample", () => {
+    // The rule underneath has to carry the whole set or no screen can show it.
+    const group = Array.from({ length: 9 }, (_, i) =>
+      who(`had_${i}`, { notes: [sent(FALL)] }),
+    );
+    const out = splitAudience([...group, who("fresh")], FALL, new Set());
+    assert.equal(out.alreadySent.length, 9, "all nine, not the first three");
+    assert.deepEqual(out.sendable.map((c) => c.id), ["fresh"]);
+  });
+
+  test("the sheet can expand the whole skipped list", () => {
+    assert.match(code, /setSentOpen/, "the skipped group has its own expander");
+    assert.match(
+      code,
+      /audience\.alreadySent\.map\(/,
+      "and maps every one of them, rather than only a slice",
+    );
+  });
+
+  test("seeing them does not put them in the send", () => {
+    // The expander and the include toggle are separate controls. If opening
+    // the list changed who gets texted, checking would be the dangerous act.
+    assert.notEqual(
+      code.includes("setSentOpen"),
+      code.includes("setSentOpen((v) => !v);\n                    setIncludeSent"),
+      "expanding must not touch includeSent",
+    );
+    assert.match(code, /onClick=\{\(\) => setIncludeSent\(\(v\) => !v\)\}/);
+  });
+
+  test("the two lists expand independently", () => {
+    // Checking who is being skipped should not collapse the recipient list
+    // you were halfway through editing.
+    assert.match(code, /const \[listOpen, setListOpen\]/);
+    assert.match(code, /const \[sentOpen, setSentOpen\]/);
   });
 });
