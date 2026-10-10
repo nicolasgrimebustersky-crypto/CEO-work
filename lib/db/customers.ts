@@ -29,6 +29,7 @@ import {
 } from "@/lib/pipeline";
 import { asLocations, asPropertyType, propertyFields } from "@/lib/property";
 import { asOrgId, DEFAULT_ORG_ID } from "@/lib/org";
+import { CONSENT_METHODS, type ConsentMethod, type SmsConsent, type SmsOptOut } from "@/lib/smsConsent";
 import { CUSTOMER_STATUSES, LEAD_SOURCES, SERVICE_TYPES } from "@/lib/types";
 import type {
   Author,
@@ -53,6 +54,48 @@ function asServiceTypes(value: unknown): ServiceType[] {
   return value.filter((item): item is ServiceType =>
     SERVICE_TYPES.includes(item as ServiceType),
   );
+}
+
+/**
+ * The consent record, read back off the document.
+ *
+ * Needed here rather than inferred anywhere else: `canSendTo` and the consent
+ * row on the customer screen both read these two fields, and a mapper that
+ * drops them makes every client-side caller see "nobody has asked" for a
+ * person who agreed, declined, or replied STOP. Unmapped, the row wrote a
+ * consent the crew then watched not appear.
+ */
+function asSmsConsent(value: unknown): SmsConsent | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const data = value as DocumentData;
+  // `granted` and `at` are what every reader keys off. A record missing either
+  // is not a consent, and guessing a default would invent an answer nobody
+  // gave — so it reads back as no record at all, which is the honest state.
+  if (typeof data.granted !== "boolean" || typeof data.at !== "string") return undefined;
+  return {
+    granted: data.granted,
+    method: (CONSENT_METHODS.includes(data.method as ConsentMethod)
+      ? data.method
+      : "verbal") as ConsentMethod,
+    at: data.at,
+    byUid: typeof data.byUid === "string" ? data.byUid : "",
+    byName: typeof data.byName === "string" ? data.byName : "",
+  };
+}
+
+/**
+ * The opt-out, read back off the document.
+ *
+ * `at` is required for the same reason as above, with one difference that
+ * matters: this field existing at all is the instruction. Anything object-like
+ * carrying a timestamp is honoured rather than second-guessed, because the
+ * failure directions are not equal — dropping it texts somebody who said stop.
+ */
+function asSmsOptOut(value: unknown): SmsOptOut | null {
+  if (typeof value !== "object" || value === null) return null;
+  const data = value as DocumentData;
+  if (typeof data.at !== "string") return null;
+  return { at: data.at, keyword: typeof data.keyword === "string" ? data.keyword : "" };
 }
 
 function asNotes(value: unknown): Note[] {
@@ -80,6 +123,8 @@ export function toCustomer(snap: QueryDocumentSnapshot<DocumentData>): Customer 
     lastName: typeof data.lastName === "string" ? data.lastName : "",
     phone: typeof data.phone === "string" ? data.phone : "",
     phoneE164: typeof data.phoneE164 === "string" ? data.phoneE164 : "",
+    smsConsent: asSmsConsent(data.smsConsent),
+    smsOptOut: asSmsOptOut(data.smsOptOut),
     email: typeof data.email === "string" ? data.email : "",
     address: typeof data.address === "string" ? data.address : "",
     lat: typeof data.lat === "number" ? data.lat : 0,

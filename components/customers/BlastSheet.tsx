@@ -7,6 +7,7 @@ import { Sheet } from "@/components/ui/Sheet";
 import { splitAudience } from "@/lib/blastAudience";
 import { customerName, formatPhone } from "@/lib/format";
 import { sendBlast, type BlastResult } from "@/lib/smsClient";
+import { canSendTo } from "@/lib/smsConsent";
 import type { Customer } from "@/lib/types";
 
 const SEGMENT_CHARS = 160;
@@ -35,6 +36,9 @@ export function BlastSheet({
   /** Whether the already-had-it list is expanded. Separate from the recipients
    *  list, so checking one does not collapse the other. */
   const [sentOpen, setSentOpen] = useState(false);
+  /** Whether the cannot-be-texted list is expanded. Its own state for the same
+   *  reason: three names and an ellipsis is not an answer you can check. */
+  const [blockedOpen, setBlockedOpen] = useState(false);
   /**
    * Whether to send to people who already had this exact message.
    *
@@ -53,6 +57,7 @@ export function BlastSheet({
     setRemoved(new Set());
     setListOpen(false);
     setSentOpen(false);
+    setBlockedOpen(false);
     setIncludeSent(false);
   }, [open]);
 
@@ -60,7 +65,10 @@ export function BlastSheet({
   // front stops "why did only 6 of 9 send?" after the fact. Who has already
   // had this message is only knowable here, from their timeline.
   const audience = useMemo(
-    () => splitAudience(recipients, body, removed),
+    // canSendTo is the function /api/sms/blast runs before each message. Handing
+    // it in rather than letting this screen judge consent itself is what keeps
+    // the count honest: anything the server will refuse is refused here too.
+    () => splitAudience(recipients, body, removed, canSendTo),
     [recipients, body, removed],
   );
 
@@ -291,15 +299,60 @@ export function BlastSheet({
               </p>
             ) : null}
 
+            {/* Who cannot be texted at all, and why — expandable for the same
+                reason the skipped list is. These are the people most worth
+                checking by name: one of them replied STOP, and seeing that on
+                this screen is how the crew learns to call instead. No toggle
+                offers to include them, because nothing on this screen may
+                overrule a customer's own instruction. */}
             {audience.blocked.length > 0 ? (
-              <p className="border-t border-line px-3 py-2 text-sm font-semibold text-warn">
-                Skipping {audience.blocked.length}:{" "}
-                {audience.blocked
-                  .slice(0, 3)
-                  .map((item) => `${customerName(item.customer)} (${item.reason})`)
-                  .join(", ")}
-                {audience.blocked.length > 3 ? "…" : ""}
-              </p>
+              <div className="border-t border-line">
+                <button
+                  type="button"
+                  onClick={() => setBlockedOpen((v) => !v)}
+                  aria-expanded={blockedOpen}
+                  className="tap-target flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
+                >
+                  <span>
+                    <span className="block text-sm font-semibold text-warn">
+                      Skipping {audience.blocked.length} who cannot be texted.
+                    </span>
+                    <span className="block text-sm font-semibold text-muted">
+                      {audience.blocked
+                        .slice(0, 3)
+                        .map((item) => `${customerName(item.customer)} (${item.reason})`)
+                        .join(", ")}
+                      {audience.blocked.length > 3
+                        ? ` and ${audience.blocked.length - 3} more`
+                        : ""}
+                    </span>
+                  </span>
+                  <span aria-hidden="true" className="text-muted">
+                    {blockedOpen ? "Hide" : "See all"}
+                  </span>
+                </button>
+
+                {blockedOpen ? (
+                  <ul className="max-h-56 overflow-y-auto border-t border-line">
+                    {audience.blocked.map((item) => (
+                      <li
+                        key={item.customer.id}
+                        className="border-b border-line px-3 py-2 last:border-b-0"
+                      >
+                        <span className="block text-base font-semibold text-ink">
+                          {customerName(item.customer)}
+                        </span>
+                        <span className="block text-sm font-semibold text-muted">
+                          {formatPhone(item.customer.phone)}
+                        </span>
+                        <span className="block text-sm font-semibold text-warn">
+                          {item.detail}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
             ) : null}
           </div>
 
