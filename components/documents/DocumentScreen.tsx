@@ -898,8 +898,15 @@ export function DocumentScreen() {
                       <p className="mt-1 font-mono text-xs break-all text-ink select-all">
                         {linkUrl}
                       </p>
+                      {/* ?crew=1 so checking your own link does not stamp the
+                          quote as opened by the customer. Without it this
+                          anchor — which exists to be tapped, and says so —
+                          would be the likeliest false "Opened" in the app, and
+                          a false one is worse than none: it sends somebody
+                          chasing a decision the customer was never asked to
+                          make. See components/documents/RecordView.tsx. */}
                       <a
-                        href={linkUrl}
+                        href={`${linkUrl}?crew=1`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="mt-1.5 inline-block text-sm font-bold text-accent underline"

@@ -1,3 +1,4 @@
+import { ApiError } from "@/lib/server/auth";
 import { recordDocumentView } from "@/lib/server/documentViews";
 import { findByShareToken } from "@/lib/server/publicDocument";
 import { consumeRateLimit, QUOTE_VIEW_LIMIT } from "@/lib/server/rateLimit";
@@ -39,10 +40,18 @@ export async function POST(
 
   try {
     await consumeRateLimit(`quoteview:${found.document.id}`, "quote_view", QUOTE_VIEW_LIMIT);
-  } catch {
-    // Over the limit is not an error worth telling the page about: it is
-    // already open, and the stamp that matters was set on the first call.
-    return new Response(null, { status: 204 });
+  } catch (error) {
+    // Over the limit is not worth telling the page about: it is already open,
+    // and the stamp that matters was set on the first call.
+    //
+    // Anything else thrown here is the limiter itself failing — its own
+    // Firestore transaction losing a race, a cold start timing out — and
+    // swallowing that would throw away a genuine first open to protect a
+    // counter. The stamp is the point; the limit is the guard rail. So only
+    // the refusal stops us.
+    if (error instanceof ApiError && error.status === 429) {
+      return new Response(null, { status: 204 });
+    }
   }
 
   try {

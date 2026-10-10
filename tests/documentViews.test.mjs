@@ -149,3 +149,94 @@ describe("an unauthenticated writer stays narrow", () => {
     }
   });
 });
+
+describe("the stamps that would have been wrong", () => {
+  // Every one of these came out of an adversarial review of the first version
+  // of this feature. Each is a concrete way the board would have said "the
+  // customer read your quote" about somebody who had not.
+  const beacon = code("components/documents/RecordView.tsx");
+  const views = code("lib/server/documentViews.ts");
+  const screen = code("components/documents/DocumentScreen.tsx");
+
+  test("the crew checking their own link does not stamp it", () => {
+    // The CRM offers an anchor labelled "Open it yourself to check" pointing
+    // at the customer URL. It exists to be tapped. Without a marker on it,
+    // that tap was the likeliest false Opened in the whole app.
+    assert.match(
+      screen,
+      /href=\{`\$\{linkUrl\}\?crew=1`\}/,
+      "the CRM's own check-link must carry ?crew=1",
+    );
+    assert.match(
+      beacon,
+      /URLSearchParams\(window\.location\.search\)\.has\("crew"\)/,
+      "and the beacon must refuse to fire when it sees it",
+    );
+  });
+
+  test("a draft is never stamped, and the stamp cannot predate sending", () => {
+    // ensureShareToken mints a token whenever somebody asks, without waiting
+    // for the document to be sent, and the public page renders a draft. So an
+    // open before sending would still be sitting there afterwards, and the
+    // board would say the customer read it before it left.
+    assert.match(views, /const STAMPABLE/, "the stampable statuses are named");
+    assert.doesNotMatch(
+      views.slice(views.indexOf("const STAMPABLE"), views.indexOf("export async function")),
+      /"draft"/,
+      "draft must not be among them",
+    );
+    assert.match(
+      views,
+      /if \(!STAMPABLE\.has\(/,
+      "and the write must refuse a status that is not one of them",
+    );
+  });
+
+  test("a reload or a trip through Stripe is not a fresh open", () => {
+    // Stripe's success and cancel URLs both land back on this page, so paying
+    // an invoice would otherwise cost two or three "opens" — and the count is
+    // read as interest.
+    assert.match(views, /const SAME_VISIT_MS/, "a same-visit window exists");
+    assert.match(
+      views,
+      /return "same-visit" as const;/,
+      "and a visit inside it writes nothing at all",
+    );
+  });
+
+  test("a background tab is not a read quote", () => {
+    assert.match(
+      beacon,
+      /document\.visibilityState !== "visible"/,
+      "visibility must be checked",
+    );
+    const check = beacon.indexOf('visibilityState !== "visible"');
+    const timer = beacon.indexOf("setTimeout");
+    assert.ok(
+      timer > 0 && check > timer,
+      "and checked when the timer fires, not when it was set — a tab opened in " +
+        "the background and never looked at must not count",
+    );
+  });
+
+  test("a speculative load is skipped outright", () => {
+    assert.match(beacon, /prerendering/, "the browser says so; there is no need to guess");
+  });
+
+  test("the page must be open a moment before it counts", () => {
+    // Corporate mail scanners (Defender Safe Links, Proofpoint, Mimecast) do
+    // render pages with a real browser. The dwell is what separates them from
+    // somebody actually reading a price.
+    assert.match(beacon, /const DWELL_MS = \d+/, "a dwell is defined");
+    assert.match(beacon, /setTimeout\(/, "and the fetch waits for it");
+  });
+
+  test("the honest limits are written down, not glossed", () => {
+    // The feature's whole value is that the owner can trust the word. A
+    // comment claiming more defence than the code has would be the most
+    // expensive kind of wrong here, so the file names what it does NOT stop.
+    const prose = read("components/documents/RecordView.tsx");
+    assert.match(prose, /NOT stopped/, "the file must say what gets through");
+    assert.match(prose, /Apple/, "and name the one that matters on a texted link");
+  });
+});

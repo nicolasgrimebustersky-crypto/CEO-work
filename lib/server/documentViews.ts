@@ -32,7 +32,36 @@ import { adminDb } from "@/lib/server/admin";
  */
 
 /** What the stamp write did, for the route's response and for tests. */
-export type ViewOutcome = "first" | "repeat" | "unknown-document";
+export type ViewOutcome = "first" | "repeat" | "same-visit" | "not-sent" | "unknown-document";
+
+/**
+ * How long after an open a further one is the same sitting.
+ *
+ * A refresh, a back-then-forward, iOS pull-to-refresh and the round trip
+ * through Stripe Checkout — whose success and cancel URLs both land back on
+ * this page — are all the same person still reading, and counting them as
+ * fresh opens turns "opened 4 times" into a story about interest that never
+ * happened. Half an hour is comfortably longer than any of those and shorter
+ * than coming back to think it over.
+ */
+const SAME_VISIT_MS = 30 * 60 * 1000;
+
+/**
+ * The statuses a stamp is meaningful on.
+ *
+ * A draft has a share token the moment anybody asks for one — ensureShareToken
+ * does not wait for the document to be sent — and the public page will render
+ * it. So without this, the crew's own look at a draft becomes an open, and the
+ * stamp is still sitting there when the estimate is sent a day later: the
+ * board would say the customer read it before it ever left.
+ */
+const STAMPABLE: ReadonlySet<string> = new Set([
+  "sent",
+  "accepted",
+  "declined",
+  "partial",
+  "paid",
+]);
 
 /**
  * Stamps a view, setting the first-seen time only once.
@@ -55,8 +84,22 @@ export async function recordDocumentView(documentId: string): Promise<ViewOutcom
     if (!snap.exists) return "unknown-document" as const;
 
     const data = snap.data() ?? {};
+
+    // Nothing to have been read yet. Refused rather than recorded quietly,
+    // because a stamp on a draft outlives the draft.
+    if (!STAMPABLE.has(typeof data.status === "string" ? data.status : "")) {
+      return "not-sent" as const;
+    }
+
     const already = data.firstViewedAt instanceof Timestamp;
+    const last = data.lastViewedAt instanceof Timestamp ? data.lastViewedAt : null;
     const now = Timestamp.now();
+
+    // Still the same sitting: the stamp already says what this visit would.
+    // Nothing is written at all, so a reload cannot even move the clock.
+    if (last && now.toMillis() - last.toMillis() < SAME_VISIT_MS) {
+      return "same-visit" as const;
+    }
 
     tx.update(ref, {
       // Set once. A later visit must not rewrite when they first looked.

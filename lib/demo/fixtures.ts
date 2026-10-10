@@ -677,10 +677,12 @@ function demoDoc(
     number,
     kind,
     status,
-    // A demo estimate that has been sent reads as opened, so the walkthrough
-    // shows the state the feature exists for rather than only the empty one.
-    firstViewedAt: status === "sent" ? Timestamp.fromDate(new Date(2026, 8, 30, 19, 12)) : null,
-    lastViewedAt: status === "sent" ? Timestamp.fromDate(new Date(2026, 8, 30, 19, 12)) : null,
+    // Relative like every other date here. An absolute one drifted: the
+    // fixture dates are anchored to run time, so a hardcoded open time
+    // eventually read as the customer having opened the quote days before it
+    // was issued.
+    firstViewedAt: status === "sent" ? ago(2) : null,
+    lastViewedAt: status === "sent" ? ago(2) : null,
     viewCount: status === "sent" ? 1 : 0,
     customerId,
     customerName,
