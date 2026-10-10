@@ -2,16 +2,12 @@
 
 import { useEffect, useRef } from "react";
 
-/**
- * How long the page must be open, and visible, before it counts as read.
- *
- * Long enough that a machine fetching the URL to decide whether it is
- * dangerous has usually finished and moved on, short enough that a customer
- * glancing at a price and closing the tab still counts. Corporate mail
- * scanners — Microsoft Defender Safe Links, Proofpoint, Mimecast — do render
- * pages with a real browser and would otherwise look exactly like a reader.
- */
-const DWELL_MS = 3000;
+import {
+  DWELL_MS,
+  isCrewLink,
+  shouldArm,
+  shouldFire,
+} from "@/lib/documentViewBeacon";
 
 /**
  * Tells the server this link was opened by a person.
@@ -32,9 +28,8 @@ const DWELL_MS = 3000;
  *   WhatsApp), Slackbot, Twitterbot, Skype, ordinary crawlers.
  *
  *   Usually stopped — renderers that do execute JavaScript but do not stay:
- *   browser prerender and speculative loads (skipped outright below), and
- *   security scanners that detonate a URL headlessly, which the dwell is
- *   aimed at.
+ *   browser prerender and speculative loads (skipped outright), and security
+ *   scanners that detonate a URL headlessly, which the dwell is aimed at.
  *
  *   NOT stopped — anything that renders the page, waits, and reports itself as
  *   visible. Apple's rich link preview is the one worth naming: it is not
@@ -42,16 +37,16 @@ const DWELL_MS = 3000;
  *   from. If a quote ever reads Opened seconds after it was sent, that is the
  *   first thing to suspect.
  *
- * `?crew=1` suppresses it entirely, which is what the "Open it yourself to
- * check" link in the CRM carries — the crew checking their own link is
- * otherwise the likeliest false stamp in the app.
+ * When each of those applies is decided in lib/documentViewBeacon.ts, which is
+ * pure and has the combinations enumerated in a test. What is left here is the
+ * wiring: a timer, two listeners and one fetch.
  */
 export function RecordView({ token }: { token: string }) {
   const sent = useRef(false);
 
   useEffect(() => {
     // The crew's own check of the link they just made. Not a customer.
-    if (new URLSearchParams(window.location.search).has("crew")) return;
+    if (isCrewLink(window.location.search)) return;
     // Guarded by a ref rather than by the effect's dependencies: React runs
     // effects twice in development's strict mode, and a count that reads 2 for
     // one visit is a small lie in the same direction as the big one.
@@ -67,30 +62,19 @@ export function RecordView({ token }: { token: string }) {
       }
     };
 
-    /**
-     * Start the clock, if this is a real reader looking at the page now.
-     *
-     * Re-entrant on purpose. It runs at mount and again every time the page
-     * becomes visible or a prerender is activated, because the first attempt
-     * very often is not the real one: a link tapped from a message thread can
-     * open behind the messages app, and a prerender is a page nobody has
-     * chosen to look at yet. The first version returned on both of those and
-     * never tried again, so a customer who opened the quote, got distracted,
-     * and came back to read it properly was recorded as never having seen it
-     * — which reads on the board as "the text never arrived" and sends
-     * somebody chasing the wrong problem.
-     */
+    const state = () => ({
+      prerendering: Boolean(page.prerendering),
+      visible: document.visibilityState === "visible",
+      sent: sent.current,
+      armed: timer !== 0,
+    });
+
     const arm = () => {
-      if (sent.current || timer) return;
-      if (page.prerendering) return;
-      if (document.visibilityState !== "visible") return;
+      if (!shouldArm(state())) return;
 
       timer = window.setTimeout(() => {
         timer = 0;
-        if (sent.current) return;
-        // Re-checked at the end of the dwell, not only at the start: a tab
-        // backgrounded a second after opening is not a read quote.
-        if (document.visibilityState !== "visible") return;
+        if (!shouldFire(state())) return;
         sent.current = true;
 
         // keepalive so the record survives a customer who reads the price and
