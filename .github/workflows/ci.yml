@@ -70,6 +70,26 @@ jobs:
       - run: npm ci
       - run: npm run test:rules
 
+  server:
+    name: Server writes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # The Firestore emulator is a Java process.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      # Runs the Admin SDK writes against a real Firestore: the view stamp's
+      # transaction, its same-visit window and what it refuses. These used to
+      # be regexes over the source, which pass whatever the code does.
+      - run: npm run test:server
+
   api:
     name: API auth and rate limits
     runs-on: ubuntu-latest

@@ -127,6 +127,23 @@ export const QUOTE_RESPONSE_LIMIT: RateLimitRule = {
 };
 
 /**
+ * Opens of one quote's link in an hour.
+ *
+ * Looser than answering it, because a customer reading a long estimate on a
+ * phone genuinely reloads: they scroll, lock the screen, come back, forward it
+ * to a spouse who opens it too. Twenty is well above that and still far below
+ * what it would take to inflate the count into a story nobody should believe.
+ *
+ * Hitting it costs nothing the customer can see — the page is already open and
+ * the stamp is already set. All that is lost is a bump to the count.
+ */
+export const QUOTE_VIEW_LIMIT: RateLimitRule = {
+  max: 20,
+  windowMs: 60 * 60 * 1000,
+  label: "opens of this quote",
+};
+
+/**
  * Starting a card checkout, per share link.
  *
  * Higher than answering a quote, because a customer legitimately retries: they

@@ -21,6 +21,11 @@ const {
   CONSENT_METHODS,
 } = await import("../lib/smsConsent.ts");
 
+// The real mapper, by the alias the app uses — tests/helpers/appAliases.mjs
+// resolves it. Top level because `describe` takes a synchronous callback.
+const { toCustomer } = await import("@/lib/db/customers.ts");
+const { Timestamp } = await import("firebase/firestore");
+
 const AT = new Date("2026-09-19T15:00:00Z");
 const CREW = { uid: "u1", name: "Noah" };
 
@@ -194,5 +199,94 @@ describe("the line the crew reads before texting", () => {
 
   test("a refusal reads as a refusal", () => {
     assert.match(consentLabel({ smsConsent: declineConsent("verbal", CREW, AT) }), /Declined/);
+  });
+});
+
+describe("the consent fields survive the trip back from Firestore", () => {
+  // The bug underneath Codex's finding on the blast sheet, and a bigger one
+  // than the sheet. `toCustomer` never mapped smsConsent or smsOptOut, so
+  // every client-side Customer had both undefined no matter what the document
+  // said. canSendTo therefore answered "allowed" for a person who replied
+  // STOP, and the consent row on the customer screen showed "No text consent
+  // recorded" for everyone — including the customer whose consent a crew
+  // member had just tapped in and watched not appear.
+  //
+  // Imported for real rather than grepped (see the top of this file): the
+  // whole point is that the function returns these fields, and only running
+  // it can show that.
+
+  const snap = (data) => ({ id: "c1", data: () => ({ createdAt: Timestamp.now(), ...data }) });
+
+  test("an opt-out comes back, and canSendTo refuses on it", () => {
+    const customer = toCustomer(snap({
+      phone: "(502) 555-0147",
+      smsOptOut: { at: "2026-09-01T10:00:00Z", keyword: "stop" },
+    }));
+    assert.deepEqual(customer.smsOptOut, { at: "2026-09-01T10:00:00Z", keyword: "stop" });
+    assert.equal(canSendTo(customer).allowed, false, "the refusal the server already made");
+    assert.match(consentLabel(customer), /STOP/);
+  });
+
+  test("a recorded consent comes back whole", () => {
+    // Every field, because the A2P campaign filed with Twilio says the date
+    // and the crew member who asked are on the record. Dropping byName would
+    // leave a claim we could not support if it were ever questioned.
+    const customer = toCustomer(snap({
+      phone: "(502) 555-0147",
+      smsConsent: {
+        granted: true,
+        method: "web_form",
+        at: "2026-09-01T10:00:00Z",
+        byUid: "customer",
+        byName: "Marta Reyes",
+      },
+    }));
+    assert.deepEqual(customer.smsConsent, {
+      granted: true,
+      method: "web_form",
+      at: "2026-09-01T10:00:00Z",
+      byUid: "customer",
+      byName: "Marta Reyes",
+    });
+    assert.equal(needsConsentAsked(customer), false, "nobody should be asked twice");
+  });
+
+  test("a declined consent is not quietly turned into a yes", () => {
+    const customer = toCustomer(snap({
+      phone: "(502) 555-0147",
+      smsConsent: { granted: false, method: "verbal", at: "2026-09-01T10:00:00Z", byUid: "u", byName: "Nick" },
+    }));
+    assert.equal(customer.smsConsent.granted, false);
+    assert.equal(canSendTo(customer).allowed, false);
+  });
+
+  test("no record reads as no record, not as a refusal", () => {
+    // Every customer entered before consent was tracked. Reading absence as a
+    // no would mean a business that cannot text its own customers.
+    const customer = toCustomer(snap({ phone: "(502) 555-0147" }));
+    assert.equal(customer.smsConsent, undefined);
+    assert.equal(customer.smsOptOut, null);
+    assert.equal(canSendTo(customer).allowed, true);
+    assert.equal(needsConsentAsked(customer), true, "and the crew is prompted to ask");
+  });
+
+  test("junk in the field does not become a consent", () => {
+    // A half-written document should read as "nobody has asked", never as a
+    // yes — the one direction that would text somebody who never agreed.
+    for (const junk of ["yes", 1, true, {}, { granted: true }, { at: "2026-09-01" }]) {
+      const customer = toCustomer(snap({ phone: "(502) 555-0147", smsConsent: junk }));
+      assert.equal(customer.smsConsent, undefined, JSON.stringify(junk));
+    }
+  });
+
+  test("an unknown consent method does not discard the consent", () => {
+    // The method is decoration next to `granted`. Throwing the record away
+    // over an unrecognised method would re-prompt a customer who did agree.
+    const customer = toCustomer(snap({
+      phone: "(502) 555-0147",
+      smsConsent: { granted: true, method: "carrier-pigeon", at: "2026-09-01T10:00:00Z", byUid: "u", byName: "N" },
+    }));
+    assert.equal(customer.smsConsent.granted, true);
+    assert.ok(CONSENT_METHODS.includes(customer.smsConsent.method));
   });
 });

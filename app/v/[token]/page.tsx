@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { PayInvoiceButton } from "@/components/documents/PayInvoiceButton";
+import { RecordView } from "@/components/documents/RecordView";
 import { QuoteActions } from "@/components/documents/QuoteActions";
 import { SharedDocument } from "@/components/documents/SharedDocument";
 import { BUSINESS, BUSINESS_TIMEZONE } from "@/lib/business";
@@ -68,6 +69,10 @@ export default async function SharedDocumentPage({
 
   return (
     <main className="min-h-dvh bg-canvas">
+      {/* Renders nothing; stamps the open from the browser once this page is
+          live, so a link-preview fetcher cannot mark it read on the customer's
+          behalf. See components/documents/RecordView.tsx. */}
+      <RecordView token={token} />
       <div className="mx-auto max-w-3xl px-4 pt-6 pb-3">
         <p className="text-sm font-bold tracking-wide text-muted uppercase">
           {BUSINESS.name}

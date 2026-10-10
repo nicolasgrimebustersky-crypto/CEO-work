@@ -44,6 +44,11 @@ export interface SerialPayment {
  * no use for them — the buttons already know from the status whether this was
  * answered — and sending them would push a customer's own signature back down
  * the wire on every load of a link that may sit in a forwarded text thread.
+ *
+ * The view stamps are dropped for the same reason and one more: they are a
+ * record kept about the reader, and handing somebody "you opened this three
+ * times" on their own quote is both useless to them and faintly unsettling.
+ * The crew's screen is where that belongs.
  */
 export type SerialDocument = Omit<
   BusinessDocument,
@@ -56,6 +61,9 @@ export type SerialDocument = Omit<
   | "payments"
   | "acceptance"
   | "decline"
+  | "firstViewedAt"
+  | "lastViewedAt"
+  | "viewCount"
 > & {
   issuedAtMs: number | null;
   dueAtMs: number | null;
