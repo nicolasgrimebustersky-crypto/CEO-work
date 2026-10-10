@@ -15,6 +15,7 @@
  */
 import assert from "node:assert/strict";
 import { test, before, describe } from "node:test";
+import { randomBytes } from "node:crypto";
 
 const BASE = process.env.TEST_BASE_URL ?? "http://localhost:3133";
 const AUTH_EMULATOR =
@@ -359,6 +360,25 @@ describe("security headers", () => {
  */
 describe("the quote-viewed beacon", () => {
   const PROJECT = process.env.TEST_PROJECT ?? "demo-grimebusters-apitest";
+
+  /**
+   * A share token of the shape the app actually mints.
+   *
+   * It has to pass `looksLikeShareToken` in lib/shareLinks.ts —
+   * /^[A-Za-z0-9_-]{32,64}$/, which is SHARE_TOKEN_BYTES=24 of base64url — and
+   * that check runs BEFORE the database is touched, so a wrongly shaped token
+   * resolves to nothing. The first version of these tests used readable ids
+   * like `viewtest-1760…`, which are too short: every request 204'd, which is
+   * what the assertions expected, and the route had refused the token rather
+   * than done the work. Hence `assertShaped` below — a 204 is the right answer
+   * to both a real open and a rejected token, so the shape is checked directly
+   * instead of being inferred from a reply that cannot tell them apart.
+   */
+  const shareToken = () => randomBytes(24).toString("base64url");
+  const SHAPE = /^[A-Za-z0-9_-]{32,64}$/;
+  const assertShaped = (t) =>
+    assert.match(t, SHAPE, "the test's own token must be one the route will accept");
+
   let db;
   let token;
   let documentId;
@@ -371,7 +391,8 @@ describe("the quote-viewed beacon", () => {
       ?? initializeApp({ projectId: PROJECT }, "viewed-route-test");
     db = getFirestore(app);
 
-    token = `viewtest-${Date.now()}`;
+    token = shareToken();
+    assertShaped(token);
     const ref = db.collection("documents").doc();
     await ref.set({
       orgId: "grime-busters",
@@ -407,14 +428,19 @@ describe("the quote-viewed beacon", () => {
   test("an unknown token gets the identical answer", async () => {
     // A different reply would confirm to somebody walking tokens which ones
     // are real. Same status, same empty body.
-    const res = await post("definitely-not-a-real-share-token");
+    // Well-shaped but unissued, so this exercises the lookup rather than the
+    // cheap shape check in front of it.
+    const unknown = shareToken();
+    assertShaped(unknown);
+    const res = await post(unknown);
     assert.equal(res.status, 204);
     assert.equal(await res.text(), "");
   });
 
   test("a draft's token gets the identical answer too", async () => {
     const ref = db.collection("documents").doc();
-    const draftToken = `viewtest-draft-${Date.now()}`;
+    const draftToken = shareToken();
+    assertShaped(draftToken);
     await ref.set({
       orgId: "grime-busters",
       customerId: "cust-viewed",
@@ -434,7 +460,8 @@ describe("the quote-viewed beacon", () => {
   test("a GET does not stamp anything", async () => {
     // A GET is what a crawler or a link prefetcher issues.
     const ref = db.collection("documents").doc();
-    const getToken = `viewtest-get-${Date.now()}`;
+    const getToken = shareToken();
+    assertShaped(getToken);
     await ref.set({
       orgId: "grime-busters",
       customerId: "cust-viewed",
@@ -461,7 +488,8 @@ describe("the quote-viewed beacon", () => {
     // nothing here to measure it by. That one is checked by its own test in
     // tests/documentViews.test.mjs.
     const ref = db.collection("documents").doc();
-    const hotToken = `viewtest-rate-${Date.now()}`;
+    const hotToken = shareToken();
+    assertShaped(hotToken);
     await ref.set({
       orgId: "grime-busters",
       customerId: "cust-viewed",
