@@ -139,6 +139,8 @@ echo "==> running tests"
 TEST_BASE_URL="http://localhost:$PORT" \
 TEST_AUTH_EMULATOR="http://127.0.0.1:$AUTH_PORT/identitytoolkit.googleapis.com/v1" \
 CRON_SECRET="test-cron-secret" \
+TEST_PROJECT="$PROJECT" \
+FIRESTORE_EMULATOR_HOST="127.0.0.1:$FIRESTORE_PORT" \
   node --test tests/api.auth.test.mjs
 
 # The MCP endpoint is the only inbound door that is not gated on a Firebase

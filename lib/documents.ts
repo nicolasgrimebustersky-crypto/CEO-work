@@ -46,6 +46,30 @@ export const STATUS_LABEL: Record<DocumentStatus, string> = {
   void: "Void",
 };
 
+/**
+ * What to call a document's state on screen, counting whether it was opened.
+ *
+ * "Sent" and "Opened" are the same status underneath — `sent`, unanswered —
+ * and the difference between them is the whole reason this exists. A quote
+ * sitting at "Sent" for a week may never have arrived; the same one at
+ * "Opened" was read and not answered, and those want different responses from
+ * whoever is looking at the board.
+ *
+ * Only `sent` is relabelled. An accepted estimate that the customer opens
+ * again reads "Accepted" — the decision outranks the visit, and a status that
+ * walked backwards from Accepted to Opened would be a lie about what happened.
+ *
+ * Pure, so the rule can be tested by running it rather than by reading a
+ * component.
+ */
+export function viewedLabel(
+  status: DocumentStatus,
+  firstViewedAt: { toMillis(): number } | null,
+): string {
+  if (status === "sent" && firstViewedAt) return "Opened";
+  return STATUS_LABEL[status];
+}
+
 /** Which statuses each kind can actually be in, for the status picker. */
 export const STATUSES_FOR: Record<DocumentKind, DocumentStatus[]> = {
   estimate: ["draft", "sent", "accepted", "declined", "void"],
@@ -225,6 +249,30 @@ export interface BusinessDocument {
    * two jobs on two different days.
    */
   scheduledJobId: string | null;
+
+  /**
+   * When the customer first opened their link, and when they last did.
+   *
+   * The difference between "they are ignoring me" and "they have not seen it",
+   * which are the same silence and want opposite responses: one is a reason to
+   * follow up on the price, the other a reason to check the text arrived.
+   *
+   * Deliberately not a `status`. A status is where the document is in its
+   * life — drafted, sent, answered, paid — and opening a link is not a step in
+   * that: it says nothing about what the customer decided, it can happen again
+   * after they accept, and it is not something anybody should be able to set
+   * by hand from the status picker. Keeping it as its own stamp means the
+   * follow-up sequence still chases an estimate that was read and ignored,
+   * which is exactly who is worth chasing. `viewedLabel` below is what turns
+   * it into the word "Opened" on screen.
+   *
+   * Absent on every document written before this existed, which reads back as
+   * never opened — the honest answer, since nothing was recording it.
+   */
+  firstViewedAt: Timestamp | null;
+  lastViewedAt: Timestamp | null;
+  /** How many times the link has been opened. 0 before it ever was. */
+  viewCount: number;
 
   createdAt: Timestamp;
   createdBy: string;

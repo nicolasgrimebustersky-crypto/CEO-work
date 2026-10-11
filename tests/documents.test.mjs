@@ -29,6 +29,8 @@ const {
   NUMBER_SEQUENCE_START,
   round2,
   statusAfterPayment,
+  viewedLabel,
+  STATUS_LABEL,
 } = await import("../lib/documents.ts");
 
 const line = (name, quantity, unitPrice, taxable = true) => ({
@@ -375,5 +377,53 @@ describe("scheduling an estimate as a job stamps the org", () => {
     const payload = body.slice(body.indexOf("const jobPayload"), body.indexOf("const estimatePatch"));
     assert.ok(payload.length > 0, "jobPayload block not found");
     assert.match(payload, /orgId: DEFAULT_ORG_ID/, "the job itself must be stamped");
+  });
+});
+
+/* ------------------------------------------------------ opened, and when */
+
+describe("telling 'they have not seen it' from 'they are ignoring me'", () => {
+  // The two silences look identical on the board and want opposite responses:
+  // one is a reason to check the text arrived, the other a reason to ring them
+  // about the price. That is the whole feature, so the rule deciding which
+  // word shows is pure and tested by running it.
+  const at = (ms) => ({ toMillis: () => ms });
+  const SEEN = at(Date.parse("2026-10-07T19:12:00Z"));
+
+  test("a sent estimate nobody has opened still reads Sent", () => {
+    assert.equal(viewedLabel("sent", null), "Sent");
+  });
+
+  test("a sent estimate that was opened reads Opened", () => {
+    assert.equal(viewedLabel("sent", SEEN), "Opened");
+  });
+
+  test("a decision outranks the visit", () => {
+    // An accepted estimate the customer opens again must not walk backwards to
+    // Opened. The status says what happened; the visit is a footnote to it.
+    for (const status of ["accepted", "declined", "partial", "paid", "void"]) {
+      assert.equal(viewedLabel(status, SEEN), STATUS_LABEL[status], status);
+    }
+  });
+
+  test("a draft is never Opened, however the field reads", () => {
+    // A draft has no link to open. If this ever says Opened, something has
+    // stamped a document that was never sent and the stamp cannot be trusted.
+    assert.equal(viewedLabel("draft", SEEN), "Draft");
+  });
+
+  test("every status still has a label when nothing was opened", () => {
+    for (const status of Object.keys(STATUS_LABEL)) {
+      assert.equal(viewedLabel(status, null), STATUS_LABEL[status], status);
+    }
+  });
+
+  test("Opened is not a status anyone can set by hand", () => {
+    // It is deliberately a derived word, not a member of the status list: a
+    // status is where the document is in its life, and being read is not a
+    // step in that. Keeping it out of the list is also what stops an opened
+    // estimate dropping out of the follow-up sequence, whose OPEN_QUOTE_STATUSES
+    // is written in terms of real statuses.
+    assert.ok(!Object.keys(STATUS_LABEL).includes("opened"));
   });
 });

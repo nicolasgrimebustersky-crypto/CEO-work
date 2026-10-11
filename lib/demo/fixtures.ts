@@ -677,6 +677,13 @@ function demoDoc(
     number,
     kind,
     status,
+    // Relative like every other date here. An absolute one drifted: the
+    // fixture dates are anchored to run time, so a hardcoded open time
+    // eventually read as the customer having opened the quote days before it
+    // was issued.
+    firstViewedAt: status === "sent" ? ago(2) : null,
+    lastViewedAt: status === "sent" ? ago(2) : null,
+    viewCount: status === "sent" ? 1 : 0,
     customerId,
     customerName,
     serviceType,

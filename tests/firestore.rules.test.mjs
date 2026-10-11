@@ -697,6 +697,81 @@ describe("estimates and invoices", () => {
     );
   });
 
+  test("a document cannot be created already stamped as opened", async () => {
+    // The gap behind keepsViewStamps: guarding the update and forgetting the
+    // create. A document that arrives pre-stamped reads Opened from the
+    // moment it is made, about a customer who has never seen it.
+    for (const forged of [
+      { firstViewedAt: serverTimestamp() },
+      { lastViewedAt: serverTimestamp() },
+      { viewCount: 7 },
+    ]) {
+      await assertFails(
+        addDoc(collection(alice, "documents"), businessDoc("alice", forged)),
+        `creating with ${Object.keys(forged)[0]} must be refused`,
+      );
+    }
+  });
+
+  test("an ordinary create, and the app's own explicit nulls, still work", async () => {
+    // The rule must refuse a forged stamp without refusing the client that
+    // initialises the fields honestly — lib/db/documents.ts writes null and 0.
+    await assertSucceeds(addDoc(collection(alice, "documents"), businessDoc("alice")));
+    await assertSucceeds(
+      addDoc(
+        collection(alice, "documents"),
+        businessDoc("alice", { firstViewedAt: null, lastViewedAt: null, viewCount: 0 }),
+      ),
+    );
+  });
+
+  test("a crew client cannot write the view stamps", async () => {
+    // They are evidence, and evidence a crew account can edit from a Firebase
+    // console is not evidence. Only the Admin SDK — writing from a customer's
+    // own browser opening their link — sets these.
+    for (const patch of [
+      { firstViewedAt: serverTimestamp() },
+      { lastViewedAt: serverTimestamp() },
+      { viewCount: 99 },
+    ]) {
+      await assertFails(
+        updateDoc(doc(bob, "documents/d1"), stampedUpdate("bob", patch)),
+        `a crew write of ${Object.keys(patch)[0]} must be refused`,
+      );
+    }
+  });
+
+  test("clearing a view stamp is refused too", async () => {
+    // Marking a quote unopened would be as much a lie as marking it opened.
+    //
+    // The stamp has to be seeded first, and finding that out is the reason
+    // this test is worth its lines: deleting a field that was never set is a
+    // no-op, so it does not appear in affectedKeys and the rule has nothing to
+    // refuse. The guard is sound; a test that skipped the seed would have
+    // passed for a reason that had nothing to do with it.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), "documents/d1"), {
+        firstViewedAt: serverTimestamp(),
+        lastViewedAt: serverTimestamp(),
+        viewCount: 2,
+      });
+    });
+
+    await assertFails(
+      updateDoc(doc(bob, "documents/d1"), stampedUpdate("bob", { firstViewedAt: deleteField() })),
+    );
+    await assertFails(
+      updateDoc(doc(bob, "documents/d1"), stampedUpdate("bob", { viewCount: 0 })),
+    );
+  });
+
+  test("an ordinary edit that leaves the stamps alone still works", async () => {
+    // The guard must pin the three fields, not freeze the document.
+    await assertSucceeds(
+      updateDoc(doc(bob, "documents/d1"), stampedUpdate("bob", { status: "accepted" })),
+    );
+  });
+
   test("revoking a share token is an edit too", async () => {
     await assertFails(updateDoc(doc(bob, "documents/d1"), { shareToken: deleteField() }));
     await assertSucceeds(

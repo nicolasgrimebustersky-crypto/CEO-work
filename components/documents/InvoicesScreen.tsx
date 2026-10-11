@@ -614,7 +614,7 @@ function DocumentRow({
         <span className="text-lg leading-tight font-extrabold text-ink tabular-nums">
           {formatMoneyExact(document.total)}
         </span>
-        <StatusPill status={document.status} />
+        <StatusPill status={document.status} firstViewedAt={document.firstViewedAt} />
       </span>
     </button>
   );

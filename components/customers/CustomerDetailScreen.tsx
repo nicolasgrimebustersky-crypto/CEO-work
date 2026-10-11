@@ -538,7 +538,10 @@ export function CustomerDetailScreen() {
                       </span>
                     </span>
                     <span className="mt-2 block">
-                      <DocumentStatusPill status={document.status} />
+                      <DocumentStatusPill
+                        status={document.status}
+                        firstViewedAt={document.firstViewedAt}
+                      />
                     </span>
                   </Link>
                 </li>

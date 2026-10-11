@@ -433,7 +433,12 @@ export function DocumentScreen() {
                 ? `${kindLabel} ${document.number}`
                 : `New ${kindLabel.toLowerCase()}`}
             </h1>
-            {document ? <StatusPill status={document.status} /> : null}
+            {document ? (
+              <StatusPill
+                status={document.status}
+                firstViewedAt={document.firstViewedAt}
+              />
+            ) : null}
           </div>
 
           {customer ? (
@@ -599,6 +604,24 @@ export function DocumentScreen() {
               ) : null}
               {document.sentAt ? (
                 <Row label="Sent" value={formatDateOnly(document.sentAt)} />
+              ) : null}
+              {/* The time, not just the fact. "Opened" on its own answers
+                  whether they looked; when they looked is what tells you
+                  whether to ring them today or leave it another day. */}
+              {document.firstViewedAt ? (
+                <Row
+                  label="First opened"
+                  value={formatTimestamp(document.firstViewedAt)}
+                />
+              ) : null}
+              {/* Only once it says something the line above does not. A
+                  customer who opened it once would otherwise get two rows
+                  carrying one fact. */}
+              {document.lastViewedAt && document.viewCount > 1 ? (
+                <Row
+                  label={`Opened ${document.viewCount} times, last`}
+                  value={formatTimestamp(document.lastViewedAt)}
+                />
               ) : null}
               {document.convertedFromId ? (
                 <div className="flex items-center justify-between gap-4 border-t border-line px-3 py-2.5">
@@ -875,8 +898,15 @@ export function DocumentScreen() {
                       <p className="mt-1 font-mono text-xs break-all text-ink select-all">
                         {linkUrl}
                       </p>
+                      {/* ?crew=1 so checking your own link does not stamp the
+                          quote as opened by the customer. Without it this
+                          anchor — which exists to be tapped, and says so —
+                          would be the likeliest false "Opened" in the app, and
+                          a false one is worse than none: it sends somebody
+                          chasing a decision the customer was never asked to
+                          make. See components/documents/RecordView.tsx. */}
                       <a
-                        href={linkUrl}
+                        href={`${linkUrl}?crew=1`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="mt-1.5 inline-block text-sm font-bold text-accent underline"
