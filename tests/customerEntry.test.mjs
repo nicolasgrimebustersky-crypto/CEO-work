@@ -7,6 +7,7 @@
  */
 import assert from "node:assert/strict";
 import { test, describe } from "node:test";
+import { readFileSync } from "node:fs";
 
 const {
   customerEntryProblem,
@@ -136,5 +137,84 @@ describe("whether the map can place it later", () => {
   test("a name and a phone number alone cannot be placed", () => {
     assert.equal(willGeocode(entry({ firstName: "Marta", phone: "5025550100" })), false);
     assert.equal(willGeocode(entry({ address: "   " })), false);
+  });
+});
+
+describe("a note is appended, never written over the array", () => {
+  /**
+   * The server appends with FieldValue.arrayUnion from nine places — the
+   * inbound-SMS webhook, the nurture cron, the blast, quote responses. The
+   * client used to rewrite the whole notes array from its in-memory snapshot,
+   * so any server note that landed in between was erased. The inbound reply is
+   * the one that hurts: it is the only record that a customer wrote back.
+   *
+   * A comment in the file justified the rewrite on two grounds, and both are
+   * answered elsewhere in the same file — makeNote gives every note a
+   * randomUUID so arrayUnion's deep-equality dedup cannot bite, and asNotes
+   * sorts on read so stored order never mattered.
+   */
+  const SOURCE = readFileSync(new URL("../lib/db/customers.ts", import.meta.url), "utf8");
+  const code = SOURCE.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/.*$/gm, " ");
+
+  test("no client writer rebuilds the notes array", () => {
+    // The regression that would re-open it. Comments stripped first, because
+    // this file's prose quotes the old expression to explain why it is gone.
+    assert.doesNotMatch(
+      code,
+      /notes\s*[:=]\s*\[\.\.\.customer\.notes/,
+      "a client write is rebuilding the whole notes array again — any note the " +
+        "server appended since this snapshot would be erased",
+    );
+  });
+
+  test("all three writers go through the one helper", () => {
+    // addNote, changeStatus and setPipelineStage. setPipelineStage assigns
+    // patch.notes rather than using an object literal, which is how it was
+    // missed on the first pass through this file.
+    const uses = code.match(/appendNote\(customer, note\)/g) ?? [];
+    assert.equal(uses.length, 3, `expected 3 call sites, saw ${uses.length}`);
+    for (const fn of ["addNote", "changeStatus", "setPipelineStage"]) {
+      const at = code.indexOf(`function ${fn}`);
+      assert.notEqual(at, -1, `${fn} not found`);
+      const body = code.slice(at, at + 1400);
+      assert.match(body, /appendNote\(customer, note\)/, `${fn} must append, not rewrite`);
+    }
+  });
+
+  test("the helper uses arrayUnion outside demo mode", () => {
+    const at = code.indexOf("function appendNote");
+    const body = code.slice(at, code.indexOf("\n}", at));
+    assert.match(body, /arrayUnion\(note\)/, "atomic append on the real path");
+    assert.match(body, /isDemoMode/, "demo mode keeps the array form");
+    assert.ok(
+      body.indexOf("isDemoMode") < body.indexOf("arrayUnion"),
+      "demo mode is the branch, not the fallback — lib/demo/store would " +
+        "persist a FieldValue sentinel as an object",
+    );
+  });
+
+  test("the server still appends atomically too", () => {
+    // Both sides must agree. If the server ever went back to a rewrite, the
+    // same race returns from the other direction.
+    const server = readFileSync(
+      new URL("../lib/server/customerNotes.ts", import.meta.url),
+      "utf8",
+    );
+    assert.match(server, /notes: FieldValue\.arrayUnion\(/, "server appends atomically");
+  });
+
+  test("every note carries a unique id, which is what makes arrayUnion safe", () => {
+    // arrayUnion de-duplicates by deep equality. That was the original
+    // objection, and it only holds if two notes can be identical.
+    assert.match(code, /randomUUID\(\)/, "notes are uniquely identified");
+  });
+
+  test("notes are sorted on read, which is why stored order does not matter", () => {
+    // The other original objection.
+    assert.match(
+      code,
+      /sort\(\(a, b\) => b\.createdAt\.toMillis\(\) - a\.createdAt\.toMillis\(\)\)/,
+      "asNotes orders newest-first on the way in",
+    );
   });
 });

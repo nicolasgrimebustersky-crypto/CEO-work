@@ -1,5 +1,6 @@
 import {
   addDoc,
+  arrayUnion,
   collection,
   deleteDoc,
   doc,
@@ -324,7 +325,7 @@ export async function setPipelineStage(
       "stage_change",
       author,
     );
-    patch.notes = [...customer.notes, note];
+    patch.notes = appendNote(customer, note);
 
     const nextStatus = syncStatusToStage(stage, customer.status);
     if (nextStatus) patch.status = nextStatus;
@@ -403,9 +404,37 @@ export async function updateCustomer(
 }
 
 /**
- * Notes are appended client-side rather than with arrayUnion because arrayUnion
- * de-duplicates by deep equality and cannot express "newest first" ordering;
- * the array is small (one customer's history) so rewriting it is cheap.
+ * One note, appended without rewriting the array.
+ *
+ * This replaces a rewrite — `notes: [...customer.notes, note]` — and the
+ * comment that justified it, which said arrayUnion "de-duplicates by deep
+ * equality and cannot express newest-first ordering". Neither objection
+ * survives contact with the rest of the file:
+ *
+ *   dedup cannot bite, because makeNote stamps every note with a
+ *   crypto.randomUUID(), so no two notes are ever deeply equal;
+ *
+ *   ordering is a read concern already solved — asNotes sorts by createdAt
+ *   descending on the way in, so the stored order never mattered.
+ *
+ * What the rewrite did cost was real. lib/server/customerNotes.ts appends with
+ * FieldValue.arrayUnion from nine places, including the inbound-SMS webhook,
+ * the nurture cron and the blast. Any note the server added between this
+ * client's last snapshot and its write was silently erased — and the one that
+ * matters most is the inbound reply, the only record that a customer wrote
+ * back. On a phone on a porch with one bar, that window is not milliseconds.
+ *
+ * Demo mode keeps the array form: it has no Firestore to interpret a sentinel,
+ * and lib/demo/store would persist the FieldValue object itself.
+ */
+function appendNote(customer: Customer, note: Note): unknown {
+  return isDemoMode ? [...customer.notes, note] : arrayUnion(note);
+}
+
+/**
+ * serverTimestamp() is still not allowed inside an array element, which is why
+ * makeNote stamps with the client clock. The server does exactly the same in
+ * its own arrayUnion, so both sides agree.
  */
 export async function addNote(
   customer: Customer,
@@ -417,7 +446,7 @@ export async function addNote(
   if (!trimmed) return;
   const note = makeNote(trimmed, kind, author);
   await writeCustomer(customer.id, {
-    notes: [...customer.notes, note],
+    notes: appendNote(customer, note),
     lastContactedAt: serverTimestamp(),
     lastContactedBy: author.uid,
     lastContactedByName: author.displayName,
@@ -440,7 +469,7 @@ export async function changeStatus(
   );
   const patch: Record<string, unknown> = {
     status,
-    notes: [...customer.notes, note],
+    notes: appendNote(customer, note),
     updatedAt: serverTimestamp(),
     updatedBy: author.uid,
     updatedByName: author.displayName,
