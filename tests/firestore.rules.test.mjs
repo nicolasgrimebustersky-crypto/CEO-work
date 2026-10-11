@@ -50,6 +50,7 @@ const VERIFIED = { auth_time: SIGNED_IN_AT, otpAuths: [SIGNED_IN_AT] };
 let alice;
 let bob;
 let mallory;
+let aliceNoCode;
 let dana;
 let newbie;
 let admin;
@@ -188,6 +189,9 @@ before(async () => {
   alice = testEnv.authenticatedContext("alice", VERIFIED).firestore();
   bob = testEnv.authenticatedContext("bob", VERIFIED).firestore();
   mallory = testEnv.authenticatedContext("mallory").firestore();
+  // Alice again, signed in with her password and nothing else: approved crew,
+  // no otpAuths claim. "Entered the password, never entered the code."
+  aliceNoCode = testEnv.authenticatedContext("alice").firestore();
   // Registered and approved — crew by role rather than by uid.
   dana = testEnv.authenticatedContext("dana", VERIFIED).firestore();
   // Signed in with no profile document at all: the instant after registering.
@@ -244,6 +248,24 @@ beforeEach(async () => {
     });
     await setDoc(doc(db, "conversations/conv1/messages/m1"), {
       text: "on my way",
+      authorUid: "alice",
+      authorName: "Alice",
+    });
+    // A thread a since-revoked account is still named in. Without this, the
+    // pending-account cases below pass for the wrong reason — mallory is not
+    // in conv1, so she was refused for membership and her ROLE was never
+    // what the test proved.
+    await setDoc(doc(db, "conversations/conv2"), {
+      title: "",
+      memberUids: ["alice", "mallory"],
+      createdBy: "alice",
+      createdByName: "Alice",
+      lastMessageAt: null,
+      lastMessageText: "",
+      lastMessageBy: "",
+    });
+    await setDoc(doc(db, "conversations/conv2/messages/m2"), {
+      text: "before the access was pulled",
       authorUid: "alice",
       authorName: "Alice",
     });
@@ -1191,6 +1213,11 @@ describe("registration grants nothing", () => {
     await assertFails(getDoc(doc(mallory, "documents/d1")));
     await assertFails(getDoc(doc(mallory, "jobs/j1")));
     await assertFails(getDoc(doc(mallory, "territories/t1")));
+    // This line is why the name said "messages" and the body did not: the
+    // claim went untested, and inConversation() omitted isCrew() so a pending
+    // MEMBER could in fact read and post. conv2 names mallory, so the refusal
+    // here is about her role rather than her membership.
+    await assertFails(getDoc(doc(mallory, "conversations/conv2/messages/m2")));
   });
 
   test("a pending account cannot write anything", async () => {
@@ -1947,5 +1974,87 @@ describe("a phone number's nurture history", () => {
     );
     await assertFails(deleteDoc(doc(admin, "nurtureNumbers/5025550147")));
     await assertFails(setDoc(doc(anon, "nurtureNumbers/5025551111"), { step: 0 }));
+  });
+});
+
+/**
+ * Chat was the way around the sign-in code.
+ *
+ * The conversation document itself requires isCrew() on read, create and
+ * update. Its messages and reads subcollections required only
+ * `request.auth != null` plus membership — and isCrew() is what carries both
+ * an approved role and hasVerifiedSession(). So a revoked account kept the
+ * threads it was in, and a password-only session that never entered its
+ * emailed code could read the history and post as that person, while the same
+ * session was refused every customer, document and job in the database.
+ *
+ * The test that should have caught it was named "a pending account cannot read
+ * money, jobs or messages" and asserted on documents, jobs and territories.
+ * It never touched a message, and the pending account was not a member of the
+ * only conversation in the fixture, so a pending MEMBER was never exercised.
+ */
+describe("chat needs standing, not just membership", () => {
+  test("a member who never entered their code is refused", async () => {
+    // Approved crew, in the thread, password-only session.
+    await assertFails(getDoc(doc(aliceNoCode, "conversations/conv1/messages/m1")));
+    await assertFails(
+      addDoc(collection(aliceNoCode, "conversations/conv1/messages"), {
+        text: "posting without the code",
+        authorUid: "alice",
+        authorName: "Alice",
+      }),
+    );
+  });
+
+  test("and cannot mark it read either", async () => {
+    // The reads subcollection is behind the same helper, so it moved with it.
+    await assertFails(
+      setDoc(doc(aliceNoCode, "conversations/conv1/reads/alice"), {
+        readAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  test("a revoked member loses the thread they were in", async () => {
+    // mallory IS in conv2's memberUids. Membership is not standing.
+    await assertFails(getDoc(doc(mallory, "conversations/conv2/messages/m2")));
+    await assertFails(
+      addDoc(collection(mallory, "conversations/conv2/messages"), {
+        text: "still here?",
+        authorUid: "mallory",
+        authorName: "Mallory",
+      }),
+    );
+  });
+
+  test("a revoked member cannot mark it read", async () => {
+    await assertFails(
+      setDoc(doc(mallory, "conversations/conv2/reads/mallory"), {
+        readAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  test("a full crew member in the thread is unaffected", async () => {
+    // The regression guard. Tightening this helper must not lock out the
+    // people the feature is for — and a test suite where everything fails is
+    // not evidence of anything.
+    await assertSucceeds(getDoc(doc(alice, "conversations/conv1/messages/m1")));
+    await assertSucceeds(
+      addDoc(collection(alice, "conversations/conv1/messages"), {
+        text: "with the code entered",
+        authorUid: "alice",
+        authorName: "Alice",
+      }),
+    );
+    await assertSucceeds(
+      setDoc(doc(alice, "conversations/conv1/reads/alice"), { readAt: serverTimestamp() }),
+    );
+  });
+
+  test("a crew member still cannot reach a thread they are not in", async () => {
+    // isCrew() is now necessary; it was never sufficient. dana is approved and
+    // verified, and conv2 is not hers.
+    await assertFails(getDoc(doc(dana, "conversations/conv2/messages/m2")));
   });
 });
