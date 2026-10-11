@@ -511,3 +511,164 @@ describe("the quote-viewed beacon", () => {
     );
   });
 });
+
+/**
+ * One handset, several customer records, one STOP.
+ *
+ * The audit's confirmed finding, and the one part of it a source assertion
+ * cannot prove. `canSendTo` reads the opt-out off the single document whose id
+ * the client posts, while an inbound STOP is written to exactly one of the
+ * records a number can have — the Meta lead webhook creates a fresh record per
+ * form submission. So every duplicate record passed the check and the
+ * promotional message went out to somebody who had asked us to stop.
+ *
+ * Checking the source says the route consults a number-keyed map; only running
+ * it proves the consultation refuses. Deleting the lookup is caught by a source
+ * test, but turning its `if` into `if (false)` is not — that mutation survived
+ * until this test existed.
+ */
+describe("a blast never texts a number that replied STOP", () => {
+  const PROJECT = process.env.TEST_PROJECT ?? "demo-grimebusters-apitest";
+  const ORG = "grime-busters";
+  let db;
+  let optedOutId;
+  let duplicateId;
+  let cleanId;
+
+  /**
+   * Hands the blast budget back before each case.
+   *
+   * SMS_BLAST_LIMIT is 4 an hour and an earlier test in this file spends it
+   * deliberately, so without this these cases 429 and prove nothing about
+   * consent. Cleared explicitly rather than by depending on test order, which
+   * would make this suite fragile in the direction of passing for free.
+   */
+  const clearBlastLimit = async () => {
+    // Every blast counter, whoever owns it. Deleting by a uid decoded from the
+    // token was the first attempt and silently matched nothing — the doc id is
+    // built from requireCrew's caller.uid, which is not guaranteed to be the
+    // claim this test picked. A scan cannot miss, and `rateLimits` holds only
+    // a handful of rows in a test run.
+    const snap = await db.collection("rateLimits").get();
+    await Promise.all(
+      snap.docs.filter((d) => d.id.endsWith("__sms_blast")).map((d) => d.ref.delete()),
+    );
+  };
+
+  before(async () => {
+    const { initializeApp, getApps } = await import("firebase-admin/app");
+    const { getFirestore } = await import("firebase-admin/firestore");
+    const app =
+      getApps().find((a) => a.name === "blast-consent-test")
+      ?? initializeApp({ projectId: PROJECT }, "blast-consent-test");
+    db = getFirestore(app);
+
+    // The same handset, typed two ways, as two records — exactly what the
+    // Meta webhook produces alongside a number typed at a door.
+    const shared = "(502) 555-0188";
+    const customer = (fields) => ({
+      orgId: ORG,
+      firstName: "Dup",
+      lastName: "Record",
+      phone: shared,
+      email: "",
+      address: "1 Test Way",
+      status: "lead",
+      notes: [],
+      tags: [],
+      serviceTypes: [],
+      ...fields,
+    });
+
+    const a = db.collection("customers").doc();
+    await a.set(
+      customer({
+        lastName: "WithStop",
+        // A plain-language revocation: lib/smsConsent.ts matches it, Twilio
+        // does not, so without a phone-scoped check this one is DELIVERED.
+        smsOptOut: { at: "2026-09-01T10:00:00Z", keyword: "stop texting me" },
+      }),
+    );
+    optedOutId = a.id;
+
+    const b = db.collection("customers").doc();
+    await b.set(customer({ lastName: "NoStop" }));
+    duplicateId = b.id;
+
+    const c = db.collection("customers").doc();
+    await c.set(customer({ lastName: "Unrelated", phone: "(502) 555-0199" }));
+    cleanId = c.id;
+  });
+
+  test("the record holding the STOP is refused", async () => {
+    await clearBlastLimit();
+    const res = await post(
+      "/api/sms/blast",
+      { customerIds: [optedOutId], body: "Fall promo — 20% off leaf removal" },
+      crewToken,
+    );
+    assert.equal(res.status, 200);
+    const entry = res.json.failed.find((f) => f.customerId === optedOutId);
+    assert.ok(entry, `expected a refusal for the opted-out record: ${JSON.stringify(res.json)}`);
+    assert.match(entry.error, /opted back in|STOP/i);
+    assert.equal(res.json.sent, 0);
+  });
+
+  test("and so is the DUPLICATE record that carries no STOP of its own", async () => {
+    await clearBlastLimit();
+    // The finding. This record's own document is clean; the instruction lives
+    // on its sibling. A per-record check sends to it.
+    const res = await post(
+      "/api/sms/blast",
+      { customerIds: [duplicateId], body: "Fall promo — 20% off leaf removal" },
+      crewToken,
+    );
+    assert.equal(res.status, 200);
+    assert.equal(res.json.sent, 0, "nothing may be sent to this number");
+    const entry = res.json.failed.find((f) => f.customerId === duplicateId);
+    assert.ok(entry, `expected a refusal: ${JSON.stringify(res.json)}`);
+    assert.match(
+      entry.error,
+      /opted back in|STOP/i,
+      "must be refused for the opt-out on the sibling record, not for some " +
+        "unrelated Twilio error — the reason is the whole point",
+    );
+  });
+
+  test("both records in one send are refused, and nothing is sent", async () => {
+    await clearBlastLimit();
+    const res = await post(
+      "/api/sms/blast",
+      { customerIds: [optedOutId, duplicateId], body: "Fall promo — 20% off" },
+      crewToken,
+    );
+    assert.equal(res.status, 200);
+    assert.equal(res.json.sent, 0);
+    assert.equal(res.json.failed.length, 2);
+    for (const f of res.json.failed) {
+      assert.match(f.error, /opted back in|STOP/i, `${f.name}: ${f.error}`);
+    }
+  });
+
+  test("an unrelated number is not caught by somebody else's STOP", async () => {
+    await clearBlastLimit();
+    // The over-blocking direction. Grouping on a wrong key would quietly stop
+    // texting people who never asked for anything — a silent loss of reach.
+    const res = await post(
+      "/api/sms/blast",
+      { customerIds: [cleanId], body: "Fall promo — 20% off" },
+      crewToken,
+    );
+    assert.equal(res.status, 200);
+    const entry = res.json.failed.find((f) => f.customerId === cleanId);
+    // Twilio is deliberately fake here, so the send itself fails — but it must
+    // fail at Twilio, NOT be refused for consent.
+    if (entry) {
+      assert.doesNotMatch(
+        entry.error,
+        /opted back in/i,
+        "this number never opted out; refusing it means the grouping key is wrong",
+      );
+    }
+  });
+});

@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import { test, describe } from "node:test";
 import { readFileSync } from "node:fs";
 
-const { sameMessage, hasReceivedMessage, blockFor, splitAudience } = await import(
+const { sameMessage, hasReceivedMessage, blockFor, splitAudience, phoneGroupKey } = await import(
   "../lib/blastAudience.ts"
 );
 // The real thing, not a stand-in. These tests are the only place the screen's
@@ -29,9 +29,25 @@ const FALL = `Grime Busters KY LLC: Hey with fall temperatures comes fall mess a
 
 Call us today at 502-599-6855 or sign up online at grimebusterskyllc.com!`;
 
+/**
+ * A distinct number per record, derived from its id.
+ *
+ * Every record used to get the same number, which was harmless while consent
+ * was judged per record and became actively misleading the moment it was
+ * judged per NUMBER: `who("a")` and `who("b")` meant two people everywhere in
+ * this file, but shared one handset, so one record's STOP blocked the other
+ * and the second deduplicated away. Tests that genuinely mean one handset
+ * twice now say so by passing `phone` explicitly.
+ */
+const phoneSeq = new Map();
+const phoneFor = (id) => {
+  if (!phoneSeq.has(id)) phoneSeq.set(id, phoneSeq.size);
+  return `(502) 555-${String(1000 + phoneSeq.get(id)).padStart(4, "0")}`;
+};
+
 const who = (id, patch = {}) => ({
   id,
-  phone: "(502) 555-0147",
+  phone: phoneFor(id),
   status: "lead",
   notes: [],
   ...patch,
@@ -362,5 +378,180 @@ describe("the cannot-be-texted list is inspectable too", () => {
       /setIncludeBlocked|includeBlocked/,
       "nothing on this screen may overrule an opt-out",
     );
+  });
+});
+
+describe("one record's STOP covers every record for that number", () => {
+  // The audit's confirmed finding, verified 3/3 by independent reviewers.
+  //
+  // canSendTo reads the opt-out off ONE customer document. An inbound STOP is
+  // written to exactly one of the several records a handset can have, because
+  // the Meta lead webhook creates a fresh record per form submission. So a
+  // per-record check passed every duplicate: the sheet listed the same person
+  // under "cannot be texted" AND counted her as a recipient, and the send went
+  // out. For a plain-language revocation ("stop texting me", which Twilio does
+  // not act on but lib/smsConsent.ts does) the promotional text was delivered.
+  const STOP = { at: "2026-09-01T10:00:00Z", keyword: "stop texting me" };
+
+  /** The same handset, typed two different ways, as two records. */
+  const dupPair = (patchA = {}, patchB = {}) => [
+    who("rec_a", { phone: "(502) 555-0147", ...patchA }),
+    who("rec_b", { phone: "502-555-0147", ...patchB }),
+  ];
+
+  test("the second record is blocked too, not counted as a recipient", () => {
+    const out = split(dupPair({ smsOptOut: STOP }, {}), FALL);
+    assert.deepEqual(out.sendable.map((c) => c.id), [], "nobody is textable");
+    assert.deepEqual(
+      out.blocked.map((b) => b.customer.id).sort(),
+      ["rec_a", "rec_b"],
+      "both records carry the refusal",
+    );
+  });
+
+  test("the refusal quotes the record that actually holds it", () => {
+    const out = split(dupPair({ smsOptOut: STOP }, {}), FALL);
+    for (const entry of out.blocked) {
+      assert.match(entry.detail, /STOP/, `${entry.customer.id} must say which refusal`);
+    }
+  });
+
+  test("it does not matter which of the two holds the opt-out", () => {
+    // The hole was order-dependent in practice: findCustomerByPhone writes to
+    // whichever record an unordered scan hit first.
+    const out = split(dupPair({}, { smsOptOut: STOP }), FALL);
+    assert.equal(out.sendable.length, 0);
+    assert.equal(out.blocked.length, 2);
+  });
+
+  test("a declined consent on one record covers the number too", () => {
+    const declined = {
+      granted: false,
+      method: "verbal",
+      at: "2026-09-01T10:00:00Z",
+      byUid: "u",
+      byName: "Nick",
+    };
+    const out = split(dupPair({ smsConsent: declined }, {}), FALL);
+    assert.equal(out.sendable.length, 0);
+    assert.equal(out.blocked.length, 2);
+  });
+
+  test("a different number is untouched by somebody else's STOP", () => {
+    // The over-blocking direction. Grouping on the wrong key would silently
+    // stop texting people who never asked for anything.
+    const group = [
+      ...dupPair({ smsOptOut: STOP }, {}),
+      who("other", { phone: "(502) 555-0999" }),
+    ];
+    const out = split(group, FALL);
+    assert.deepEqual(out.sendable.map((c) => c.id), ["other"]);
+  });
+
+  test("a record with no usable number is judged on its own", () => {
+    // Nothing to group on, so it must not inherit anybody's refusal.
+    const out = split([who("nophone", { phone: "" }), who("fine")], FALL);
+    assert.deepEqual(out.sendable.map((c) => c.id), ["fine"]);
+    assert.deepEqual(out.blocked.map((b) => b.reason), ["no phone"]);
+  });
+});
+
+describe("one handset, one message", () => {
+  test("a second record for the same number is a duplicate, not a recipient", () => {
+    const out = split(
+      [who("a", { phone: "(502) 555-0147" }), who("b", { phone: "5025550147" })],
+      FALL,
+    );
+    assert.deepEqual(out.sendable.map((c) => c.id), ["a"]);
+    assert.deepEqual(out.duplicates.map((c) => c.id), ["b"]);
+  });
+
+  test("three records for one number send once", () => {
+    const group = ["a", "b", "c"].map((id) => who(id, { phone: "502 555 0147" }));
+    const out = split(group, FALL);
+    assert.equal(out.sendable.length, 1);
+    assert.equal(out.duplicates.length, 2);
+  });
+
+  test("different numbers are not duplicates of each other", () => {
+    const group = [
+      who("a", { phone: "(502) 555-0147" }),
+      who("b", { phone: "(502) 555-0148" }),
+    ];
+    assert.equal(split(group, FALL).sendable.length, 2);
+  });
+
+  test("a blocked duplicate reads as blocked, not as a duplicate", () => {
+    // The truer reason wins. "Duplicate record" would hide a STOP.
+    const out = split(
+      [
+        who("a", { phone: "(502) 555-0147" }),
+        who("b", { phone: "5025550147", smsOptOut: { at: "2026-09-01T10:00:00Z", keyword: "stop" } }),
+      ],
+      FALL,
+    );
+    assert.equal(out.duplicates.length, 0);
+    assert.equal(out.blocked.length, 2, "the STOP covers both records");
+  });
+
+  test("the normalised key is the last ten digits", () => {
+    assert.equal(phoneGroupKey("(502) 555-0147"), "5025550147");
+    assert.equal(phoneGroupKey("+1 502 555 0147"), "5025550147");
+    assert.equal(phoneGroupKey("1-502-555-0147"), "5025550147");
+    assert.equal(phoneGroupKey("502.555.0147"), "5025550147");
+    assert.equal(phoneGroupKey("555-0147"), null, "too short to group on");
+    assert.equal(phoneGroupKey(""), null);
+    assert.equal(phoneGroupKey(null), null);
+  });
+});
+
+describe("the screen and the server group a handset the same way", () => {
+  // If these drift, the count shown stops matching the send — and the hole
+  // this whole section exists to close quietly re-opens on one side only.
+  const SERVER = readFileSync(
+    new URL("../lib/server/customerNotes.ts", import.meta.url),
+    "utf8",
+  );
+
+  test("the server keys its opt-out map on the last ten digits too", () => {
+    const fn = SERVER.slice(SERVER.indexOf("function digits10("));
+    const body = fn.slice(0, fn.indexOf("\n}"));
+    assert.match(body, /replace\(\/\\D\/g, ""\)/, "strips non-digits");
+    assert.match(body, /slice\(-10\)/, "takes the last ten");
+    assert.match(body, /length === 10/, "and refuses anything shorter");
+  });
+
+  test("the server's blast path asks the number before the record", () => {
+    const route = readFileSync(
+      new URL("../app/api/sms/blast/route.ts", import.meta.url),
+      "utf8",
+    ).replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+    assert.match(route, /optOutsByPhone\(/, "one scan for the whole blast");
+    assert.match(route, /phoneSuppressionKey\(customer\.phone\)/);
+
+    // Presence FIRST, then order. Asserting only `indexOf(a) < indexOf(b)`
+    // passes when `a` is absent entirely — indexOf returns -1, which is less
+    // than everything — so deleting the number check satisfied the ordering
+    // test. Caught by mutation; the lookup is now required to exist.
+    const lookup = route.indexOf("stopped.get(key)");
+    const perRecord = route.indexOf("canSendTo(customer)");
+    const send = route.indexOf("sendSms(");
+    assert.ok(lookup !== -1, "the route must consult the number's opt-out map");
+    assert.ok(perRecord !== -1, "and still check the single record after it");
+    assert.ok(send !== -1, "and send through sendSms");
+    assert.ok(
+      lookup < perRecord,
+      "the number is checked BEFORE the single record, and before the pacing delay",
+    );
+    assert.ok(lookup < send, "and before anything is sent");
+  });
+
+  test("the server texts one number once per blast", () => {
+    const route = readFileSync(
+      new URL("../app/api/sms/blast/route.ts", import.meta.url),
+      "utf8",
+    );
+    assert.match(route, /textedNumbers/, "a per-run set of numbers already texted");
+    assert.match(route, /textedNumbers\.add\(key\)/, "added only after a successful send");
   });
 });
