@@ -430,6 +430,14 @@ export async function convertToInvoice(
   const due = dueAt === undefined ? defaultInvoiceDueDate() : dueAt;
 
   const payload = {
+    // Which business owns the invoice. Without it every "Convert to invoice"
+    // was denied outright, exactly as every "Schedule the job" was before the
+    // same line was added to scheduleAsJob below: firestore.rules'
+    // createsInMyOrg asks that orgId is a non-empty string matching the
+    // caller's org, and a MISSING field fails `is string` before any
+    // comparison happens. This write is a batch, so the denial took the
+    // estimate's convertedToId patch down with it and nothing applied at all.
+    orgId: DEFAULT_ORG_ID,
     number: await allocateNumber(),
     kind: "invoice" satisfies DocumentKind,
     status: "draft" satisfies DocumentStatus,
