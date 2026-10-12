@@ -156,6 +156,8 @@ export const COLLECTIONS = {
   territories: "territories",
   /** Team chat threads. Messages and read state are subcollections. */
   conversations: "conversations",
+  /** What the app does on its own, and the switches for it. See lib/db/automations.ts. */
+  automations: "automations",
   /** Demo mode only — the real app keeps these as subcollections. */
   chatMessages: "chatMessages",
   chatReads: "chatReads",
