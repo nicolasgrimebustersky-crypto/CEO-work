@@ -71,6 +71,13 @@ export interface Audience<T> {
   removed: T[];
   /** Cannot be texted at all, with the reason. */
   blocked: BlastBlocked<T>[];
+  /**
+   * A second or later record carrying a number already in `sendable`.
+   *
+   * One handset, one message. Without this the same person gets the blast
+   * once per record they have, and the count promises more people than exist.
+   */
+  duplicates: T[];
 }
 
 /**
@@ -107,6 +114,46 @@ export function hasReceivedMessage(
 ): boolean {
   if (!notes || !body.trim()) return false;
   return notes.some((note) => note.kind === "sms_out" && sameMessage(note.text, body));
+}
+
+/**
+ * The last ten digits of a number, or null if it is not one.
+ *
+ * Deliberately the same arithmetic as phoneSuppressionKey in
+ * lib/server/customerNotes.ts, so the screen and the server group a handset
+ * the same way. A test imports both and asserts they still agree — if they
+ * drift, the count shown stops matching the send.
+ */
+export function phoneGroupKey(raw: string | null | undefined): string | null {
+  const digits = String(raw ?? "").replace(/\D/g, "").slice(-10);
+  return digits.length === 10 ? digits : null;
+}
+
+/**
+ * Lifts a per-record consent check to the number it belongs to.
+ *
+ * This is the fix for the audit's confirmed finding. `canSendTo` reads the
+ * opt-out off ONE customer document, while an inbound STOP is written to
+ * exactly one of the several records a handset can have — the Meta lead
+ * webhook creates a fresh record per form submission. So a per-record check
+ * passed every duplicate, and the screen showed the same person under
+ * "cannot be texted" while also counting her as a recipient and sending.
+ *
+ * One record refusing is enough for every record on that number. A second
+ * record without the mark is not a retraction of the first.
+ */
+function groupRefusals<T extends BlastCandidate>(
+  customers: readonly T[],
+  verdictFor: (customer: T) => ConsentVerdict,
+): Map<string, string> {
+  const refused = new Map<string, string>();
+  for (const customer of customers) {
+    const key = phoneGroupKey(customer.phone);
+    if (!key || refused.has(key)) continue;
+    const verdict = verdictFor(customer);
+    if (!verdict.allowed) refused.set(key, verdict.reason);
+  }
+  return refused;
 }
 
 /**
@@ -160,10 +207,29 @@ export function splitAudience<T extends BlastCandidate>(
   removedIds: ReadonlySet<string>,
   verdictFor: (customer: T) => ConsentVerdict,
 ): Audience<T> {
-  const out: Audience<T> = { sendable: [], alreadySent: [], removed: [], blocked: [] };
+  const out: Audience<T> = {
+    sendable: [],
+    alreadySent: [],
+    removed: [],
+    blocked: [],
+    duplicates: [],
+  };
+
+  // Every number that any record refuses, before judging any single record.
+  const refusedNumbers = groupRefusals(customers, verdictFor);
+  /** Numbers already counted as a recipient in this pass. */
+  const claimed = new Set<string>();
 
   for (const customer of customers) {
-    const blocked = blockFor(customer, verdictFor);
+    const key = phoneGroupKey(customer.phone);
+    const groupReason = key ? refusedNumbers.get(key) : undefined;
+    // A refusal recorded on ANY record for this number blocks them all, with
+    // that record's own wording so the crew sees which refusal it was.
+    const effectiveVerdict = groupReason
+      ? () => ({ allowed: false, reason: groupReason })
+      : verdictFor;
+
+    const blocked = blockFor(customer, effectiveVerdict);
     if (blocked) {
       out.blocked.push(blocked);
       continue;
@@ -176,6 +242,13 @@ export function splitAudience<T extends BlastCandidate>(
       out.alreadySent.push(customer);
       continue;
     }
+    // One handset, one message. Checked last, so a duplicate that is also
+    // blocked, removed or already-sent reads as the truer of the two.
+    if (key && claimed.has(key)) {
+      out.duplicates.push(customer);
+      continue;
+    }
+    if (key) claimed.add(key);
     out.sendable.push(customer);
   }
 

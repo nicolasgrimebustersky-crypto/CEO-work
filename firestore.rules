@@ -767,8 +767,19 @@ service cloud.firestore {
         .data.memberUids;
     }
 
+    // Membership AND standing. isCrew() is the part that was missing, and the
+    // asymmetry was the tell: the conversation document itself requires it on
+    // read, create and update, while these subcollections asked only that you
+    // were signed in and named in memberUids.
+    //
+    // isCrew() carries two things membership does not. An approved role, so a
+    // revoked account (role: 'pending') loses the threads it was in rather
+    // than keeping them. And hasVerifiedSession(), so a password-only session
+    // that never entered its emailed code cannot read the history or post as
+    // that person — every other collection in this file is behind that gate,
+    // and chat was the way around it.
     function inConversation(conversationId) {
-      return request.auth != null
+      return isCrew()
         && exists(/databases/$(database)/documents/conversations/$(conversationId))
         && request.auth.uid in chatMembers(conversationId);
     }

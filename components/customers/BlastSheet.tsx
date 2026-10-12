@@ -299,6 +299,18 @@ export function BlastSheet({
               </p>
             ) : null}
 
+            {/* One handset, one message. Shown rather than silently folded
+                into the count, because "109 recipients" meaning 103 people
+                and six second records is the kind of number that quietly
+                stops being worth trusting. */}
+            {audience.duplicates.length > 0 ? (
+              <p className="border-t border-line px-3 py-2 text-sm font-semibold text-muted">
+                {audience.duplicates.length} duplicate{" "}
+                {audience.duplicates.length === 1 ? "record" : "records"} for a number
+                already in this send — each number is texted once.
+              </p>
+            ) : null}
+
             {/* Who cannot be texted at all, and why — expandable for the same
                 reason the skipped list is. These are the people most worth
                 checking by name: one of them replied STOP, and seeing that on

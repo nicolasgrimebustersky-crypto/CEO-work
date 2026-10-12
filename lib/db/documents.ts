@@ -84,6 +84,18 @@ function asPayments(value: unknown): Payment[] {
       method: typeof item.method === "string" ? item.method : "",
       recordedBy: typeof item.recordedBy === "string" ? item.recordedBy : "",
       recordedByName: typeof item.recordedByName === "string" ? item.recordedByName : "Unknown",
+      // Carried through, and this is not decoration. providerRef is the ONLY
+      // thing stopping a replayed Stripe webhook crediting a card payment
+      // twice — lib/server/stripe.ts refuses an event whose session id is
+      // already on the document. Dropping it here did not merely lose a
+      // label: recordPayment and removePayment rebuild the whole payments
+      // array from this read and write it back, so one crew member recording
+      // a check (or deleting any payment) erased the session id from the
+      // card entry beside it and re-armed the double credit.
+      ...(item.provider === "stripe" ? { provider: "stripe" as const } : {}),
+      ...(typeof item.providerRef === "string" && item.providerRef
+        ? { providerRef: item.providerRef }
+        : {}),
     }))
     .sort((a, b) => b.receivedAt.toMillis() - a.receivedAt.toMillis());
 }
