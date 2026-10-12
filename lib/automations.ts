@@ -149,21 +149,32 @@ export const MAX_PER_RUN_CEILING = 25;
 export const MAX_PER_RUN_ALL = 40;
 
 /**
- * How old an anchor may be for an automation to pick a record up at all.
+ * How wide the net may be - the most days between "due" and "too old".
  *
  * This is the ceiling that matters most, and the one whose absence would do
  * the most damage. The day an automation is switched on, every record that has
  * ever satisfied its trigger satisfies it right now: "14 days after the
- * estimate was sent" is true of an estimate from last spring. Without a
- * staleness cap the first run after arming reaches years back at once, which
- * is both the worst customer experience the app can produce and the exact
- * traffic shape carriers treat as spam.
+ * estimate was sent" is true of an estimate from last spring. Without a cap
+ * the first run after arming reaches years back at once, which is both the
+ * worst customer experience the app can produce and the exact traffic shape
+ * carriers treat as spam.
  *
- * So an automation only ever sees recent records. Anything older is somebody's
- * decision to make by hand, from the blast screen, where the recipient list is
- * on screen before anything sends.
+ * It bounds the WIDTH of the window rather than an absolute age, and that
+ * correction came from a test. An absolute cap of 120 days looked right until
+ * clampGuards was asked for a 365-day wait: the stale value has to leave room
+ * for the trigger to fire at all, so the floor rose above the ceiling and the
+ * ceiling quietly stopped applying. An absolute number is the wrong measure
+ * anyway - at a 3-day wait it allows a 117-day net, and at a 90-day wait only
+ * 30. What is dangerous is how many records the net holds, which is its width.
+ *
+ * Measuring the width also allows the automation this business genuinely wants
+ * and an absolute cap forbade: a word a year after a gutter clean, with a net
+ * no wider than four months around it.
+ *
+ * Anything older is somebody's decision to make by hand, from the blast
+ * screen, where the recipient list is on screen before anything sends.
  */
-export const MAX_STALE_DAYS_CEILING = 120;
+export const MAX_WINDOW_DAYS = 120;
 
 /**
  * The earliest and latest local hour an automated text may be sent.
@@ -236,7 +247,7 @@ export interface AutomationGuards {
   maxTouches: number;
   minGapDays: number;
   maxPerRun: number;
-  /** Anchors older than this are left alone. See MAX_STALE_DAYS_CEILING. */
+  /** Anchors older than this are left alone. See MAX_WINDOW_DAYS. */
   staleAfterDays: number;
   startHour: number;
   endHour: number;
@@ -348,15 +359,16 @@ export function clampGuards(raw: Partial<AutomationGuards> | null | undefined): 
       ? null
       : Math.max(minGapDays, clampInt(rawRepeat, 1, 365, minGapDays));
 
-  // Stale has to leave room for the trigger to fire at all: an automation that
-  // waits 14 days and ignores anything older than 7 can never send, and would
-  // look on screen exactly like one that is armed and simply has nothing to do.
-  const staleFloor = afterDays + 1;
+  // The window runs from the day it comes due to the day it is too old, so
+  // both ends are relative to afterDays. The floor has to leave room for the
+  // trigger to fire - an automation that waits 14 days and ignores anything
+  // older than 7 can never send, and on screen that is indistinguishable from
+  // one that is armed and simply has nothing to do today.
   const staleAfterDays = clampInt(
     guards.staleAfterDays,
-    staleFloor,
-    Math.max(staleFloor, MAX_STALE_DAYS_CEILING),
-    Math.min(Math.max(staleFloor, afterDays + 30), MAX_STALE_DAYS_CEILING),
+    afterDays + 1,
+    afterDays + MAX_WINDOW_DAYS,
+    afterDays + 30,
   );
 
   const startHour = clampInt(guards.startHour, SEND_HOUR_FLOOR, SEND_HOUR_CEILING, 9);
@@ -588,6 +600,14 @@ export function decide(
     };
   }
 
+  // Checked before the count, although a once-only automation always has a
+  // maxTouches of 1 and would be caught by it anyway. "This automation only
+  // sends once, and it has" is a sentence somebody can act on; "already had
+  // 1 of 1" invites him to go looking for a setting called 1.
+  if (subject.touches > 0 && guards.repeatEveryDays === null) {
+    return { send: false, reason: "This automation only sends once, and it has" };
+  }
+
   if (subject.touches >= guards.maxTouches) {
     return {
       send: false,
@@ -596,9 +616,6 @@ export function decide(
   }
 
   if (subject.touches > 0) {
-    if (guards.repeatEveryDays === null) {
-      return { send: false, reason: "This automation only sends once, and it has" };
-    }
     if (!subject.lastTouchAt) {
       // Counted a touch but cannot say when. Refusing is the safe direction:
       // the alternative is treating it as infinitely long ago and sending.
@@ -610,11 +627,17 @@ export function decide(
       const days = guards.minGapDays - since;
       return {
         send: false,
-        reason: `Texted ${since} ${since === 1 ? "day" : "days"} ago — waiting ${days} more`,
+        // Not "texted": the same ladder governs notes, stage moves and
+        // notifications, and "texted 2 days ago" on an automation that adds
+        // notes is a reason somebody would go looking for a message about.
+        reason: `Last one was ${since} ${since === 1 ? "day" : "days"} ago — waiting ${days} more`,
       };
     }
-    if (since < guards.repeatEveryDays) {
-      const days = guards.repeatEveryDays - since;
+    // Bound to a local because the null case already returned above, outside
+    // this block, which is a fact the compiler cannot see from in here.
+    const repeat = guards.repeatEveryDays;
+    if (repeat !== null && since < repeat) {
+      const days = repeat - since;
       return { send: false, reason: `Next one in ${days} ${days === 1 ? "day" : "days"}` };
     }
   }

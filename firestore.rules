@@ -179,7 +179,9 @@ service cloud.firestore {
         && g.maxTouches is int && g.maxTouches >= 1 && g.maxTouches <= 4
         && g.minGapDays is int && g.minGapDays >= 3 && g.minGapDays <= 90
         && g.maxPerRun is int && g.maxPerRun >= 1 && g.maxPerRun <= 25
-        && g.staleAfterDays is int && g.staleAfterDays >= 1 && g.staleAfterDays <= 120
+        && g.staleAfterDays is int
+        && g.staleAfterDays > g.afterDays
+        && g.staleAfterDays <= g.afterDays + 120
         && g.startHour is int && g.startHour >= 8 && g.startHour <= 19
         && g.endHour is int && g.endHour > g.startHour && g.endHour <= 19
         && g.stopOnReply is bool

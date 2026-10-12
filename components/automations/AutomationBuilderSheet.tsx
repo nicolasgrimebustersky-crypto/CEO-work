@@ -14,7 +14,7 @@ import {
   defaultConditions,
   defaultGuards,
   MAX_PER_RUN_CEILING,
-  MAX_STALE_DAYS_CEILING,
+  MAX_WINDOW_DAYS,
   MAX_TOUCHES_CEILING,
   MIN_GAP_DAYS_FLOOR,
   SEND_HOUR_CEILING,
@@ -233,7 +233,7 @@ export function AutomationBuilderSheet({
           <input
             type="number"
             min={value.guards.afterDays + 1}
-            max={MAX_STALE_DAYS_CEILING}
+            max={value.guards.afterDays + MAX_WINDOW_DAYS}
             value={value.guards.staleAfterDays}
             onChange={(event) =>
               patchGuards({ staleAfterDays: Number(event.target.value) })

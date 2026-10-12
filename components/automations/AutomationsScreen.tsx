@@ -292,7 +292,7 @@ export function AutomationsScreen() {
                             ? "Armed, not run yet"
                             : "Off"}
                         {row.sentCount > 0
-                          ? ` · ${row.sentCount} sent in total`
+                          ? ` · ${row.sentCount} so far`
                           : ""}
                       </p>
                       {isAdmin ? (

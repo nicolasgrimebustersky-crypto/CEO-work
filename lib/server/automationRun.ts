@@ -4,6 +4,7 @@ import {
   clampGuards,
   clockFrom,
   decide,
+  renderTemplate,
   MAX_PER_RUN_ALL,
   type AutomationAction,
   type AutomationClock,
@@ -15,13 +16,25 @@ import {
 } from "@/lib/automations";
 import { automationSmsText } from "@/lib/messages";
 import { asOrgId } from "@/lib/org";
-import { isPipelineStage, OPEN_STAGES, type PipelineStage } from "@/lib/pipeline";
+import {
+  isPipelineStage,
+  OPEN_STAGES,
+  type PipelineStage,
+} from "@/lib/pipeline";
 import { canSendTo, type Textable } from "@/lib/smsConsent";
 import { adminDb } from "@/lib/server/admin";
-import { appendNote, optOutsByPhone, phoneSuppressionKey } from "@/lib/server/customerNotes";
+import {
+  appendNote,
+  optOutsByPhone,
+  phoneSuppressionKey,
+} from "@/lib/server/customerNotes";
 import { sendSmsToPhone } from "@/lib/server/customerSms";
 import { notifyCrew } from "@/lib/server/notify";
-import { PROPERTY_TYPES, type PropertyType, type ServiceType } from "@/lib/types";
+import {
+  PROPERTY_TYPES,
+  type PropertyType,
+  type ServiceType,
+} from "@/lib/types";
 
 /**
  * Running the automations the owner built.
@@ -65,7 +78,11 @@ const SEND_INTERVAL_MS = 1100;
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function touchId(orgId: string, automationId: string, phoneKey: string): string {
+function touchId(
+  orgId: string,
+  automationId: string,
+  phoneKey: string,
+): string {
   return `${orgId}__${automationId}__${phoneKey}`;
 }
 
@@ -109,7 +126,9 @@ interface CustomerRow {
   lastInboundAtMs: number | null;
 }
 
-function readCustomer(doc: FirebaseFirestore.QueryDocumentSnapshot): CustomerRow {
+function readCustomer(
+  doc: FirebaseFirestore.QueryDocumentSnapshot,
+): CustomerRow {
   const data = doc.data();
   const phone = str(data.phone);
 
@@ -141,7 +160,9 @@ function readCustomer(doc: FirebaseFirestore.QueryDocumentSnapshot): CustomerRow
       : null,
     stage: isPipelineStage(data.pipelineStage) ? data.pipelineStage : null,
     serviceTypes: Array.isArray(data.serviceTypes)
-      ? (data.serviceTypes.filter((item) => typeof item === "string") as ServiceType[])
+      ? (data.serviceTypes.filter(
+          (item) => typeof item === "string",
+        ) as ServiceType[])
       : [],
     consent: {
       phone,
@@ -219,7 +240,12 @@ async function subjectsFor(
   const db = adminDb();
   const subjects: AutomationSubject[] = [];
 
-  const push = (row: CustomerRow, anchorMs: number | null, amount: number | null, serviceType: ServiceType | null) => {
+  const push = (
+    row: CustomerRow,
+    anchorMs: number | null,
+    amount: number | null,
+    serviceType: ServiceType | null,
+  ) => {
     const ledger = row.phoneKey
       ? touches.get(touchId(orgId, automationId, row.phoneKey))
       : undefined;
@@ -236,13 +262,18 @@ async function subjectsFor(
       touches: ledger?.touches ?? 0,
       lastTouchAt: isoOrNull(ledger?.lastTouchAtMs ?? null),
       repliedSince:
-        row.lastInboundAtMs !== null && anchorMs !== null && row.lastInboundAtMs > anchorMs,
+        row.lastInboundAtMs !== null &&
+        anchorMs !== null &&
+        row.lastInboundAtMs > anchorMs,
     });
   };
 
   if (trigger === "estimate_unanswered" || trigger === "invoice_overdue") {
     const kind = trigger === "estimate_unanswered" ? "estimate" : "invoice";
-    const snap = await db.collection("documents").where("kind", "==", kind).get();
+    const snap = await db
+      .collection("documents")
+      .where("kind", "==", kind)
+      .get();
     for (const doc of snap.docs) {
       const data = doc.data();
       if (asOrgId(data.orgId) !== orgId) continue;
@@ -257,8 +288,16 @@ async function subjectsFor(
         if (str(data.status) !== "sent") continue;
         if (data.acceptance || data.decline) continue;
         if (str(data.convertedToId)) continue;
-        const anchor = millis(data.sentAt) ?? millis(data.issuedAt) ?? millis(data.createdAt);
-        push(row, anchor, num(data.total), str(data.serviceType) as ServiceType | null);
+        const anchor =
+          millis(data.sentAt) ??
+          millis(data.issuedAt) ??
+          millis(data.createdAt);
+        push(
+          row,
+          anchor,
+          num(data.total),
+          str(data.serviceType) as ServiceType | null,
+        );
       } else {
         const status = str(data.status);
         if (status !== "sent" && status !== "partial") continue;
@@ -267,22 +306,37 @@ async function subjectsFor(
         // No due date means nothing to be overdue against. `decide` refuses a
         // null anchor with a reason, so it is pushed rather than dropped: the
         // preview saying "nothing to measure from" is more use than silence.
-        push(row, millis(data.dueAt), balance, str(data.serviceType) as ServiceType | null);
+        push(
+          row,
+          millis(data.dueAt),
+          balance,
+          str(data.serviceType) as ServiceType | null,
+        );
       }
     }
     return subjects;
   }
 
   if (trigger === "job_finished") {
-    const snap = await db.collection("jobs").where("status", "==", "complete").get();
+    const snap = await db
+      .collection("jobs")
+      .where("status", "==", "complete")
+      .get();
     for (const doc of snap.docs) {
       const data = doc.data();
       if (asOrgId(data.orgId) !== orgId) continue;
       const row = customers.get(str(data.customerId));
       if (!row) continue;
       const anchor =
-        millis(data.completedAt) ?? millis(data.finishedAt) ?? millis(data.scheduledEnd);
-      push(row, anchor, num(data.price), str(data.serviceType) as ServiceType | null);
+        millis(data.completedAt) ??
+        millis(data.finishedAt) ??
+        millis(data.scheduledEnd);
+      push(
+        row,
+        anchor,
+        num(data.price),
+        str(data.serviceType) as ServiceType | null,
+      );
     }
     return subjects;
   }
@@ -295,10 +349,14 @@ async function subjectsFor(
       // the message that gets a number reported.
       if (!row.stage || !OPEN_STAGES.includes(row.stage)) continue;
       const anchor =
-        row.lastContactedAtMs ?? row.pipelineChangedAtMs ?? row.updatedAtMs ?? row.createdAtMs;
+        row.lastContactedAtMs ??
+        row.pipelineChangedAtMs ??
+        row.updatedAtMs ??
+        row.createdAtMs;
       push(row, anchor, row.pipelineValue, row.serviceTypes[0] ?? null);
     } else {
-      const anchor = row.lastContactedAtMs ?? row.updatedAtMs ?? row.createdAtMs;
+      const anchor =
+        row.lastContactedAtMs ?? row.updatedAtMs ?? row.createdAtMs;
       push(row, anchor, row.lifetimeValue, row.serviceTypes[0] ?? null);
     }
   }
@@ -313,7 +371,10 @@ async function loadTouches(
     .collection(TOUCHES)
     .where("automationId", "==", automationId)
     .get();
-  const out = new Map<string, { touches: number; lastTouchAtMs: number | null }>();
+  const out = new Map<
+    string,
+    { touches: number; lastTouchAtMs: number | null }
+  >();
   for (const doc of snap.docs) {
     if (str(doc.get("orgId")) !== orgId) continue;
     out.set(doc.id, {
@@ -389,22 +450,29 @@ export async function evaluateAutomation(
         if (!verdict.allowed) {
           decision = { send: false, reason: verdict.reason };
         } else if (key && seenNumbers.has(key)) {
-          decision = { send: false, reason: "Already going out on this number in this run" };
+          decision = {
+            send: false,
+            reason: "Already going out on this number in this run",
+          };
         } else if (key) {
           seenNumbers.add(key);
         }
       }
     }
 
+    const vars = {
+      first_name: row.firstName,
+      business: "Grime Busters",
+      amount: moneyLabel(subject.amount),
+      owner_phone: "502-599-6855",
+    };
+    // Rendered for every action, not just the text. A note reading
+    // "Hi {first_name}" on a customer's own timeline is the same mistake as a
+    // text reading it, and it was only the text that filled them in at first.
     const message =
       automation.action.kind === "send_sms"
-        ? automationSmsText(automation.action.body, {
-            first_name: row.firstName,
-            business: "Grime Busters",
-            amount: moneyLabel(subject.amount),
-            owner_phone: "502-599-6855",
-          })
-        : automation.action.body;
+        ? automationSmsText(automation.action.body, vars)
+        : renderTemplate(automation.action.body, vars);
 
     candidates.push({
       customerId: row.id,
@@ -440,14 +508,19 @@ async function claimTouch(
   minGapDays: number,
   nowMs: number,
 ): Promise<{ claimed: boolean; reason: string }> {
-  const ref = adminDb().collection(TOUCHES).doc(touchId(orgId, automationId, phoneKey));
+  const ref = adminDb()
+    .collection(TOUCHES)
+    .doc(touchId(orgId, automationId, phoneKey));
   return adminDb().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     const current = snap.exists ? (num(snap.get("touches")) ?? 0) : 0;
     const lastMs = snap.exists ? millis(snap.get("lastTouchAt")) : null;
 
     if (current >= maxTouches) {
-      return { claimed: false, reason: "Already had every message this automation sends" };
+      return {
+        claimed: false,
+        reason: "Already had every message this automation sends",
+      };
     }
     if (lastMs !== null && nowMs - lastMs < minGapDays * 86_400_000) {
       return { claimed: false, reason: "Texted too recently on this number" };
@@ -467,6 +540,27 @@ async function claimTouch(
     );
     return { claimed: true, reason: "" };
   });
+}
+
+/**
+ * The shared limits for one cron tick: how many sends are left, and how long.
+ *
+ * The send count is what bounds a bad morning. The clock is what stops the run
+ * being cut off mid-send by the platform: this route also runs the quote
+ * follow-up sequence, both of them pace sends about a second apart to stay
+ * inside Twilio's rate limit, and `maxDuration` is sixty seconds for the lot.
+ * Twenty-five sends is twenty-eight seconds of deliberate waiting before any
+ * of the reads are counted.
+ *
+ * A timeout would not double-send — the claim is written before the send and
+ * is not released — but it would abandon the remaining automations silently
+ * and report nothing. Stopping on our own clock means the run ends with a
+ * count of what it held back, which the screen can show.
+ */
+export interface RunBudget {
+  remaining: number;
+  /** Epoch millis after which no new send is started. */
+  deadlineMs: number;
 }
 
 export interface AutomationRunResult {
@@ -490,7 +584,7 @@ export interface AutomationRunResult {
 export async function runAutomation(
   orgId: string,
   automation: RunnableAutomation,
-  budget: { remaining: number },
+  budget: RunBudget,
   now: Date = new Date(),
 ): Promise<AutomationRunResult> {
   const guards = clampGuards(automation.guards);
@@ -510,32 +604,44 @@ export async function runAutomation(
   let madeThisAutomation = 0;
 
   for (const candidate of sendable) {
-    if (madeThisAutomation >= guards.maxPerRun || budget.remaining <= 0) {
+    if (
+      madeThisAutomation >= guards.maxPerRun ||
+      budget.remaining <= 0 ||
+      Date.now() >= budget.deadlineMs
+    ) {
       result.held += 1;
       continue;
     }
 
-    const key = phoneSuppressionKey(candidate.phone);
+    const phoneKey = phoneSuppressionKey(candidate.phone);
 
-    // Only a text needs claiming: it is the only action that cannot be undone
-    // and the only one whose repetition costs anything outside the app.
-    if (automation.action.kind === "send_sms") {
-      if (!key) {
-        result.failed += 1;
-        continue;
-      }
-      const claim = await claimTouch(
-        orgId,
-        automation.id,
-        key,
-        guards.maxTouches,
-        guards.minGapDays,
-        nowMs,
-      );
-      if (!claim.claimed) {
-        result.held += 1;
-        continue;
-      }
+    // A text cannot be sent without a number to send it to.
+    if (automation.action.kind === "send_sms" && !phoneKey) {
+      result.failed += 1;
+      continue;
+    }
+
+    // Every action is claimed, not just the text. Claiming only texts was a
+    // real bug and not a small one: `decide` reads its repeat rules from this
+    // ledger, so an action that never wrote to it stayed at zero touches for
+    // ever and fired again on every run — a once-only "add a note" would have
+    // written the same line onto a customer's timeline every morning for up to
+    // the whole length of its window.
+    //
+    // Keyed on the phone number where there is one, so duplicate records for
+    // one handset do not each get their own note, and on the record id where
+    // there is not.
+    const claim = await claimTouch(
+      orgId,
+      automation.id,
+      phoneKey ?? candidate.customerId,
+      guards.maxTouches,
+      guards.minGapDays,
+      nowMs,
+    );
+    if (!claim.claimed) {
+      result.held += 1;
+      continue;
     }
 
     try {
@@ -563,7 +669,11 @@ async function performAction(
   switch (automation.action.kind) {
     case "send_sms": {
       if (candidate.message === "") throw new Error("empty message");
-      const result = await sendSmsToPhone(candidate.phone, candidate.message, orgId);
+      const result = await sendSmsToPhone(
+        candidate.phone,
+        candidate.message,
+        orgId,
+      );
       if (!result.ok) throw new Error(result.error);
       await appendNote(
         candidate.customerId,
@@ -578,12 +688,23 @@ async function performAction(
       return;
     }
     case "add_note": {
-      await appendNote(candidate.customerId, {
-        text: candidate.message,
-        kind: "note",
-        authorUid: author.uid,
-        authorName: author.name,
-      });
+      // `markContacted: false` is load-bearing. appendNote treats anything but
+      // an explicit false as "we spoke to this person", and a note the app
+      // wrote to itself is not that. Leaving it defaulted stamped
+      // lastContactedAt, which made the pipeline's "untouched for a week" flag
+      // untrue and reset the idle clock every other automation measures from —
+      // so an automation that added a note silently stopped every automation
+      // that waits for a quiet lead, including itself on its next step.
+      await appendNote(
+        candidate.customerId,
+        {
+          text: candidate.message,
+          kind: "note",
+          authorUid: author.uid,
+          authorName: author.name,
+        },
+        { markContacted: false },
+      );
       return;
     }
     case "move_stage": {
@@ -596,12 +717,17 @@ async function performAction(
         updatedBy: author.uid,
         updatedByName: author.name,
       });
-      await appendNote(candidate.customerId, {
-        text: `Moved by "${automation.name}".`,
-        kind: "stage_change",
-        authorUid: author.uid,
-        authorName: author.name,
-      });
+      // Not a contact either: moving a card is bookkeeping, not a conversation.
+      await appendNote(
+        candidate.customerId,
+        {
+          text: `Moved by "${automation.name}".`,
+          kind: "stage_change",
+          authorUid: author.uid,
+          authorName: author.name,
+        },
+        { markContacted: false },
+      );
       return;
     }
     case "notify_crew": {
@@ -616,7 +742,22 @@ async function performAction(
   }
 }
 
-/** The run-wide send budget, shared by every automation in one tick. */
-export function newBudget(): { remaining: number } {
-  return { remaining: MAX_PER_RUN_ALL };
+/**
+ * The run-wide budget, shared by every automation in one tick.
+ *
+ * `startedAt` is the moment the request began rather than the moment this is
+ * called, because the quote follow-up sequence has usually already spent part
+ * of the function's time by then — measuring from here would hand the
+ * automations a full window that is not there.
+ */
+export function newBudget(startedAt: number = Date.now()): RunBudget {
+  return { remaining: MAX_PER_RUN_ALL, deadlineMs: startedAt + RUN_WINDOW_MS };
 }
+
+/**
+ * How long into the request new sends may still be started.
+ *
+ * Forty-five of the sixty `maxDuration` allows, leaving fifteen for the send
+ * in flight, the note written beside it and the run receipt.
+ */
+const RUN_WINDOW_MS = 45_000;

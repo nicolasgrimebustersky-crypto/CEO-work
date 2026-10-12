@@ -2058,3 +2058,223 @@ describe("chat needs standing, not just membership", () => {
     await assertFails(getDoc(doc(dana, "conversations/conv2/messages/m2")));
   });
 });
+
+/* ------------------------------------------------------------- automations */
+
+/**
+ * The automations collection decides whether the app texts customers on its
+ * own, so the rules are stricter than anywhere else in this file: the crew can
+ * read, only the owner can write, and the timing ceilings are checked here as
+ * numbers rather than trusted to the client that typed them.
+ *
+ * The ceilings are repeated in lib/automations.ts (clampGuards) and run twice
+ * on the client. A rule is the only one of the three a stale or tampered
+ * client cannot skip, and what is being bounded is how many strangers get a
+ * text from a number this business needs to keep.
+ */
+function automationDoc(overrides = {}) {
+  return {
+    orgId: "grime-busters",
+    kind: "custom",
+    builtinKey: "",
+    name: "Leaf season",
+    enabled: false,
+    trigger: "job_finished",
+    conditions: {
+      minAmount: null,
+      maxAmount: null,
+      serviceTypes: [],
+      stages: [],
+      propertyTypes: [],
+      addressContains: [],
+    },
+    action: { kind: "send_sms", body: "Hi {first_name}", stage: null },
+    guards: {
+      afterDays: 7,
+      repeatEveryDays: null,
+      maxTouches: 1,
+      minGapDays: 3,
+      maxPerRun: 10,
+      staleAfterDays: 37,
+      startHour: 9,
+      endHour: 17,
+      daysOfWeek: [],
+      stopOnReply: true,
+    },
+    createdBy: "nicolas",
+    createdByName: "Nick",
+    updatedBy: "nicolas",
+    updatedByName: "Nick",
+    ...overrides,
+  };
+}
+
+describe("automations", () => {
+  test("the owner can create, read, arm and delete one", async () => {
+    await assertSucceeds(setDoc(doc(admin, "automations/a1"), automationDoc()));
+    await assertSucceeds(getDoc(doc(admin, "automations/a1")));
+    await assertSucceeds(
+      updateDoc(doc(admin, "automations/a1"), {
+        enabled: true,
+        updatedBy: "nicolas",
+        updatedByName: "Nick",
+      }),
+    );
+    await assertSucceeds(deleteDoc(doc(admin, "automations/a1")));
+  });
+
+  test("crew can read them but not change them", async () => {
+    // "What is this app doing without me" is a fair question for anybody who
+    // works here. Arming one is not their decision.
+    await assertSucceeds(setDoc(doc(admin, "automations/a1"), automationDoc()));
+
+    await assertSucceeds(getDocs(collection(dana, "automations")));
+    await assertFails(updateDoc(doc(dana, "automations/a1"), { enabled: true }));
+    await assertFails(setDoc(doc(dana, "automations/a2"), automationDoc({ createdBy: "dana" })));
+    await assertFails(deleteDoc(doc(dana, "automations/a1")));
+  });
+
+  test("a bootstrap crew account is still not the owner here", async () => {
+    // Alice and Bob are crew by uid and can write almost everything else. This
+    // is the collection where that is not enough.
+    await assertFails(setDoc(doc(alice, "automations/a9"), automationDoc({ createdBy: "alice" })));
+  });
+
+  test("the owner without the emailed code cannot arm anything", async () => {
+    // isAdmin() checks an email claim and nothing else, so on its own it would
+    // let a password-only session switch on a sequence that texts customers.
+    // The same gap #66 closed in inConversation().
+    const ownerNoCode = testEnv
+      .authenticatedContext("nicolas", { email: "nicolas.grimebustersky@gmail.com" })
+      .firestore();
+    await assertFails(setDoc(doc(ownerNoCode, "automations/a8"), automationDoc()));
+
+    // The update path needs its own case. A first version of this test only
+    // covered the create, and dropping isCrew() from `allow update` — the one
+    // edit that would let a password-only session flip a sequence ON — passed
+    // it. Arming an existing automation is the dangerous half, not creating a
+    // disabled one.
+    await assertSucceeds(setDoc(doc(admin, "automations/a8b"), automationDoc()));
+    await assertFails(
+      updateDoc(doc(ownerNoCode, "automations/a8b"), {
+        enabled: true,
+        updatedBy: "nicolas",
+        updatedByName: "Nick",
+      }),
+    );
+    await assertFails(deleteDoc(doc(ownerNoCode, "automations/a8b")));
+  });
+
+  test("an outsider and a signed-out stranger get nothing", async () => {
+    await assertFails(getDocs(collection(mallory, "automations")));
+    await assertFails(setDoc(doc(mallory, "automations/a7"), automationDoc()));
+    await assertFails(getDocs(collection(anon, "automations")));
+    await assertFails(setDoc(doc(anon, "automations/a6"), automationDoc()));
+  });
+
+  test("a create with no org is refused outright", async () => {
+    // Deleted rather than destructured away: an unused binding is a lint
+    // warning, and a test file that warns is a test file people stop reading.
+    const noOrg = automationDoc();
+    delete noOrg.orgId;
+    await assertFails(setDoc(doc(admin, "automations/a5"), noOrg));
+  });
+
+  test("another business's automation cannot be written or read", async () => {
+    await assertFails(
+      setDoc(doc(admin, "automations/a4"), automationDoc({ orgId: "someone-else" })),
+    );
+  });
+
+  test("the org cannot be moved by a later edit", async () => {
+    await assertSucceeds(setDoc(doc(admin, "automations/a1"), automationDoc()));
+    await assertFails(updateDoc(doc(admin, "automations/a1"), { orgId: "someone-else" }));
+  });
+
+  test("every timing ceiling is enforced by the rules, not just the client", async () => {
+    const bad = [
+      ["maxPerRun past the cap", { maxPerRun: 500 }],
+      ["maxTouches past the cap", { maxTouches: 40 }],
+      ["a gap under the floor", { minGapDays: 1 }],
+      ["a repeat under the floor", { repeatEveryDays: 1 }],
+      ["sending before 8am", { startHour: 5 }],
+      ["sending after 7pm", { endHour: 23 }],
+      ["a window that ends before it starts", { startHour: 17, endHour: 9 }],
+      ["a net wider than four months", { staleAfterDays: 7 + 400 }],
+      ["a stale day before the automation is even due", { staleAfterDays: 2 }],
+      ["a non-numeric day count", { afterDays: "soon" }],
+    ];
+    for (const [label, guards] of bad) {
+      await assertFails(
+        setDoc(
+          doc(admin, "automations/bad"),
+          automationDoc({ guards: { ...automationDoc().guards, ...guards } }),
+        ),
+        label,
+      );
+    }
+  });
+
+  test("an unknown trigger or action is refused", async () => {
+    await assertFails(
+      setDoc(doc(admin, "automations/b1"), automationDoc({ trigger: "whenever_i_feel_like_it" })),
+    );
+    await assertFails(
+      setDoc(
+        doc(admin, "automations/b2"),
+        automationDoc({ action: { kind: "call_them", body: "", stage: null } }),
+      ),
+    );
+  });
+
+  test("a message long enough to be five texts is refused", async () => {
+    await assertFails(
+      setDoc(
+        doc(admin, "automations/b3"),
+        automationDoc({ action: { kind: "send_sms", body: "x".repeat(600), stage: null } }),
+      ),
+    );
+  });
+
+  test("a built-in's switch row is writable without a trigger or guards", async () => {
+    // The off switch for lead nurture carries nothing but the switch. Requiring
+    // a full definition on it would make the sequence unswitchable.
+    await assertSucceeds(
+      setDoc(doc(admin, "automations/builtin_lead_nurture"), {
+        orgId: "grime-busters",
+        kind: "builtin",
+        builtinKey: "lead_nurture",
+        name: "Chase unanswered estimates",
+        enabled: false,
+        createdBy: "nicolas",
+        createdByName: "Nick",
+        updatedBy: "nicolas",
+        updatedByName: "Nick",
+      }),
+    );
+  });
+
+  test("but an invented built-in key is not", async () => {
+    await assertFails(
+      setDoc(doc(admin, "automations/builtin_whatever"), {
+        orgId: "grime-busters",
+        kind: "builtin",
+        builtinKey: "whatever",
+        name: "Whatever",
+        enabled: true,
+        createdBy: "nicolas",
+        createdByName: "Nick",
+      }),
+    );
+  });
+
+  test("nobody can read or write the server-only send ledger", async () => {
+    // automationTouches has no match block at all, which is what makes it
+    // server-only: rules deny by default and the Admin SDK bypasses them.
+    await assertFails(getDocs(collection(admin, "automationTouches")));
+    await assertFails(
+      setDoc(doc(admin, "automationTouches/x"), { orgId: "grime-busters", touches: 0 }),
+    );
+    await assertFails(getDocs(collection(dana, "automationTouches")));
+  });
+});

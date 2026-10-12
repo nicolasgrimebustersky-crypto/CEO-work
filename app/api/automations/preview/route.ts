@@ -4,6 +4,7 @@ import {
   clampGuards,
   defaultConditions,
   type AutomationActionKind,
+  type AutomationGuards,
   type AutomationTrigger,
 } from "@/lib/automations";
 import { DEFAULT_ORG_ID } from "@/lib/org";
@@ -123,10 +124,13 @@ function draftToRunnable(raw: unknown): RunnableAutomation {
       body: typeof action.body === "string" ? action.body : "",
       stage: isPipelineStage(action.stage) ? action.stage : null,
     },
+    // clampGuards is total - it takes a partial, a null or nonsense and
+    // always returns a usable set - so the draft's guards go straight in and
+    // come back inside every ceiling, whatever the builder posted.
     guards: clampGuards(
-      (typeof data.guards === "object" && data.guards !== null
-        ? data.guards
-        : {}) as Record<string, never>,
+      typeof data.guards === "object" && data.guards !== null
+        ? (data.guards as Partial<AutomationGuards>)
+        : null,
     ),
   };
 }

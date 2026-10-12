@@ -111,6 +111,16 @@ const MAPPERS = [
     exempt: {},
   },
   {
+    label: "toAutomation -> StoredAutomation",
+    mapperFile: "lib/db/automations.ts",
+    mapper: "toAutomation",
+    typeFile: "lib/db/automations.ts",
+    type: "StoredAutomation",
+    exempt: {
+      id: "taken from the snapshot id, not the document body",
+    },
+  },
+  {
     label: "toCustomer -> Customer",
     mapperFile: "lib/db/customers.ts",
     mapper: "toCustomer",

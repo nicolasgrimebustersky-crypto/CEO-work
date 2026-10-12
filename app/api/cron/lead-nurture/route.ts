@@ -20,7 +20,11 @@ import {
 import { leadNurtureText } from "@/lib/messages";
 import { builtinByKey, builtinEnabled } from "@/lib/automationBuiltins";
 import { adminDb } from "@/lib/server/admin";
-import { newBudget, runAutomation, type AutomationRunResult } from "@/lib/server/automationRun";
+import {
+  newBudget,
+  runAutomation,
+  type AutomationRunResult,
+} from "@/lib/server/automationRun";
 import {
   armedCustomAutomations,
   builtinRow,
@@ -28,7 +32,11 @@ import {
   recordRun,
 } from "@/lib/server/automationStore";
 import { ApiError, errorResponse, requireCronSecret } from "@/lib/server/auth";
-import { appendNote, numberSuppression, optOutForPhone } from "@/lib/server/customerNotes";
+import {
+  appendNote,
+  numberSuppression,
+  optOutForPhone,
+} from "@/lib/server/customerNotes";
 import { sendSmsToPhone } from "@/lib/server/customerSms";
 import { notifyCrew } from "@/lib/server/notify";
 import { isTwilioConfigured } from "@/lib/server/twilio";
@@ -117,7 +125,10 @@ async function rollBackClaim(
   },
 ): Promise<void> {
   await adminDb().runTransaction(async (tx) => {
-    const [customer, shared] = await Promise.all([tx.get(docRef), tx.get(claim.numberRef)]);
+    const [customer, shared] = await Promise.all([
+      tx.get(docRef),
+      tx.get(claim.numberRef),
+    ]);
     const customerStamp = customer.data()?.lastNurtureAt;
     const sharedStamp = shared.data()?.lastNurtureAt;
     const claimedMs = claim.stamp.toMillis();
@@ -132,7 +143,10 @@ async function rollBackClaim(
     }
 
     if (
-      claimStillOwns(sharedStamp instanceof Timestamp ? sharedStamp.toMillis() : null, claimedMs)
+      claimStillOwns(
+        sharedStamp instanceof Timestamp ? sharedStamp.toMillis() : null,
+        claimedMs,
+      )
     ) {
       // The pending marker goes with the claim: this attempt is known not to
       // have sent, so there is nothing unresolved to hold the number for.
@@ -166,7 +180,9 @@ function noteKinds(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value
     .map((note) =>
-      note && typeof note === "object" && typeof (note as { kind?: unknown }).kind === "string"
+      note &&
+      typeof note === "object" &&
+      typeof (note as { kind?: unknown }).kind === "string"
         ? (note as { kind: string }).kind
         : "",
     )
@@ -274,7 +290,9 @@ async function claimStep(
   | { claimed: false; reason: string }
 > {
   const db = adminDb();
-  const numberRef = db.collection(NUMBERS).doc(numberKey(lead.orgId, lead.phoneKey));
+  const numberRef = db
+    .collection(NUMBERS)
+    .doc(numberKey(lead.orgId, lead.phoneKey));
 
   // The estimate this text is about, re-read inside the transaction. The
   // whole sequence exists because of it, and it is the one field that can
@@ -288,7 +306,9 @@ async function claimStep(
   // very case numberSuppression cannot see, because it reads customer stages
   // and accepting a quote does not move one.
   const quoteRef = group.effectiveQuote
-    ? db.collection(group.effectiveQuote.collection).doc(group.effectiveQuote.id)
+    ? db
+        .collection(group.effectiveQuote.collection)
+        .doc(group.effectiveQuote.id)
     : null;
 
   return db.runTransaction(async (tx) => {
@@ -315,21 +335,26 @@ async function claimStep(
     // status on the estimate is not always the record of that. Reading it as
     // closed here means a converted estimate stops the sequence even if
     // nothing updated its status.
-    const converted = typeof quoteData.convertedToId === "string" && quoteData.convertedToId;
+    const converted =
+      typeof quoteData.convertedToId === "string" && quoteData.convertedToId;
 
     const data = fresh.exists ? (fresh.data() ?? {}) : {};
-    const previous = data.lastNurtureAt instanceof Timestamp ? data.lastNurtureAt : null;
+    const previous =
+      data.lastNurtureAt instanceof Timestamp ? data.lastNurtureAt : null;
     const phone = typeof data.phone === "string" ? data.phone : "";
 
     const sharedData = sharedSnap.exists ? (sharedSnap.data() ?? {}) : {};
     const previousShared =
-      sharedData.lastNurtureAt instanceof Timestamp ? sharedData.lastNurtureAt : null;
+      sharedData.lastNurtureAt instanceof Timestamp
+        ? sharedData.lastNurtureAt
+        : null;
 
     const decision = claimDecision(
       {
         cas: {
           exists: fresh.exists,
-          freshStep: typeof data.nurtureStep === "number" ? data.nurtureStep : 0,
+          freshStep:
+            typeof data.nurtureStep === "number" ? data.nurtureStep : 0,
           freshLastNurtureAtMs: previous ? previous.toMillis() : null,
           expectedStep: lead.nurtureStep,
           expectedLastNurtureAtMs: lead.lastNurtureAtMs,
@@ -338,11 +363,13 @@ async function claimStep(
         // reply, a stage change, a do-not-knock mark, a withdrawn consent or
         // an accepted estimate in the meantime all land in these fields.
         fresh: {
-          pipelineStage: typeof data.pipelineStage === "string" ? data.pipelineStage : "",
+          pipelineStage:
+            typeof data.pipelineStage === "string" ? data.pipelineStage : "",
           status: typeof data.status === "string" ? data.status : "",
           quoteStatus: converted ? "accepted" : freshQuoteStatus,
           quoteSentAtMs: freshQuoteSentAt,
-          nurtureStep: typeof data.nurtureStep === "number" ? data.nurtureStep : 0,
+          nurtureStep:
+            typeof data.nurtureStep === "number" ? data.nurtureStep : 0,
           lastNurtureAtMs: previous ? previous.toMillis() : null,
           hasReplied: hasInboundNote(noteKinds(data.notes)),
           phone,
@@ -354,14 +381,17 @@ async function claimStep(
           step: typeof sharedData.step === "number" ? sharedData.step : 0,
           lastNurtureAtMs: previousShared ? previousShared.toMillis() : null,
           pendingStep:
-            typeof sharedData.pendingStep === "number" ? sharedData.pendingStep : null,
+            typeof sharedData.pendingStep === "number"
+              ? sharedData.pendingStep
+              : null,
         },
         phoneKeys: { expected: lead.phoneKey, fresh: phoneKey(phone) },
       },
       nowMs,
     );
 
-    if (!decision.claim) return { claimed: false as const, reason: decision.reason };
+    if (!decision.claim)
+      return { claimed: false as const, reason: decision.reason };
 
     const stamp = Timestamp.now();
     tx.update(docRef, { lastNurtureAt: stamp });
@@ -406,11 +436,12 @@ async function claimStep(
  */
 async function runArmedAutomations(
   rows: Awaited<ReturnType<typeof loadAutomationRows>>,
+  startedAt: number,
 ): Promise<AutomationRunResult[]> {
   const armed = armedCustomAutomations(rows);
   if (armed.length === 0) return [];
 
-  const budget = newBudget();
+  const budget = newBudget(startedAt);
   const results: AutomationRunResult[] = [];
 
   for (const automation of armed) {
@@ -460,6 +491,9 @@ async function runArmedAutomations(
  */
 export async function GET(request: Request): Promise<Response> {
   try {
+    // Measured from here, so the automations below know how much of the
+    // function's sixty seconds the follow-up sequence has already spent.
+    const startedAt = Date.now();
     requireCronSecret(request);
     if (!isTwilioConfigured) {
       throw new ApiError(503, "Twilio is not configured on this deployment.");
@@ -486,7 +520,7 @@ export async function GET(request: Request): Promise<Response> {
       // Switched off, but the owner's own automations are a separate decision
       // and still run. Returning here instead of wrapping the body below in a
       // conditional keeps this route's one long happy path unindented.
-      const automations = await runArmedAutomations(rows);
+      const automations = await runArmedAutomations(rows, startedAt);
       return Response.json({
         ok: true,
         skipped: "lead_nurture is switched off on the Automations screen",
@@ -544,7 +578,8 @@ export async function GET(request: Request): Promise<Response> {
         // cron runs on the Admin SDK, which bypasses firestore.rules entirely,
         // so the org filter the rest of the app gets for free is written here.
         if (asOrgId(data.orgId) !== DEFAULT_ORG_ID) continue;
-        const customerId = typeof data.customerId === "string" ? data.customerId : "";
+        const customerId =
+          typeof data.customerId === "string" ? data.customerId : "";
         if (!customerId) continue;
         const list = byCustomer.get(customerId);
         const record = {
@@ -552,7 +587,8 @@ export async function GET(request: Request): Promise<Response> {
           id: doc.id,
           customerId,
           status: typeof data.status === "string" ? data.status : "",
-          sentAtMs: data.sentAt instanceof Timestamp ? data.sentAt.toMillis() : 0,
+          sentAtMs:
+            data.sentAt instanceof Timestamp ? data.sentAt.toMillis() : 0,
           amount: amountOf(data),
           convertedToId:
             typeof data.convertedToId === "string" && data.convertedToId
@@ -609,7 +645,8 @@ export async function GET(request: Request): Promise<Response> {
       // are not this org's to act on, and ours are not theirs.
       if (asOrgId(data.orgId) !== DEFAULT_ORG_ID) continue;
 
-      const stage = typeof data.pipelineStage === "string" ? data.pipelineStage : "";
+      const stage =
+        typeof data.pipelineStage === "string" ? data.pipelineStage : "";
       // An open estimate is the reason for the message, so a record without
       // one is here only to vote on its number. The stage is checked by
       // nurtureDecision rather than here: a record that has moved on still has
@@ -631,9 +668,12 @@ export async function GET(request: Request): Promise<Response> {
         quoteSentAtMs: quote?.sentAtMs ?? 0,
         quote,
         latestQuote: latestQuotes.get(doc.id) ?? null,
-        nurtureStep: typeof data.nurtureStep === "number" ? data.nurtureStep : 0,
+        nurtureStep:
+          typeof data.nurtureStep === "number" ? data.nurtureStep : 0,
         lastNurtureAtMs:
-          data.lastNurtureAt instanceof Timestamp ? data.lastNurtureAt.toMillis() : null,
+          data.lastNurtureAt instanceof Timestamp
+            ? data.lastNurtureAt.toMillis()
+            : null,
         hasReplied: hasInboundNote(noteKinds(data.notes)),
         consent: readConsent(data.smsConsent),
         optedOut: Boolean(data.smsOptOut),
@@ -651,7 +691,12 @@ export async function GET(request: Request): Promise<Response> {
     let sent = 0;
     let spent = 0;
 
-    for (const { lead, effectiveStep, effectiveLastNurtureAtMs, effectiveQuote } of chosen) {
+    for (const {
+      lead,
+      effectiveStep,
+      effectiveLastNurtureAtMs,
+      effectiveQuote,
+    } of chosen) {
       // One lead's problem is one lead's problem. Before this, a single thrown
       // error — a corrupt counter was enough — ended the run and abandoned
       // every lead after it in the list.
@@ -691,7 +736,11 @@ export async function GET(request: Request): Promise<Response> {
           now,
         );
         if (!preview.send) {
-          outcomes.push({ customerId: lead.id, action: "skipped", reason: preview.reason });
+          outcomes.push({
+            customerId: lead.id,
+            action: "skipped",
+            reason: preview.reason,
+          });
           continue;
         }
 
@@ -769,13 +818,21 @@ export async function GET(request: Request): Promise<Response> {
         if (stopReason) {
           await rollBackClaim(docRef, claim);
           released = true;
-          outcomes.push({ customerId: lead.id, action: "skipped", reason: stopReason });
+          outcomes.push({
+            customerId: lead.id,
+            action: "skipped",
+            reason: stopReason,
+          });
           continue;
         }
 
         // The amount from the estimate the decision was made on, so the price
         // in the message is the price the day counts were measured from.
-        const body = leadNurtureText(claim.kind, lead.firstName, effectiveQuote?.amount ?? 0);
+        const body = leadNurtureText(
+          claim.kind,
+          lead.firstName,
+          effectiveQuote?.amount ?? 0,
+        );
         // Sent to the number the claim validated, not to whatever the customer
         // record says by now. sendSmsToCustomerId re-read the document, so a
         // phone edit between the claim and the send meant marketing going to a
@@ -847,7 +904,10 @@ export async function GET(request: Request): Promise<Response> {
         // person to look at — which is the whole point of it. If it succeeds
         // and the customer write below throws, progress is still correct,
         // because this document is the authoritative one.
-        await claim.numberRef.set({ step: step + 1, pendingStep: null }, { merge: true });
+        await claim.numberRef.set(
+          { step: step + 1, pendingStep: null },
+          { merge: true },
+        );
         await docRef.update({ nurtureStep: step + 1 });
 
         await appendNote(lead.id, {
@@ -860,7 +920,8 @@ export async function GET(request: Request): Promise<Response> {
         outcomes.push({ customerId: lead.id, action: "sent", step: step + 1 });
         await wait(SEND_INTERVAL_MS);
       } catch (error) {
-        const reason = error instanceof Error ? error.message : "unexpected error";
+        const reason =
+          error instanceof Error ? error.message : "unexpected error";
 
         // A claim that never became a text is given back. Leaving it would
         // block every record for this number for the minimum gap over a
@@ -956,7 +1017,7 @@ export async function GET(request: Request): Promise<Response> {
       });
     }
 
-    const automations = await runArmedAutomations(rows);
+    const automations = await runArmedAutomations(rows, startedAt);
 
     return Response.json({
       ok: true,
