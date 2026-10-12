@@ -18,7 +18,15 @@ import {
   type NurtureKind,
 } from "@/lib/leadNurture";
 import { leadNurtureText } from "@/lib/messages";
+import { builtinByKey, builtinEnabled } from "@/lib/automationBuiltins";
 import { adminDb } from "@/lib/server/admin";
+import { newBudget, runAutomation, type AutomationRunResult } from "@/lib/server/automationRun";
+import {
+  armedCustomAutomations,
+  builtinRow,
+  loadAutomationRows,
+  recordRun,
+} from "@/lib/server/automationStore";
 import { ApiError, errorResponse, requireCronSecret } from "@/lib/server/auth";
 import { appendNote, numberSuppression, optOutForPhone } from "@/lib/server/customerNotes";
 import { sendSmsToPhone } from "@/lib/server/customerSms";
@@ -386,6 +394,50 @@ async function claimStep(
 }
 
 /**
+ * Runs every armed custom automation, inside one shared send budget.
+ *
+ * Each automation is handled in its own try, for the reason the lead loop
+ * below already learned: one thrown error used to abandon every lead after it,
+ * and one broken automation must not be able to stop the others.
+ *
+ * The budget is shared rather than per-automation, because six automations
+ * each capped at twenty-five is a hundred and fifty texts from one tick —
+ * which is the thing the per-automation cap was supposed to prevent.
+ */
+async function runArmedAutomations(
+  rows: Awaited<ReturnType<typeof loadAutomationRows>>,
+): Promise<AutomationRunResult[]> {
+  const armed = armedCustomAutomations(rows);
+  if (armed.length === 0) return [];
+
+  const budget = newBudget();
+  const results: AutomationRunResult[] = [];
+
+  for (const automation of armed) {
+    try {
+      const result = await runAutomation(DEFAULT_ORG_ID, automation, budget);
+      results.push(result);
+      const summary =
+        result.sent === 0 && result.failed === 0
+          ? `Nothing to do — ${result.considered} checked`
+          : `${result.sent} sent, ${result.failed} failed, ${result.held} held`;
+      await recordRun(automation.id, summary, result.sent);
+    } catch {
+      results.push({
+        automationId: automation.id,
+        name: automation.name,
+        sent: 0,
+        failed: 0,
+        held: 0,
+        considered: 0,
+      });
+    }
+  }
+
+  return results;
+}
+
+/**
  * Nightly lead nurture, triggered by the Vercel cron in vercel.json.
  *
  * Three texts across a lead's first month and then nothing — see
@@ -411,6 +463,35 @@ export async function GET(request: Request): Promise<Response> {
     requireCronSecret(request);
     if (!isTwilioConfigured) {
       throw new ApiError(503, "Twilio is not configured on this deployment.");
+    }
+
+    // One cron tick now drives two things: this sequence, and whatever the
+    // owner has built on the Automations screen. They share a tick because the
+    // Hobby plan allows two cron jobs in total and both slots are already
+    // spent — a third entry in vercel.json is silently dropped, which is the
+    // worst way to find out.
+    //
+    // The switch is read before any work. Until this existed, turning the
+    // sequence off meant editing vercel.json and redeploying, which is the
+    // wrong shape for a decision somebody might want to make on a Saturday
+    // because a customer complained. A missing row means on — see
+    // lib/automationBuiltins.ts for why that is the only defensible default.
+    const rows = await loadAutomationRows(DEFAULT_ORG_ID);
+    const nurture = builtinByKey("lead_nurture");
+    const nurtureOn = builtinEnabled(
+      nurture ? builtinRow(rows, nurture.docId) : undefined,
+    );
+
+    if (!nurtureOn) {
+      // Switched off, but the owner's own automations are a separate decision
+      // and still run. Returning here instead of wrapping the body below in a
+      // conditional keeps this route's one long happy path unindented.
+      const automations = await runArmedAutomations(rows);
+      return Response.json({
+        ok: true,
+        skipped: "lead_nurture is switched off on the Automations screen",
+        automations,
+      });
     }
 
     const db = adminDb();
@@ -875,8 +956,11 @@ export async function GET(request: Request): Promise<Response> {
       });
     }
 
+    const automations = await runArmedAutomations(rows);
+
     return Response.json({
       ok: true,
+      automations,
       examined: candidates.filter((c) => c.eligible).length,
       records: snap.size,
       sent,

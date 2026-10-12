@@ -26,6 +26,26 @@ export function MapIcon({ active }: NavIconProps) {
   );
 }
 
+/**
+ * A dial with a spark: something set once that then runs by itself.
+ *
+ * Not a robot and not a lightning bolt. A robot reads as "artificial
+ * intelligence", which these are emphatically not, and a bare bolt is already
+ * what every app uses for "fast". A control with a mark beside it is closer to
+ * what this screen actually holds — settings that act on their own.
+ */
+export function AutomationIcon({ active }: NavIconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className="size-6" aria-hidden="true">
+      <g fill="none" stroke="currentColor" strokeWidth={w(active)} strokeLinecap="round">
+        <path d="M4 7h9m4 0h3M4 17h3m4 0h9" />
+        <circle cx="15" cy="7" r="2.3" />
+        <circle cx="9" cy="17" r="2.3" />
+      </g>
+    </svg>
+  );
+}
+
 /** A path between two dropped pins — a walking route, not a map. */
 export function RouteIcon({ active }: NavIconProps) {
   return (
