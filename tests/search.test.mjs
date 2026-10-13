@@ -137,6 +137,28 @@ describe("spelling is forgiven, within reason", () => {
     assert.equal(allowedTypos("crestwood"), 2);
   });
 
+  test("a number is never a typo for a different number", () => {
+    // Found by running the thing: every demo customer shares one phone, and
+    // searching a DIFFERENT number two digits away returned all fifteen of
+    // them. `5025550188` and `5025550100` are two people, not one misspelling.
+    // Letters tolerate a slip; digits must not, because there is no such thing
+    // as nearly the right phone number.
+    assert.equal(scoreTerm("5025550188", "5025550100"), 0);
+    assert.equal(scoreTerm("0188", "0100"), 0);
+    assert.equal(scoreTerm("451", "450"), 0, "and nearly the right money is the wrong money");
+  });
+
+  test("but the right number still matches, however it was punctuated", () => {
+    // The guard above must not cost the thing the feature is for.
+    assert.ok(scoreTerm("5025550100", "5025550100") > 0);
+    assert.ok(scoreTerm("5025550100", "502 555 0100") > 0);
+    assert.ok(scoreTerm("0100", "502 555 0100") > 0);
+  });
+
+  test("a word is not a typo for a number either", () => {
+    assert.equal(scoreTerm("oaks", "0188"), 0);
+  });
+
   test("a different word is not a typo", () => {
     assert.equal(scoreTerm("zzzz", "dana reyes"), 0);
     assert.equal(scoreRecord(customer, terms("plumbing")), 0);

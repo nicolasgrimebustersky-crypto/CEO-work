@@ -205,7 +205,23 @@ export function scoreTerm(term: string, text: string): number {
     }
   }
 
-  const cap = allowedTypos(term);
+  // Digits are never typo-corrected, on either side.
+  //
+  // Found by running the app rather than by reading it: every demo customer
+  // shares one phone number, and searching a DIFFERENT number two digits away
+  // returned all fifteen of them as near misses. `5025550188` and
+  // `5025550100` are two people; there is no such thing as nearly the right
+  // phone number, nearly the right invoice number, or nearly the right price.
+  //
+  // Letters are the opposite — a name misremembered by one letter is the case
+  // this whole branch exists for. So the forgiveness is scoped to words that
+  // are actually words.
+  // One guard, on the term, rather than one on each side. A second check
+  // skipping numeric WORDS looked like belt and braces and was neither: a
+  // mutation removing either one survived, because each alone blocked every
+  // case the other did, and the length and distance checks below already
+  // refuse a word against a number. Untestable redundancy is not safety.
+  const cap = /^\d+$/.test(term) ? 0 : allowedTypos(term);
   if (cap > 0) {
     for (const word of words) {
       // Only against words of a comparable length; `dan` against `gutters` is
