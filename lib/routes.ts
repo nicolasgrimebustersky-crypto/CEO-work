@@ -36,6 +36,7 @@ export const routes = {
   automations: "/automations",
   dashboard: "/dashboard",
   reports: "/reports",
+  search: "/search",
   account: "/account",
   privacy: "/privacy",
 } as const;

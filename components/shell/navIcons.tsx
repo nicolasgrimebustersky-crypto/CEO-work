@@ -46,6 +46,18 @@ export function AutomationIcon({ active }: NavIconProps) {
   );
 }
 
+/** A magnifier. The one glyph nobody needs a label to read. */
+export function SearchIcon({ active }: NavIconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className="size-6" aria-hidden="true">
+      <g fill="none" stroke="currentColor" strokeWidth={w(active)} strokeLinecap="round">
+        <circle cx="11" cy="11" r="6.2" />
+        <path d="m15.6 15.6 4.4 4.4" />
+      </g>
+    </svg>
+  );
+}
+
 /** A path between two dropped pins — a walking route, not a map. */
 export function RouteIcon({ active }: NavIconProps) {
   return (

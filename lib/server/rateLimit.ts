@@ -120,6 +120,21 @@ export const OTP_VERIFY_LIMIT: RateLimitRule = {
   label: "code attempts",
 };
 
+/**
+ * Redeeming a "remember this device" token.
+ *
+ * Tighter than the code attempts next door, and for a different reason. A
+ * wrong code is a person mistyping six digits; a wrong device token is never a
+ * typo, because nobody types one — it is read from storage or it is somebody
+ * trying ids. Ten an hour is far more than a real phone needs (one per
+ * sign-in) and far less than a search is worth.
+ */
+export const TRUSTED_DEVICE_LIMIT: RateLimitRule = {
+  max: 10,
+  windowMs: 60 * 60 * 1000,
+  label: "device checks",
+};
+
 export const QUOTE_RESPONSE_LIMIT: RateLimitRule = {
   max: 12,
   windowMs: 60 * 60 * 1000,

@@ -17,6 +17,7 @@ import { NotificationSettings } from "./NotificationSettings";
 import { PendingAccounts } from "./PendingAccounts";
 import { ApiKeys } from "./ApiKeys";
 import { TextingStatus } from "./TextingStatus";
+import { TrustedDevices } from "./TrustedDevices";
 import { useOpenMenu } from "@/components/shell/menu";
 import { MenuIcon } from "@/components/shell/navIcons";
 
@@ -50,7 +51,10 @@ export function AccountScreen() {
     setSaved(false);
     setSaveError(null);
     try {
-      await updateUserProfile(author.uid, { displayName: displayName.trim(), phone });
+      await updateUserProfile(author.uid, {
+        displayName: displayName.trim(),
+        phone,
+      });
       setSaved(true);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Could not save.");
@@ -73,7 +77,9 @@ export function AccountScreen() {
               <MenuIcon />
             </button>
           ) : null}
-          <h1 className="text-2xl font-extrabold tracking-tight text-ink">Account</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight text-ink">
+            Account
+          </h1>
         </div>
         {email ? (
           <p className="mt-1 text-base font-semibold text-muted">{email}</p>
@@ -86,8 +92,8 @@ export function AccountScreen() {
             role="alert"
             className="rounded-xl border border-danger/60 bg-danger/15 px-3 py-3 text-base font-semibold text-ink"
           >
-            Can&apos;t read the team roster: {error}. Check that your uid is in the
-            Firestore rules allowlist.
+            Can&apos;t read the team roster: {error}. Check that your uid is in
+            the Firestore rules allowlist.
           </p>
         ) : null}
 
@@ -130,14 +136,17 @@ export function AccountScreen() {
                 style={{ borderLeft: `4px solid ${colorFor(user.uid)}` }}
               >
                 <div className="flex flex-wrap items-center gap-2">
-                  <UserChip name={user.displayName} color={colorFor(user.uid)} />
+                  <UserChip
+                    name={user.displayName}
+                    color={colorFor(user.uid)}
+                  />
                   {user.uid === author?.uid ? (
                     <span className="text-sm font-bold text-muted">you</span>
                   ) : null}
                 </div>
                 <p className="mt-1.5 text-sm font-semibold text-muted">
-                  {user.phone ? formatPhone(user.phone) : "No phone set"} · location{" "}
-                  {formatRelative(user.lastLocationUpdate)}
+                  {user.phone ? formatPhone(user.phone) : "No phone set"} ·
+                  location {formatRelative(user.lastLocationUpdate)}
                 </p>
               </li>
             ))}
@@ -147,6 +156,8 @@ export function AccountScreen() {
         <PendingAccounts />
 
         <NotificationSettings />
+
+        <TrustedDevices />
 
         <TextingStatus />
 
@@ -189,8 +200,9 @@ export function AccountScreen() {
 
             {sharing && permission === "denied" ? (
               <p className="mt-3 rounded-xl border border-warn/70 bg-warn/20 px-3 py-2.5 text-sm font-semibold text-ink">
-                Sharing is on, but this device has location turned off for the app.
-                Open Settings → Privacy &amp; Security → Location Services to allow it.
+                Sharing is on, but this device has location turned off for the
+                app. Open Settings → Privacy &amp; Security → Location Services
+                to allow it.
               </p>
             ) : null}
           </div>
@@ -214,8 +226,8 @@ export function AccountScreen() {
             Sign out
           </Button>
           <p className="text-sm font-semibold text-muted">
-            Accounts can only be created from the Firebase console. Signing out does
-            not remove anything.
+            Accounts can only be created from the Firebase console. Signing out
+            does not remove anything.
           </p>
 
           <div className="mt-4 border-t border-line pt-4">
@@ -223,13 +235,16 @@ export function AccountScreen() {
               Delete my account
             </Button>
             <p className="mt-2 pb-6 text-sm font-semibold text-muted">
-              Removes your sign-in and your profile. Customer records stay — they
-              belong to the business, not to one account.
+              Removes your sign-in and your profile. Customer records stay —
+              they belong to the business, not to one account.
             </p>
           </div>
         </section>
 
-        <DeleteAccountSheet open={deleting} onClose={() => setDeleting(false)} />
+        <DeleteAccountSheet
+          open={deleting}
+          onClose={() => setDeleting(false)}
+        />
       </div>
     </div>
   );
