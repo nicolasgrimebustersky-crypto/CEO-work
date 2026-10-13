@@ -29,7 +29,79 @@ import { test, describe } from "node:test";
 import { readFileSync, readdirSync } from "node:fs";
 
 const DB_DIR = new URL("../lib/db/", import.meta.url);
-const read = (f) => readFileSync(new URL(f, DB_DIR), "utf8");
+/**
+ * Comments blanked, line numbers preserved.
+ *
+ * The scanner below looks for `setDoc(` and friends in the raw text, which
+ * means prose about a create is indistinguishable from a create. That is not
+ * hypothetical: a comment in lib/db/automations.ts explaining why a write uses
+ * `setDoc(..., { merge: true })` was reported as an unclassified create site
+ * with no orgId, and the only honest fixes were to reword the comment or to
+ * stop reading comments. Rewording teaches the wrong lesson — that the test
+ * owns the prose — and the next person would add an exemption for a phantom
+ * instead.
+ *
+ * `mappersKeepFields.test.mjs` learned the mirror of this: a comment must not
+ * be able to SATISFY a check. A comment must not be able to FAIL one either.
+ *
+ * String state is tracked so a `//` inside a URL literal, or a `/*` inside a
+ * regex-looking string, does not swallow the rest of the file. Newlines
+ * survive, so every reported line number still points at the real line.
+ */
+function stripCommentsKeepingLines(source) {
+  let out = "";
+  let i = 0;
+  let quote = null;
+  while (i < source.length) {
+    const ch = source[i];
+    const next = source[i + 1];
+
+    if (quote) {
+      if (ch === "\\") {
+        out += ch + (next ?? "");
+        i += 2;
+        continue;
+      }
+      if (ch === quote) quote = null;
+      out += ch;
+      i += 1;
+      continue;
+    }
+
+    if (ch === '"' || ch === "'" || ch === "`") {
+      quote = ch;
+      out += ch;
+      i += 1;
+      continue;
+    }
+
+    if (ch === "/" && next === "/") {
+      while (i < source.length && source[i] !== "\n") {
+        out += " ";
+        i += 1;
+      }
+      continue;
+    }
+
+    if (ch === "/" && next === "*") {
+      out += "  ";
+      i += 2;
+      while (i < source.length && !(source[i] === "*" && source[i + 1] === "/")) {
+        out += source[i] === "\n" ? "\n" : " ";
+        i += 1;
+      }
+      out += "  ";
+      i += 2;
+      continue;
+    }
+
+    out += ch;
+    i += 1;
+  }
+  return out;
+}
+
+const read = (f) => stripCommentsKeepingLines(readFileSync(new URL(f, DB_DIR), "utf8"));
 
 /** Collections whose create rule demands createsInMyOrg, read from the rules. */
 function orgScopedCollections() {
@@ -142,6 +214,7 @@ const MUST_HAVE_ORG_ID = [
   "knockRoutes.ts",
   "territories.ts",
   "services.ts",
+  "automations.ts",
 ];
 
 /** Whole files exempt, with the reason. */

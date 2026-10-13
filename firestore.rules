@@ -171,6 +171,42 @@ service cloud.firestore {
     // Every write is stamped with its author. Enforcing it here rather than
     // trusting the client means an attribution can't be forged even if
     // someone runs modified code with a valid session.
+    // The hard ceilings on an automation's timing, as numbers rather than as
+    // trust. Each one is the same value as the constant of the same name in
+    // lib/automations.ts, and the reasoning for each lives there.
+    function validAutomationGuards(g) {
+      return g.afterDays is int && g.afterDays >= 1 && g.afterDays <= 365
+        && g.maxTouches is int && g.maxTouches >= 1 && g.maxTouches <= 4
+        && g.minGapDays is int && g.minGapDays >= 3 && g.minGapDays <= 90
+        && g.maxPerRun is int && g.maxPerRun >= 1 && g.maxPerRun <= 25
+        && g.staleAfterDays is int
+        && g.staleAfterDays > g.afterDays
+        && g.staleAfterDays <= g.afterDays + 120
+        && g.startHour is int && g.startHour >= 8 && g.startHour <= 19
+        && g.endHour is int && g.endHour > g.startHour && g.endHour <= 19
+        && g.stopOnReply is bool
+        && g.daysOfWeek is list && g.daysOfWeek.size() <= 7
+        && (g.repeatEveryDays == null
+            || (g.repeatEveryDays is int
+                && g.repeatEveryDays >= 3
+                && g.repeatEveryDays <= 365));
+    }
+
+    function validAutomation() {
+      let data = request.resource.data;
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 80
+        && data.enabled is bool
+        && data.kind in ['builtin', 'custom']
+        && (data.kind == 'builtin'
+            ? data.builtinKey in ['lead_nurture', 'money_reminders']
+            : (data.trigger in ['estimate_unanswered', 'invoice_overdue', 'job_finished',
+                                'lead_idle', 'customer_quiet']
+               && data.action.kind in ['send_sms', 'notify_crew', 'add_note', 'move_stage']
+               && data.action.body is string
+               && data.action.body.size() <= 480
+               && validAutomationGuards(data.guards)));
+    }
+
     function stampedByCaller(field) {
       return request.resource.data[field] == request.auth.uid;
     }
@@ -594,6 +630,41 @@ service cloud.firestore {
 
     match /apiKeys/{keyHash} {
       allow read, write: if isAdmin() && hasVerifiedSession();
+    }
+
+    // What the app does on its own, and the switches for it.
+    //
+    // Read by the crew, because "what is this app doing without me" is a fair
+    // question for anybody who works here. Written only by the owner: arming
+    // one of these is a decision to text customers with nobody looking at the
+    // list first, and an approved crew account is not the right level of trust
+    // for that. `isCrew()` is ANDed with `isAdmin()` rather than used alone
+    // because `isAdmin()` checks an email claim and nothing else — on its own
+    // it would let a password-only session that never entered its emailed code
+    // arm a sequence. That is the same gap #66 closed in `inConversation()`.
+    //
+    // The ceilings below repeat the ones in lib/automations.ts on purpose.
+    // `clampGuards` already runs in the builder and again in the cron, but a
+    // rule is the only one of the three that an out-of-date or tampered client
+    // cannot skip, and what is being bounded is how many strangers get a text
+    // from a number this business needs to keep.
+    //
+    // A built-in's row carries only its switch, so it is validated on a
+    // different branch: requiring a trigger and guards on it would make the
+    // off switch for lead nurture unwritable.
+    match /automations/{automationId} {
+      allow read: if isCrew() && belongsToMyOrg(resource.data);
+      allow create: if isCrew()
+        && isAdmin()
+        && stampedByCaller('createdBy')
+        && validAutomation()
+        && createsInMyOrg(request.resource.data);
+      allow update: if isCrew()
+        && isAdmin()
+        && belongsToMyOrg(resource.data)
+        && validAutomation()
+        && keepsOrg();
+      allow delete: if isCrew() && isAdmin() && belongsToMyOrg(resource.data);
     }
 
     match /services/{serviceId} {

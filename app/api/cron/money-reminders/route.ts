@@ -2,7 +2,10 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 import { formatMoneyExact } from "@/lib/format";
 import { hourInBusinessTimezone, BUSINESS_TIMEZONE } from "@/lib/notifications/quietHours";
+import { builtinByKey, builtinEnabled } from "@/lib/automationBuiltins";
+import { DEFAULT_ORG_ID } from "@/lib/org";
 import { adminDb } from "@/lib/server/admin";
+import { builtinRow, loadAutomationRows } from "@/lib/server/automationStore";
 import { errorResponse, requireCronSecret } from "@/lib/server/auth";
 import { notifyCrew } from "@/lib/server/notify";
 
@@ -69,6 +72,20 @@ function daysLate(dueAt: Timestamp, now: number): number {
 export async function GET(request: Request): Promise<Response> {
   try {
     requireCronSecret(request);
+
+    // Switchable from the Automations screen, like the quote follow-up. This
+    // one only ever notifies the crew — it does not text a customer — so the
+    // cost of it being on is a phone buzzing rather than a number getting
+    // reported. It still gets a switch, because something that cannot be
+    // turned off is something nobody is quite sure is on.
+    const reminders = builtinByKey("money_reminders");
+    const rows = await loadAutomationRows(DEFAULT_ORG_ID);
+    if (!builtinEnabled(reminders ? builtinRow(rows, reminders.docId) : undefined)) {
+      return Response.json({
+        ok: true,
+        skipped: "money_reminders is switched off on the Automations screen",
+      });
+    }
 
     const db = adminDb();
     const now = Date.now();

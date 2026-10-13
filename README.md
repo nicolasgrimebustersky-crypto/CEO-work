@@ -278,6 +278,15 @@ The SMS routes and the nightly cron run server-side with the Firebase Admin SDK.
    openssl rand -hex 32
    ```
 
+   **Do not skip this one.** Without it both cron routes return
+   `500 CRON_SECRET is not configured` on every run, and nothing anywhere says
+   so: Vercel reports the job as having been invoked, the code is deployed and
+   correct, and the follow-up texts simply never go out. It was missing in
+   production for months and the way it was eventually found was reading the
+   project's environment variables, not the logs. The Automations screen now
+   shows "Never run" against a sequence in this state, which is the symptom to
+   look for.
+
 ### 7. Twilio
 
 1. Sign up at [twilio.com](https://www.twilio.com/) and verify your own mobile.
@@ -706,6 +715,61 @@ backwards is a deliberate manual choice.
 `pipelineStage` is separate from `customer.status` on purpose: one answers "what
 does this lead need next", the other decides the map pin colour. They are kept
 in step automatically, so marking a pin *not interested* also closes the deal.
+
+## Automations
+
+`/automations` is the one place that answers "what does this app do without me
+being asked?". Everything that can act on a clock appears there — the two
+sequences that ship with the app and anything built in the screen — each with
+the same switch.
+
+**The two built-in ones.** *Chase unanswered estimates* texts somebody who was
+sent an estimate and has not accepted, declined or replied: day 3, day 10, day
+30, then nothing, and any reply ends it. *Flag money that hasn't come in*
+notifies the crew about a newly overdue invoice and posts a Monday total; it
+never texts a customer. Both can be switched off from the screen without a
+deploy. A sequence with no switch row saved yet counts as **on** — both were
+written to run and `vercel.json` has been asking for them daily, so a missing
+document is an upgrade that has not been through the screen, not a decision to
+stop.
+
+**Building one.** An automation is one sentence: *N days after something
+happens, do this to the people who match.* Triggers are an unanswered estimate,
+an overdue invoice, a finished job, a lead idle in one stage, and a customer
+nothing has happened to. Actions are a text, a note on the timeline, a pipeline
+move, or a notification to the crew. Filters are amount, service, stage,
+property type and a substring of the address.
+
+**It cannot be made unsafe, and that is the design.** Every number goes through
+`clampGuards` in `lib/automations.ts` on the way in and again on the way out,
+and `firestore.rules` repeats the same ceilings — a rule is the only one of the
+three a stale or tampered client cannot skip. The limits: at most 4 messages
+per person per automation, at least 3 days between two of them, at most 25
+sends per automation per run and 40 across all of them, sending only between
+8am and 7pm local, and a net no wider than 120 days.
+
+That last one matters more than it looks. The day you switch an automation on,
+every record that has ever matched its trigger matches *right now* — "14 days
+after the estimate was sent" is just as true of an estimate from last spring.
+Without a cap on the width of the window, the first run reaches years back at
+once. That is both the worst thing the app could do to a customer list and the
+exact traffic shape carriers treat as spam.
+
+"Reply STOP to opt out." is appended by `automationSmsText`, not stored on the
+automation, so it cannot be edited out or lost when a message is duplicated.
+An opt-out is honoured per phone number rather than per record, because the
+Meta lead webhook creates a fresh customer row per form submission and one
+handset can sit in the database several times.
+
+**Preview before arming.** Saving an automation never switches it on. The
+builder's "Who would this reach?" runs the same code the cron runs and lists
+real names beside the exact wording, with a "why the others are not getting it"
+list underneath. Editing any field clears the preview, so nobody arms a
+different automation from the one he read.
+
+Custom automations run on the same daily tick as the quote follow-up. That is
+forced rather than chosen: the Vercel Hobby plan allows two cron jobs in total,
+both slots are spent, and a third entry in `vercel.json` is silently ignored.
 
 ## Facebook / Instagram leads
 

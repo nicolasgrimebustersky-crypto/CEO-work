@@ -36,6 +36,10 @@ const CALLS = {
   jobFinishedText: ["Noah"],
   reviewRequestText: ["Marta", "https://g.page/r/ExampleToken/review"],
   leadNurtureText: ["nudge", "Marta", 450],
+  automationSmsText: [
+    "Hi {first_name}, {business} here — want the gutters cleared before the leaves drop?",
+    { first_name: "Marta", business: "Grime Busters" },
+  ],
 };
 
 /** greetingFor is a fragment used to build other texts, not a message itself. */
@@ -56,6 +60,27 @@ describe("the opt-out line", () => {
       assert.ok(args, `${name} has no arguments here — add them, don't skip it`);
       assert.match(fn(...args), new RegExp(OPT_OUT.replace(/\./g, "\\.")), name);
     }
+  });
+
+  test("an automation's own wording gets the line appended exactly once", () => {
+    // The owner writes these bodies in the builder, so both halves of this
+    // matter: a body without the line must get one, and a body where he typed
+    // it himself must not end up saying it twice.
+    const added = messages.automationSmsText("Gutters before the leaves drop?", {});
+    assert.ok(added.includes(OPT_OUT), added);
+    assert.equal(added.split("Reply STOP").length - 1, 1, added);
+
+    const already = messages.automationSmsText(
+      "Gutters before the leaves drop? Reply STOP to opt out.",
+      {},
+    );
+    assert.equal(already.split("Reply STOP").length - 1, 1, already);
+  });
+
+  test("an empty body produces nothing, rather than a bare opt-out line", () => {
+    // Otherwise a cleared message field sends the word "Reply STOP to opt out."
+    // on its own to everybody the automation matched.
+    assert.equal(messages.automationSmsText("   ", {}), "");
   });
 
   test("all three document branches carry it", () => {

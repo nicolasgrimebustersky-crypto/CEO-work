@@ -146,6 +146,16 @@ export const NOTIFICATION_EVENTS = {
     title: "Quote follow-up sent",
     destination: "customer",
   },
+  // Raised by an automation the owner built himself, so the title says that
+  // rather than naming a step in a sequence nobody but him has seen. Filed
+  // under customers because the thing it happened to is a customer; it was
+  // tempting to reuse followup_sent, but "Quote follow-up sent" would be a
+  // lie on a snow-season win-back.
+  automation_ran: {
+    category: "customers",
+    title: "Automation ran",
+    destination: "customer",
+  },
 
   /* ------------------------------------------------------------- messages */
   // "messages" rather than "customer" because a reply can arrive from a number
