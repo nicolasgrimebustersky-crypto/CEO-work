@@ -29,6 +29,13 @@ export type AuditAction =
   | "otp.verified"
   | "otp.wrong"
   | "otp.locked"
+  // A device presenting a "remember me" token in place of a typed code.
+  // Refusals are logged with their real reason, which the caller is never
+  // told: a run of them against one account is somebody trying ids, and that
+  // is only visible after the fact if it was written down at the time.
+  | "device.trusted"
+  | "device.refused"
+  | "device.revoked"
   | "sms.sent"
   | "sms.blast"
   | "sms.test"

@@ -6,6 +6,7 @@ import { preflight, withCors } from "@/lib/server/cors";
 import { sendEmail } from "@/lib/server/email";
 import { checkCode, markSessionVerified } from "@/lib/server/otp";
 import { consumeRateLimit, OTP_VERIFY_LIMIT } from "@/lib/server/rateLimit";
+import { issueTrustedDevice } from "@/lib/server/trustedDevices";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,13 +16,19 @@ export const dynamic = "force-dynamic";
  *
  * POST /api/otp/verify
  *   Authorization: Bearer <firebase id token>
- *   { "code": "204815" }
+ *   { "code": "204815", "trustDevice": true }
  *
- * The other route a not-yet-verified session may call. On success the
+ * One of the routes a not-yet-verified session may call. On success the
  * session's auth_time is added to the account's claim; the client then asks
  * Firebase for a fresh token and the rules start saying yes. Nothing about
  * "verified" is returned to the client because nothing about it is the
  * client's to hold — the token is the proof.
+ *
+ * `trustDevice` is the one exception to that, and it is a different kind of
+ * thing: a secret this device may present *instead of* a code for the next
+ * thirty days. It is returned exactly once, here, in the only response that
+ * can carry it — a request that has just proved, with six digits from the
+ * account's own mailbox, that it deserves one.
  */
 export async function POST(request: Request): Promise<Response> {
   try {
@@ -65,7 +72,22 @@ export async function POST(request: Request): Promise<Response> {
 
     await markSessionVerified(caller.uid, caller.authTime);
     await audit({ ...who, action: "otp.verified", ok: true });
-    return withCors(request, { ok: true });
+
+    // Issued last, after the session is already verified. If this throws, the
+    // code has still been accepted and the person is still let in — the cost
+    // of a failure here is being asked for a code again next time, which is
+    // the behaviour they had before the feature existed.
+    let deviceToken: string | null = null;
+    if ((body as { trustDevice?: unknown })?.trustDevice === true) {
+      try {
+        deviceToken = await issueTrustedDevice(caller.uid, request.headers.get("user-agent"));
+        await audit({ ...who, action: "device.trusted", ok: true, detail: "issued" });
+      } catch {
+        deviceToken = null;
+      }
+    }
+
+    return withCors(request, { ok: true, deviceToken });
   } catch (error) {
     return errorResponse(error, request);
   }
