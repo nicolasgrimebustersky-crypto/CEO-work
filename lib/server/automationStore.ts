@@ -8,7 +8,9 @@ import {
   type AutomationConditions,
   type AutomationTrigger,
 } from "@/lib/automations";
-import { asOrgId } from "@/lib/org";
+import { builtinEnabled } from "@/lib/automationBuiltins";
+import { isPaused, readPause, type PauseState } from "@/lib/automationPause";
+import { DEFAULT_ORG_ID, asOrgId } from "@/lib/org";
 import { isPipelineStage, type PipelineStage } from "@/lib/pipeline";
 import { adminDb } from "@/lib/server/admin";
 import type { RunnableAutomation } from "@/lib/server/automationRun";
@@ -43,6 +45,7 @@ export interface AutomationRow {
   conditions: AutomationConditions;
   action: { kind: AutomationActionKind; body: string; stage: PipelineStage | null };
   guards: ReturnType<typeof clampGuards>;
+  pause: PauseState;
 }
 
 function strings(value: unknown): string[] {
@@ -98,6 +101,7 @@ function readRow(doc: FirebaseFirestore.QueryDocumentSnapshot): AutomationRow {
       stage: isPipelineStage(actionData.stage) ? actionData.stage : null,
     },
     guards: clampGuards(data.guards),
+    pause: readPause(data),
   };
 }
 
@@ -112,6 +116,16 @@ export async function loadAutomationRows(orgId: string): Promise<AutomationRow[]
 }
 
 /** The switch row for a built-in, or undefined when it has never been saved. */
+/**
+ * Whether a built-in should do its work this run: switched on (a missing row
+ * counts as on) and not paused. Both crons ask this one question, so a pause
+ * cannot be honoured by one sequence and ignored by the other.
+ */
+export function builtinLive(row: AutomationRow | undefined, nowMs: number = Date.now()): boolean {
+  if (!builtinEnabled(row)) return false;
+  return !isPaused(row?.pause, nowMs);
+}
+
 export function builtinRow(rows: AutomationRow[], docId: string): AutomationRow | undefined {
   return rows.find((row) => row.kind === "builtin" && row.id === docId);
 }
@@ -123,9 +137,14 @@ export function builtinRow(rows: AutomationRow[], docId: string): AutomationRow 
  * the send: an automation whose message was cleared should do nothing quietly,
  * not fail once per matched customer and fill the run report with errors.
  */
-export function armedCustomAutomations(rows: AutomationRow[]): RunnableAutomation[] {
+export function armedCustomAutomations(
+  rows: AutomationRow[],
+  nowMs: number = Date.now(),
+): RunnableAutomation[] {
   return rows
     .filter((row) => row.kind === "custom" && row.enabled)
+    // Paused is on but quiet: skipped this run, back by itself when it ends.
+    .filter((row) => !isPaused(row.pause, nowMs))
     .filter((row) => {
       const needsBody = row.action.kind === "send_sms" || row.action.kind === "add_note";
       if (needsBody && row.action.body.trim() === "") return false;
@@ -172,6 +191,70 @@ export async function recordRun(
       lastRunAt: Timestamp.now(),
       lastRunSummary: summary,
       sentCount: FieldValue.increment(sent),
+    });
+  } catch {
+    // Deliberately silent. See above.
+  }
+}
+
+/**
+ * The same receipt for one of the two built-in sequences.
+ *
+ * `recordRun` cannot do this job, for the reason its own comment gives: it
+ * uses `update`, which throws on a missing document, and a built-in nobody has
+ * ever toggled HAS no document — absent means on. So until this existed the
+ * built-ins never recorded a run at all, and the Automations screen said
+ * "Never run … the CRON_SECRET deployment variable is missing" every morning
+ * whether or not the cron had just run cleanly. The one screen meant to answer
+ * "is this working?" could only ever answer no.
+ *
+ * Read and write in one transaction, so a toggle from the screen landing at
+ * the same moment cannot be overwritten:
+ *
+ *   - The row exists: write the receipt and nothing else. Its `enabled` is
+ *     somebody's decision and is left exactly as it is.
+ *   - No row yet: create the full switch row, `enabled: true`. That is not a
+ *     new decision — a missing row already means on (builtinEnabled), and this
+ *     is only reached on a run the switch allowed. Creating it with every
+ *     field the screen writes is what stops it reading as off: a row with a
+ *     receipt and no `enabled` is the half-row `recordRun` warns about.
+ *
+ * Swallows its own failure, for the same reason recordRun does: the work has
+ * already happened, and a missing receipt must never turn the run's report
+ * into an error.
+ */
+export async function recordBuiltinRun(
+  builtin: { key: string; docId: string; name: string },
+  summary: string,
+  sent: number,
+): Promise<void> {
+  try {
+    const db = adminDb();
+    const ref = db.collection(COLLECTION).doc(builtin.docId);
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const receipt = {
+        lastRunAt: Timestamp.now(),
+        lastRunSummary: summary,
+        sentCount: FieldValue.increment(sent),
+      };
+      if (snap.exists) {
+        tx.update(ref, receipt);
+        return;
+      }
+      tx.create(ref, {
+        kind: "builtin",
+        builtinKey: builtin.key,
+        name: builtin.name,
+        enabled: true,
+        orgId: DEFAULT_ORG_ID,
+        createdAt: FieldValue.serverTimestamp(),
+        createdBy: "system:cron",
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedBy: "system:cron",
+        updatedByName: "Automations",
+        ...receipt,
+      });
     });
   } catch {
     // Deliberately silent. See above.

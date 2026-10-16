@@ -2,10 +2,15 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 import { formatMoneyExact } from "@/lib/format";
 import { hourInBusinessTimezone, BUSINESS_TIMEZONE } from "@/lib/notifications/quietHours";
-import { builtinByKey, builtinEnabled } from "@/lib/automationBuiltins";
+import { builtinByKey } from "@/lib/automationBuiltins";
 import { DEFAULT_ORG_ID } from "@/lib/org";
 import { adminDb } from "@/lib/server/admin";
-import { builtinRow, loadAutomationRows } from "@/lib/server/automationStore";
+import {
+  builtinLive,
+  builtinRow,
+  loadAutomationRows,
+  recordBuiltinRun,
+} from "@/lib/server/automationStore";
 import { errorResponse, requireCronSecret } from "@/lib/server/auth";
 import { notifyCrew } from "@/lib/server/notify";
 
@@ -80,10 +85,10 @@ export async function GET(request: Request): Promise<Response> {
     // turned off is something nobody is quite sure is on.
     const reminders = builtinByKey("money_reminders");
     const rows = await loadAutomationRows(DEFAULT_ORG_ID);
-    if (!builtinEnabled(reminders ? builtinRow(rows, reminders.docId) : undefined)) {
+    if (!builtinLive(reminders ? builtinRow(rows, reminders.docId) : undefined)) {
       return Response.json({
         ok: true,
-        skipped: "money_reminders is switched off on the Automations screen",
+        skipped: "money_reminders is switched off or paused on the Automations screen",
       });
     }
 
@@ -159,6 +164,18 @@ export async function GET(request: Request): Promise<Response> {
             : ". Nothing past due."),
       });
       summarised = open.length;
+    }
+
+    // The screen's "Last run" line. Written on a quiet morning too: a run that
+    // found nothing is still the proof that the cron is being called.
+    if (reminders) {
+      await recordBuiltinRun(
+        reminders,
+        newlyOverdue.length === 0
+          ? `Nothing newly overdue — ${open.length} open invoice${open.length === 1 ? "" : "s"} checked`
+          : `${newlyOverdue.length} newly overdue flagged, ${open.length} open`,
+        0,
+      );
     }
 
     return Response.json({

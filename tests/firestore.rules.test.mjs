@@ -30,6 +30,7 @@ import {
   getDocs,
   query,
   serverTimestamp,
+  Timestamp,
   setDoc,
   updateDoc,
   deleteField,
@@ -2264,6 +2265,81 @@ describe("automations", () => {
         enabled: true,
         createdBy: "nicolas",
         createdByName: "Nick",
+      }),
+    );
+  });
+
+  test("the owner can pause one for a set time, or forever, and lift it", async () => {
+    await assertSucceeds(setDoc(doc(admin, "automations/p1"), automationDoc()));
+    await assertSucceeds(
+      updateDoc(doc(admin, "automations/p1"), {
+        pausedUntil: Timestamp.fromMillis(Date.now() + 60 * 60 * 1000),
+        pausedForever: false,
+        updatedAt: serverTimestamp(),
+        updatedBy: "nicolas",
+        updatedByName: "Nick",
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(doc(admin, "automations/p1"), {
+        pausedUntil: null,
+        pausedForever: true,
+        updatedAt: serverTimestamp(),
+        updatedBy: "nicolas",
+        updatedByName: "Nick",
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(doc(admin, "automations/p1"), {
+        pausedUntil: null,
+        pausedForever: false,
+        updatedAt: serverTimestamp(),
+        updatedBy: "nicolas",
+        updatedByName: "Nick",
+      }),
+    );
+  });
+
+  test("a pause must be a real timestamp and a real boolean", async () => {
+    await assertSucceeds(setDoc(doc(admin, "automations/p2"), automationDoc()));
+    // A string "true" would read as truthy to a careless reader and hold the
+    // sequence forever; a date string is not a time the cron can compare.
+    await assertFails(
+      updateDoc(doc(admin, "automations/p2"), { pausedForever: "true" }),
+    );
+    await assertFails(
+      updateDoc(doc(admin, "automations/p2"), { pausedUntil: "2026-10-17" }),
+    );
+    await assertFails(updateDoc(doc(admin, "automations/p2"), { pausedUntil: 12345 }));
+  });
+
+  test("a built-in with no row yet can be created already paused", async () => {
+    await assertSucceeds(
+      setDoc(doc(admin, "automations/builtin_money_reminders"), {
+        orgId: "grime-busters",
+        kind: "builtin",
+        builtinKey: "money_reminders",
+        name: "Flag money that hasn't come in",
+        enabled: true,
+        pausedUntil: null,
+        pausedForever: true,
+        createdBy: "nicolas",
+        createdByName: "Nick",
+        updatedAt: serverTimestamp(),
+        updatedBy: "nicolas",
+        updatedByName: "Nick",
+      }),
+    );
+  });
+
+  test("the crew can see a pause but not place one", async () => {
+    await assertSucceeds(setDoc(doc(admin, "automations/p3"), automationDoc()));
+    await assertFails(
+      updateDoc(doc(dana, "automations/p3"), {
+        pausedForever: true,
+        updatedAt: serverTimestamp(),
+        updatedBy: "dana",
+        updatedByName: "Dana",
       }),
     );
   });

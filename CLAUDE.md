@@ -15,6 +15,17 @@
 
 ## Codex review gate
 
+- **Paused since 2026-10-16, by the maintainer's decision, for cost.** The
+  OpenAI quota behind the gate ran out and the owner chose not to keep paying
+  for it for now. Until the owner says it is back on:
+  - Do not ask to top up OpenAI or re-run the gate, and do not treat a failed
+    or missing Codex check as something to fix.
+  - CI (typecheck, lint, build, rules, API, server tests) is still the bar.
+    Run the repository checks before pushing, and say on every pull request,
+    plainly, that no independent review happened. A green CI run means the
+    tests passed, not that anyone read the diff.
+  - Never merge, and never bypass a rule yourself; merging stays the owner's.
+  - The rules below describe the gate as it works when switched on.
 - Every change goes through Codex review before it reaches `main`. The gate is
   `.github/workflows/codex-auto-review.yml`, it runs on every pull request to
   `main` including drafts, and it posts findings as an `@claude` comment.

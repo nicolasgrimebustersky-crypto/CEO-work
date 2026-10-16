@@ -12,11 +12,19 @@ import {
   type BuilderValue,
 } from "@/components/automations/AutomationBuilderSheet";
 import { BUILTIN_AUTOMATIONS, builtinEnabled } from "@/lib/automationBuiltins";
+import {
+  NOT_PAUSED,
+  PAUSE_CHOICES,
+  isPaused,
+  pauseFor,
+  type PauseState,
+} from "@/lib/automationPause";
 import { describeAutomation } from "@/lib/automations";
 import {
   createAutomation,
   deleteAutomation,
   setAutomationEnabled,
+  setAutomationPause,
   subscribeAutomations,
   updateAutomation,
   upsertBuiltinSwitch,
@@ -71,6 +79,112 @@ function Switch({
   );
 }
 
+/** "Paused until Sat 3:40 PM", or "Paused" for Forever. */
+function pausedLine(state: PauseState): string {
+  if (state.pausedForever || state.pausedUntilMs === null) return "Paused until you resume it";
+  const until = new Date(state.pausedUntilMs);
+  return `Paused until ${until.toLocaleString("en-US", {
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  })}`;
+}
+
+/**
+ * The hold under each switch: Pause → 1 hour, 1 day, 3 days or Forever, and
+ * Resume while one is in force.
+ *
+ * Only offered while the switch is on — pausing something already off would
+ * be a second way to say the same thing. A timed pause lifts itself; the
+ * screen re-reads the clock every half minute so the button comes back
+ * without a reload.
+ */
+function PauseControl({
+  state,
+  nowMs,
+  busy,
+  disabled,
+  name,
+  onPause,
+}: {
+  state: PauseState;
+  nowMs: number;
+  busy: boolean;
+  disabled: boolean;
+  name: string;
+  onPause: (next: PauseState) => void;
+}) {
+  const [choosing, setChoosing] = useState(false);
+  const paused = isPaused(state, nowMs);
+
+  if (paused) {
+    return (
+      <div className="flex flex-col items-end gap-1">
+        <span className="rounded-full bg-warn/20 px-2.5 py-1 text-xs font-bold text-ink">
+          {pausedLine(state)}
+        </span>
+        {disabled ? null : (
+          <button
+            type="button"
+            disabled={busy}
+            aria-label={`Resume ${name}`}
+            onClick={() => onPause(NOT_PAUSED)}
+            className="tap-target rounded-full px-2 text-sm font-bold text-accent disabled:opacity-60"
+          >
+            Resume
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (disabled) return null;
+
+  if (!choosing) {
+    return (
+      <button
+        type="button"
+        disabled={busy}
+        aria-label={`Pause ${name}`}
+        onClick={() => setChoosing(true)}
+        className="tap-target rounded-full px-2 text-sm font-bold text-accent disabled:opacity-60"
+      >
+        Pause
+      </button>
+    );
+  }
+
+  return (
+    <div
+      role="group"
+      aria-label={`Pause ${name} for`}
+      className="flex flex-col items-end gap-1"
+    >
+      {PAUSE_CHOICES.map((choice) => (
+        <button
+          key={choice.key}
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            setChoosing(false);
+            onPause(pauseFor(choice.key, Date.now()));
+          }}
+          className="tap-target rounded-full border border-line bg-surface px-3 text-sm font-bold text-ink disabled:opacity-60"
+        >
+          {choice.label}
+        </button>
+      ))}
+      <button
+        type="button"
+        onClick={() => setChoosing(false)}
+        className="tap-target px-2 text-sm font-semibold text-muted"
+      >
+        Cancel
+      </button>
+    </div>
+  );
+}
+
 function Row({ children }: { children: React.ReactNode }) {
   return (
     <li className="rounded-2xl border border-line bg-surface-2 p-3.5">
@@ -86,6 +200,14 @@ export function AutomationsScreen() {
   const [busyId, setBusyId] = useState("");
   const [editing, setEditing] = useState<BuilderValue | null>(null);
   const [saving, setSaving] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  // A timed pause ends on its own; re-read the clock so "Paused until …"
+  // turns back into "Pause" without a reload.
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     return subscribeAutomations(
@@ -116,6 +238,25 @@ export function AutomationsScreen() {
     setBusyId(docId);
     try {
       await upsertBuiltinSwitch(docId, key, name, next, author);
+    } catch (problem) {
+      setError(
+        problem instanceof Error ? problem.message : "Could not change that.",
+      );
+    } finally {
+      setBusyId("");
+    }
+  };
+
+  const changePause = async (
+    id: string,
+    next: PauseState,
+    builtin?: { builtinKey: string; name: string; exists: boolean },
+  ) => {
+    if (!author) return;
+    setBusyId(id);
+    try {
+      await setAutomationPause(id, next, author, builtin);
+      setNowMs(Date.now());
     } catch (problem) {
       setError(
         problem instanceof Error ? problem.message : "Could not change that.",
@@ -239,20 +380,38 @@ export function AutomationsScreen() {
                           : "Never run. If this has been on for a while and still says never, the CRON_SECRET deployment variable is missing — nothing is calling it."}
                       </p>
                     </div>
-                    <Switch
-                      on={on}
-                      busy={busyId === builtin.docId}
-                      disabled={!isAdmin}
-                      label={`${builtin.name} is ${on ? "on" : "off"}`}
-                      onChange={(next) =>
-                        void toggleBuiltin(
-                          builtin.docId,
-                          builtin.key,
-                          builtin.name,
-                          next,
-                        )
-                      }
-                    />
+                    <div className="flex shrink-0 flex-col items-end gap-2">
+                      <Switch
+                        on={on}
+                        busy={busyId === builtin.docId}
+                        disabled={!isAdmin}
+                        label={`${builtin.name} is ${on ? "on" : "off"}`}
+                        onChange={(next) =>
+                          void toggleBuiltin(
+                            builtin.docId,
+                            builtin.key,
+                            builtin.name,
+                            next,
+                          )
+                        }
+                      />
+                      {on ? (
+                        <PauseControl
+                          state={row?.pause ?? NOT_PAUSED}
+                          nowMs={nowMs}
+                          busy={busyId === builtin.docId}
+                          disabled={!isAdmin}
+                          name={builtin.name}
+                          onPause={(next) =>
+                            void changePause(builtin.docId, next, {
+                              builtinKey: builtin.key,
+                              name: builtin.name,
+                              exists: Boolean(row),
+                            })
+                          }
+                        />
+                      ) : null}
+                    </div>
                   </div>
                 </Row>
               );
@@ -322,13 +481,25 @@ export function AutomationsScreen() {
                         </div>
                       ) : null}
                     </div>
-                    <Switch
-                      on={row.enabled}
-                      busy={busyId === row.id}
-                      disabled={!isAdmin}
-                      label={`${row.name} is ${row.enabled ? "on" : "off"}`}
-                      onChange={(next) => void toggleCustom(row, next)}
-                    />
+                    <div className="flex shrink-0 flex-col items-end gap-2">
+                      <Switch
+                        on={row.enabled}
+                        busy={busyId === row.id}
+                        disabled={!isAdmin}
+                        label={`${row.name} is ${row.enabled ? "on" : "off"}`}
+                        onChange={(next) => void toggleCustom(row, next)}
+                      />
+                      {row.enabled ? (
+                        <PauseControl
+                          state={row.pause}
+                          nowMs={nowMs}
+                          busy={busyId === row.id}
+                          disabled={!isAdmin}
+                          name={row.name}
+                          onPause={(next) => void changePause(row.id, next)}
+                        />
+                      ) : null}
+                    </div>
                   </div>
                 </Row>
               ))}

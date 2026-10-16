@@ -18,7 +18,7 @@ import {
   type NurtureKind,
 } from "@/lib/leadNurture";
 import { leadNurtureText } from "@/lib/messages";
-import { builtinByKey, builtinEnabled } from "@/lib/automationBuiltins";
+import { builtinByKey } from "@/lib/automationBuiltins";
 import { adminDb } from "@/lib/server/admin";
 import {
   newBudget,
@@ -27,8 +27,10 @@ import {
 } from "@/lib/server/automationRun";
 import {
   armedCustomAutomations,
+  builtinLive,
   builtinRow,
   loadAutomationRows,
+  recordBuiltinRun,
   recordRun,
 } from "@/lib/server/automationStore";
 import { ApiError, errorResponse, requireCronSecret } from "@/lib/server/auth";
@@ -512,7 +514,7 @@ export async function GET(request: Request): Promise<Response> {
     // lib/automationBuiltins.ts for why that is the only defensible default.
     const rows = await loadAutomationRows(DEFAULT_ORG_ID);
     const nurture = builtinByKey("lead_nurture");
-    const nurtureOn = builtinEnabled(
+    const nurtureOn = builtinLive(
       nurture ? builtinRow(rows, nurture.docId) : undefined,
     );
 
@@ -523,7 +525,7 @@ export async function GET(request: Request): Promise<Response> {
       const automations = await runArmedAutomations(rows, startedAt);
       return Response.json({
         ok: true,
-        skipped: "lead_nurture is switched off on the Automations screen",
+        skipped: "lead_nurture is switched off or paused on the Automations screen",
         automations,
       });
     }
@@ -1015,6 +1017,17 @@ export async function GET(request: Request): Promise<Response> {
               ? `${blocked}. Check whether ${held.length === 1 ? "it" : "they"} arrived.`
               : `${nudged}, and ${blocked}. Check whether ${held.length === 1 ? "it" : "they"} arrived.`,
       });
+    }
+
+    if (nurture) {
+      const examined = candidates.filter((c) => c.eligible).length;
+      await recordBuiltinRun(
+        nurture,
+        sent === 0 && held.length === 0
+          ? `Nothing to do — ${examined} estimate${examined === 1 ? "" : "s"} checked`
+          : `${sent} sent, ${held.length} held`,
+        sent,
+      );
     }
 
     const automations = await runArmedAutomations(rows, startedAt);

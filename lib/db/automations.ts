@@ -24,6 +24,7 @@ import {
   type AutomationTrigger,
 } from "@/lib/automations";
 import { builtinOrder } from "@/lib/automationBuiltins";
+import { readPause, type PauseState } from "@/lib/automationPause";
 import { isDemoMode } from "@/lib/demo/enabled";
 import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
@@ -69,6 +70,8 @@ export interface StoredAutomation {
   lastRunSummary: string;
   /** Lifetime sends, for the list. Not a guard — the guards count per person. */
   sentCount: number;
+  /** A hold that ends by itself, or Forever. See lib/automationPause.ts. */
+  pause: PauseState;
   createdAt: Timestamp;
   createdBy: string;
   createdByName: string;
@@ -152,6 +155,7 @@ export function toAutomation(snap: QueryDocumentSnapshot<DocumentData>): StoredA
     lastRunAt: data.lastRunAt instanceof Timestamp ? data.lastRunAt : null,
     lastRunSummary: typeof data.lastRunSummary === "string" ? data.lastRunSummary : "",
     sentCount: typeof data.sentCount === "number" ? data.sentCount : 0,
+    pause: readPause(data),
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt : Timestamp.now(),
     createdBy: typeof data.createdBy === "string" ? data.createdBy : "",
     createdByName: typeof data.createdByName === "string" ? data.createdByName : "Unknown",
@@ -182,8 +186,13 @@ export function subscribeAutomations(
   onError?: (error: Error) => void,
 ): () => void {
   if (isDemoMode) {
+    // Demo rows are stored as written, so the pause has to be read here the
+    // way toAutomation reads it from Firestore.
     return demo.subscribe<StoredAutomation>(COLLECTION, (items) =>
-      onChange(rankAutomations(items)),
+      onChange(rankAutomations(items.map((item) => ({
+          ...item,
+          pause: readPause(item as unknown as { pausedUntil?: unknown; pausedForever?: unknown }),
+        })))),
     );
   }
   return onSnapshot(
@@ -328,7 +337,7 @@ export async function upsertBuiltinSwitch(
   if (isDemoMode) {
     const existing = demo.rows<StoredAutomation>(COLLECTION).find((row) => row.id === docId);
     if (existing) demo.update(COLLECTION, docId, payload);
-    else demo.add(COLLECTION, { ...payload, id: docId });
+    else demo.put(COLLECTION, docId, payload);
     return;
   }
   // `createdAt` is deliberately not in this write. With `merge: true` it would
@@ -351,6 +360,68 @@ export async function upsertBuiltinSwitch(
     },
     { merge: true },
   );
+}
+
+/**
+ * Pauses one, or lifts a pause (`state` = NOT_PAUSED).
+ *
+ * Never touches `enabled`: a pause is a hold on top of the switch, not a
+ * second switch, so lifting it puts back exactly what was there before.
+ *
+ * `builtin` is passed for a built-in sequence that has no row yet. Its switch
+ * has never been saved, so there is nothing to update; the write has to create
+ * the full switch row, and `enabled: true` there records the state that was
+ * already in force — a missing built-in row means on. Without it this would be
+ * the half-row that reads as off (see recordRun in lib/server/automationStore).
+ */
+export async function setAutomationPause(
+  id: string,
+  state: PauseState,
+  author: Author,
+  builtin?: { builtinKey: string; name: string; exists: boolean },
+): Promise<void> {
+  const pauseFields = {
+    pausedUntil:
+      state.pausedUntilMs === null ? null : Timestamp.fromMillis(state.pausedUntilMs),
+    pausedForever: state.pausedForever,
+    updatedAt: serverTimestamp(),
+    updatedBy: author.uid,
+    updatedByName: author.displayName,
+  };
+  if (isDemoMode) {
+    const existing = demo.rows<StoredAutomation>(COLLECTION).find((row) => row.id === id);
+    if (existing) demo.update(COLLECTION, id, pauseFields);
+    else if (builtin)
+      demo.put(COLLECTION, id, {
+        ...pauseFields,
+        kind: "builtin",
+        builtinKey: builtin.builtinKey,
+        name: builtin.name,
+        enabled: true,
+        orgId: DEFAULT_ORG_ID,
+      });
+    return;
+  }
+  if (builtin && !builtin.exists) {
+    // `orgId` and `createdBy` spelled out at the call site for the same reason
+    // as upsertBuiltinSwitch: this is a create, and the rules check both.
+    await setDoc(
+      doc(getDb(), COLLECTION, id),
+      {
+        ...pauseFields,
+        kind: "builtin" as const,
+        builtinKey: builtin.builtinKey,
+        name: builtin.name,
+        enabled: true,
+        orgId: DEFAULT_ORG_ID,
+        createdBy: author.uid,
+        createdByName: author.displayName,
+      },
+      { merge: true },
+    );
+    return;
+  }
+  await updateDoc(doc(getDb(), COLLECTION, id), pauseFields);
 }
 
 export async function deleteAutomation(id: string): Promise<void> {
