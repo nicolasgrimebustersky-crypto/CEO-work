@@ -136,6 +136,17 @@ export function add(name: string, data: Record<string, unknown>): string {
   return id;
 }
 
+/**
+ * Write a row at a fixed id, like setDoc. `add` mints its own id, which is
+ * wrong for a document whose id IS its identity — a built-in automation's
+ * switch lives at `builtin_<key>`, and a row anywhere else is never found.
+ */
+export function put(name: string, id: string, data: Record<string, unknown>): void {
+  seed();
+  tableFor(name).set(id, { ...resolve(data), id });
+  emit(name);
+}
+
 /** Shallow merge, like Firestore's updateDoc with top-level field names. */
 export function update(name: string, id: string, patch: Record<string, unknown>): void {
   seed();

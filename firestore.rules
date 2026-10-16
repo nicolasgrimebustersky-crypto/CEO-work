@@ -196,6 +196,12 @@ service cloud.firestore {
       let data = request.resource.data;
       return data.name is string && data.name.size() > 0 && data.name.size() <= 80
         && data.enabled is bool
+        // A pause (lib/automationPause.ts). Both optional, so every row from
+        // before pausing existed still passes; when present, only a timestamp
+        // or null, and only a real boolean — a string "false" would be truthy
+        // to a careless reader and pause something forever.
+        && (!('pausedUntil' in data) || data.pausedUntil == null || data.pausedUntil is timestamp)
+        && (!('pausedForever' in data) || data.pausedForever is bool)
         && data.kind in ['builtin', 'custom']
         && (data.kind == 'builtin'
             ? data.builtinKey in ['lead_nurture', 'money_reminders']
