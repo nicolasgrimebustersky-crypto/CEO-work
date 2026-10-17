@@ -229,6 +229,81 @@ export function acceptedEmail(notice: AcceptedNotice): BuiltEmail {
   return { subject, text, html };
 }
 
+export interface DeclinedNotice {
+  customerName: string;
+  /** The document's own number, e.g. "EST-1042". */
+  number: string;
+  service: string;
+  /** Already formatted — the caller owns how money reads. */
+  total: string;
+  /** The reason's label as the customer saw it, or "" when they gave none. */
+  reason: string;
+  /** Whatever they wrote, in full. Can be long — a decline has no word cap. */
+  message: string;
+  /** Absolute link to the document in the CRM, when one can be built. */
+  documentUrl: string;
+}
+
+/**
+ * The crew's notice that an estimate was turned down — the same shape as
+ * acceptedEmail, so the two read as a pair in an inbox.
+ *
+ * The subject carries who, which estimate and why, because a no is the one
+ * answer worth a phone call back, and the reason decides what that call says.
+ * The comment goes in full in its own block under the table rather than as a
+ * table cell: it can run to thousands of words, and line breaks the customer
+ * typed are kept.
+ */
+export function declinedEmail(notice: DeclinedNotice): BuiltEmail {
+  const who = notice.customerName.trim() || "A customer";
+  const reason = notice.reason.trim();
+  const message = notice.message.trim();
+  const subject = `${who} declined ${notice.number} — ${reason || notice.total}`;
+
+  const rows: Array<[string, string]> = [
+    ["Customer", who],
+    ["Estimate", notice.number],
+    ["Service", notice.service],
+    ["Total", notice.total],
+    ["Reason", reason || "They didn't pick one"],
+  ];
+
+  const lines = rows.map(([label, value]) => `${label}: ${value}`);
+  lines.push("", "Their comments:", message || "They didn't leave a comment.");
+  if (notice.documentUrl) lines.push("", `Open it in the CRM: ${notice.documentUrl}`);
+
+  const text = [`${who} declined their estimate online.`, "", ...lines].join("\n");
+
+  const cells = rows
+    .map(
+      ([label, value]) =>
+        `<tr>` +
+        `<td style="padding:6px 16px 6px 0;color:#666;white-space:nowrap;vertical-align:top">${escapeHtml(label)}</td>` +
+        `<td style="padding:6px 0;color:#111;vertical-align:top">${escapeHtml(value)}</td>` +
+        `</tr>`,
+    )
+    .join("");
+
+  const comment = message
+    ? `<p style="margin:20px 0 6px;color:#666">Their comments</p>` +
+      `<div style="white-space:pre-wrap;padding:12px 14px;border-left:3px solid #ccc;background:#f7f7f7;color:#111">${escapeHtml(message)}</div>`
+    : `<p style="margin:20px 0 0;color:#666">They didn't leave a comment.</p>`;
+
+  const link = notice.documentUrl
+    ? `<p style="margin:24px 0 0"><a href="${escapeHtml(notice.documentUrl)}" style="color:#0b5cff">Open it in the CRM</a></p>`
+    : "";
+
+  const html =
+    `<div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;font-size:15px;line-height:1.5;color:#111">` +
+    `<p style="margin:0 0 16px"><strong>${escapeHtml(who)}</strong> declined their estimate online.</p>` +
+    `<table style="border-collapse:collapse">${cells}</table>` +
+    comment +
+    link +
+    `</div>`;
+
+  return { subject, text, html };
+}
+
 export interface CustomerApprovalNotice {
   customerName: string;
   /** The document's own number, e.g. "EST-1042". */

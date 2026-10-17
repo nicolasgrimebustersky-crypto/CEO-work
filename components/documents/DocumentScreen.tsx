@@ -48,6 +48,7 @@ import { SERVICE_TYPES, type ServiceType } from "@/lib/types";
 import { CustomerPickerSheet } from "./CustomerPickerSheet";
 import { DocumentPreview } from "./DocumentPreview";
 import { ScheduleJobSheet } from "./ScheduleJobSheet";
+import { declineReasonLabel } from "@/lib/quoteResponse";
 import { DraftEstimateSheet } from "./DraftEstimateSheet";
 import { LineItemsEditor } from "./LineItemsEditor";
 import { PaymentSheet } from "./PaymentSheet";
@@ -829,7 +830,12 @@ export function DocumentScreen() {
                     {formatDateOnly(document.decline.declinedAt)}
                   </p>
                 ) : null}
-                <p className="mt-1.5 text-base font-semibold text-ink">
+                {declineReasonLabel(document.decline.reason) ? (
+                  <p className="mt-1.5 text-base font-bold text-ink">
+                    {declineReasonLabel(document.decline.reason)}
+                  </p>
+                ) : null}
+                <p className="mt-1.5 whitespace-pre-wrap text-base font-semibold text-ink">
                   {document.decline.message
                     ? `“${document.decline.message}”`
                     : "They did not leave a message."}

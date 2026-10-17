@@ -175,6 +175,8 @@ export interface DocumentAcceptance {
 
 export interface DocumentDecline {
   message: string;
+  /** A DECLINE_REASONS key (lib/quoteResponse.ts), or "" when none was given. */
+  reason: string;
   declinedAt: Timestamp | null;
 }
 
