@@ -2,7 +2,7 @@
   "name": "Grime Busters CRM",
   "short_name": "Grime Busters",
   "description": "Door-to-door CRM for pressure washing, landscaping and snow removal.",
-  "start_url": "/map",
+  "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
