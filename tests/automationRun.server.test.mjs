@@ -53,8 +53,10 @@ const DAY = 86_400_000;
  * ledger, not the window (tests/automations.test.mjs covers the window), so
  * the clock is pinned somewhere the window is always open.
  *
- * Today's noon rather than a fixed date: the leads are written relative to the
- * real clock, and a run dated far from it would see them as from the future.
+ * Today's noon rather than a fixed date, and the leads below are dated from
+ * it too, so a lead "1 day ago" is exactly one day before the run. Dating them
+ * from the real clock instead shifted "Due in 2 days" to "Due in 3 days"
+ * whenever the suite ran in the evening.
  */
 const NOON = (() => {
   const now = new Date();
@@ -90,8 +92,10 @@ async function lead({ phone = "502-555-0100", ago = 10, org = ORG } = {}) {
     pipelineValue: 450,
     serviceTypes: ["pressure_washing"],
     notes: [],
-    lastContactedAt: Timestamp.fromMillis(Date.now() - ago * DAY),
-    createdAt: Timestamp.now(),
+    // Measured from the same pinned clock the runs use, so "10 days ago"
+    // means ten days before the run, at any hour the suite happens to start.
+    lastContactedAt: Timestamp.fromMillis(NOON.getTime() - ago * DAY),
+    createdAt: Timestamp.fromMillis(NOON.getTime()),
   });
   return ref.id;
 }
