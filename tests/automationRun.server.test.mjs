@@ -37,10 +37,30 @@ const { runAutomation, evaluateAutomation, newBudget } = await import(
 );
 const { clampGuards, defaultConditions, defaultGuards } = await import("@/lib/automations.ts");
 const { adminDb } = await import("@/lib/server/admin.ts");
+const { hourInBusinessTimezone } = await import("@/lib/notifications/quietHours.ts");
 const { Timestamp } = await import("firebase-admin/firestore");
 
 const ORG = "grime-busters";
 const DAY = 86_400_000;
+
+/**
+ * Noon today in the business's timezone, handed to every run below.
+ *
+ * Each automation only acts inside its send window (9:00–17:00 Louisville by
+ * default), so on the real clock these tests passed during the working day
+ * and failed every evening — "the first run acts: 0 !== 1" from a run that
+ * was correctly refusing to act at 8 pm. What is under test here is the
+ * ledger, not the window (tests/automations.test.mjs covers the window), so
+ * the clock is pinned somewhere the window is always open.
+ *
+ * Today's noon rather than a fixed date: the leads are written relative to the
+ * real clock, and a run dated far from it would see them as from the future.
+ */
+const NOON = (() => {
+  const now = new Date();
+  const fromNoon = hourInBusinessTimezone(now) - 12;
+  return new Date(now.getTime() - fromNoon * 60 * 60 * 1000);
+})();
 
 // One Admin app, the same one the code under test uses. A second named app
 // here breaks lib/server/admin.ts outright — see the comment in
@@ -98,20 +118,20 @@ describe("the send ledger stops an automation repeating itself", () => {
   test("a once-only automation acts once, however many times the cron runs", async () => {
     const id = await lead();
 
-    const first = await runAutomation(ORG, noteAutomation(), newBudget());
+    const first = await runAutomation(ORG, noteAutomation(), newBudget(), NOON);
     assert.equal(first.sent, 1, "the first run acts");
     assert.equal((await notesOf(id)).length, 1);
 
     // The same automation, the same day, the same customer. Before the fix
     // this wrote a second identical note, and would have kept going daily.
-    const second = await runAutomation(ORG, noteAutomation(), newBudget());
+    const second = await runAutomation(ORG, noteAutomation(), newBudget(), NOON);
     assert.equal(second.sent, 0, `second run sent ${second.sent}`);
     assert.equal((await notesOf(id)).length, 1, "still exactly one note");
   });
 
   test("and the ledger is what records it, keyed per automation", async () => {
     await lead();
-    await runAutomation(ORG, noteAutomation(), newBudget());
+    await runAutomation(ORG, noteAutomation(), newBudget(), NOON);
 
     const ledger = await adminDb().collection("automationTouches").get();
     assert.equal(ledger.size, 1, "one ledger row");
@@ -122,7 +142,7 @@ describe("the send ledger stops an automation repeating itself", () => {
 
     // A different automation has its own count, so adding one does not
     // silently use up another's allowance.
-    const other = await runAutomation(ORG, noteAutomation({ id: "auto-2" }), newBudget());
+    const other = await runAutomation(ORG, noteAutomation({ id: "auto-2" }), newBudget(), NOON);
     assert.equal(other.sent, 1, "a different automation still acts");
   });
 
@@ -136,7 +156,7 @@ describe("the send ledger stops an automation repeating itself", () => {
     const id = await lead({ ago: 10 });
     const before = (await customers().doc(id).get()).get("lastContactedAt").toMillis();
 
-    await runAutomation(ORG, noteAutomation(), newBudget());
+    await runAutomation(ORG, noteAutomation(), newBudget(), NOON);
 
     const after = (await customers().doc(id).get()).get("lastContactedAt").toMillis();
     assert.equal(after, before, "lastContactedAt must not move when a note is added");
@@ -146,7 +166,7 @@ describe("the send ledger stops an automation repeating itself", () => {
     // The note action did not render its template at first, so a timeline
     // entry read "Chase {first_name} about the quote."
     const id = await lead();
-    await runAutomation(ORG, noteAutomation(), newBudget());
+    await runAutomation(ORG, noteAutomation(), newBudget(), NOON);
     const [note] = await notesOf(id);
     assert.equal(note.text, "Chase Marta about the quote.");
     assert.doesNotMatch(note.text, /\{/, note.text);
@@ -160,7 +180,7 @@ describe("one person, several records", () => {
     const a = await lead({ phone: "(502) 555-0199" });
     const b = await lead({ phone: "502-555-0199" });
 
-    const result = await runAutomation(ORG, noteAutomation(), newBudget());
+    const result = await runAutomation(ORG, noteAutomation(), newBudget(), NOON);
     assert.equal(result.sent, 1, `acted on ${result.sent} of 2 records for one number`);
 
     const total = (await notesOf(a)).length + (await notesOf(b)).length;
@@ -170,7 +190,7 @@ describe("one person, several records", () => {
   test("two different people both get one", async () => {
     await lead({ phone: "502-555-0101" });
     await lead({ phone: "502-555-0102" });
-    const result = await runAutomation(ORG, noteAutomation(), newBudget());
+    const result = await runAutomation(ORG, noteAutomation(), newBudget(), NOON);
     assert.equal(result.sent, 2);
   });
 });
@@ -183,7 +203,7 @@ describe("the caps actually bind", () => {
     const capped = noteAutomation({
       guards: clampGuards({ ...defaultGuards(), afterDays: 3, staleAfterDays: 60, maxPerRun: 2 }),
     });
-    const result = await runAutomation(ORG, capped, newBudget());
+    const result = await runAutomation(ORG, capped, newBudget(), NOON);
     assert.equal(result.sent, 2);
     assert.equal(result.held, 1, "the third is held, not dropped silently");
   });
@@ -191,7 +211,7 @@ describe("the caps actually bind", () => {
   test("the run-wide budget holds everything back once spent", async () => {
     await lead();
     const spent = { ...newBudget(), remaining: 0 };
-    const result = await runAutomation(ORG, noteAutomation(), spent);
+    const result = await runAutomation(ORG, noteAutomation(), spent, NOON);
     assert.equal(result.sent, 0);
     assert.equal(result.held, 1);
   });
@@ -200,7 +220,7 @@ describe("the caps actually bind", () => {
     // Both this and the quote follow-up share one sixty-second function.
     await lead();
     const late = { remaining: 40, deadlineMs: Date.now() - 1 };
-    const result = await runAutomation(ORG, noteAutomation(), late);
+    const result = await runAutomation(ORG, noteAutomation(), late, NOON);
     assert.equal(result.sent, 0);
     assert.equal(result.held, 1);
   });
@@ -209,7 +229,7 @@ describe("the caps actually bind", () => {
 describe("what the preview sees", () => {
   test("it reports who would be reached without touching anything", async () => {
     const id = await lead();
-    const { candidates } = await evaluateAutomation(ORG, noteAutomation());
+    const { candidates } = await evaluateAutomation(ORG, noteAutomation(), NOON);
 
     assert.equal(candidates.length, 1);
     assert.equal(candidates[0].decision.send, true);
@@ -223,14 +243,14 @@ describe("what the preview sees", () => {
 
   test("a refusal comes back with the reason the screen shows", async () => {
     await lead({ ago: 1 });
-    const { candidates } = await evaluateAutomation(ORG, noteAutomation());
+    const { candidates } = await evaluateAutomation(ORG, noteAutomation(), NOON);
     assert.equal(candidates[0].decision.send, false);
     assert.match(candidates[0].decision.reason, /Due in 2 days/);
   });
 
   test("an estimate too old to start is named as such", async () => {
     await lead({ ago: 400 });
-    const { candidates } = await evaluateAutomation(ORG, noteAutomation());
+    const { candidates } = await evaluateAutomation(ORG, noteAutomation(), NOON);
     assert.equal(candidates[0].decision.send, false);
     assert.match(candidates[0].decision.reason, /too old/i);
   });
@@ -239,7 +259,7 @@ describe("what the preview sees", () => {
 describe("another business's records are not touched", () => {
   test("the Admin SDK bypasses rules, so the runner filters orgId itself", async () => {
     const theirs = await lead({ org: "someone-else", phone: "502-555-0777" });
-    const result = await runAutomation(ORG, noteAutomation(), newBudget());
+    const result = await runAutomation(ORG, noteAutomation(), newBudget(), NOON);
     assert.equal(result.sent, 0, "nothing of theirs was acted on");
     assert.equal(result.considered, 0, "and nothing of theirs was even considered");
     assert.equal((await notesOf(theirs)).length, 0);
