@@ -120,6 +120,7 @@ function asDecline(raw: unknown): DocumentDecline | null {
   const value = raw as Record<string, unknown>;
   return {
     message: typeof value.message === "string" ? value.message : "",
+    reason: typeof value.reason === "string" ? value.reason : "",
     declinedAt: value.declinedAt instanceof Timestamp ? value.declinedAt : null,
   };
 }

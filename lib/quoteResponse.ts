@@ -26,6 +26,43 @@ export const MAX_SIGNATURE_BYTES = 200_000;
 export const MAX_NAME_CHARS = 80;
 export const MAX_MESSAGE_CHARS = 1000;
 
+/**
+ * How much a customer can write when they say no.
+ *
+ * Far above MAX_MESSAGE_CHARS on purpose: a no is the one answer the crew can
+ * still act on, and the owner asked for comments with no word limit. Twenty
+ * thousand characters is roughly 3,500 words — no real comment comes near it —
+ * while still being a ceiling, because this arrives from the open internet and
+ * lands inside a document that Firestore caps at 1 MB alongside its line
+ * items and any signature.
+ */
+export const MAX_DECLINE_MESSAGE_CHARS = 20_000;
+
+/**
+ * Why a customer said no. Optional: a customer must always be able to decline
+ * without explaining. The keys are stored; the labels are what both the CRM
+ * and the website show, so they live here once.
+ */
+export const DECLINE_REASONS = [
+  { key: "price", label: "The price is more than I expected" },
+  { key: "timing", label: "Not the right time" },
+  { key: "another_company", label: "I went with another company" },
+  { key: "doing_it_myself", label: "I'll do it myself" },
+  { key: "scope", label: "It doesn't include what I need" },
+  { key: "no_longer_needed", label: "I don't need it anymore" },
+  { key: "other", label: "Something else" },
+] as const;
+export type DeclineReason = (typeof DECLINE_REASONS)[number]["key"];
+
+export function isDeclineReason(value: unknown): value is DeclineReason {
+  return typeof value === "string" && DECLINE_REASONS.some((reason) => reason.key === value);
+}
+
+/** The label for a stored reason, or "" for none or one no longer listed. */
+export function declineReasonLabel(value: unknown): string {
+  return DECLINE_REASONS.find((reason) => reason.key === value)?.label ?? "";
+}
+
 /** How far ahead a customer may ask for. Beyond this it is not scheduling. */
 export const MAX_DAYS_AHEAD = 180;
 
@@ -39,6 +76,8 @@ export interface QuoteResponseInput {
   requestedDate?: string | null;
   /** Free text — a question on decline, or a note on approval. */
   message?: string | null;
+  /** On a decline only: one of DECLINE_REASONS' keys. */
+  reason?: string | null;
 }
 
 export interface CleanQuoteResponse {
@@ -47,6 +86,8 @@ export interface CleanQuoteResponse {
   signature: string;
   requestedDate: string;
   message: string;
+  /** A DECLINE_REASONS key on a decline that gave one, otherwise "". */
+  reason: DeclineReason | "";
 }
 
 export function isDecision(value: unknown): value is Decision {
@@ -66,8 +107,8 @@ export function cleanName(value: unknown): string {
   return tidy(value).slice(0, MAX_NAME_CHARS);
 }
 
-export function cleanMessage(value: unknown): string {
-  return tidy(value, true).slice(0, MAX_MESSAGE_CHARS);
+export function cleanMessage(value: unknown, limit: number = MAX_MESSAGE_CHARS): string {
+  return tidy(value, true).slice(0, limit);
 }
 
 /**
@@ -139,14 +180,23 @@ export function validateQuoteResponse(
     return { ok: false, problem: "Tell us whether you are approving this quote." };
   }
 
-  const message = cleanMessage(input.message);
-
   if (input.decision === "declined") {
     return {
       ok: true,
-      value: { decision: "declined", signedName: "", signature: "", requestedDate: "", message },
+      value: {
+        decision: "declined",
+        signedName: "",
+        signature: "",
+        requestedDate: "",
+        message: cleanMessage(input.message, MAX_DECLINE_MESSAGE_CHARS),
+        // An unknown reason is dropped, not refused: saying no must never fail
+        // because the reason list changed under an open page.
+        reason: isDeclineReason(input.reason) ? input.reason : "",
+      },
     };
   }
+
+  const message = cleanMessage(input.message);
 
   const signedName = cleanName(input.signedName);
   if (signedName.length < 2) {
@@ -165,7 +215,7 @@ export function validateQuoteResponse(
 
   return {
     ok: true,
-    value: { decision: "accepted", signedName, signature, requestedDate, message },
+    value: { decision: "accepted", signedName, signature, requestedDate, message, reason: "" },
   };
 }
 

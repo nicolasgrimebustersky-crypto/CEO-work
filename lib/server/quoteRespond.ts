@@ -7,13 +7,23 @@ import { appendNote } from "@/lib/server/customerNotes";
 import { adminDb } from "@/lib/server/admin";
 import { notifyCrew } from "@/lib/server/notify";
 import { sendEmail } from "@/lib/server/email";
-import { acceptedEmail, customerApprovalEmail, readRecipients } from "@/lib/emailNotice";
+import {
+  acceptedEmail,
+  customerApprovalEmail,
+  declinedEmail,
+  readRecipients,
+} from "@/lib/emailNotice";
 import { routes } from "@/lib/routes";
 import { customerFor, type SerialDocument } from "@/lib/server/publicDocument";
 import { formatMoneyExact } from "@/lib/format";
 import { SERVICE_LABEL } from "@/lib/status";
 import { BUSINESS, BUSINESS_TIMEZONE } from "@/lib/business";
-import { todayIn, validateQuoteResponse, type QuoteResponseInput } from "@/lib/quoteResponse";
+import {
+  declineReasonLabel,
+  todayIn,
+  validateQuoteResponse,
+  type QuoteResponseInput,
+} from "@/lib/quoteResponse";
 
 /**
  * A customer answering an estimate: approve (with a signature and a date) or
@@ -71,7 +81,7 @@ export async function respondToDocument(
   );
   if (!checked.ok) return bad(400, checked.problem);
 
-  const { decision, signedName, signature, requestedDate, message } = checked.value;
+  const { decision, signedName, signature, requestedDate, message, reason } = checked.value;
   const now = Timestamp.now();
   const service = SERVICE_LABEL[document.serviceType];
   const money = formatMoneyExact(document.total);
@@ -170,16 +180,23 @@ export async function respondToDocument(
     .doc(document.id)
     .update({
       status: "declined",
-      decline: { message, declinedAt: now },
+      decline: { message, reason, declinedAt: now },
       updatedAt: FieldValue.serverTimestamp(),
       updatedBy: responder.uid,
       updatedByName: document.customerName || "Customer",
     });
 
+  const reasonLabel = declineReasonLabel(reason);
+  // A decline comment can now run to thousands of words. The timeline note and
+  // the document keep all of it; a notification is a phone banner, so it gets
+  // the start and a pointer to the rest.
+  const preview = message.length > 240 ? `${message.slice(0, 240).trimEnd()}…` : message;
+
   await appendNote(document.customerId, {
     text:
       `Declined ${document.number} (${service}, ${money}) online.` +
-      (message ? ` They asked: ${message}` : " No message left."),
+      (reasonLabel ? ` Reason: ${reasonLabel}.` : "") +
+      (message ? ` They said: ${message}` : " No message left."),
     kind: "quote",
     authorUid: responder.uid,
     authorName: document.customerName || "Customer",
@@ -187,13 +204,29 @@ export async function respondToDocument(
 
   await notifyCrew({
     type: "estimate_declined",
-    body: message
-      ? `${document.customerName} declined ${document.number} and asked: ${message}`
-      : `${document.customerName} declined ${document.number} — ${money}.`,
+    body:
+      `${document.customerName} declined ${document.number}` +
+      (reasonLabel ? ` — ${reasonLabel}` : ` — ${money}`) +
+      (preview ? `. They said: ${preview}` : "."),
     customerId: document.customerId,
     documentId: document.id,
     actorName: document.customerName || "Customer",
   });
+
+  // Emailed like an approval, to the same NOTIFY_EMAIL_TO list. Best-effort in
+  // the same way: sendEmail never throws, so a mail problem cannot turn the
+  // customer's answer into an error after it has already been saved.
+  await sendEmail(
+    declinedEmail({
+      customerName: document.customerName,
+      number: document.number,
+      service,
+      total: money,
+      reason: reasonLabel,
+      message,
+      documentUrl: documentLink(document.id),
+    }),
+  );
 
   await audit({
     action: "quote.answered",
