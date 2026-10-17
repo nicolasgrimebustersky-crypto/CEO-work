@@ -26,6 +26,17 @@ export interface NavItem {
 }
 
 /**
+ * The landing screen, so it heads the drawer. Not a bottom tab: the five
+ * thumb positions below are unchanged.
+ */
+export const DASHBOARD: NavItem = {
+  href: routes.dashboard,
+  label: "Dashboard",
+  icon: ChartIcon,
+  hint: "Today at a glance",
+};
+
+/**
  * The five that earn a permanent thumb position.
  *
  * The test is what you reach for standing on somebody's porch: where am I,
@@ -92,12 +103,6 @@ export const DRAWER_ONLY: NavItem[] = [
     hint: "What the app does on its own, and the switches for it",
   },
   {
-    href: routes.dashboard,
-    label: "Dashboard",
-    icon: ChartIcon,
-    hint: "Today at a glance",
-  },
-  {
     href: routes.services,
     label: "Services",
     icon: PriceBookIcon,
@@ -123,7 +128,7 @@ export const DRAWER_ONLY: NavItem[] = [
   },
 ];
 
-export const ALL_DESTINATIONS: NavItem[] = [...TABS, ...DRAWER_ONLY];
+export const ALL_DESTINATIONS: NavItem[] = [DASHBOARD, ...TABS, ...DRAWER_ONLY];
 
 /** True for the destination itself and anything nested under it. */
 export function isActive(pathname: string, href: string): boolean {
