@@ -285,3 +285,18 @@ export const PORTAL_RESPOND_LIMIT: RateLimitRule = {
   max: 10,
   windowMs: 60 * 60 * 1000,
 };
+
+/**
+ * Website form submissions, per sending address.
+ *
+ * The one write into the CRM that anybody on the internet can make, so the
+ * cap is what stops a script filling the client list. Ten an hour is far
+ * above a real household — somebody who submits the quote tool, then books,
+ * then corrects a typo is three — and a bot rotating addresses still has to
+ * get past the honeypot and the field checks on each one.
+ */
+export const WEBSITE_LEAD_LIMIT: RateLimitRule = {
+  label: "website form submissions",
+  max: 10,
+  windowMs: 60 * 60 * 1000,
+};

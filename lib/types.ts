@@ -173,6 +173,12 @@ export interface Customer {
    * recorded afterwards. Cleared only by them texting START.
    */
   smsOptOut?: SmsOptOut | null;
+  /**
+   * The blue "new" dot. Set when somebody submits a website form (a new client,
+   * or an existing one asking again) and cleared the first time anyone opens
+   * the profile — an unread marker, not a status. Absent or null means seen.
+   */
+  unseenSince?: Timestamp | null;
   email: string;
   address: string;
   lat: number;

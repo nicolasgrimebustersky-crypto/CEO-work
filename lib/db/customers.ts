@@ -126,6 +126,7 @@ export function toCustomer(snap: QueryDocumentSnapshot<DocumentData>): Customer 
     phoneE164: typeof data.phoneE164 === "string" ? data.phoneE164 : "",
     smsConsent: asSmsConsent(data.smsConsent),
     smsOptOut: asSmsOptOut(data.smsOptOut),
+    unseenSince: data.unseenSince instanceof Timestamp ? data.unseenSince : null,
     email: typeof data.email === "string" ? data.email : "",
     address: typeof data.address === "string" ? data.address : "",
     lat: typeof data.lat === "number" ? data.lat : 0,
@@ -523,6 +524,18 @@ export async function markContacted(customer: Customer, author: Author): Promise
     updatedBy: author.uid,
     updatedByName: author.displayName,
   });
+}
+
+/**
+ * Clears the blue "new" dot once somebody has opened the profile.
+ *
+ * Writes that one field and nothing else — not even the author stamp. Opening
+ * a client is not editing them, and stamping "last edited by" on every view
+ * would bury the edits that matter. firestore.rules allows exactly this write
+ * (unseenSince to null, no other field) without the stamp, and nothing more.
+ */
+export async function markCustomerSeen(id: string): Promise<void> {
+  await writeCustomer(id, { unseenSince: null });
 }
 
 export async function deleteCustomer(id: string): Promise<void> {

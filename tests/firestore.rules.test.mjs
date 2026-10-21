@@ -517,6 +517,47 @@ describe("the lead-nurture counters belong to the cron", () => {
   });
 });
 
+describe("the blue new-client dot from a website form", () => {
+  /** Mark c1 unseen, the way app/api/leads/website does (Admin SDK, no rules). */
+  async function markUnseen() {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), "customers/c1"), {
+        unseenSince: Timestamp.fromMillis(Date.now()),
+      });
+    });
+  }
+
+  test("opening the profile clears it without an author stamp", async () => {
+    await markUnseen();
+    await assertSucceeds(updateDoc(doc(alice, "customers/c1"), { unseenSince: null }));
+  });
+
+  test("the unstamped path can only clear it, never set it", async () => {
+    await assertFails(
+      updateDoc(doc(alice, "customers/c1"), { unseenSince: Timestamp.fromMillis(Date.now()) }),
+    );
+  });
+
+  test("the unstamped path cannot carry any other change with it", async () => {
+    await markUnseen();
+    await assertFails(
+      updateDoc(doc(alice, "customers/c1"), { unseenSince: null, phone: "(502) 555-0199" }),
+    );
+    await assertFails(updateDoc(doc(alice, "customers/c1"), { unseenSince: null, status: "customer" }));
+  });
+
+  test("a stray value is refused on a normal edit", async () => {
+    await assertFails(
+      updateDoc(doc(alice, "customers/c1"), stampedUpdate("alice", { unseenSince: "yes" })),
+    );
+  });
+
+  test("someone outside the business cannot clear it", async () => {
+    await markUnseen();
+    await assertFails(updateDoc(doc(mallory, "customers/c1"), { unseenSince: null }));
+  });
+});
+
 describe("an opt-out is the customer's own instruction", () => {
   /** Put a STOP on c1, the way the inbound webhook does (Admin SDK, no rules). */
   async function withOptOut() {
