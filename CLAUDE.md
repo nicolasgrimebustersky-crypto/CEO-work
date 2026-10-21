@@ -13,38 +13,17 @@
 - Preserve unrelated work. Do not reformat, refactor, or update dependencies
   unless the review request requires it.
 
-## Codex review gate
+## Review
 
-- **Paused since 2026-10-16, by the maintainer's decision, for cost.** The
-  OpenAI quota behind the gate ran out and the owner chose not to keep paying
-  for it for now. Until the owner says it is back on:
-  - Do not ask to top up OpenAI or re-run the gate, and do not treat a failed
-    or missing Codex check as something to fix.
-  - CI (typecheck, lint, build, rules, API, server tests) is still the bar.
-    Run the repository checks before pushing, and say on every pull request,
-    plainly, that no independent review happened. A green CI run means the
-    tests passed, not that anyone read the diff.
-  - Never merge, and never bypass a rule yourself; merging stays the owner's.
-  - The rules below describe the gate as it works when switched on.
-- Every change goes through Codex review before it reaches `main`. The gate is
-  `.github/workflows/codex-auto-review.yml`, it runs on every pull request to
-  `main` including drafts, and it posts findings as an `@claude` comment.
-- Never report the gate as having reviewed anything without reading the `review`
-  job's own result. A **skipped** review is not an approval, and for a long
-  time it rendered as a green "Codex review gate" that had read nothing: both
-  of the job's conditions excluded Claude's own pull requests, and the gate
-  script turned the resulting skip into a pass. #58 changed security rules and
-  merged that way. The script now fails on a skip, but the habit is the real
-  protection — check the job, not the tick.
-- A pull request is not ready to merge until Codex has actually reported, and
-  its findings are addressed or explicitly answered. Say plainly when the gate
-  has not run.
-- There is no auto-merge. Merging is the maintainer's decision; a Codex
-  approval is an input to it, not a substitute for it.
-- Reviewing before pushing, from the local `claudex-loop` runner, needs the
-  `codex` CLI on `PATH`. It is absent in the cloud container, so there the PR
-  gate is the only Codex review available — say so rather than implying a
-  pre-push review happened.
+- **There is no Codex review.** The owner removed the Codex gate on
+  2026-10-21 (it had been paused for cost since 2026-10-16). Do not ask to
+  re-enable it, top up OpenAI for it, or treat a missing Codex check as a
+  problem.
+- CI (typecheck, lint, build, security rules, API and server tests) is the
+  bar. Run the repository checks before pushing, and say on every pull request,
+  plainly, that no independent review happened: green CI means the tests
+  passed, not that anyone read the diff.
+- There is no auto-merge. Merging is the maintainer's decision.
 
 ## Verification and response
 

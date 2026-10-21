@@ -6,9 +6,9 @@
 
 <!-- List commands actually run and their result. State skipped checks and why. -->
 
-## AI review loop
+## Review
 
-- [ ] Claude-authored PRs wait for the automatic Codex review gate before merge.
+- [ ] CI is green, and any check that was not run is named with the reason.
 - [ ] All actionable `@claude` review comments are resolved or explicitly
       explained in the pull request.
 - [ ] This pull request does not expose secrets or weaken security controls.
