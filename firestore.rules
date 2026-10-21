@@ -341,6 +341,14 @@ service cloud.firestore {
     // Light shape checks. These are not a schema — they exist to stop a bug in
     // one client from writing a document the other client cannot render, which
     // in a two-device app looks like data loss.
+    // Opening a profile clears its blue "new" dot without stamping "last edited
+    // by" — viewing is not editing. Exactly one field may change, and only to
+    // null: this cannot set the dot, touch any other field, or move a record.
+    function clearsOnlyUnseen() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unseenSince'])
+        && request.resource.data.unseenSince == null;
+    }
+
     function validCustomer() {
       let data = request.resource.data;
       return data.status in ['lead', 'not_home', 'callback', 'interested', 'quoted', 'customer', 'not_interested', 'do_not_knock']
@@ -360,6 +368,9 @@ service cloud.firestore {
         // the field existed must stay editable — and only ever a string, so a
         // list or a map cannot be smuggled into that lookup.
         && (!('phoneE164' in data) || data.phoneE164 is string)
+        // The blue "new" dot from a website form (app/api/leads/website).
+        // Optional; a timestamp while unopened, null once somebody has looked.
+        && (!('unseenSince' in data) || data.unseenSince == null || data.unseenSince is timestamp)
         // Text consent, and the instruction to stop.
         //
         // Both optional: every customer entered before consent was tracked has
@@ -467,11 +478,14 @@ service cloud.firestore {
         && createsInMyOrg(request.resource.data);
       allow update: if isCrew()
         && belongsToMyOrg(resource.data)
-        && refreshesAuthorStamp()
-        && validCustomer()
-        && keepsOptOut()
-        && keepsNurtureCounters()
-        && keepsOrg();
+        && (
+          (refreshesAuthorStamp()
+            && validCustomer()
+            && keepsOptOut()
+            && keepsNurtureCounters()
+            && keepsOrg())
+          || clearsOnlyUnseen()
+        );
       allow delete: if isCrew() && belongsToMyOrg(resource.data);
     }
 

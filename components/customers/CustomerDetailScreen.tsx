@@ -21,6 +21,7 @@ import {
   advancePipeline,
   changeStatus,
   deleteCustomer,
+  markCustomerSeen,
   setPipelineStage,
 } from "@/lib/db/customers";
 import { completedRevenue, subscribeJobsForCustomer } from "@/lib/db/jobs";
@@ -94,6 +95,16 @@ export function CustomerDetailScreen() {
   }, [customerId]);
 
   const customer = byId.get(customerId) ?? null;
+
+  // Opening the profile is what "seen" means for the blue new-client dot.
+  // Keyed on the id and the flag, so it fires once per arrival and again only
+  // if another website request lands while the profile is closed and reopened.
+  const unseen = Boolean(customer?.unseenSince);
+  useEffect(() => {
+    if (!customerId || !unseen) return;
+    // Best-effort: failing to clear a dot must never break the screen.
+    markCustomerSeen(customerId).catch(() => {});
+  }, [customerId, unseen]);
 
   /**
    * Revenue is computed from completed jobs rather than read from
