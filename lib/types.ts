@@ -384,12 +384,23 @@ export interface Territory {
   updatedByName: string | null;
 }
 
-export const LEAD_SOURCES = ["door_knock", "meta_lead_ad", "referral", "manual"] as const;
+export const LEAD_SOURCES = [
+  "door_knock",
+  "meta_lead_ad",
+  "website_quote",
+  "website_booking",
+  "referral",
+  "manual",
+] as const;
 export type LeadSource = (typeof LEAD_SOURCES)[number];
 
 export const LEAD_SOURCE_LABEL: Record<LeadSource, string> = {
   door_knock: "Door knock",
   meta_lead_ad: "Facebook / Instagram",
+  // Written by app/api/leads/website. Until these were listed, the mapper
+  // dropped them as unknown and the profile read "Door knock".
+  website_quote: "Website — instant quote",
+  website_booking: "Website — booking form",
   referral: "Referral",
   manual: "Added by hand",
 };
