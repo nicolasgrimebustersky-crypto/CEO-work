@@ -26,11 +26,11 @@ import {
   visitFinishedText,
 } from "@/lib/messages";
 import { normalizeReviewUrl, shouldAskForReview } from "@/lib/reviewRequest";
-import { SERVICE_LABEL } from "@/lib/status";
 import { trySendSms } from "@/lib/smsClient";
 import type { Customer, Job } from "@/lib/types";
 import { isBillable, visitTitle } from "@/lib/visitTypes";
 import { BriefcaseCheckIcon, CheckIcon, PlayIcon, VanIcon } from "./jobFlowIcons";
+import { servicesLabel } from "@/lib/serviceText";
 
 /**
  * The four taps a job takes on site.
@@ -167,7 +167,7 @@ export function JobStatusActions({
       }
 
       const name = customer ? customerName(customer) : "A job";
-      const service = SERVICE_LABEL[job.serviceType];
+      const service = servicesLabel(job);
 
       await notify({
         type: "job_completed",
@@ -225,7 +225,7 @@ export function JobStatusActions({
       await completeVisit(job.id, author);
       await notify({
         type: "job_completed",
-        body: `${customer ? customerName(customer) : "A visit"} · ${visitTitle(job.visitType, SERVICE_LABEL[job.serviceType])}`,
+        body: `${customer ? customerName(customer) : "A visit"} · ${visitTitle(job.visitType, servicesLabel(job))}`,
         customerId: job.customerId,
         jobId: job.id,
       });

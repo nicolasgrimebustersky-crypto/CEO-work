@@ -7,6 +7,7 @@ import { looksLikeShareToken, normalizeShareToken } from "@/lib/shareLinks";
 import { DEFAULT_TAX_RATE_PCT, type BusinessDocument, type DocumentStatus } from "@/lib/documents";
 import { asOrgId } from "@/lib/org";
 import { SERVICE_TYPES, type ServiceType } from "@/lib/types";
+import { cleanSelection } from "@/lib/subServices";
 
 /**
  * Resolving a share token to the document it opens.
@@ -152,6 +153,7 @@ export function serializeDocument(hit: DocumentSnapshot): SerialDocument | null 
     customerId: text(data.customerId),
     customerName: text(data.customerName),
     serviceType,
+    ...cleanSelection(data, serviceType),
     lineItems: Array.isArray(data.lineItems)
       ? data.lineItems.map((raw) => {
           const item = (raw ?? {}) as Record<string, unknown>;

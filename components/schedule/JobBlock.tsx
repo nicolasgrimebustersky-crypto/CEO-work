@@ -83,6 +83,10 @@ export function JobBlock({
         >
           {format(job.scheduledStart.toDate(), "h:mm a")} ·{" "}
           {visitTitle(job.visitType, SERVICE_SHORT_LABEL[job.serviceType])}
+          {/* Short on purpose — the block is small. The rest are on the job. */}
+          {job.serviceTypes.length + job.subServices.length > 1
+            ? ` +${job.serviceTypes.length + job.subServices.length - 1}`
+            : ""}
           {compact ? "" : ` · ${formatMoney(job.price)}`}
           {complete ? " · done" : ""}
         </span>

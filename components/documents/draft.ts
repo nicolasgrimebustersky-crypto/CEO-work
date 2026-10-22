@@ -31,6 +31,9 @@ export interface Draft {
   kind: DocumentKind;
   customerId: string;
   serviceType: ServiceType;
+  /** Every main service picked (first = serviceType) and the specific ones. */
+  serviceTypes: ServiceType[];
+  subServices: string[];
   lines: DraftLine[];
   discount: string;
   taxRatePct: string;
@@ -68,6 +71,8 @@ export function emptyDraft(kind: DocumentKind, customerId: string): Draft {
     kind,
     customerId,
     serviceType: "pressure_washing",
+    serviceTypes: ["pressure_washing"],
+    subServices: [],
     lines: [blankLine()],
     discount: "",
     taxRatePct: String(DEFAULT_TAX_RATE_PCT),
@@ -81,6 +86,8 @@ export function draftFrom(document: BusinessDocument): Draft {
     kind: document.kind,
     customerId: document.customerId,
     serviceType: document.serviceType,
+    serviceTypes: document.serviceTypes,
+    subServices: document.subServices,
     lines:
       document.lineItems.length > 0
         ? document.lineItems.map((item) => ({

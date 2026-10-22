@@ -40,6 +40,7 @@ import { COLLECTIONS, getDb } from "@/lib/firebase";
 import { asOrgId, DEFAULT_ORG_ID } from "@/lib/org";
 import { SERVICE_TYPES } from "@/lib/types";
 import type { Author, Customer, ServiceType } from "@/lib/types";
+import { cleanSelection } from "@/lib/subServices";
 
 const COLLECTION = COLLECTIONS.documents;
 
@@ -140,6 +141,7 @@ export function toDocument(snap: QueryDocumentSnapshot<DocumentData>): BusinessD
     customerId: typeof data.customerId === "string" ? data.customerId : "",
     customerName: typeof data.customerName === "string" ? data.customerName : "",
     serviceType,
+    ...cleanSelection(data, serviceType),
     lineItems: asLineItems(data.lineItems),
     discount: typeof data.discount === "number" ? data.discount : 0,
     taxRatePct: typeof data.taxRatePct === "number" ? data.taxRatePct : DEFAULT_TAX_RATE_PCT,
@@ -237,6 +239,8 @@ export interface NewDocumentInput {
   kind: DocumentKind;
   customer: Customer;
   serviceType: ServiceType;
+  serviceTypes: ServiceType[];
+  subServices: string[];
   lineItems: LineItem[];
   discount?: number;
   taxRatePct?: number;
@@ -259,6 +263,8 @@ export async function createDocument(
     customerId: input.customer.id,
     customerName: `${input.customer.firstName} ${input.customer.lastName}`.trim(),
     serviceType: input.serviceType,
+    serviceTypes: input.serviceTypes,
+    subServices: input.subServices,
     lineItems: input.lineItems,
     discount: totals.discount,
     taxRatePct,
@@ -295,6 +301,8 @@ export async function createDocument(
 
 export interface DocumentPatch {
   serviceType?: ServiceType;
+  serviceTypes?: ServiceType[];
+  subServices?: string[];
   lineItems?: LineItem[];
   discount?: number;
   taxRatePct?: number;
@@ -332,6 +340,8 @@ export async function updateDocument(
   };
 
   if (patch.serviceType !== undefined) payload.serviceType = patch.serviceType;
+  if (patch.serviceTypes !== undefined) payload.serviceTypes = patch.serviceTypes;
+  if (patch.subServices !== undefined) payload.subServices = patch.subServices;
   if (patch.notes !== undefined) payload.notes = patch.notes;
   if (patch.dueAt !== undefined) {
     payload.dueAt = patch.dueAt ? Timestamp.fromDate(patch.dueAt) : null;
@@ -457,6 +467,8 @@ export async function convertToInvoice(
     customerId: estimate.customerId,
     customerName: estimate.customerName,
     serviceType: estimate.serviceType,
+    serviceTypes: estimate.serviceTypes,
+    subServices: estimate.subServices,
     lineItems: estimate.lineItems,
     discount: estimate.discount,
     taxRatePct: estimate.taxRatePct,
@@ -678,6 +690,8 @@ export async function scheduleAsJob(
     orgId: DEFAULT_ORG_ID,
     customerId: estimate.customerId,
     serviceType: estimate.serviceType,
+    serviceTypes: estimate.serviceTypes,
+    subServices: estimate.subServices,
     // Scheduling an accepted estimate books the work itself.
     visitType: "service",
     scheduledStart: Timestamp.fromDate(when.start),

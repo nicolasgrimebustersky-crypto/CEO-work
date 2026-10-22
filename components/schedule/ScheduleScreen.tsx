@@ -28,7 +28,6 @@ import {
   snapToSlot,
   type CalendarView,
 } from "@/lib/schedule";
-import { SERVICE_LABEL } from "@/lib/status";
 import { trySendSms } from "@/lib/smsClient";
 import type { Job } from "@/lib/types";
 import { DayView } from "./DayView";
@@ -37,6 +36,7 @@ import { MonthView } from "./MonthView";
 import { WeekView } from "./WeekView";
 import { useJobDrag, type DropTarget } from "./useJobDrag";
 import { visitPhrase, visitTitle } from "@/lib/visitTypes";
+import { servicesLabel } from "@/lib/serviceText";
 
 const VIEWS: { value: CalendarView; label: string }[] = [
   { value: "day", label: "Day" },
@@ -104,14 +104,14 @@ function Schedule() {
 
         await notify({
           type: "job_rescheduled",
-          body: `${label} · ${visitTitle(job.visitType, SERVICE_LABEL[job.serviceType])} · ${format(newStart, "EEE MMM d, h:mm a")}`,
+          body: `${label} · ${visitTitle(job.visitType, servicesLabel(job))} · ${format(newStart, "EEE MMM d, h:mm a")}`,
           customerId: job.customerId,
           jobId: job.id,
         });
 
         const smsError = await trySendSms(
           job.customerId,
-          jobRescheduledText(visitPhrase(job.visitType, SERVICE_LABEL[job.serviceType]), newStart),
+          jobRescheduledText(visitPhrase(job.visitType, servicesLabel(job)), newStart),
           "job_rescheduled",
         );
         setToast(

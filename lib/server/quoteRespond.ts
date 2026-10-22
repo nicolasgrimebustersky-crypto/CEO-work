@@ -16,7 +16,6 @@ import {
 import { routes } from "@/lib/routes";
 import { customerFor, type SerialDocument } from "@/lib/server/publicDocument";
 import { formatMoneyExact } from "@/lib/format";
-import { SERVICE_LABEL } from "@/lib/status";
 import { BUSINESS, BUSINESS_TIMEZONE } from "@/lib/business";
 import {
   declineReasonLabel,
@@ -24,6 +23,7 @@ import {
   validateQuoteResponse,
   type QuoteResponseInput,
 } from "@/lib/quoteResponse";
+import { servicesLabel } from "@/lib/serviceText";
 
 /**
  * A customer answering an estimate: approve (with a signature and a date) or
@@ -83,7 +83,7 @@ export async function respondToDocument(
 
   const { decision, signedName, signature, requestedDate, message, reason } = checked.value;
   const now = Timestamp.now();
-  const service = SERVICE_LABEL[document.serviceType];
+  const service = servicesLabel(document);
   const money = formatMoneyExact(document.total);
 
   if (decision === "accepted") {
