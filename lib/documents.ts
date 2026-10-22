@@ -194,6 +194,9 @@ export interface BusinessDocument {
   customerName: string;
 
   serviceType: ServiceType;
+  /** All main services, first = serviceType; and the specific ones. See lib/subServices.ts. */
+  serviceTypes: ServiceType[];
+  subServices: string[];
   lineItems: LineItem[];
 
   /** Flat amount off, not a percentage — that is how it was always quoted. */

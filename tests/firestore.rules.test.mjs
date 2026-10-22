@@ -517,6 +517,33 @@ describe("the lead-nurture counters belong to the cron", () => {
   });
 });
 
+describe("several services on one job", () => {
+  test("a job can carry several main services and specific ones", async () => {
+    await assertSucceeds(
+      updateDoc(
+        doc(alice, "jobs/j1"),
+        stampedUpdate("alice", {
+          serviceTypes: ["pressure_washing", "landscaping"],
+          subServices: ["house_wash", "mulching"],
+        }),
+      ),
+    );
+  });
+
+  test("an unknown main service is refused", async () => {
+    await assertFails(
+      updateDoc(doc(alice, "jobs/j1"), stampedUpdate("alice", { serviceTypes: ["pressure_washing", "car_wash"] })),
+    );
+  });
+
+  test("an empty or oversized list is refused", async () => {
+    await assertFails(updateDoc(doc(alice, "jobs/j1"), stampedUpdate("alice", { serviceTypes: [] })));
+    await assertFails(
+      updateDoc(doc(alice, "jobs/j1"), stampedUpdate("alice", { subServices: Array.from({ length: 41 }, (_, i) => `s${i}`) })),
+    );
+  });
+});
+
 describe("a job's visit type", () => {
   test("each visit type can be saved", async () => {
     for (const visitType of ["service", "estimate", "walkthrough", "follow_up", "touch_up"]) {

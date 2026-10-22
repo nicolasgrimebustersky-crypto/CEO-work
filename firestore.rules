@@ -387,10 +387,24 @@ service cloud.firestore {
         && (!('smsOptOut' in data) || data.smsOptOut == null || data.smsOptOut is map);
     }
 
+    // The main services on a job or estimate (lib/subServices.ts), and the
+    // specific ones under them. Both optional: every record saved before they
+    // existed has only `serviceType`. When present, the main ones are only
+    // ever the three known values, and both lists are bounded.
+    function validServiceSelection(data) {
+      return (!('serviceTypes' in data) || (
+               data.serviceTypes is list
+               && data.serviceTypes.size() >= 1
+               && data.serviceTypes.size() <= 3
+               && data.serviceTypes.hasOnly(['pressure_washing', 'landscaping', 'snow_removal'])))
+        && (!('subServices' in data) || (data.subServices is list && data.subServices.size() <= 40));
+    }
+
     function validJob() {
       let data = request.resource.data;
       return data.status in ['scheduled', 'in_progress', 'complete', 'cancelled']
         && data.serviceType in ['pressure_washing', 'landscaping', 'snow_removal']
+        && validServiceSelection(data)
         // What the trip is for (lib/visitTypes.ts). Optional: every job saved
         // before it existed has none, which reads as a service job.
         && (!('visitType' in data)
@@ -409,6 +423,7 @@ service cloud.firestore {
       return data.kind in ['estimate', 'invoice']
         && data.status in ['draft', 'sent', 'accepted', 'declined', 'partial', 'paid', 'void']
         && data.serviceType in ['pressure_washing', 'landscaping', 'snow_removal']
+        && validServiceSelection(data)
         && data.customerId is string
         && data.number is string
         && data.lineItems is list

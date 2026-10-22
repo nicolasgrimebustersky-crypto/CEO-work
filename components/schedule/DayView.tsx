@@ -19,12 +19,12 @@ import {
   formatSlotLabel,
   jobsOnDay,
 } from "@/lib/schedule";
-import { SERVICE_LABEL } from "@/lib/status";
 import type { Job, LatLng } from "@/lib/types";
 import { assigneeStripe } from "./JobBlock";
 import type { DropTarget } from "./useJobDrag";
 import { routes } from "@/lib/routes";
 import { isBillable, visitTitle } from "@/lib/visitTypes";
+import { servicesLabel } from "@/lib/serviceText";
 
 const SLOT_HEIGHT_PX = 44;
 
@@ -153,7 +153,7 @@ export function DayView({
                       <p className="text-sm font-semibold text-muted">
                         {format(job.scheduledStart.toDate(), "h:mm a")}–
                         {format(job.scheduledEnd.toDate(), "h:mm a")} ·{" "}
-                        {visitTitle(job.visitType, SERVICE_LABEL[job.serviceType])}
+                        {visitTitle(job.visitType, servicesLabel(job))}
                         {job.status === "complete" ? " · done" : ""}
                       </p>
                       {customer?.address ? (
@@ -274,7 +274,7 @@ export function DayView({
                 {customer ? customerName(customer) : "Unknown customer"}
               </span>
               <span className="truncate pl-2 text-xs font-semibold text-muted">
-                {visitTitle(job.visitType, SERVICE_LABEL[job.serviceType])}
+                {visitTitle(job.visitType, servicesLabel(job))}
                 {isBillable(job.visitType) ? ` · ${formatMoney(job.price)}` : ""}
               </span>
             </button>

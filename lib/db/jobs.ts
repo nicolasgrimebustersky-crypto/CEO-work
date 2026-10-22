@@ -22,6 +22,7 @@ import { asOrgId, DEFAULT_ORG_ID } from "@/lib/org";
 import { STEP_BY_FIELD, STEP_FIELD, type JobStep } from "@/lib/jobFlow";
 import { JOB_STATUSES, SERVICE_TYPES } from "@/lib/types";
 import { asVisitType, type VisitType } from "@/lib/visitTypes";
+import { cleanSelection } from "@/lib/subServices";
 import type { Author, Job, JobStatus, Photo, ServiceType } from "@/lib/types";
 
 function asPhotos(value: unknown): Photo[] {
@@ -52,6 +53,7 @@ export function toJob(snap: QueryDocumentSnapshot<DocumentData>): Job {
     orgId: asOrgId(data.orgId),
     customerId: typeof data.customerId === "string" ? data.customerId : "",
     serviceType,
+    ...cleanSelection(data, serviceType),
     visitType: asVisitType(data.visitType),
     scheduledStart:
       data.scheduledStart instanceof Timestamp ? data.scheduledStart : Timestamp.now(),
@@ -185,6 +187,8 @@ export function completedRevenue(jobs: Job[]): number {
 export interface NewJobInput {
   customerId: string;
   serviceType: ServiceType;
+  serviceTypes: ServiceType[];
+  subServices: string[];
   visitType: VisitType;
   scheduledStart: Date;
   scheduledEnd: Date;
@@ -197,6 +201,8 @@ export async function createJob(input: NewJobInput, author: Author): Promise<str
   const payload = {
     customerId: input.customerId,
     serviceType: input.serviceType,
+    serviceTypes: input.serviceTypes,
+    subServices: input.subServices,
     visitType: input.visitType,
     scheduledStart: Timestamp.fromDate(input.scheduledStart),
     scheduledEnd: Timestamp.fromDate(input.scheduledEnd),
@@ -235,6 +241,8 @@ async function writeJob(jobId: string, patch: Record<string, unknown>): Promise<
 
 export type JobPatch = Partial<{
   serviceType: ServiceType;
+  serviceTypes: ServiceType[];
+  subServices: string[];
   visitType: VisitType;
   scheduledStart: Date;
   scheduledEnd: Date;

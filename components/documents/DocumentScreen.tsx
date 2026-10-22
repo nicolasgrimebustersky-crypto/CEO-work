@@ -43,8 +43,6 @@ import { documentText } from "@/lib/messages";
 import { shareUrl } from "@/lib/shareLinks";
 import { downloadPdf } from "@/lib/pdf/share";
 import { routes } from "@/lib/routes";
-import { SERVICE_LABEL } from "@/lib/status";
-import { SERVICE_TYPES, type ServiceType } from "@/lib/types";
 import { CustomerPickerSheet } from "./CustomerPickerSheet";
 import { DocumentPreview } from "./DocumentPreview";
 import { ScheduleJobSheet } from "./ScheduleJobSheet";
@@ -64,6 +62,8 @@ import {
   toNumber,
   type Draft,
 } from "./draft";
+import { ServicePicker } from "@/components/ui/ServicePicker";
+import { servicesLabel } from "@/lib/serviceText";
 
 const INPUT =
   "tap-target w-full rounded-xl border border-line bg-surface-2 px-3 py-3 text-base text-ink placeholder:text-muted/70 focus:border-accent focus:outline-none";
@@ -212,6 +212,8 @@ export function DocumentScreen() {
           document,
           {
             serviceType: draft.serviceType,
+            serviceTypes: draft.serviceTypes,
+            subServices: draft.subServices,
             lineItems: lineItemsFrom(draft),
             discount: toNumber(draft.discount),
             taxRatePct: toNumber(draft.taxRatePct),
@@ -233,6 +235,8 @@ export function DocumentScreen() {
             kind: draft.kind,
             customer: target,
             serviceType: draft.serviceType,
+            serviceTypes: draft.serviceTypes,
+            subServices: draft.subServices,
             lineItems: lineItemsFrom(draft),
             discount: toNumber(draft.discount),
             taxRatePct: toNumber(draft.taxRatePct),
@@ -490,27 +494,19 @@ export function DocumentScreen() {
                 </button>
               </div>
 
-              <div>
-                <span className="mb-1.5 block text-sm font-semibold text-muted">
-                  Service
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {SERVICE_TYPES.map((service) => (
-                    <Chip
-                      key={service}
-                      active={draft.serviceType === service}
-                      onClick={() =>
-                        setDraft({
-                          ...draft,
-                          serviceType: service as ServiceType,
-                        })
-                      }
-                    >
-                      {SERVICE_LABEL[service]}
-                    </Chip>
-                  ))}
-                </div>
-              </div>
+              <ServicePicker
+                value={{ serviceTypes: draft.serviceTypes, subServices: draft.subServices }}
+                onChange={(next) =>
+                  setDraft({
+                    ...draft,
+                    serviceTypes: next.serviceTypes,
+                    subServices: next.subServices,
+                    // The first main service is the record's serviceType —
+                    // the price book, reports and rules all read it.
+                    serviceType: next.serviceTypes[0],
+                  })
+                }
+              />
 
               <label>
                 <span className="mb-1.5 block text-sm font-semibold text-muted">
@@ -594,7 +590,7 @@ export function DocumentScreen() {
             <section className="rounded-xl border border-line bg-surface-2">
               <Row
                 label="Service"
-                value={SERVICE_LABEL[document.serviceType]}
+                value={servicesLabel(document)}
               />
               <Row label="Issued" value={formatDateOnly(document.issuedAt)} />
               {document.dueAt ? (
@@ -1050,7 +1046,7 @@ export function DocumentScreen() {
           onClose={() => setTexting(false)}
           initialBody={documentText(
             document.kind,
-            SERVICE_LABEL[document.serviceType],
+            servicesLabel(document),
             document.total,
             document.balanceDue,
             // Only once a link exists. Making one as a side effect of opening
@@ -1073,7 +1069,7 @@ export function DocumentScreen() {
             // that failed to send must never make a booked job look unbooked.
             void notify({
               type: "job_created",
-              body: `${document.customerName} · ${SERVICE_LABEL[document.serviceType]} · from estimate ${document.number}`,
+              body: `${document.customerName} · ${servicesLabel(document)} · from estimate ${document.number}`,
               customerId: document.customerId,
               jobId,
               documentId: document.id,

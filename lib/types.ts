@@ -255,6 +255,13 @@ export interface Job {
   customerId: string;
   serviceType: ServiceType;
   /**
+   * Every main service this job covers, first one = `serviceType`, and the
+   * specific services under them (lib/subServices.ts). A job saved before
+   * these existed reads as just its `serviceType`, with nothing specific.
+   */
+  serviceTypes: ServiceType[];
+  subServices: string[];
+  /**
    * What the trip is for — paid work, or an estimate, walkthrough, follow-up
    * or touch-up. "service" on every job saved before this existed. Only a
    * service job is billable; see lib/visitTypes.ts.
