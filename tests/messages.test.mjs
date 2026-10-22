@@ -34,6 +34,7 @@ const CALLS = {
   enRouteText: ["Marta"],
   jobStartedText: ["Noah"],
   jobFinishedText: ["Noah"],
+  visitFinishedText: ["Noah", "estimate"],
   reviewRequestText: ["Marta", "https://g.page/r/ExampleToken/review"],
   leadNurtureText: ["nudge", "Marta", 450],
   automationSmsText: [

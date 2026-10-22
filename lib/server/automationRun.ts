@@ -35,6 +35,7 @@ import {
   type PropertyType,
   type ServiceType,
 } from "@/lib/types";
+import { asVisitType, isBillable } from "@/lib/visitTypes";
 
 /**
  * Running the automations the owner built.
@@ -325,6 +326,11 @@ async function subjectsFor(
     for (const doc of snap.docs) {
       const data = doc.data();
       if (asOrgId(data.orgId) !== orgId) continue;
+      // Only paid work counts as a finished job. An estimate visit,
+      // walkthrough, follow-up or touch-up (lib/visitTypes.ts) is not one,
+      // and a "thanks for your business" sent after a free estimate would be
+      // the wrong message at the wrong time.
+      if (!isBillable(asVisitType(data.visitType))) continue;
       const row = customers.get(str(data.customerId));
       if (!row) continue;
       const anchor =

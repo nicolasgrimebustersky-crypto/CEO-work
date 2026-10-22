@@ -3,6 +3,7 @@ import type { Timestamp } from "firebase/firestore";
 
 import type { PipelineStage } from "./pipeline";
 import type { SmsConsent, SmsOptOut } from "./smsConsent";
+import type { VisitType } from "./visitTypes";
 
 /**
  * What a door is, in the order the picker shows them: the open ones first,
@@ -253,6 +254,12 @@ export interface Job {
   orgId: string;
   customerId: string;
   serviceType: ServiceType;
+  /**
+   * What the trip is for — paid work, or an estimate, walkthrough, follow-up
+   * or touch-up. "service" on every job saved before this existed. Only a
+   * service job is billable; see lib/visitTypes.ts.
+   */
+  visitType: VisitType;
   scheduledStart: Timestamp;
   scheduledEnd: Timestamp;
   status: JobStatus;

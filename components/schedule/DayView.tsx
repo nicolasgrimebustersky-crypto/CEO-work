@@ -24,6 +24,7 @@ import type { Job, LatLng } from "@/lib/types";
 import { assigneeStripe } from "./JobBlock";
 import type { DropTarget } from "./useJobDrag";
 import { routes } from "@/lib/routes";
+import { isBillable, visitTitle } from "@/lib/visitTypes";
 
 const SLOT_HEIGHT_PX = 44;
 
@@ -143,14 +144,16 @@ export function DayView({
                         <span className="truncate text-base font-bold text-ink">
                           {index + 1}. {customer ? customerName(customer) : "Unknown"}
                         </span>
-                        <span className="shrink-0 text-sm font-extrabold text-money tabular-nums">
-                          {formatMoney(job.price)}
-                        </span>
+                        {isBillable(job.visitType) ? (
+                          <span className="shrink-0 text-sm font-extrabold text-money tabular-nums">
+                            {formatMoney(job.price)}
+                          </span>
+                        ) : null}
                       </div>
                       <p className="text-sm font-semibold text-muted">
                         {format(job.scheduledStart.toDate(), "h:mm a")}–
                         {format(job.scheduledEnd.toDate(), "h:mm a")} ·{" "}
-                        {SERVICE_LABEL[job.serviceType]}
+                        {visitTitle(job.visitType, SERVICE_LABEL[job.serviceType])}
                         {job.status === "complete" ? " · done" : ""}
                       </p>
                       {customer?.address ? (
@@ -271,7 +274,8 @@ export function DayView({
                 {customer ? customerName(customer) : "Unknown customer"}
               </span>
               <span className="truncate pl-2 text-xs font-semibold text-muted">
-                {SERVICE_LABEL[job.serviceType]} · {formatMoney(job.price)}
+                {visitTitle(job.visitType, SERVICE_LABEL[job.serviceType])}
+                {isBillable(job.visitType) ? ` · ${formatMoney(job.price)}` : ""}
               </span>
             </button>
           );

@@ -119,6 +119,30 @@ export function jobFinishedText(technicianFirstName: string): string {
 }
 
 /**
+ * The "finished" text for a visit that is not paid work.
+ *
+ * jobFinishedText asks for payment, which is wrong after an estimate or a
+ * walkthrough — there is nothing to pay. This says what happens next instead:
+ * an estimate on its way, or simply that the visit is done.
+ */
+export function visitFinishedText(
+  technicianFirstName: string,
+  visit: "estimate" | "walkthrough" | "follow_up" | "touch_up",
+): string {
+  const next =
+    visit === "estimate" || visit === "walkthrough"
+      ? "We have everything we need and will send your estimate shortly."
+      : "Thanks for having us.";
+  const what = {
+    estimate: "estimate visit",
+    walkthrough: "walkthrough",
+    follow_up: "follow-up visit",
+    touch_up: "touch-up",
+  }[visit];
+  return `Hey! This is ${technicianFirstName} from ${LEGAL_NAME}. We've wrapped up your ${what}. ${next} Any questions, reach out to ${OWNER_NAME} at ${OWNER_PHONE}.${OPT_OUT}`;
+}
+
+/**
  * The thank-you that goes out when the money is in hand.
  *
  * Sent from the sign-off on site, and only when the crew member answers yes to

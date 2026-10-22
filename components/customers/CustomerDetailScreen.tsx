@@ -55,6 +55,7 @@ import { NotesTimeline } from "./NotesTimeline";
 import { QuoteSheet } from "./QuoteSheet";
 import { SendTextSheet } from "./SendTextSheet";
 import { routes } from "@/lib/routes";
+import { visitTitle } from "@/lib/visitTypes";
 
 export function CustomerDetailScreen() {
   // Read from the query string rather than a path segment so this page can be
@@ -477,7 +478,7 @@ export function CustomerDetailScreen() {
                   >
                     <span className="flex items-start justify-between gap-2">
                       <span className="text-base font-bold text-ink">
-                        {SERVICE_LABEL[job.serviceType]}
+                        {visitTitle(job.visitType, SERVICE_LABEL[job.serviceType])}
                       </span>
                       <span className="text-base font-bold text-money tabular-nums">
                         {formatMoney(job.price)}
