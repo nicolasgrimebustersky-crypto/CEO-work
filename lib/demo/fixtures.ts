@@ -528,6 +528,7 @@ function job(
     orgId: DEFAULT_ORG_ID,
     customerId,
     serviceType,
+    visitType: "service",
     scheduledStart: start,
     scheduledEnd: Timestamp.fromMillis(start.toMillis() + hours * 3_600_000),
     status,

@@ -517,6 +517,25 @@ describe("the lead-nurture counters belong to the cron", () => {
   });
 });
 
+describe("a job's visit type", () => {
+  test("each visit type can be saved", async () => {
+    for (const visitType of ["service", "estimate", "walkthrough", "follow_up", "touch_up"]) {
+      await assertSucceeds(
+        updateDoc(doc(alice, "jobs/j1"), stampedUpdate("alice", { visitType, price: 0 })),
+      );
+    }
+  });
+
+  test("a job with no visit type, as every old one is, still saves", async () => {
+    await assertSucceeds(updateDoc(doc(alice, "jobs/j1"), stampedUpdate("alice", { jobNotes: "gate code 4417" })));
+  });
+
+  test("an invented visit type is refused", async () => {
+    await assertFails(updateDoc(doc(alice, "jobs/j1"), stampedUpdate("alice", { visitType: "free_job" })));
+    await assertFails(updateDoc(doc(alice, "jobs/j1"), stampedUpdate("alice", { visitType: 3 })));
+  });
+});
+
 describe("the blue new-client dot from a website form", () => {
   /** Mark c1 unseen, the way app/api/leads/website does (Admin SDK, no rules). */
   async function markUnseen() {

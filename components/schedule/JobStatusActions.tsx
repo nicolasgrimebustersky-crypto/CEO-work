@@ -7,7 +7,7 @@ import { useNotify } from "@/components/providers/NotificationsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { OWNER_UID } from "@/lib/auth/roles";
 import { advancePipeline } from "@/lib/db/customers";
-import { markReviewRequested, signOffJob, stampJobStep } from "@/lib/db/jobs";
+import { completeVisit, markReviewRequested, signOffJob, stampJobStep } from "@/lib/db/jobs";
 import { DEMO_NICK } from "@/lib/demo/fixtures";
 import { isDemoMode } from "@/lib/demo/enabled";
 import { customerName, formatMoney } from "@/lib/format";
@@ -18,11 +18,18 @@ import {
   stepProblem,
   type JobStep,
 } from "@/lib/jobFlow";
-import { enRouteText, jobFinishedText, jobStartedText, reviewRequestText } from "@/lib/messages";
+import {
+  enRouteText,
+  jobFinishedText,
+  jobStartedText,
+  reviewRequestText,
+  visitFinishedText,
+} from "@/lib/messages";
 import { normalizeReviewUrl, shouldAskForReview } from "@/lib/reviewRequest";
 import { SERVICE_LABEL } from "@/lib/status";
 import { trySendSms } from "@/lib/smsClient";
 import type { Customer, Job } from "@/lib/types";
+import { isBillable, visitTitle } from "@/lib/visitTypes";
 import { BriefcaseCheckIcon, CheckIcon, PlayIcon, VanIcon } from "./jobFlowIcons";
 
 /**
@@ -201,6 +208,35 @@ export function JobStatusActions({
     }
   }
 
+  const billable = isBillable(job.visitType);
+
+  /**
+   * Completes an estimate, walkthrough, follow-up or touch-up.
+   *
+   * No payment question, no pipeline move, no review request: nothing was
+   * sold, so none of the money steps apply. The crew are still told it is
+   * done, so the visit shows up the same way a finished job does.
+   */
+  async function finishVisit() {
+    if (!author || busy) return;
+    setBusy("complete");
+    setError(null);
+    try {
+      await completeVisit(job.id, author);
+      await notify({
+        type: "job_completed",
+        body: `${customer ? customerName(customer) : "A visit"} · ${visitTitle(job.visitType, SERVICE_LABEL[job.serviceType])}`,
+        customerId: job.customerId,
+        jobId: job.id,
+      });
+      onSignedOff();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not complete this visit.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const tiles = [
     {
       step: "en_route" as const,
@@ -221,7 +257,14 @@ export function JobStatusActions({
       icon: <BriefcaseCheckIcon />,
       label: "Job finished",
       at: job.finishedAt,
-      run: () => sendStep("finished", jobFinishedText(signedBy)),
+      run: () =>
+        sendStep(
+          "finished",
+          // The paid-work text asks for payment; an estimate visit has none.
+          job.visitType === "service"
+            ? jobFinishedText(signedBy)
+            : visitFinishedText(signedBy, job.visitType),
+        ),
     },
   ];
 
@@ -266,7 +309,7 @@ export function JobStatusActions({
 
         <button
           type="button"
-          onClick={() => setAsking(true)}
+          onClick={() => (billable ? setAsking(true) : void finishVisit())}
           disabled={busy !== null || job.status === "cancelled"}
           className={`tap-target flex flex-col items-center justify-center gap-1 rounded-xl border px-2 py-3 text-center disabled:opacity-50 ${
             job.status === "complete"
@@ -292,7 +335,7 @@ export function JobStatusActions({
           answer decides whether this job joins the list of money owed, and a
           dialog that can be dismissed by a stray tap on a phone is the wrong
           place to decide that. */}
-      {asking ? (
+      {asking && billable ? (
         <div className="flex flex-col gap-3 rounded-xl border border-accent/60 bg-accent/10 p-3">
           <p className="text-base font-bold text-ink">
             Did you collect payment, or see proof of it?

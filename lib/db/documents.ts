@@ -678,6 +678,8 @@ export async function scheduleAsJob(
     orgId: DEFAULT_ORG_ID,
     customerId: estimate.customerId,
     serviceType: estimate.serviceType,
+    // Scheduling an accepted estimate books the work itself.
+    visitType: "service",
     scheduledStart: Timestamp.fromDate(when.start),
     scheduledEnd: Timestamp.fromDate(when.end),
     status: "scheduled",
