@@ -93,7 +93,10 @@ export async function POST(request: Request): Promise<Response> {
   if (result.recorded) {
     await notifyCrew({
       type: "payment_received",
-      body: `Card payment of ${formatMoney(payment.amount)} received on invoice ${payment.documentId}.`,
+      body:
+        payment.tip > 0
+          ? `Card payment of ${formatMoney(payment.amount)} plus a ${formatMoney(payment.tip)} tip received on invoice ${payment.documentId}.`
+          : `Card payment of ${formatMoney(payment.amount)} received on invoice ${payment.documentId}.`,
       documentId: payment.documentId,
       actorName: "Stripe",
     });

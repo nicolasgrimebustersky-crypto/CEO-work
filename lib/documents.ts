@@ -135,6 +135,12 @@ export interface Payment {
   receivedAt: Timestamp;
   /** "Card", "Check 1042", "Cash", "Zelle" — free text, matching how it arrives. */
   method: string;
+  /**
+   * A tip paid on top, in dollars. Kept out of `amount` so the invoice reads
+   * paid exactly rather than overpaid, and so a tip is never mistaken for
+   * money owed to the business. Absent on everything before tips existed.
+   */
+  tip?: number;
   recordedBy: string;
   recordedByName: string;
   /**
