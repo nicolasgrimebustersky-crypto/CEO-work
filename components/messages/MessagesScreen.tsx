@@ -9,6 +9,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { customerName, formatRelative } from "@/lib/format";
 import { buildThreads, needsReplyCount, previewOf, type Thread } from "@/lib/threads";
 import type { Customer } from "@/lib/types";
+import { ImportReplies } from "./ImportReplies";
 import { ThreadSheet } from "./ThreadSheet";
 import { UnmatchedInbox } from "./UnmatchedInbox";
 
@@ -116,6 +117,8 @@ export function MessagesScreen() {
             ))}
           </ul>
         )}
+
+        <ImportReplies />
       </div>
 
       {openThread ? (

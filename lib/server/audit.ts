@@ -39,6 +39,7 @@ export type AuditAction =
   | "sms.sent"
   | "sms.blast"
   | "sms.test"
+  | "sms.import_replies"
   | "estimate.drafted"
   | "push.sent"
   | "mcp.call"
