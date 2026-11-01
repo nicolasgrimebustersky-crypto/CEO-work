@@ -693,6 +693,7 @@ function demoDoc(
     serviceTypes: [serviceType],
     subServices: [],
     lineItems,
+    attachments: [],
     discount: totals.discount,
     taxRatePct: DEFAULT_TAX_RATE_PCT,
     subtotal: totals.subtotal,

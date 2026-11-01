@@ -127,3 +127,49 @@ describe("job photos", () => {
     );
   });
 });
+
+describe("files attached to estimates and invoices", () => {
+  const PDF = { contentType: "application/pdf" };
+  const PDF_BYTES = new TextEncoder().encode("%PDF-1.4 test");
+
+  test("a crew member can attach a PDF or a photo, read it back and remove it", async () => {
+    await assertSucceeds(uploadBytes(ref(alice, "documents/d1/files/scope.pdf"), PDF_BYTES, PDF));
+    await assertSucceeds(uploadBytes(ref(alice, "documents/d1/files/site.jpg"), IMAGE_BYTES, IMAGE));
+    await assertSucceeds(getDownloadURL(ref(bob, "documents/d1/files/scope.pdf")));
+    await assertSucceeds(deleteObject(ref(bob, "documents/d1/files/scope.pdf")));
+  });
+
+  test("anything that could run in a browser is refused", async () => {
+    for (const contentType of ["text/html", "image/svg+xml", "application/javascript", "application/zip"]) {
+      await assertFails(
+        uploadBytes(ref(alice, "documents/d1/files/x"), PDF_BYTES, { contentType }),
+        contentType,
+      );
+    }
+  });
+
+  test("files over 20 MB are refused", async () => {
+    const tooBig = new Uint8Array(21 * 1024 * 1024);
+    await assertFails(uploadBytes(ref(alice, "documents/d1/files/huge.pdf"), tooBig, PDF));
+  });
+
+  test("nobody but verified crew can attach or read — customers go through the server", async () => {
+    const path = "documents/d2/files/coi.pdf";
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await uploadBytes(ref(ctx.storage(), path), PDF_BYTES, PDF);
+    });
+    const aliceFresh = testEnv
+      .authenticatedContext("alice", { auth_time: SIGNED_IN_AT + 5000 })
+      .storage();
+    for (const ctx of [mallory, anon, aliceFresh]) {
+      await assertFails(getDownloadURL(ref(ctx, path)));
+      await assertFails(uploadBytes(ref(ctx, "documents/d2/files/new.pdf"), PDF_BYTES, PDF));
+      await assertFails(deleteObject(ref(ctx, path)));
+    }
+  });
+
+  test("only the files folder of a document is writable", async () => {
+    await assertFails(uploadBytes(ref(alice, "documents/d1/scope.pdf"), PDF_BYTES, PDF));
+    await assertFails(uploadBytes(ref(alice, "documents/d1/files/a/b.pdf"), PDF_BYTES, PDF));
+  });
+});

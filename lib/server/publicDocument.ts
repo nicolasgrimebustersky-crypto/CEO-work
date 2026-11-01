@@ -65,6 +65,7 @@ export type SerialDocument = Omit<
   | "firstViewedAt"
   | "lastViewedAt"
   | "viewCount"
+  | "attachments"
 > & {
   issuedAtMs: number | null;
   dueAtMs: number | null;
@@ -73,7 +74,21 @@ export type SerialDocument = Omit<
   createdAtMs: number | null;
   updatedAtMs: number | null;
   payments: SerialPayment[];
+  attachments: SerialAttachment[];
 };
+
+/**
+ * What the customer's page knows about an attached file: enough to draw the
+ * tile and ask for it. The storage path is left behind on purpose — the
+ * download goes through /api/files/[token]/[fileId], which looks the path up
+ * itself, so nothing on the page names a location in the bucket.
+ */
+export interface SerialAttachment {
+  id: string;
+  name: string;
+  contentType: string;
+  size: number;
+}
 
 /** Only the customer fields a document actually prints. */
 export interface SerialCustomer {
@@ -196,6 +211,17 @@ export function serializeDocument(hit: DocumentSnapshot): SerialDocument | null 
             recordedByName: text(payment.recordedByName),
           };
         })
+      : [],
+    attachments: Array.isArray(data.attachments)
+      ? data.attachments
+          .map((raw) => (raw ?? {}) as Record<string, unknown>)
+          .filter((file) => text(file.id) && text(file.path))
+          .map((file) => ({
+            id: text(file.id),
+            name: text(file.name) || "File",
+            contentType: text(file.contentType),
+            size: num(file.size),
+          }))
       : [],
     issuedAtMs: millis(data.issuedAt),
     dueAtMs: millis(data.dueAt),

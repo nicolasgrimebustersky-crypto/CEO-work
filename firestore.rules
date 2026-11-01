@@ -437,7 +437,10 @@ service cloud.firestore {
         && data.total >= 0
         && data.amountPaid is number
         && data.amountPaid >= 0
-        && data.balanceDue is number;
+        && data.balanceDue is number
+        // Attached files (lib/documents.ts DocumentAttachment). Optional:
+        // nothing saved before attachments existed has the field.
+        && (!('attachments' in data) || data.attachments is list);
     }
 
     // The price book. Written automatically whenever a service is used on an

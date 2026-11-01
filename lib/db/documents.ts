@@ -30,6 +30,7 @@ import {
   sumPayments,
   type BusinessDocument,
   type DocumentAcceptance,
+  type DocumentAttachment,
   type DocumentDecline,
   type DocumentKind,
   type DocumentStatus,
@@ -101,6 +102,23 @@ function asPayments(value: unknown): Payment[] {
     .sort((a, b) => b.receivedAt.toMillis() - a.receivedAt.toMillis());
 }
 
+function asAttachments(value: unknown): DocumentAttachment[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is DocumentData => typeof item === "object" && item !== null)
+    .filter((item) => typeof item.path === "string" && item.path)
+    .map((item, index) => ({
+      id: typeof item.id === "string" ? item.id : `file-${index}`,
+      name: typeof item.name === "string" && item.name ? item.name : "File",
+      path: item.path as string,
+      contentType: typeof item.contentType === "string" ? item.contentType : "",
+      size: typeof item.size === "number" ? item.size : 0,
+      uploadedBy: typeof item.uploadedBy === "string" ? item.uploadedBy : "",
+      uploadedByName: typeof item.uploadedByName === "string" ? item.uploadedByName : "Unknown",
+      uploadedAt: item.uploadedAt instanceof Timestamp ? item.uploadedAt : Timestamp.now(),
+    }));
+}
+
 /** The customer's approval, as written by /api/quote/[token]. */
 function asAcceptance(raw: unknown): DocumentAcceptance | null {
   if (!raw || typeof raw !== "object") return null;
@@ -149,6 +167,7 @@ export function toDocument(snap: QueryDocumentSnapshot<DocumentData>): BusinessD
     taxAmount: typeof data.taxAmount === "number" ? data.taxAmount : 0,
     total: typeof data.total === "number" ? data.total : 0,
     payments: asPayments(data.payments),
+    attachments: asAttachments(data.attachments),
     amountPaid: typeof data.amountPaid === "number" ? data.amountPaid : 0,
     balanceDue: typeof data.balanceDue === "number" ? data.balanceDue : 0,
     notes: typeof data.notes === "string" ? data.notes : "",

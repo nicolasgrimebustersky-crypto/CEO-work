@@ -2,7 +2,9 @@
 
 import { Timestamp } from "firebase/firestore";
 
+import { AttachedFiles } from "@/components/documents/AttachedFiles";
 import { DocumentPaper } from "@/components/documents/DocumentPaper";
+import { apiUrl } from "@/lib/apiBase";
 import type { BusinessDocument } from "@/lib/documents";
 import type { SerialCustomer, SerialDocument } from "@/lib/server/publicDocument";
 
@@ -39,6 +41,7 @@ export function SharedDocument({
     createdAtMs,
     updatedAtMs,
     payments,
+    attachments,
     ...rest
   } = document;
 
@@ -67,7 +70,28 @@ export function SharedDocument({
       ...payment,
       receivedAt: at(receivedAtMs) ?? Timestamp.fromMillis(0),
     })),
+    // The paper does not print files; they are the tiles below it.
+    attachments: [],
   };
 
-  return <DocumentPaper document={hydrated} customer={customer} />;
+  const token = document.shareToken;
+
+  return (
+    <>
+      <DocumentPaper document={hydrated} customer={customer} />
+      {token && attachments.length > 0 ? (
+        <section className="mx-auto mt-6 max-w-3xl">
+          <p className="mb-3 text-sm font-bold tracking-widest text-muted uppercase">
+            Attached files
+          </p>
+          <AttachedFiles
+            files={attachments}
+            hrefFor={(file) =>
+              apiUrl(`/api/files/${encodeURIComponent(token)}/${encodeURIComponent(file.id)}`)
+            }
+          />
+        </section>
+      ) : null}
+    </>
+  );
 }
