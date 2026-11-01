@@ -21,6 +21,7 @@ import type {
   KnockRoute,
   Note,
   Quote,
+  Task,
   Territory, ChatMessage, Conversation } from "@/lib/types";
 
 /**
@@ -1317,4 +1318,60 @@ export const demoChatMessages: (ChatMessage & { conversationId: string })[] = [
     authorName: "Dana",
     createdAt: hoursAgo(2),
   },
+];
+
+/** A few follow-ups: one late, one today, one for Dana, one with no date. */
+const demoTask = (over: Partial<Task> & Pick<Task, "id" | "title">): Task => ({
+  orgId: DEFAULT_ORG_ID,
+  notes: "",
+  dueAt: null,
+  customerId: null,
+  customerName: null,
+  documentId: null,
+  assignedTo: DEMO_NICK,
+  doneAt: null,
+  doneBy: null,
+  remindedAt: null,
+  createdAt: hoursAgo(30),
+  createdBy: DEMO_NICK,
+  createdByName: "Nick",
+  updatedAt: hoursAgo(30),
+  updatedBy: DEMO_NICK,
+  updatedByName: "Nick",
+  ...over,
+});
+
+export const demoTasks: Task[] = [
+  demoTask({
+    id: "dk-1",
+    title: "Call back about the gutter quote",
+    dueAt: inDays(-2, 9),
+    customerId: "d-whitfield",
+    customerName: "Ray Whitfield",
+  }),
+  demoTask({
+    id: "dk-2",
+    title: "Text a reminder before Saturday's wash",
+    dueAt: inDays(0, 9),
+    customerId: "d-oakley",
+    customerName: "Marta Oakley",
+  }),
+  demoTask({
+    id: "dk-3",
+    title: "Measure the back patio",
+    dueAt: inDays(2, 9),
+    customerId: "d-castellano",
+    customerName: "Dev Castellano",
+    assignedTo: DEMO_DANA,
+  }),
+  demoTask({ id: "dk-4", title: "Order more surface cleaner tips" }),
+  demoTask({
+    id: "dk-5",
+    title: "Send the window estimate",
+    dueAt: inDays(-1, 9),
+    doneAt: hoursAgo(20),
+    doneBy: DEMO_NICK,
+    customerId: "d-oakley",
+    customerName: "Marta Oakley",
+  }),
 ];

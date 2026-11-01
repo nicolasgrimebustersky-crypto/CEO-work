@@ -35,6 +35,8 @@ export function notificationLink(item: {
       return routes.chatThread(target.id ?? "");
     case "chat":
       return routes.chat;
+    case "tasks":
+      return routes.tasks;
     case "customers":
     default:
       return routes.customers;

@@ -35,6 +35,12 @@ interface ServerNotifyPayload {
   documentId?: string | null;
   /** Who or what caused it — "Customer", "Facebook", "Grime Busters". */
   actorName: string;
+  /**
+   * Narrows the crew to these uids — a follow-up reminder is for the person
+   * it is assigned to, not everyone. Still intersected with CREW_UIDS, so a
+   * stale uid on a task cannot reach somebody who has left.
+   */
+  toUids?: readonly string[] | null;
 }
 
 function crewUids(): string[] {
@@ -53,8 +59,9 @@ function crewUids(): string[] {
  */
 async function willingRecipients(
   type: NotificationType,
+  toUids?: readonly string[] | null,
 ): Promise<{ record: string[]; interrupt: string[] }> {
-  const uids = crewUids();
+  const uids = crewUids().filter((uid) => !toUids || toUids.includes(uid));
   if (uids.length === 0) return { record: [], interrupt: [] };
 
   const docs = await adminDb().getAll(
@@ -91,7 +98,10 @@ export async function notifyCrew(payload: ServerNotifyPayload): Promise<void> {
   if (!isAdminConfigured) return;
 
   try {
-    const { record: recipients, interrupt } = await willingRecipients(payload.type);
+    const { record: recipients, interrupt } = await willingRecipients(
+      payload.type,
+      payload.toUids,
+    );
     if (recipients.length === 0) return;
 
     const title = titleOf(payload.type);

@@ -14,6 +14,7 @@ import {
   PriceBookIcon,
   ReportIcon,
   SearchIcon,
+  TaskIcon,
   type NavIconProps,
 } from "./navIcons";
 
@@ -78,6 +79,12 @@ export const TABS: NavItem[] = [
 
 /** Everything else, reachable from the drawer. */
 export const DRAWER_ONLY: NavItem[] = [
+  {
+    href: routes.tasks,
+    label: "Follow-ups",
+    icon: TaskIcon,
+    hint: "Who to call back and when — reminds you the morning it's due",
+  },
   {
     href: routes.knockRoutes,
     label: "Routes",

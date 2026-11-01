@@ -48,6 +48,7 @@ import { LEAD_SOURCE_LABEL } from "@/lib/types";
 import { CUSTOMER_STATUSES, QUOTE_STATUSES } from "@/lib/types";
 import type { Job, Photo, Quote } from "@/lib/types";
 import { JobSheet } from "@/components/schedule/JobSheet";
+import { CustomerFollowUps } from "@/components/tasks/CustomerFollowUps";
 import { EditCustomerSheet } from "./EditCustomerSheet";
 import { TextConsentRow } from "./TextConsentRow";
 import { StatusPicker } from "./StatusPicker";
@@ -450,6 +451,8 @@ export function CustomerDetailScreen() {
             ) : null}
           </div>
         </section>
+
+        <CustomerFollowUps customerId={customer.id} customerName={customerName(customer)} />
 
         <section>
           <h2 className="mb-2 text-lg font-bold text-ink">Status</h2>

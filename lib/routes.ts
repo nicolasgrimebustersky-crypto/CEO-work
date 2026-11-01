@@ -34,6 +34,7 @@ export const routes = {
     `/chat/thread?id=${encodeURIComponent(conversationId)}`,
   newChat: "/chat?new=1",
   automations: "/automations",
+  tasks: "/tasks",
   dashboard: "/dashboard",
   reports: "/reports",
   search: "/search",

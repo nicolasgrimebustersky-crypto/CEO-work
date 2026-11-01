@@ -179,6 +179,8 @@ describe("the shape the demo and the server both rely on", () => {
       "schedule",
       "pipeline",
       "chat",
+      // The follow-up list, app/tasks/page.tsx.
+      "tasks",
     ]);
     for (const type of NOTIFICATION_TYPES) {
       assert.ok(

@@ -8,6 +8,7 @@ import { useCustomers } from "@/components/providers/CustomersProvider";
 import { useDocuments } from "@/components/providers/DocumentsProvider";
 import { useJobs } from "@/components/providers/JobsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
+import { DashboardFollowUps } from "@/components/tasks/DashboardFollowUps";
 import { useOpenMenu } from "@/components/shell/menu";
 import { MenuIcon } from "@/components/shell/navIcons";
 import { NotificationBell } from "@/components/shell/NotificationBell";
@@ -346,6 +347,8 @@ export function DashboardScreen() {
                   </ol>
                 )}
               </section>
+
+              <DashboardFollowUps />
 
               {/* Crew */}
               <section>

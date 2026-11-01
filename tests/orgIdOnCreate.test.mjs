@@ -213,6 +213,7 @@ const MUST_HAVE_ORG_ID = [
   "quotes.ts",
   "knockRoutes.ts",
   "territories.ts",
+  "tasks.ts",
   "services.ts",
   "automations.ts",
 ];
