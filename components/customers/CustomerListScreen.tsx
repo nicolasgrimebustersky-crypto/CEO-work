@@ -419,6 +419,16 @@ function ClientRow({
         >
           {named ? initialsFor(name) : <PinGlyph />}
         </span>
+        {/* The blue "new" dot, top-left: a website request nobody has
+            opened yet. Separate from the status dot below, which is about the
+            door; this one is about whether anyone has looked. */}
+        {customer.unseenSince ? (
+          <span
+            role="img"
+            aria-label="New — not opened yet"
+            className="absolute -top-0.5 -left-0.5 size-4 rounded-full bg-[#1d9bf0] ring-2 ring-surface"
+          />
+        ) : null}
         {/* The pin status, as a dot on the disc: the one thing about a
             client that decides whether to knock on that door again. */}
         <span

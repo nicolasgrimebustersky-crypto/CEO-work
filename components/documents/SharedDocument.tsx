@@ -49,6 +49,11 @@ export function SharedDocument({
     // down a link that may be sitting in a forwarded text thread.
     acceptance: null,
     decline: null,
+    // Likewise never sent here: the view stamps are a record kept about this
+    // reader, for the crew's screen, not for the page the reader is holding.
+    firstViewedAt: null,
+    lastViewedAt: null,
+    viewCount: 0,
     // Every date the record carries, not only the two this page prints. A
     // rebuild that quietly drops the rest would be a trap for whoever renders
     // something else from it later.

@@ -2,12 +2,13 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { PayInvoiceButton } from "@/components/documents/PayInvoiceButton";
+import { RecordView } from "@/components/documents/RecordView";
 import { QuoteActions } from "@/components/documents/QuoteActions";
 import { SharedDocument } from "@/components/documents/SharedDocument";
 import { BUSINESS, BUSINESS_TIMEZONE } from "@/lib/business";
 import { canTakeCardPayments, checkPayable } from "@/lib/payments";
 import { todayIn } from "@/lib/quoteResponse";
-import { findByShareToken } from "@/lib/server/publicDocument";
+import { crewForCustomer, findByShareToken } from "@/lib/server/publicDocument";
 import { stripeConfig } from "@/lib/server/stripe";
 
 export const runtime = "nodejs";
@@ -61,6 +62,12 @@ export default async function SharedDocumentPage({
   // Both halves have to be true: the deployment can take cards at all, and
   // this particular document is one there is something to pay on.
   const canPay = canTakeCardPayments(stripeConfig()) && checkPayable(document).payable;
+  // Only looked up when there is a payment to make — the crew line belongs
+  // with the tip, and nowhere else on the page.
+  const crew =
+    canPay && document.customerId
+      ? (await crewForCustomer(document.customerId, document.orgId)).map((member) => member.firstName)
+      : [];
   const answered =
     document.status === "accepted" || document.status === "declined"
       ? document.status
@@ -68,6 +75,10 @@ export default async function SharedDocumentPage({
 
   return (
     <main className="min-h-dvh bg-canvas">
+      {/* Renders nothing; stamps the open from the browser once this page is
+          live, so a link-preview fetcher cannot mark it read on the customer's
+          behalf. See components/documents/RecordView.tsx. */}
+      <RecordView token={token} />
       <div className="mx-auto max-w-3xl px-4 pt-6 pb-3">
         <p className="text-sm font-bold tracking-wide text-muted uppercase">
           {BUSINESS.name}
@@ -89,7 +100,12 @@ export default async function SharedDocumentPage({
       <div className="px-3 pb-8">
         <SharedDocument document={document} customer={customer} />
         {canPay && document.shareToken ? (
-          <PayInvoiceButton token={document.shareToken} balanceDue={document.balanceDue} />
+          <PayInvoiceButton
+            token={document.shareToken}
+            balanceDue={document.balanceDue}
+            invoiceLabel={`Invoice ${document.number}`}
+            crew={crew}
+          />
         ) : null}
       </div>
 

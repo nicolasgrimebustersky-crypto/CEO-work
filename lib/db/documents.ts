@@ -41,6 +41,7 @@ import { COLLECTIONS, getDb } from "@/lib/firebase";
 import { asOrgId, DEFAULT_ORG_ID } from "@/lib/org";
 import { SERVICE_TYPES } from "@/lib/types";
 import type { Author, Customer, ServiceType } from "@/lib/types";
+import { cleanSelection } from "@/lib/subServices";
 
 const COLLECTION = COLLECTIONS.documents;
 
@@ -85,6 +86,24 @@ function asPayments(value: unknown): Payment[] {
       method: typeof item.method === "string" ? item.method : "",
       recordedBy: typeof item.recordedBy === "string" ? item.recordedBy : "",
       recordedByName: typeof item.recordedByName === "string" ? item.recordedByName : "Unknown",
+      // Carried through, and this is not decoration. providerRef is the ONLY
+      // thing stopping a replayed Stripe webhook crediting a card payment
+      // twice — lib/server/stripe.ts refuses an event whose session id is
+      // already on the document. Dropping it here did not merely lose a
+      // label: recordPayment and removePayment rebuild the whole payments
+      // array from this read and write it back, so one crew member recording
+      // a check (or deleting any payment) erased the session id from the
+      // card entry beside it and re-armed the double credit.
+      ...(item.provider === "stripe" ? { provider: "stripe" as const } : {}),
+      ...(typeof item.providerRef === "string" && item.providerRef
+        ? { providerRef: item.providerRef }
+        : {}),
+      // Carried through for the same reason: the array is rebuilt and written
+      // back on every recorded payment, and a tip dropped here is a tip the
+      // crew never sees again.
+      ...(typeof item.tip === "number" && Number.isFinite(item.tip) && item.tip > 0
+        ? { tip: item.tip }
+        : {}),
     }))
     .sort((a, b) => b.receivedAt.toMillis() - a.receivedAt.toMillis());
 }
@@ -109,6 +128,7 @@ function asDecline(raw: unknown): DocumentDecline | null {
   const value = raw as Record<string, unknown>;
   return {
     message: typeof value.message === "string" ? value.message : "",
+    reason: typeof value.reason === "string" ? value.reason : "",
     declinedAt: value.declinedAt instanceof Timestamp ? value.declinedAt : null,
   };
 }
@@ -128,6 +148,7 @@ export function toDocument(snap: QueryDocumentSnapshot<DocumentData>): BusinessD
     customerId: typeof data.customerId === "string" ? data.customerId : "",
     customerName: typeof data.customerName === "string" ? data.customerName : "",
     serviceType,
+    ...cleanSelection(data, serviceType),
     lineItems: asLineItems(data.lineItems),
     discount: typeof data.discount === "number" ? data.discount : 0,
     taxRatePct: typeof data.taxRatePct === "number" ? data.taxRatePct : DEFAULT_TAX_RATE_PCT,
@@ -149,6 +170,9 @@ export function toDocument(snap: QueryDocumentSnapshot<DocumentData>): BusinessD
     decline: asDecline(data.decline),
     scheduledJobId:
       typeof data.scheduledJobId === "string" ? data.scheduledJobId : null,
+    firstViewedAt: data.firstViewedAt instanceof Timestamp ? data.firstViewedAt : null,
+    lastViewedAt: data.lastViewedAt instanceof Timestamp ? data.lastViewedAt : null,
+    viewCount: typeof data.viewCount === "number" ? data.viewCount : 0,
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt : Timestamp.now(),
     createdBy: typeof data.createdBy === "string" ? data.createdBy : "",
     createdByName: typeof data.createdByName === "string" ? data.createdByName : "Unknown",
@@ -222,6 +246,8 @@ export interface NewDocumentInput {
   kind: DocumentKind;
   customer: Customer;
   serviceType: ServiceType;
+  serviceTypes: ServiceType[];
+  subServices: string[];
   lineItems: LineItem[];
   discount?: number;
   taxRatePct?: number;
@@ -244,6 +270,8 @@ export async function createDocument(
     customerId: input.customer.id,
     customerName: `${input.customer.firstName} ${input.customer.lastName}`.trim(),
     serviceType: input.serviceType,
+    serviceTypes: input.serviceTypes,
+    subServices: input.subServices,
     lineItems: input.lineItems,
     discount: totals.discount,
     taxRatePct,
@@ -261,6 +289,9 @@ export async function createDocument(
     convertedFromId: null,
     convertedToId: null,
     scheduledJobId: null,
+    firstViewedAt: null,
+    lastViewedAt: null,
+    viewCount: 0,
     orgId: DEFAULT_ORG_ID,
     createdAt: serverTimestamp(),
     createdBy: author.uid,
@@ -277,6 +308,8 @@ export async function createDocument(
 
 export interface DocumentPatch {
   serviceType?: ServiceType;
+  serviceTypes?: ServiceType[];
+  subServices?: string[];
   lineItems?: LineItem[];
   discount?: number;
   taxRatePct?: number;
@@ -314,6 +347,8 @@ export async function updateDocument(
   };
 
   if (patch.serviceType !== undefined) payload.serviceType = patch.serviceType;
+  if (patch.serviceTypes !== undefined) payload.serviceTypes = patch.serviceTypes;
+  if (patch.subServices !== undefined) payload.subServices = patch.subServices;
   if (patch.notes !== undefined) payload.notes = patch.notes;
   if (patch.dueAt !== undefined) {
     payload.dueAt = patch.dueAt ? Timestamp.fromDate(patch.dueAt) : null;
@@ -425,12 +460,22 @@ export async function convertToInvoice(
   const due = dueAt === undefined ? defaultInvoiceDueDate() : dueAt;
 
   const payload = {
+    // Which business owns the invoice. Without it every "Convert to invoice"
+    // was denied outright, exactly as every "Schedule the job" was before the
+    // same line was added to scheduleAsJob below: firestore.rules'
+    // createsInMyOrg asks that orgId is a non-empty string matching the
+    // caller's org, and a MISSING field fails `is string` before any
+    // comparison happens. This write is a batch, so the denial took the
+    // estimate's convertedToId patch down with it and nothing applied at all.
+    orgId: DEFAULT_ORG_ID,
     number: await allocateNumber(),
     kind: "invoice" satisfies DocumentKind,
     status: "draft" satisfies DocumentStatus,
     customerId: estimate.customerId,
     customerName: estimate.customerName,
     serviceType: estimate.serviceType,
+    serviceTypes: estimate.serviceTypes,
+    subServices: estimate.subServices,
     lineItems: estimate.lineItems,
     discount: estimate.discount,
     taxRatePct: estimate.taxRatePct,
@@ -448,6 +493,9 @@ export async function convertToInvoice(
     convertedFromId: estimate.id,
     convertedToId: null,
     scheduledJobId: null,
+    firstViewedAt: null,
+    lastViewedAt: null,
+    viewCount: 0,
     createdAt: serverTimestamp(),
     createdBy: author.uid,
     createdByName: author.displayName,
@@ -640,8 +688,19 @@ export async function scheduleAsJob(
   if (estimate.scheduledJobId) return estimate.scheduledJobId;
 
   const jobPayload = {
+    // Which business owns the job. Without it every "Schedule the job" was
+    // denied outright: firestore.rules' createsInMyOrg asks that orgId is a
+    // non-empty string matching the caller's org, and a missing field fails
+    // the `is string` test before the comparison is ever reached. createJob in
+    // lib/db/jobs.ts stamps it; this path, which builds its payload by hand
+    // from an estimate rather than going through that function, did not.
+    orgId: DEFAULT_ORG_ID,
     customerId: estimate.customerId,
     serviceType: estimate.serviceType,
+    serviceTypes: estimate.serviceTypes,
+    subServices: estimate.subServices,
+    // Scheduling an accepted estimate books the work itself.
+    visitType: "service",
     scheduledStart: Timestamp.fromDate(when.start),
     scheduledEnd: Timestamp.fromDate(when.end),
     status: "scheduled",

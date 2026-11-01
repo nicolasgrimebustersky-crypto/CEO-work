@@ -24,9 +24,9 @@ import {
 } from "@/lib/documentPeriods";
 import { customerName, formatMoney, initialsFor } from "@/lib/format";
 import { routes } from "@/lib/routes";
-import { SERVICE_LABEL } from "@/lib/status";
 import type { Quote } from "@/lib/types";
 import { readableInkOn } from "@/lib/userColor";
+import { servicesLabel } from "@/lib/serviceText";
 
 /**
  * The first screen of the day.
@@ -317,7 +317,7 @@ export function DashboardScreen() {
                                 </span>
                               </span>
                               <span className="mt-0.5 block text-sm font-semibold text-muted">
-                                {SERVICE_LABEL[job.serviceType]}
+                                {servicesLabel(job)}
                                 {done
                                   ? " · Done"
                                   : job.status === "in_progress"

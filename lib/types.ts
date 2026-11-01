@@ -3,6 +3,7 @@ import type { Timestamp } from "firebase/firestore";
 
 import type { PipelineStage } from "./pipeline";
 import type { SmsConsent, SmsOptOut } from "./smsConsent";
+import type { VisitType } from "./visitTypes";
 
 /**
  * What a door is, in the order the picker shows them: the open ones first,
@@ -184,6 +185,12 @@ export interface Customer {
    * recorded afterwards. Cleared only by them texting START.
    */
   smsOptOut?: SmsOptOut | null;
+  /**
+   * The blue "new" dot. Set when somebody submits a website form (a new client,
+   * or an existing one asking again) and cleared the first time anyone opens
+   * the profile — an unread marker, not a status. Absent or null means seen.
+   */
+  unseenSince?: Timestamp | null;
   email: string;
   address: string;
   lat: number;
@@ -258,6 +265,19 @@ export interface Job {
   orgId: string;
   customerId: string;
   serviceType: ServiceType;
+  /**
+   * Every main service this job covers, first one = `serviceType`, and the
+   * specific services under them (lib/subServices.ts). A job saved before
+   * these existed reads as just its `serviceType`, with nothing specific.
+   */
+  serviceTypes: ServiceType[];
+  subServices: string[];
+  /**
+   * What the trip is for — paid work, or an estimate, walkthrough, follow-up
+   * or touch-up. "service" on every job saved before this existed. Only a
+   * service job is billable; see lib/visitTypes.ts.
+   */
+  visitType: VisitType;
   scheduledStart: Timestamp;
   scheduledEnd: Timestamp;
   status: JobStatus;
@@ -389,12 +409,23 @@ export interface Territory {
   updatedByName: string | null;
 }
 
-export const LEAD_SOURCES = ["door_knock", "meta_lead_ad", "referral", "manual"] as const;
+export const LEAD_SOURCES = [
+  "door_knock",
+  "meta_lead_ad",
+  "website_quote",
+  "website_booking",
+  "referral",
+  "manual",
+] as const;
 export type LeadSource = (typeof LEAD_SOURCES)[number];
 
 export const LEAD_SOURCE_LABEL: Record<LeadSource, string> = {
   door_knock: "Door knock",
   meta_lead_ad: "Facebook / Instagram",
+  // Written by app/api/leads/website. Until these were listed, the mapper
+  // dropped them as unknown and the profile read "Door knock".
+  website_quote: "Website — instant quote",
+  website_booking: "Website — booking form",
   referral: "Referral",
   manual: "Added by hand",
 };

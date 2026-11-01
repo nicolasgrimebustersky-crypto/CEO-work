@@ -530,6 +530,9 @@ function job(
     orgId: DEFAULT_ORG_ID,
     customerId,
     serviceType,
+    serviceTypes: [serviceType],
+    subServices: [],
+    visitType: "service",
     scheduledStart: start,
     scheduledEnd: Timestamp.fromMillis(start.toMillis() + hours * 3_600_000),
     status,
@@ -679,9 +682,18 @@ function demoDoc(
     number,
     kind,
     status,
+    // Relative like every other date here. An absolute one drifted: the
+    // fixture dates are anchored to run time, so a hardcoded open time
+    // eventually read as the customer having opened the quote days before it
+    // was issued.
+    firstViewedAt: status === "sent" ? ago(2) : null,
+    lastViewedAt: status === "sent" ? ago(2) : null,
+    viewCount: status === "sent" ? 1 : 0,
     customerId,
     customerName,
     serviceType,
+    serviceTypes: [serviceType],
+    subServices: [],
     lineItems,
     discount: totals.discount,
     taxRatePct: DEFAULT_TAX_RATE_PCT,

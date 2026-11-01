@@ -21,6 +21,8 @@ const {
   fromMinorUnits,
   checkPayable,
   readWebhookPayment,
+  tipCentsFor,
+  MAX_TIP_CENTS,
   cardPaymentMethod,
   MIN_CHARGE_CENTS,
   PAID_EVENT,
@@ -193,8 +195,28 @@ describe("reading a webhook, which arrives from the open internet", () => {
       documentId: "doc_1",
       orgId: "org_1",
       amount: 420.15,
+      tip: 0,
       paid: true,
     });
+  });
+
+  test("a tip is split out of the charge, so the invoice is paid exactly", () => {
+    const tipped = structuredClone(good);
+    tipped.data.object.amount_total = 48315;
+    tipped.data.object.metadata.tipCents = "6300";
+    const read = readWebhookPayment(tipped);
+    assert.equal(read.amount, 420.15);
+    assert.equal(read.tip, 63);
+  });
+
+  test("an unreadable or impossible tip counts the whole charge against the bill", () => {
+    for (const tipCents of ["abc", "-5", "1.5", "42015", "99999", undefined]) {
+      const odd = structuredClone(good);
+      odd.data.object.metadata.tipCents = tipCents;
+      const read = readWebhookPayment(odd);
+      assert.equal(read.amount, 420.15, String(tipCents));
+      assert.equal(read.tip, 0, String(tipCents));
+    }
   });
 
   test("a completed but unpaid session is read, and marked unpaid", () => {
@@ -253,5 +275,33 @@ describe("how a card payment reads in the ledger", () => {
     for (const value of ["", "12", "abcd"]) {
       assert.equal(cardPaymentMethod(value), "Card");
     }
+  });
+});
+
+describe("tips", () => {
+  test("the presets are a share of what is owed, rounded to the cent", () => {
+    assert.equal(tipCentsFor(44900, { percent: 10 }), 4490);
+    assert.equal(tipCentsFor(44900, { percent: 15 }), 6735);
+    assert.equal(tipCentsFor(44900, { percent: 20 }), 8980);
+  });
+
+  test("only the offered percentages are accepted", () => {
+    assert.equal(tipCentsFor(44900, { percent: 99 }), 0);
+    assert.equal(tipCentsFor(44900, { percent: "20" }), 0);
+  });
+
+  test("a custom tip is whole cents, positive, and bounded", () => {
+    assert.equal(tipCentsFor(44900, { cents: 2500 }), 2500);
+    assert.equal(tipCentsFor(44900, { cents: 25.5 }), 0);
+    assert.equal(tipCentsFor(44900, { cents: -100 }), 0);
+    assert.equal(tipCentsFor(10000, { cents: 900000 }), 10000, "never more than the bill");
+    assert.equal(tipCentsFor(900000, { cents: 900000 }), MAX_TIP_CENTS, "never more than the cap");
+  });
+
+  test("no choice, or junk, is no tip", () => {
+    for (const choice of [null, undefined, "20%", 20, {}, []]) {
+      assert.equal(tipCentsFor(44900, choice), 0, JSON.stringify(choice));
+    }
+    assert.equal(tipCentsFor(0, { percent: 20 }), 0);
   });
 });

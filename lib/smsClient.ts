@@ -128,6 +128,41 @@ export function sendTestText(): Promise<TestTextResult> {
   return post("/api/sms/test", {});
 }
 
+export interface ReplyImportResult {
+  ok: boolean;
+  /** Incoming texts read from Twilio's log. */
+  read: number;
+  /** Replies newly added to client timelines. */
+  filed: number;
+  /** Clients those replies were added to. */
+  customers: number;
+  /** Replies from numbers not on file, added to the Messages screen. */
+  unknownNumbers: number;
+  /** Replies that were already in the CRM. */
+  alreadyFiled: number;
+  /** Clients whose last word was STOP, now flagged. */
+  optOuts: number;
+  /** Twilio's log was longer than one run reads, so the oldest were left out. */
+  truncated: boolean;
+}
+
+/** Pulls replies sent before the webhook was connected out of Twilio's log. */
+export function importOldReplies(): Promise<ReplyImportResult> {
+  if (isDemoMode) {
+    return Promise.resolve({
+      ok: true,
+      read: 0,
+      filed: 0,
+      customers: 0,
+      unknownNumbers: 0,
+      alreadyFiled: 0,
+      optOuts: 0,
+      truncated: false,
+    });
+  }
+  return post("/api/sms/import-replies", {});
+}
+
 /**
  * Job texts are best-effort: the job itself is already saved by the time these
  * run, and a Twilio outage must not make it look like the save failed. Errors

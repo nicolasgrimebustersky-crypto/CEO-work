@@ -8,6 +8,7 @@ import { looksLikeShareToken, normalizeShareToken } from "@/lib/shareLinks";
 import { DEFAULT_TAX_RATE_PCT, type BusinessDocument, type DocumentStatus } from "@/lib/documents";
 import { asOrgId } from "@/lib/org";
 import { SERVICE_TYPES, type ServiceType } from "@/lib/types";
+import { cleanSelection } from "@/lib/subServices";
 
 /**
  * Resolving a share token to the document it opens.
@@ -45,6 +46,11 @@ export interface SerialPayment {
  * no use for them — the buttons already know from the status whether this was
  * answered — and sending them would push a customer's own signature back down
  * the wire on every load of a link that may sit in a forwarded text thread.
+ *
+ * The view stamps are dropped for the same reason and one more: they are a
+ * record kept about the reader, and handing somebody "you opened this three
+ * times" on their own quote is both useless to them and faintly unsettling.
+ * The crew's screen is where that belongs.
  */
 export type SerialDocument = Omit<
   BusinessDocument,
@@ -57,6 +63,9 @@ export type SerialDocument = Omit<
   | "payments"
   | "acceptance"
   | "decline"
+  | "firstViewedAt"
+  | "lastViewedAt"
+  | "viewCount"
 > & {
   issuedAtMs: number | null;
   dueAtMs: number | null;
@@ -145,6 +154,7 @@ export function serializeDocument(hit: DocumentSnapshot): SerialDocument | null 
     customerId: text(data.customerId),
     customerName: text(data.customerName),
     serviceType,
+    ...cleanSelection(data, serviceType),
     lineItems: Array.isArray(data.lineItems)
       ? data.lineItems.map((raw) => {
           const item = (raw ?? {}) as Record<string, unknown>;
@@ -224,4 +234,59 @@ export async function customerFor(customerId: string): Promise<SerialCustomer | 
   if (!customerId) return null;
   const snap = await adminDb().collection("customers").doc(customerId).get();
   return serializeCustomer(snap);
+}
+
+/** Who did the work, as the customer's page shows it: first names only. */
+export interface CrewMember {
+  firstName: string;
+}
+
+/**
+ * The crew on this customer's most recent job, for the "your crew" line above
+ * the tip.
+ *
+ * First names only, read through the Admin SDK and never anything else off
+ * the profile: the page is public to anyone holding the link, and a crew
+ * member's email, phone or surname is not the customer's to see. Empty when
+ * there is no job, so the page simply says nothing about a crew.
+ *
+ * Queried on customerId alone and sorted here, because adding a status filter
+ * or an orderBy would need a composite index for a two-person crew's handful
+ * of jobs per customer.
+ */
+export async function crewForCustomer(customerId: string, orgId: string): Promise<CrewMember[]> {
+  if (!customerId) return [];
+  try {
+    const db = adminDb();
+    const jobs = await db.collection("jobs").where("customerId", "==", customerId).get();
+    const candidates = jobs.docs
+      .map((doc) => doc.data())
+      .filter((job) => asOrgId(job.orgId) === orgId && job.status !== "cancelled")
+      .filter((job) => Array.isArray(job.assignedTo) && job.assignedTo.length > 0);
+    const millis = (value: unknown) =>
+      value && typeof (value as { toMillis?: unknown }).toMillis === "function"
+        ? (value as { toMillis: () => number }).toMillis()
+        : 0;
+    // Finished work first — that is the crew being thanked — then the latest.
+    candidates.sort((a, b) => {
+      const doneA = a.status === "complete" ? 1 : 0;
+      const doneB = b.status === "complete" ? 1 : 0;
+      if (doneA !== doneB) return doneB - doneA;
+      return millis(b.completedAt ?? b.scheduledStart) - millis(a.completedAt ?? a.scheduledStart);
+    });
+    const uids = (candidates[0]?.assignedTo ?? []).filter(
+      (uid: unknown): uid is string => typeof uid === "string" && uid.length > 0,
+    );
+    const crew: CrewMember[] = [];
+    for (const uid of uids.slice(0, 4)) {
+      const profile = await db.collection("users").doc(uid).get();
+      const name = text(profile.data()?.displayName).split(/\s+/)[0] ?? "";
+      if (name) crew.push({ firstName: name });
+    }
+    return crew;
+  } catch (error) {
+    // A missing crew line is cosmetic. Never fail the customer's page over it.
+    console.error("Could not read the crew for a shared document:", error);
+    return [];
+  }
 }

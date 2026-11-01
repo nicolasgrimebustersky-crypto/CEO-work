@@ -112,12 +112,18 @@ export async function appendNote(
     kind: NoteKind;
     authorUid: string;
     authorName: string;
+    /**
+     * A fixed id, for a note that must not be filed twice. Customer replies
+     * use their Twilio message SID (see lib/replyImport.ts) so an import of
+     * old replies recognises one the webhook already delivered.
+     */
+    id?: string;
   },
-  options: { markContacted?: boolean } = {},
+  options: { markContacted?: boolean; markUnseen?: boolean } = {},
 ): Promise<void> {
   const patch: Record<string, unknown> = {
     notes: FieldValue.arrayUnion({
-      id: crypto.randomUUID(),
+      id: note.id || crypto.randomUUID(),
       text: note.text,
       kind: note.kind,
       authorUid: note.authorUid,
@@ -135,7 +141,76 @@ export async function appendNote(
     patch.lastContactedByName = note.authorName;
   }
 
+  // The blue dot on the client list, the same one a new website lead gets.
+  // Cleared by opening the record.
+  if (options.markUnseen) patch.unseenSince = Timestamp.now();
+
   await adminDb().collection("customers").doc(customerId).update(patch);
+}
+
+/**
+ * Files replies that arrived before the webhook was connected, in one write.
+ *
+ * Each note keeps the time the customer actually sent it, so the timeline and
+ * the Messages screen put it where it belongs rather than at the top as if it
+ * arrived today. `lastContactedAt` is left alone: that field is about us
+ * reaching them, and an import is not contact.
+ */
+export async function appendImportedReplies(
+  customerId: string,
+  notes: { id: string; text: string; sentAt: number }[],
+  author: { name: string },
+): Promise<void> {
+  if (notes.length === 0) return;
+  await adminDb()
+    .collection("customers")
+    .doc(customerId)
+    .update({
+      notes: FieldValue.arrayUnion(
+        ...notes.map((note) => ({
+          id: note.id,
+          text: note.text,
+          kind: "sms_in",
+          authorUid: "customer",
+          authorName: author.name,
+          createdAt: Timestamp.fromMillis(note.sentAt),
+        })),
+      ),
+      unseenSince: Timestamp.now(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+}
+
+/**
+ * Every customer with the ids of the notes already on their timeline.
+ *
+ * One scan for a whole import, rather than findCustomerByPhone's scan per
+ * message. Scoped to one org: another business's customer is not ours to
+ * file a reply on.
+ */
+export async function customersForReplyImport(
+  orgId: string,
+): Promise<{ id: string; phone: string; name: string; noteIds: Set<string> }[]> {
+  const snap = await adminDb().collection("customers").get();
+  const out: { id: string; phone: string; name: string; noteIds: Set<string> }[] = [];
+  for (const doc of snap.docs) {
+    const data = doc.data();
+    if (asOrgId(data.orgId) !== orgId) continue;
+    const notes = Array.isArray(data.notes) ? data.notes : [];
+    const noteIds = new Set<string>();
+    for (const note of notes) {
+      if (note && typeof note === "object" && typeof note.id === "string") noteIds.add(note.id);
+    }
+    const first = typeof data.firstName === "string" ? data.firstName : "";
+    const last = typeof data.lastName === "string" ? data.lastName : "";
+    out.push({
+      id: doc.id,
+      phone: typeof data.phone === "string" ? data.phone : "",
+      name: `${first} ${last}`.trim() || "Customer",
+      noteIds,
+    });
+  }
+  return out;
 }
 
 /**
@@ -224,6 +299,53 @@ export interface NumberSuppression {
   refused: boolean;
   /** A record for this number has accepted, been won, or been written off. */
   movedOn: boolean;
+}
+
+/** The last ten digits, the form every phone comparison in this file uses. */
+function digits10(raw: unknown): string | null {
+  const digits = String(raw ?? "").replace(/\D/g, "").slice(-10);
+  return digits.length === 10 ? digits : null;
+}
+
+/**
+ * Every recorded STOP in this org, keyed by the number it belongs to.
+ *
+ * One scan for a whole blast, rather than optOutForPhone's one scan per
+ * number. That difference is the reason this exists: /api/sms/blast sends up
+ * to 200 messages inside a 60-second maxDuration, so 200 full collection
+ * scans is not a slower version of the right answer, it is a timeout. Asking
+ * per-record instead was the bug — see below.
+ *
+ * Phone-keyed, not customer-keyed, because a number is not a customer. The
+ * Meta lead webhook creates a fresh record per form submission, so one handset
+ * can sit in the database several times, and an inbound STOP is written to
+ * exactly one of them. A record-scoped check therefore passes every duplicate:
+ * the blast screen showed the same person under "cannot be texted" AND counted
+ * her as a recipient, and the send went out.
+ *
+ * One record saying stop is enough; a second record without the mark is not a
+ * retraction. Other orgs are skipped — a number is shared often enough (a
+ * landlord, a spouse) and one business's instruction is not the other's.
+ */
+export async function optOutsByPhone(orgId: string): Promise<Map<string, SmsOptOut>> {
+  const out = new Map<string, SmsOptOut>();
+  const snap = await adminDb().collection("customers").get();
+  for (const doc of snap.docs) {
+    const data = doc.data();
+    const key = digits10(data.phone);
+    if (!key) continue;
+    if (asOrgId(data.orgId) !== orgId) continue;
+    const optOut = readOptOut(data.smsOptOut);
+    // First one wins; they all mean the same thing, and the earliest recorded
+    // instruction is the more honest one to quote back to the crew.
+    if (optOut && !out.has(key)) out.set(key, optOut);
+  }
+  return out;
+}
+
+/** The key `optOutsByPhone` is keyed on, for callers holding a raw number. */
+export function phoneSuppressionKey(rawPhone: unknown): string | null {
+  return digits10(rawPhone);
 }
 
 export async function numberSuppression(

@@ -25,27 +25,66 @@
 export type Role = "crew" | "pending";
 
 /**
+ * Who holds the keys, per brand. Each brand runs its own Firebase project
+ * (lib/brand.ts), so each has its own admin and founding accounts — and they
+ * must never be another brand's, or one business's owner could sign in to
+ * the other's customers.
+ *
+ * Read inline from NEXT_PUBLIC_BRAND, like lib/messages.ts, so this file stays
+ * import-free. The same values are written into each brand's rules:
+ * firestore.rules and storage.rules for Grime Busters, and rules/<brand>/ for
+ * the rest, rendered by scripts/brand-rules.mjs. `tests/roles.test.mjs` and
+ * `tests/brand.test.mjs` check they agree.
+ *
+ * An empty adminEmail means the brand has no admin yet. isAdmin() then
+ * matches nobody, and lib/brandGuard.ts refuses a live build for it.
+ */
+export interface AccessIdentity {
+  adminEmail: string;
+  bootstrapCrew: readonly string[];
+  ownerUid: string;
+}
+
+export const ACCESS_IDENTITIES: Record<"grime-busters" | "rda", AccessIdentity> = {
+  "grime-busters": {
+    adminEmail: "nicolas.grimebustersky@gmail.com",
+    bootstrapCrew: ["Bzo7rclax4SdT7PaAua1monNxXG3", "QLMsTAHbbceHBAWBXPqtScGdGon2"],
+    ownerUid: "Bzo7rclax4SdT7PaAua1monNxXG3",
+  },
+  rda: {
+    // Ryland's Google sign-in address, in lower case. Set it, then run
+    // `node --experimental-strip-types scripts/brand-rules.mjs rda`.
+    adminEmail: "",
+    // His Firebase uid once he has signed up in RDA's own project. Until then
+    // he is crew through the admin email, but job photos (storage.rules)
+    // admit only these uids.
+    bootstrapCrew: [],
+    ownerUid: "",
+  },
+};
+
+const IDENTITY =
+  process.env.NEXT_PUBLIC_BRAND === "rda" ? ACCESS_IDENTITIES.rda : ACCESS_IDENTITIES["grime-busters"];
+
+/**
  * The single admin. Firebase enforces one account per email address, so this
  * cannot be claimed by registering — and it is checked against the signed-in
  * token, not against anything a client can send.
  *
- * If this address ever changes in Firebase, change it here and in
- * firestore.rules together. `tests/roles.test.mjs` checks they agree.
+ * If this address ever changes in Firebase, change it in ACCESS_IDENTITIES and
+ * in the brand's rules together. `tests/roles.test.mjs` checks they agree.
  */
-export const ADMIN_EMAIL = "nicolas.grimebustersky@gmail.com";
+export const ADMIN_EMAIL = IDENTITY.adminEmail;
 
 /**
  * Crew regardless of what is stored — the founding accounts.
  *
- * Keep in step with the same list in firestore.rules and storage.rules. This
- * is the bootstrap: the first accounts cannot wait for an approver, and a
- * profile damaged by a bad write must never lock the owners out of their own
- * business.
+ * Keep in step with the same list in the brand's firestore.rules and
+ * storage.rules. This is the bootstrap: the first accounts cannot wait for an
+ * approver, and a profile damaged by a bad write must never lock the owners
+ * out of their own business.
  */
-export const BOOTSTRAP_CREW: readonly string[] = [
-  "Bzo7rclax4SdT7PaAua1monNxXG3",
-  "QLMsTAHbbceHBAWBXPqtScGdGon2",
-];
+export const BOOTSTRAP_CREW: readonly string[] = IDENTITY.bootstrapCrew;
 
 /**
  * The owner's account, for the one notification that is addressed rather than
@@ -53,14 +92,16 @@ export const BOOTSTRAP_CREW: readonly string[] = [
  * was collected.
  *
  * A uid rather than an email because notifications are addressed by uid, and
- * the roster carries no email to match on. It is the first bootstrap account —
- * the same uid the legacy import scripts write as "Nicolas".
+ * the roster carries no email to match on. For Grime Busters it is the first
+ * bootstrap account — the same uid the legacy import scripts write as
+ * "Nicolas". Empty when a brand's owner has no uid yet; the sign-off then
+ * addresses nobody rather than somebody else.
  *
  * Safe to hold in client code: it addresses a message, it does not grant
  * anything. Permission still comes from `isAdmin`, which is checked against the
  * signed-in token.
  */
-export const OWNER_UID = "Bzo7rclax4SdT7PaAua1monNxXG3";
+export const OWNER_UID = IDENTITY.ownerUid;
 
 export function isBootstrapCrew(uid: string | null | undefined): boolean {
   return typeof uid === "string" && BOOTSTRAP_CREW.includes(uid);
@@ -74,7 +115,9 @@ export function isBootstrapCrew(uid: string | null | undefined): boolean {
  * loosely: no prefix matching, no domain matching, no "starts with".
  */
 export function isAdmin(email: string | null | undefined): boolean {
-  if (typeof email !== "string") return false;
+  // No admin configured matches nobody — never the empty string a missing
+  // token email would trim to.
+  if (typeof email !== "string" || !ADMIN_EMAIL) return false;
   return email.trim().toLowerCase() === ADMIN_EMAIL;
 }
 

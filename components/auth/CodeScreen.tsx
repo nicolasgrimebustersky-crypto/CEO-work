@@ -1,6 +1,13 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 
 import { useAuth } from "@/components/providers/AuthProvider";
 import { apiUrl } from "@/lib/apiBase";
@@ -14,9 +21,22 @@ import {
   maskEmail,
   placeDigits,
 } from "@/lib/otp";
+import { TRUST_DAYS } from "@/lib/trustedDevice";
+import {
+  clearDeviceToken,
+  readDeviceToken,
+  saveDeviceToken,
+} from "@/lib/trustedDeviceClient";
 import { LoginBackdrop } from "./LoginBackdrop";
 
-type Stage = "sending" | "ready" | "checking" | "verified" | "failed";
+/** "trying" is the silent device check, before a code is ever asked for. */
+type Stage =
+  | "trying"
+  | "sending"
+  | "ready"
+  | "checking"
+  | "verified"
+  | "failed";
 
 async function bearer(force = false): Promise<string> {
   const user = getFirebaseAuth().currentUser;
@@ -24,10 +44,17 @@ async function bearer(force = false): Promise<string> {
   return user.getIdToken(force);
 }
 
-async function post(path: string, body: unknown, force: boolean): Promise<Response> {
+async function post(
+  path: string,
+  body: unknown,
+  force: boolean,
+): Promise<Response> {
   return fetch(apiUrl(path), {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${await bearer(force)}` },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${await bearer(force)}`,
+    },
     body: JSON.stringify(body),
   });
 }
@@ -41,13 +68,34 @@ async function post(path: string, body: unknown, force: boolean): Promise<Respon
  * server is the one signal that the cache is stale, so it is answered by
  * fetching a fresh token and trying exactly once more. A second 401 is real.
  */
-async function call(path: string, body: unknown): Promise<{ ok: boolean; error: string }> {
+interface CallResult {
+  ok: boolean;
+  error: string;
+  /** Only /api/otp/device sets this. */
+  trusted?: boolean;
+  /** Only /api/otp/verify sets this, and only when a device was asked for. */
+  deviceToken?: string;
+}
+
+async function call(path: string, body: unknown): Promise<CallResult> {
   let response = await post(path, body, false);
   if (response.status === 401) response = await post(path, body, true);
-  const json = (await response.json().catch(() => ({}))) as { error?: unknown };
+  const json = (await response.json().catch(() => ({}))) as {
+    error?: unknown;
+    trusted?: unknown;
+    deviceToken?: unknown;
+  };
   return {
     ok: response.ok,
-    error: typeof json.error === "string" ? json.error : response.ok ? "" : "Something went wrong.",
+    error:
+      typeof json.error === "string"
+        ? json.error
+        : response.ok
+          ? ""
+          : "Something went wrong.",
+    trusted: json.trusted === true,
+    deviceToken:
+      typeof json.deviceToken === "string" ? json.deviceToken : undefined,
   };
 }
 
@@ -78,15 +126,25 @@ function CheckIcon() {
  * anything verified; it asks, and the token it is handed afterwards is the
  * answer.
  *
- * The code is requested once, on arrival, so the person is not made to tap a
- * button to get a thing they obviously want. A resend is offered after a
- * pause rather than instantly, because two codes in a row is the one thing
- * that makes the first one confusing.
+ * On arrival it first offers whatever device token this browser is holding.
+ * That order matters: asking for a code and *then* checking the device would
+ * email a code on every sign-in from a trusted phone — one nobody reads, which
+ * is how people learn to ignore the email that matters. Only when the device
+ * is unknown, expired or revoked is a code sent, and then it is sent without a
+ * tap, because it is obviously wanted.
+ *
+ * A resend is offered after a pause rather than instantly, because two codes
+ * in a row is the one thing that makes the first one confusing.
  */
 export function CodeScreen() {
   const { email, signOutNow, confirmCode } = useAuth();
 
-  const [stage, setStage] = useState<Stage>("sending");
+  const [stage, setStage] = useState<Stage>("trying");
+  // On by default, because it is what was asked for and what the person on a
+  // company phone wants. Unticking is there for the case the default is wrong
+  // — a borrowed handset, a shared desktop — and it has to be decided before
+  // the code is entered, which is why it sits above the boxes.
+  const [trustDevice, setTrustDevice] = useState(true);
   const [boxes, setBoxes] = useState<string[]>(emptyBoxes);
   const [error, setError] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string>("");
@@ -118,13 +176,35 @@ export function CodeScreen() {
     setTimeout(() => focusBox(0), 0);
   }, [email, focusBox]);
 
-  // Once. React's development double-mount would otherwise send two codes and
-  // silently invalidate the first — the ref survives the remount, state does not.
+  /**
+   * Try this device first, then fall back to a code.
+   *
+   * Once. React's development double-mount would otherwise send two codes and
+   * silently invalidate the first — the ref survives the remount, state does
+   * not.
+   *
+   * A refused token is cleared rather than kept. It is expired, revoked, or
+   * for another account, and all three stay true tomorrow; keeping it would
+   * mean a pointless request on every future sign-in.
+   */
   useEffect(() => {
     if (requested.current) return;
     requested.current = true;
-    void send();
-  }, [send]);
+
+    void (async () => {
+      const token = readDeviceToken();
+      if (token) {
+        const result = await call("/api/otp/device", { token });
+        if (result.ok && result.trusted) {
+          setStage("verified");
+          setTimeout(() => void confirmCode(), 450);
+          return;
+        }
+        clearDeviceToken();
+      }
+      await send();
+    })();
+  }, [send, confirmCode]);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -136,7 +216,7 @@ export function CodeScreen() {
     async (code: string) => {
       setStage("checking");
       setError(null);
-      const result = await call("/api/otp/verify", { code });
+      const result = await call("/api/otp/verify", { code, trustDevice });
       if (!result.ok) {
         setStage("ready");
         setError(result.error);
@@ -144,12 +224,13 @@ export function CodeScreen() {
         setTimeout(() => focusBox(0), 0);
         return;
       }
+      if (result.deviceToken) saveDeviceToken(result.deviceToken);
       setStage("verified");
       // A beat with the six ticks showing. The app opening the instant the
       // last digit lands reads as the screen having given up, not succeeded.
       setTimeout(() => void confirmCode(), 650);
     },
-    [confirmCode, focusBox],
+    [confirmCode, focusBox, trustDevice],
   );
 
   // Typing is allowed after a failed send as well as a successful one. The
@@ -160,7 +241,10 @@ export function CodeScreen() {
     if (!canType) return;
     // A second character typed into a full box replaces it rather than
     // spilling both into the next: the first character is the old value.
-    const typed = raw.length > 1 && boxes[index] && raw.startsWith(boxes[index]) ? raw.slice(1) : raw;
+    const typed =
+      raw.length > 1 && boxes[index] && raw.startsWith(boxes[index])
+        ? raw.slice(1)
+        : raw;
     const next = placeDigits(boxes, index, typed);
     setBoxes(next.boxes);
     setError(null);
@@ -187,17 +271,19 @@ export function CodeScreen() {
 
   const verified = stage === "verified";
   const status =
-    stage === "sending"
-      ? "Sending your code…"
-      : stage === "checking"
-        ? "Checking…"
-        : stage === "verified"
-          ? "Code verified"
-          : stage === "failed"
-            ? "Could not send a code"
-            : error
-              ? error
-              : `Enter the ${OTP_LENGTH}-digit code`;
+    stage === "trying"
+      ? "Checking this device…"
+      : stage === "sending"
+        ? "Sending your code…"
+        : stage === "checking"
+          ? "Checking…"
+          : stage === "verified"
+            ? "Code verified"
+            : stage === "failed"
+              ? "Could not send a code"
+              : error
+                ? error
+                : `Enter the ${OTP_LENGTH}-digit code`;
   const dot =
     stage === "verified"
       ? "bg-login-accent"
@@ -227,13 +313,18 @@ export function CodeScreen() {
         <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-ink/50">
           Security check
         </p>
-        <h1 id="code-heading" className="mt-2 text-2xl font-bold tracking-tight text-ink">
+        <h1
+          id="code-heading"
+          className="mt-2 text-2xl font-bold tracking-tight text-ink"
+        >
           Enter your code
         </h1>
         <p className="mt-1.5 text-sm text-ink/55">
-          {stage === "failed"
-            ? "We could not send one."
-            : `We sent a ${OTP_LENGTH}-digit code to ${sentTo || (email ? maskEmail(email) : "your email")}.`}
+          {stage === "trying"
+            ? "Seeing whether this device is already trusted…"
+            : stage === "failed"
+              ? "We could not send one."
+              : `We sent a ${OTP_LENGTH}-digit code to ${sentTo || (email ? maskEmail(email) : "your email")}.`}
         </p>
 
         <div
@@ -244,7 +335,10 @@ export function CodeScreen() {
           {boxes.map((value, index) => (
             <Fragment key={index}>
               {index === OTP_LENGTH / 2 ? (
-                <span aria-hidden className="mx-0.5 h-px w-3 shrink-0 bg-white/25" />
+                <span
+                  aria-hidden
+                  className="mx-0.5 h-px w-3 shrink-0 bg-white/25"
+                />
               ) : null}
               <div className="relative">
                 <input
@@ -284,25 +378,60 @@ export function CodeScreen() {
           role="status"
           aria-live="polite"
           className={`mt-6 flex items-center justify-center gap-2 text-sm font-medium ${
-            verified ? "text-login-accent" : error || stage === "failed" ? "text-ink" : "text-ink/70"
+            verified
+              ? "text-login-accent"
+              : error || stage === "failed"
+                ? "text-ink"
+                : "text-ink/70"
           }`}
         >
           <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} />
           {status}
         </p>
+
+        {/* Hidden once the code is accepted: by then the choice is made, and a
+            checkbox that still looks changeable but no longer is would be a
+            lie about what the next tap does. */}
+        {verified || stage === "trying" ? null : (
+          <label className="mt-5 flex cursor-pointer items-start justify-center gap-2.5 text-left">
+            <input
+              type="checkbox"
+              checked={trustDevice}
+              onChange={(e) => setTrustDevice(e.target.checked)}
+              className="mt-0.5 h-5 w-5 shrink-0 rounded border-white/20 bg-white/[0.06] accent-login-accent"
+            />
+            <span className="text-sm text-ink/70">
+              Trust this device for {TRUST_DAYS} days
+              <span className="block text-xs text-ink/45">
+                You will still need your password. Untick on a shared or
+                borrowed phone.
+              </span>
+            </span>
+          </label>
+        )}
         {stage === "failed" && error ? (
-          <p role="alert" className="mt-3 rounded-xl border border-danger/50 bg-danger/10 px-3.5 py-2.5 text-left text-sm text-ink">
+          <p
+            role="alert"
+            className="mt-3 rounded-xl border border-danger/50 bg-danger/10 px-3.5 py-2.5 text-left text-sm text-ink"
+          >
             {error}
           </p>
         ) : null}
 
-        <p className="mt-3 text-xs text-ink/40">Tip: paste to fill every box at once.</p>
+        <p className="mt-3 text-xs text-ink/40">
+          Tip: paste to fill every box at once.
+        </p>
 
         <div className="mt-7 flex items-center justify-center gap-5 text-sm">
           <button
             type="button"
             onClick={() => void send()}
-            disabled={stage === "sending" || stage === "checking" || verified || cooldown > 0}
+            disabled={
+              stage === "sending" ||
+              stage === "checking" ||
+              verified ||
+              cooldown > 0
+            }
             className="font-semibold text-login-accent transition hover:brightness-110 disabled:text-ink/40 disabled:hover:brightness-100"
           >
             {cooldown > 0 ? `Send again in ${cooldown}s` : "Send a new code"}

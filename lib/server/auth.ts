@@ -48,9 +48,18 @@ export interface CrewCaller {
 
 export interface RequireCrewOptions {
   /**
-   * Let a session through that has not yet passed the sign-in code. Only the
-   * two routes that issue and check the code may set this — everything else
-   * gets the default, which is the whole point of having a code.
+   * Let a session through that has not yet passed the sign-in code.
+   *
+   * Three routes may set this, and all three are part of *becoming* verified,
+   * where requiring verification first would be circular: issuing a code,
+   * checking one, and redeeming a trusted device's token in place of one.
+   * Everything else gets the default, which is the whole point of having a
+   * code.
+   *
+   * None of the three is a way in on its own. `requireCrew` has already
+   * established that the caller holds a valid session for an approved crew
+   * account, which means the password has already been given — this flag only
+   * says the second factor is still outstanding.
    */
   beforeCode?: boolean;
 }

@@ -3,7 +3,15 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { BRAND_PROFILE } from "@/lib/brand";
 import { formatMoneyExact } from "@/lib/format";
 import { hourInBusinessTimezone, BUSINESS_TIMEZONE } from "@/lib/notifications/quietHours";
+import { builtinByKey } from "@/lib/automationBuiltins";
+import { DEFAULT_ORG_ID } from "@/lib/org";
 import { adminDb } from "@/lib/server/admin";
+import {
+  builtinLive,
+  builtinRow,
+  loadAutomationRows,
+  recordBuiltinRun,
+} from "@/lib/server/automationStore";
 import { errorResponse, requireCronSecret } from "@/lib/server/auth";
 import { notifyCrew } from "@/lib/server/notify";
 
@@ -70,6 +78,20 @@ function daysLate(dueAt: Timestamp, now: number): number {
 export async function GET(request: Request): Promise<Response> {
   try {
     requireCronSecret(request);
+
+    // Switchable from the Automations screen, like the quote follow-up. This
+    // one only ever notifies the crew — it does not text a customer — so the
+    // cost of it being on is a phone buzzing rather than a number getting
+    // reported. It still gets a switch, because something that cannot be
+    // turned off is something nobody is quite sure is on.
+    const reminders = builtinByKey("money_reminders");
+    const rows = await loadAutomationRows(DEFAULT_ORG_ID);
+    if (!builtinLive(reminders ? builtinRow(rows, reminders.docId) : undefined)) {
+      return Response.json({
+        ok: true,
+        skipped: "money_reminders is switched off or paused on the Automations screen",
+      });
+    }
 
     const db = adminDb();
     const now = Date.now();
@@ -143,6 +165,18 @@ export async function GET(request: Request): Promise<Response> {
             : ". Nothing past due."),
       });
       summarised = open.length;
+    }
+
+    // The screen's "Last run" line. Written on a quiet morning too: a run that
+    // found nothing is still the proof that the cron is being called.
+    if (reminders) {
+      await recordBuiltinRun(
+        reminders,
+        newlyOverdue.length === 0
+          ? `Nothing newly overdue — ${open.length} open invoice${open.length === 1 ? "" : "s"} checked`
+          : `${newlyOverdue.length} newly overdue flagged, ${open.length} open`,
+        0,
+      );
     }
 
     return Response.json({

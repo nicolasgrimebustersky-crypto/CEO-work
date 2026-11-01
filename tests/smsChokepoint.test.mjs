@@ -56,8 +56,10 @@ const ALLOWED = new Map([
   ],
   [
     "app/api/sms/blast/route.ts",
-    "checks canSendTo per recipient so a refusal skips the 1.1s pacing delay — " +
-      "200 refusals through the chokepoint would run past maxDuration",
+    "checks the NUMBER against optOutsByPhone (one scan for the whole blast) " +
+      "and then canSendTo per recipient, so a refusal skips the 1.1s pacing " +
+      "delay — 200 refusals through sendSmsToPhone would be 200 full customer " +
+      "scans and run past maxDuration",
   ],
 ]);
 

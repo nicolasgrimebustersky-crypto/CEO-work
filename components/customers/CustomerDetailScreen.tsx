@@ -21,6 +21,7 @@ import {
   advancePipeline,
   changeStatus,
   deleteCustomer,
+  markCustomerSeen,
   setPipelineStage,
 } from "@/lib/db/customers";
 import { completedRevenue, subscribeJobsForCustomer } from "@/lib/db/jobs";
@@ -54,6 +55,8 @@ import { NotesTimeline } from "./NotesTimeline";
 import { QuoteSheet } from "./QuoteSheet";
 import { SendTextSheet } from "./SendTextSheet";
 import { routes } from "@/lib/routes";
+import { visitTitle } from "@/lib/visitTypes";
+import { servicesLabel } from "@/lib/serviceText";
 
 export function CustomerDetailScreen() {
   // Read from the query string rather than a path segment so this page can be
@@ -94,6 +97,16 @@ export function CustomerDetailScreen() {
   }, [customerId]);
 
   const customer = byId.get(customerId) ?? null;
+
+  // Opening the profile is what "seen" means for the blue new-client dot.
+  // Keyed on the id and the flag, so it fires once per arrival and again only
+  // if another website request lands while the profile is closed and reopened.
+  const unseen = Boolean(customer?.unseenSince);
+  useEffect(() => {
+    if (!customerId || !unseen) return;
+    // Best-effort: failing to clear a dot must never break the screen.
+    markCustomerSeen(customerId).catch(() => {});
+  }, [customerId, unseen]);
 
   /**
    * Revenue is computed from completed jobs rather than read from
@@ -466,7 +479,7 @@ export function CustomerDetailScreen() {
                   >
                     <span className="flex items-start justify-between gap-2">
                       <span className="text-base font-bold text-ink">
-                        {SERVICE_LABEL[job.serviceType]}
+                        {visitTitle(job.visitType, servicesLabel(job))}
                       </span>
                       <span className="text-base font-bold text-money tabular-nums">
                         {formatMoney(job.price)}
@@ -522,7 +535,7 @@ export function CustomerDetailScreen() {
                           {document.number}
                         </span>
                         <span className="block text-sm font-semibold text-muted">
-                          {SERVICE_LABEL[document.serviceType]} ·{" "}
+                          {servicesLabel(document)} ·{" "}
                           {formatDateOnly(document.issuedAt)}
                         </span>
                       </span>
@@ -538,7 +551,10 @@ export function CustomerDetailScreen() {
                       </span>
                     </span>
                     <span className="mt-2 block">
-                      <DocumentStatusPill status={document.status} />
+                      <DocumentStatusPill
+                        status={document.status}
+                        firstViewedAt={document.firstViewedAt}
+                      />
                     </span>
                   </Link>
                 </li>

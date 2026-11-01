@@ -9,7 +9,7 @@
 import assert from "node:assert/strict";
 import { test, describe } from "node:test";
 
-const { buildThreads, needsReplyCount, previewOf } = await import("../lib/threads.ts");
+const { buildThreads, needsReplyCount, previewOf, incomingFeed } = await import("../lib/threads.ts");
 
 /** Firestore's Timestamp, reduced to the one method this code uses. */
 const at = (minutesAgo) => ({ toMillis: () => 1_700_000_000_000 - minutesAgo * 60_000 });
@@ -137,5 +137,37 @@ describe("the inbox preview", () => {
     const preview = previewOf(thread, 20);
     assert.equal(preview.length, 20);
     assert.ok(preview.endsWith("…"));
+  });
+});
+
+describe("the incoming list", () => {
+  const unknown = (id, from, body, minutesAgo) => ({ id, from, body, receivedAt: at(minutesAgo) });
+
+  test("every text that came in, clients and unknown numbers, newest first", () => {
+    const feed = incomingFeed(
+      [
+        customer("c1", [
+          note("n1", "sms_in", "Saturday works", 30, "Tyler Higdon"),
+          note("n2", "sms_out", "See you then", 20),
+          note("n3", "note", "Gate code 1234", 10),
+        ]),
+        customer("c2", [note("n4", "sms_in", "How much for a driveway?", 5, "Ann Lee")]),
+      ],
+      [unknown("u1", "+15029990000", "Do you do gutters?", 15)],
+    );
+    assert.deepEqual(
+      feed.map((item) => [item.from, item.text, item.customerId]),
+      [
+        ["Ann Lee", "How much for a driveway?", "c2"],
+        ["+15029990000", "Do you do gutters?", null],
+        ["Tyler Higdon", "Saturday works", "c1"],
+      ],
+    );
+  });
+
+  test("capped, keeping the newest", () => {
+    const notes = Array.from({ length: 5 }, (_, i) => note(`n${i}`, "sms_in", `m${i}`, i));
+    const feed = incomingFeed([customer("c1", notes)], [], 2);
+    assert.deepEqual(feed.map((item) => item.text), ["m0", "m1"]);
   });
 });

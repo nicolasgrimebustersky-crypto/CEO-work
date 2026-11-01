@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { renderTemplate, type TemplateVars } from "@/lib/automations";
 
 /**
  * Every outbound SMS template lives here so the wording stays consistent
@@ -164,6 +165,30 @@ export function jobFinishedText(technicianFirstName: string): string {
 }
 
 /**
+ * The "finished" text for a visit that is not paid work.
+ *
+ * jobFinishedText asks for payment, which is wrong after an estimate or a
+ * walkthrough — there is nothing to pay. This says what happens next instead:
+ * an estimate on its way, or simply that the visit is done.
+ */
+export function visitFinishedText(
+  technicianFirstName: string,
+  visit: "estimate" | "walkthrough" | "follow_up" | "touch_up",
+): string {
+  const next =
+    visit === "estimate" || visit === "walkthrough"
+      ? "We have everything we need and will send your estimate shortly."
+      : "Thanks for having us.";
+  const what = {
+    estimate: "estimate visit",
+    walkthrough: "walkthrough",
+    follow_up: "follow-up visit",
+    touch_up: "touch-up",
+  }[visit];
+  return `Hey! This is ${technicianFirstName} from ${LEGAL_NAME}. We've wrapped up your ${what}. ${next} Any questions, reach out to ${OWNER_NAME} at ${OWNER_PHONE}.${OPT_OUT}`;
+}
+
+/**
  * The thank-you that goes out when the money is in hand.
  *
  * Sent from the sign-off on site, and only when the crew member answers yes to
@@ -233,4 +258,24 @@ export function leadNurtureText(
     case "last_call":
       return `${hello}, last one from ${BUSINESS_NAME} — I won't keep texting about the${priced ? ` $${Math.round(amount)}` : ""} estimate. Whenever you're ready, call ${OWNER_PHONE} and we'll pick it up from there.${OPT_OUT}`;
   }
+}
+
+/**
+ * An automation's own wording, turned into a sendable text.
+ *
+ * The owner writes the body in the builder; this file still owns the opt-out
+ * sentence. That split is the point: `OPT_OUT` is not stored on the automation
+ * document, so it cannot be edited out, trimmed by a careless rewrite, or lost
+ * when a template is duplicated. Every message this app sends to a customer
+ * carries it, and the one category of message a non-programmer composes is the
+ * last place to make that optional.
+ *
+ * Appended only when it is not already there, so somebody who types "Reply
+ * STOP to opt out" by hand does not get it twice.
+ */
+export function automationSmsText(body: string, vars: TemplateVars): string {
+  const rendered = renderTemplate(body, vars).trim();
+  if (rendered === "") return "";
+  if (/\breply stop\b/i.test(rendered)) return rendered;
+  return `${rendered}${OPT_OUT}`;
 }

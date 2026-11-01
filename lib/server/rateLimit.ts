@@ -54,6 +54,16 @@ export const SMS_TEST_LIMIT: RateLimitRule = {
 };
 
 /**
+ * Importing old replies reads Twilio's whole log. It files nothing twice, so
+ * running it again is harmless — this only stops a stuck button hammering it.
+ */
+export const REPLY_IMPORT_LIMIT: RateLimitRule = {
+  max: 10,
+  windowMs: 60 * 60 * 1000,
+  label: "reply imports",
+};
+
+/**
  * Each draft is a model call the business pays for, and the button sits on a
  * screen somebody taps while distracted. Thirty an hour is far more estimates
  * than two people can write in an hour, and a low enough ceiling that a stuck
@@ -120,10 +130,42 @@ export const OTP_VERIFY_LIMIT: RateLimitRule = {
   label: "code attempts",
 };
 
+/**
+ * Redeeming a "remember this device" token.
+ *
+ * Tighter than the code attempts next door, and for a different reason. A
+ * wrong code is a person mistyping six digits; a wrong device token is never a
+ * typo, because nobody types one — it is read from storage or it is somebody
+ * trying ids. Ten an hour is far more than a real phone needs (one per
+ * sign-in) and far less than a search is worth.
+ */
+export const TRUSTED_DEVICE_LIMIT: RateLimitRule = {
+  max: 10,
+  windowMs: 60 * 60 * 1000,
+  label: "device checks",
+};
+
 export const QUOTE_RESPONSE_LIMIT: RateLimitRule = {
   max: 12,
   windowMs: 60 * 60 * 1000,
   label: "answers to this quote",
+};
+
+/**
+ * Opens of one quote's link in an hour.
+ *
+ * Looser than answering it, because a customer reading a long estimate on a
+ * phone genuinely reloads: they scroll, lock the screen, come back, forward it
+ * to a spouse who opens it too. Twenty is well above that and still far below
+ * what it would take to inflate the count into a story nobody should believe.
+ *
+ * Hitting it costs nothing the customer can see — the page is already open and
+ * the stamp is already set. All that is lost is a bump to the count.
+ */
+export const QUOTE_VIEW_LIMIT: RateLimitRule = {
+  max: 20,
+  windowMs: 60 * 60 * 1000,
+  label: "opens of this quote",
 };
 
 /**
@@ -250,6 +292,21 @@ export const PORTAL_READ_LIMIT: RateLimitRule = {
 
 export const PORTAL_RESPOND_LIMIT: RateLimitRule = {
   label: "estimate answers from the portal",
+  max: 10,
+  windowMs: 60 * 60 * 1000,
+};
+
+/**
+ * Website form submissions, per sending address.
+ *
+ * The one write into the CRM that anybody on the internet can make, so the
+ * cap is what stops a script filling the client list. Ten an hour is far
+ * above a real household — somebody who submits the quote tool, then books,
+ * then corrects a typo is three — and a bot rotating addresses still has to
+ * get past the honeypot and the field checks on each one.
+ */
+export const WEBSITE_LEAD_LIMIT: RateLimitRule = {
+  label: "website form submissions",
   max: 10,
   windowMs: 60 * 60 * 1000,
 };

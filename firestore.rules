@@ -171,6 +171,48 @@ service cloud.firestore {
     // Every write is stamped with its author. Enforcing it here rather than
     // trusting the client means an attribution can't be forged even if
     // someone runs modified code with a valid session.
+    // The hard ceilings on an automation's timing, as numbers rather than as
+    // trust. Each one is the same value as the constant of the same name in
+    // lib/automations.ts, and the reasoning for each lives there.
+    function validAutomationGuards(g) {
+      return g.afterDays is int && g.afterDays >= 1 && g.afterDays <= 365
+        && g.maxTouches is int && g.maxTouches >= 1 && g.maxTouches <= 4
+        && g.minGapDays is int && g.minGapDays >= 3 && g.minGapDays <= 90
+        && g.maxPerRun is int && g.maxPerRun >= 1 && g.maxPerRun <= 25
+        && g.staleAfterDays is int
+        && g.staleAfterDays > g.afterDays
+        && g.staleAfterDays <= g.afterDays + 120
+        && g.startHour is int && g.startHour >= 8 && g.startHour <= 19
+        && g.endHour is int && g.endHour > g.startHour && g.endHour <= 19
+        && g.stopOnReply is bool
+        && g.daysOfWeek is list && g.daysOfWeek.size() <= 7
+        && (g.repeatEveryDays == null
+            || (g.repeatEveryDays is int
+                && g.repeatEveryDays >= 3
+                && g.repeatEveryDays <= 365));
+    }
+
+    function validAutomation() {
+      let data = request.resource.data;
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 80
+        && data.enabled is bool
+        // A pause (lib/automationPause.ts). Both optional, so every row from
+        // before pausing existed still passes; when present, only a timestamp
+        // or null, and only a real boolean — a string "false" would be truthy
+        // to a careless reader and pause something forever.
+        && (!('pausedUntil' in data) || data.pausedUntil == null || data.pausedUntil is timestamp)
+        && (!('pausedForever' in data) || data.pausedForever is bool)
+        && data.kind in ['builtin', 'custom']
+        && (data.kind == 'builtin'
+            ? data.builtinKey in ['lead_nurture', 'money_reminders']
+            : (data.trigger in ['estimate_unanswered', 'invoice_overdue', 'job_finished',
+                                'lead_idle', 'customer_quiet']
+               && data.action.kind in ['send_sms', 'notify_crew', 'add_note', 'move_stage']
+               && data.action.body is string
+               && data.action.body.size() <= 480
+               && validAutomationGuards(data.guards)));
+    }
+
     function stampedByCaller(field) {
       return request.resource.data[field] == request.auth.uid;
     }
@@ -299,6 +341,14 @@ service cloud.firestore {
     // Light shape checks. These are not a schema — they exist to stop a bug in
     // one client from writing a document the other client cannot render, which
     // in a two-device app looks like data loss.
+    // Opening a profile clears its blue "new" dot without stamping "last edited
+    // by" — viewing is not editing. Exactly one field may change, and only to
+    // null: this cannot set the dot, touch any other field, or move a record.
+    function clearsOnlyUnseen() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unseenSince'])
+        && request.resource.data.unseenSince == null;
+    }
+
     function validCustomer() {
       let data = request.resource.data;
       return data.status in ['lead', 'not_home', 'callback', 'interested', 'quoted', 'customer', 'not_interested', 'do_not_knock']
@@ -318,6 +368,9 @@ service cloud.firestore {
         // the field existed must stay editable — and only ever a string, so a
         // list or a map cannot be smuggled into that lookup.
         && (!('phoneE164' in data) || data.phoneE164 is string)
+        // The blue "new" dot from a website form (app/api/leads/website).
+        // Optional; a timestamp while unopened, null once somebody has looked.
+        && (!('unseenSince' in data) || data.unseenSince == null || data.unseenSince is timestamp)
         // Text consent, and the instruction to stop.
         //
         // Both optional: every customer entered before consent was tracked has
@@ -334,10 +387,28 @@ service cloud.firestore {
         && (!('smsOptOut' in data) || data.smsOptOut == null || data.smsOptOut is map);
     }
 
+    // The main services on a job or estimate (lib/subServices.ts), and the
+    // specific ones under them. Both optional: every record saved before they
+    // existed has only `serviceType`. When present, the main ones are only
+    // ever the three known values, and both lists are bounded.
+    function validServiceSelection(data) {
+      return (!('serviceTypes' in data) || (
+               data.serviceTypes is list
+               && data.serviceTypes.size() >= 1
+               && data.serviceTypes.size() <= 6
+               && data.serviceTypes.hasOnly(['pressure_washing', 'landscaping', 'snow_removal', 'mowing', 'aeration', 'window_cleaning'])))
+        && (!('subServices' in data) || (data.subServices is list && data.subServices.size() <= 40));
+    }
+
     function validJob() {
       let data = request.resource.data;
       return data.status in ['scheduled', 'in_progress', 'complete', 'cancelled']
         && data.serviceType in ['pressure_washing', 'landscaping', 'snow_removal', 'mowing', 'aeration', 'window_cleaning']
+        && validServiceSelection(data)
+        // What the trip is for (lib/visitTypes.ts). Optional: every job saved
+        // before it existed has none, which reads as a service job.
+        && (!('visitType' in data)
+            || data.visitType in ['service', 'estimate', 'walkthrough', 'follow_up', 'touch_up'])
         && data.price is number
         && data.price >= 0
         && data.customerId is string
@@ -352,6 +423,7 @@ service cloud.firestore {
       return data.kind in ['estimate', 'invoice']
         && data.status in ['draft', 'sent', 'accepted', 'declined', 'partial', 'paid', 'void']
         && data.serviceType in ['pressure_washing', 'landscaping', 'snow_removal', 'mowing', 'aeration', 'window_cleaning']
+        && validServiceSelection(data)
         && data.customerId is string
         && data.number is string
         && data.lineItems is list
@@ -425,11 +497,14 @@ service cloud.firestore {
         && createsInMyOrg(request.resource.data);
       allow update: if isCrew()
         && belongsToMyOrg(resource.data)
-        && refreshesAuthorStamp()
-        && validCustomer()
-        && keepsOptOut()
-        && keepsNurtureCounters()
-        && keepsOrg();
+        && (
+          (refreshesAuthorStamp()
+            && validCustomer()
+            && keepsOptOut()
+            && keepsNurtureCounters()
+            && keepsOrg())
+          || clearsOnlyUnseen()
+        );
       allow delete: if isCrew() && belongsToMyOrg(resource.data);
     }
 
@@ -475,11 +550,49 @@ service cloud.firestore {
     // to. Renumbering an invoice after it has been sent, or moving it to
     // another customer, would silently rewrite history — and unlike a wrong
     // price, neither leaves any trace of what it used to say.
+    // The view stamps belong to the server, not to any client.
+    //
+    // Same reasoning as keepsNurtureCounters above, for the same kind of
+    // field: firstViewedAt, lastViewedAt and viewCount are written only by the
+    // Admin SDK, from a customer's own browser opening their link, and the
+    // whole point of them is that they are evidence. Evidence a crew account
+    // can edit from a Firebase console is not evidence — somebody could mark a
+    // quote opened that nobody opened, or clear one that was, and the board
+    // would state it with confidence either way.
+    //
+    // Absent is fine and is the normal case: nothing in the UI writes them,
+    // and a missing stamp reads back as never opened.
+    // The same fields, on the way in.
+    //
+    // keepsViewStamps() below stops a client *changing* them, which left
+    // create wide open: a crew client could write a document that arrives
+    // already stamped, and an estimate nobody has seen would read Opened from
+    // the moment it was made. This is the same gap that safeNurtureStart()
+    // exists for on customers, found the same way — guarding the update and
+    // forgetting the create.
+    //
+    // Absent is the normal case and is what the app writes; null and 0 are
+    // allowed because lib/db/documents.ts initialises them explicitly, and a
+    // rule that refused its own client's create would be a rule nobody could
+    // ship behind.
+    function safeViewStart() {
+      let data = request.resource.data;
+      return data.get('firstViewedAt', null) == null
+        && data.get('lastViewedAt', null) == null
+        && data.get('viewCount', 0) == 0;
+    }
+
+    function keepsViewStamps() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['firstViewedAt', 'lastViewedAt', 'viewCount']);
+    }
+
     match /documents/{documentId} {
       allow read: if isCrew() && belongsToMyOrg(resource.data);
       allow create: if isCrew()
         && stampedByCaller('createdBy')
         && validDocument()
+        && safeViewStart()
         && createsInMyOrg(request.resource.data);
       allow update: if isCrew()
         && belongsToMyOrg(resource.data)
@@ -487,6 +600,7 @@ service cloud.firestore {
         && validDocument()
         && request.resource.data.number == resource.data.number
         && request.resource.data.customerId == resource.data.customerId
+        && keepsViewStamps()
         && keepsOrg();
       allow delete: if isCrew() && belongsToMyOrg(resource.data);
     }
@@ -555,6 +669,41 @@ service cloud.firestore {
 
     match /apiKeys/{keyHash} {
       allow read, write: if isAdmin() && hasVerifiedSession();
+    }
+
+    // What the app does on its own, and the switches for it.
+    //
+    // Read by the crew, because "what is this app doing without me" is a fair
+    // question for anybody who works here. Written only by the owner: arming
+    // one of these is a decision to text customers with nobody looking at the
+    // list first, and an approved crew account is not the right level of trust
+    // for that. `isCrew()` is ANDed with `isAdmin()` rather than used alone
+    // because `isAdmin()` checks an email claim and nothing else — on its own
+    // it would let a password-only session that never entered its emailed code
+    // arm a sequence. That is the same gap #66 closed in `inConversation()`.
+    //
+    // The ceilings below repeat the ones in lib/automations.ts on purpose.
+    // `clampGuards` already runs in the builder and again in the cron, but a
+    // rule is the only one of the three that an out-of-date or tampered client
+    // cannot skip, and what is being bounded is how many strangers get a text
+    // from a number this business needs to keep.
+    //
+    // A built-in's row carries only its switch, so it is validated on a
+    // different branch: requiring a trigger and guards on it would make the
+    // off switch for lead nurture unwritable.
+    match /automations/{automationId} {
+      allow read: if isCrew() && belongsToMyOrg(resource.data);
+      allow create: if isCrew()
+        && isAdmin()
+        && stampedByCaller('createdBy')
+        && validAutomation()
+        && createsInMyOrg(request.resource.data);
+      allow update: if isCrew()
+        && isAdmin()
+        && belongsToMyOrg(resource.data)
+        && validAutomation()
+        && keepsOrg();
+      allow delete: if isCrew() && isAdmin() && belongsToMyOrg(resource.data);
     }
 
     match /services/{serviceId} {
@@ -728,8 +877,19 @@ service cloud.firestore {
         .data.memberUids;
     }
 
+    // Membership AND standing. isCrew() is the part that was missing, and the
+    // asymmetry was the tell: the conversation document itself requires it on
+    // read, create and update, while these subcollections asked only that you
+    // were signed in and named in memberUids.
+    //
+    // isCrew() carries two things membership does not. An approved role, so a
+    // revoked account (role: 'pending') loses the threads it was in rather
+    // than keeping them. And hasVerifiedSession(), so a password-only session
+    // that never entered its emailed code cannot read the history or post as
+    // that person — every other collection in this file is behind that gate,
+    // and chat was the way around it.
     function inConversation(conversationId) {
-      return request.auth != null
+      return isCrew()
         && exists(/databases/$(database)/documents/conversations/$(conversationId))
         && request.auth.uid in chatMembers(conversationId);
     }

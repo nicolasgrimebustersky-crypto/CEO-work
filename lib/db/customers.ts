@@ -1,5 +1,6 @@
 import {
   addDoc,
+  arrayUnion,
   collection,
   deleteDoc,
   doc,
@@ -29,6 +30,7 @@ import {
 } from "@/lib/pipeline";
 import { asLocations, asPropertyType, propertyFields } from "@/lib/property";
 import { asOrgId, DEFAULT_ORG_ID } from "@/lib/org";
+import { CONSENT_METHODS, type ConsentMethod, type SmsConsent, type SmsOptOut } from "@/lib/smsConsent";
 import { CUSTOMER_STATUSES, LEAD_SOURCES, SERVICE_TYPES } from "@/lib/types";
 import type {
   Author,
@@ -53,6 +55,48 @@ function asServiceTypes(value: unknown): ServiceType[] {
   return value.filter((item): item is ServiceType =>
     SERVICE_TYPES.includes(item as ServiceType),
   );
+}
+
+/**
+ * The consent record, read back off the document.
+ *
+ * Needed here rather than inferred anywhere else: `canSendTo` and the consent
+ * row on the customer screen both read these two fields, and a mapper that
+ * drops them makes every client-side caller see "nobody has asked" for a
+ * person who agreed, declined, or replied STOP. Unmapped, the row wrote a
+ * consent the crew then watched not appear.
+ */
+function asSmsConsent(value: unknown): SmsConsent | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const data = value as DocumentData;
+  // `granted` and `at` are what every reader keys off. A record missing either
+  // is not a consent, and guessing a default would invent an answer nobody
+  // gave — so it reads back as no record at all, which is the honest state.
+  if (typeof data.granted !== "boolean" || typeof data.at !== "string") return undefined;
+  return {
+    granted: data.granted,
+    method: (CONSENT_METHODS.includes(data.method as ConsentMethod)
+      ? data.method
+      : "verbal") as ConsentMethod,
+    at: data.at,
+    byUid: typeof data.byUid === "string" ? data.byUid : "",
+    byName: typeof data.byName === "string" ? data.byName : "",
+  };
+}
+
+/**
+ * The opt-out, read back off the document.
+ *
+ * `at` is required for the same reason as above, with one difference that
+ * matters: this field existing at all is the instruction. Anything object-like
+ * carrying a timestamp is honoured rather than second-guessed, because the
+ * failure directions are not equal — dropping it texts somebody who said stop.
+ */
+function asSmsOptOut(value: unknown): SmsOptOut | null {
+  if (typeof value !== "object" || value === null) return null;
+  const data = value as DocumentData;
+  if (typeof data.at !== "string") return null;
+  return { at: data.at, keyword: typeof data.keyword === "string" ? data.keyword : "" };
 }
 
 function asNotes(value: unknown): Note[] {
@@ -80,6 +124,9 @@ export function toCustomer(snap: QueryDocumentSnapshot<DocumentData>): Customer 
     lastName: typeof data.lastName === "string" ? data.lastName : "",
     phone: typeof data.phone === "string" ? data.phone : "",
     phoneE164: typeof data.phoneE164 === "string" ? data.phoneE164 : "",
+    smsConsent: asSmsConsent(data.smsConsent),
+    smsOptOut: asSmsOptOut(data.smsOptOut),
+    unseenSince: data.unseenSince instanceof Timestamp ? data.unseenSince : null,
     email: typeof data.email === "string" ? data.email : "",
     address: typeof data.address === "string" ? data.address : "",
     lat: typeof data.lat === "number" ? data.lat : 0,
@@ -279,7 +326,7 @@ export async function setPipelineStage(
       "stage_change",
       author,
     );
-    patch.notes = [...customer.notes, note];
+    patch.notes = appendNote(customer, note);
 
     const nextStatus = syncStatusToStage(stage, customer.status);
     if (nextStatus) patch.status = nextStatus;
@@ -358,9 +405,37 @@ export async function updateCustomer(
 }
 
 /**
- * Notes are appended client-side rather than with arrayUnion because arrayUnion
- * de-duplicates by deep equality and cannot express "newest first" ordering;
- * the array is small (one customer's history) so rewriting it is cheap.
+ * One note, appended without rewriting the array.
+ *
+ * This replaces a rewrite — `notes: [...customer.notes, note]` — and the
+ * comment that justified it, which said arrayUnion "de-duplicates by deep
+ * equality and cannot express newest-first ordering". Neither objection
+ * survives contact with the rest of the file:
+ *
+ *   dedup cannot bite, because makeNote stamps every note with a
+ *   crypto.randomUUID(), so no two notes are ever deeply equal;
+ *
+ *   ordering is a read concern already solved — asNotes sorts by createdAt
+ *   descending on the way in, so the stored order never mattered.
+ *
+ * What the rewrite did cost was real. lib/server/customerNotes.ts appends with
+ * FieldValue.arrayUnion from nine places, including the inbound-SMS webhook,
+ * the nurture cron and the blast. Any note the server added between this
+ * client's last snapshot and its write was silently erased — and the one that
+ * matters most is the inbound reply, the only record that a customer wrote
+ * back. On a phone on a porch with one bar, that window is not milliseconds.
+ *
+ * Demo mode keeps the array form: it has no Firestore to interpret a sentinel,
+ * and lib/demo/store would persist the FieldValue object itself.
+ */
+function appendNote(customer: Customer, note: Note): unknown {
+  return isDemoMode ? [...customer.notes, note] : arrayUnion(note);
+}
+
+/**
+ * serverTimestamp() is still not allowed inside an array element, which is why
+ * makeNote stamps with the client clock. The server does exactly the same in
+ * its own arrayUnion, so both sides agree.
  */
 export async function addNote(
   customer: Customer,
@@ -372,7 +447,7 @@ export async function addNote(
   if (!trimmed) return;
   const note = makeNote(trimmed, kind, author);
   await writeCustomer(customer.id, {
-    notes: [...customer.notes, note],
+    notes: appendNote(customer, note),
     lastContactedAt: serverTimestamp(),
     lastContactedBy: author.uid,
     lastContactedByName: author.displayName,
@@ -395,7 +470,7 @@ export async function changeStatus(
   );
   const patch: Record<string, unknown> = {
     status,
-    notes: [...customer.notes, note],
+    notes: appendNote(customer, note),
     updatedAt: serverTimestamp(),
     updatedBy: author.uid,
     updatedByName: author.displayName,
@@ -449,6 +524,18 @@ export async function markContacted(customer: Customer, author: Author): Promise
     updatedBy: author.uid,
     updatedByName: author.displayName,
   });
+}
+
+/**
+ * Clears the blue "new" dot once somebody has opened the profile.
+ *
+ * Writes that one field and nothing else — not even the author stamp. Opening
+ * a client is not editing them, and stamping "last edited by" on every view
+ * would bury the edits that matter. firestore.rules allows exactly this write
+ * (unseenSince to null, no other field) without the stamp, and nothing more.
+ */
+export async function markCustomerSeen(id: string): Promise<void> {
+  await writeCustomer(id, { unseenSince: null });
 }
 
 export async function deleteCustomer(id: string): Promise<void> {

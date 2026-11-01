@@ -1,5 +1,6 @@
 import { routes } from "@/lib/routes";
 import {
+  AutomationIcon,
   CalendarIcon,
   ChartIcon,
   InvoiceIcon,
@@ -12,6 +13,7 @@ import {
   PipelineIcon,
   PriceBookIcon,
   ReportIcon,
+  SearchIcon,
   type NavIconProps,
 } from "./navIcons";
 
@@ -22,6 +24,17 @@ export interface NavItem {
   /** Shown under the label in the drawer, where there is room to explain. */
   hint?: string;
 }
+
+/**
+ * The landing screen, so it heads the drawer. Not a bottom tab: the five
+ * thumb positions below are unchanged.
+ */
+export const DASHBOARD: NavItem = {
+  href: routes.dashboard,
+  label: "Dashboard",
+  icon: ChartIcon,
+  hint: "Today at a glance",
+};
 
 /**
  * The five that earn a permanent thumb position.
@@ -84,10 +97,10 @@ export const DRAWER_ONLY: NavItem[] = [
     hint: "Texts to and from customers, and who is waiting",
   },
   {
-    href: routes.dashboard,
-    label: "Dashboard",
-    icon: ChartIcon,
-    hint: "Today at a glance",
+    href: routes.automations,
+    label: "Automations",
+    icon: AutomationIcon,
+    hint: "What the app does on its own, and the switches for it",
   },
   {
     href: routes.services,
@@ -102,6 +115,12 @@ export const DRAWER_ONLY: NavItem[] = [
     hint: "Revenue, doors, conversion",
   },
   {
+    href: routes.search,
+    label: "Search",
+    icon: SearchIcon,
+    hint: "Find anything — a client, an estimate, a job, a price, an old note",
+  },
+  {
     href: routes.account,
     label: "Account",
     icon: PersonIcon,
@@ -109,7 +128,7 @@ export const DRAWER_ONLY: NavItem[] = [
   },
 ];
 
-export const ALL_DESTINATIONS: NavItem[] = [...TABS, ...DRAWER_ONLY];
+export const ALL_DESTINATIONS: NavItem[] = [DASHBOARD, ...TABS, ...DRAWER_ONLY];
 
 /** True for the destination itself and anything nested under it. */
 export function isActive(pathname: string, href: string): boolean {

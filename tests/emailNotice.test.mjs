@@ -18,6 +18,7 @@ const {
   escapeHtml,
   spellDate,
   acceptedEmail,
+  declinedEmail,
   codeEmail,
   lockoutEmail,
   customerApprovalEmail,
@@ -326,5 +327,58 @@ describe("the customer's own receipt", () => {
     });
     assert.ok(!email.html.includes("<script>"));
     assert.ok(!email.html.includes(`onmouseover="alert(1)"`));
+  });
+});
+
+describe("the declined email", () => {
+  const DECLINED = {
+    customerName: "Jay Rennirts",
+    number: "EST-1042",
+    service: "Pressure washing",
+    total: "$450.00",
+    reason: "The price is more than I expected",
+    message: "Got a quote for $300.\nCould you match it?",
+    documentUrl: "https://crm.example/invoices/abc",
+  };
+
+  test("the subject alone says who, which estimate and why", () => {
+    const email = declinedEmail(DECLINED);
+    assert.equal(email.subject, "Jay Rennirts declined EST-1042 — The price is more than I expected");
+  });
+
+  test("with no reason the subject falls back to the amount", () => {
+    const email = declinedEmail({ ...DECLINED, reason: "" });
+    assert.equal(email.subject, "Jay Rennirts declined EST-1042 — $450.00");
+    assert.match(email.text, /Reason: They didn't pick one/);
+  });
+
+  test("the whole comment is included, line breaks and all", () => {
+    const long = "This is a long comment. ".repeat(500);
+    const email = declinedEmail({ ...DECLINED, message: long });
+    assert.ok(email.text.includes(long.trim()));
+    assert.ok(email.html.includes("white-space:pre-wrap"));
+    assert.ok(declinedEmail(DECLINED).text.includes("Got a quote for $300.\nCould you match it?"));
+  });
+
+  test("a missing comment is said, not left blank", () => {
+    const email = declinedEmail({ ...DECLINED, message: "  " });
+    assert.match(email.text, /They didn't leave a comment\./);
+    assert.match(email.html, /They didn't leave a comment\./);
+  });
+
+  test("the customer's words are escaped in the HTML", () => {
+    const email = declinedEmail({
+      ...DECLINED,
+      customerName: "<b>Jay</b>",
+      message: "<img src=x onerror=alert(1)> too high",
+    });
+    assert.ok(!email.html.includes("<img"));
+    assert.ok(!email.html.includes("<b>Jay</b>"));
+    assert.ok(email.html.includes("&lt;img"));
+  });
+
+  test("it links to the estimate in the CRM", () => {
+    assert.ok(declinedEmail(DECLINED).html.includes('href="https://crm.example/invoices/abc"'));
+    assert.ok(!declinedEmail({ ...DECLINED, documentUrl: "" }).html.includes("href="));
   });
 });

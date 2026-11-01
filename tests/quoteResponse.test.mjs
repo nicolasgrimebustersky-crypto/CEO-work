@@ -9,6 +9,8 @@ import assert from "node:assert/strict";
 import { test, describe } from "node:test";
 
 const {
+  DECLINE_REASONS,
+  MAX_DECLINE_MESSAGE_CHARS,
   MAX_MESSAGE_CHARS,
   MAX_NAME_CHARS,
   MAX_SIGNATURE_BYTES,
@@ -16,6 +18,7 @@ const {
   cleanName,
   cleanRequestedDate,
   cleanSignature,
+  declineReasonLabel,
   isDecision,
   todayIn,
   validateQuoteResponse,
@@ -175,13 +178,67 @@ describe("declining", () => {
     assert.equal(out.value.signedName, "");
   });
 
-  test("a very long message is capped", () => {
+  test("a long decline comment is kept whole, far past the approval note's cap", () => {
+    // The owner asked for decline comments with no word limit.
+    const long = "word ".repeat(3000).trim(); // 14,999 characters, ~3,000 words
+    const out = validateQuoteResponse({ decision: "declined", message: long }, TODAY);
+    assert.equal(out.ok, true);
+    assert.equal(out.value.message, long);
+    assert.ok(out.value.message.length > MAX_MESSAGE_CHARS);
+  });
+
+  test("but a decline comment still has a ceiling, against the open internet", () => {
     const out = validateQuoteResponse(
-      { decision: "declined", message: "x".repeat(5000) },
+      { decision: "declined", message: "x".repeat(MAX_DECLINE_MESSAGE_CHARS + 5000) },
       TODAY,
     );
     assert.equal(out.ok, true);
-    assert.equal(out.value.message.length, MAX_MESSAGE_CHARS);
+    assert.equal(out.value.message.length, MAX_DECLINE_MESSAGE_CHARS);
+  });
+
+  test("line breaks in a decline comment survive", () => {
+    const out = validateQuoteResponse(
+      { decision: "declined", message: "Too high.\nAlso the timing." },
+      TODAY,
+    );
+    assert.equal(out.value.message, "Too high.\nAlso the timing.");
+  });
+});
+
+describe("why they said no", () => {
+  test("a listed reason is kept", () => {
+    const out = validateQuoteResponse({ decision: "declined", reason: "price" }, TODAY);
+    assert.equal(out.ok, true);
+    assert.equal(out.value.reason, "price");
+  });
+
+  test("no reason is fine — saying no never requires explaining", () => {
+    const out = validateQuoteResponse({ decision: "declined" }, TODAY);
+    assert.equal(out.ok, true);
+    assert.equal(out.value.reason, "");
+  });
+
+  test("an unknown reason is dropped, and the decline still goes through", () => {
+    for (const reason of ["cheaper elsewhere", "<script>", 7, null, ""]) {
+      const out = validateQuoteResponse({ decision: "declined", reason }, TODAY);
+      assert.equal(out.ok, true, `refused for ${String(reason)}`);
+      assert.equal(out.value.reason, "");
+    }
+  });
+
+  test("an approval carries no reason, even if one is sent", () => {
+    const out = validateQuoteResponse(approval({ reason: "price" }), TODAY);
+    assert.equal(out.ok, true);
+    assert.equal(out.value.reason, "");
+  });
+
+  test("every reason has a label, and unknown keys have none", () => {
+    for (const { key, label } of DECLINE_REASONS) {
+      assert.equal(declineReasonLabel(key), label);
+      assert.ok(label.length > 0);
+    }
+    assert.equal(declineReasonLabel("nope"), "");
+    assert.equal(declineReasonLabel(undefined), "");
   });
 });
 
@@ -195,6 +252,7 @@ describe("a complete approval", () => {
       signature: PNG,
       requestedDate: "2026-09-06",
       message: "see you then",
+      reason: "",
     });
   });
 });

@@ -6,6 +6,7 @@ import { useTeam } from "@/components/providers/TeamProvider";
 import { customerName, formatMoney } from "@/lib/format";
 import { SERVICE_SHORT_LABEL } from "@/lib/status";
 import type { Customer, Job } from "@/lib/types";
+import { visitTitle } from "@/lib/visitTypes";
 
 /**
  * Jobs are colour-coded by who is assigned. A job assigned to both crew gets a
@@ -81,7 +82,11 @@ export function JobBlock({
           }`}
         >
           {format(job.scheduledStart.toDate(), "h:mm a")} ·{" "}
-          {SERVICE_SHORT_LABEL[job.serviceType]}
+          {visitTitle(job.visitType, SERVICE_SHORT_LABEL[job.serviceType])}
+          {/* Short on purpose — the block is small. The rest are on the job. */}
+          {job.serviceTypes.length + job.subServices.length > 1
+            ? ` +${job.serviceTypes.length + job.subServices.length - 1}`
+            : ""}
           {compact ? "" : ` · ${formatMoney(job.price)}`}
           {complete ? " · done" : ""}
         </span>

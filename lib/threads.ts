@@ -115,3 +115,59 @@ export function previewOf(thread: Thread, limit = 80): string {
   const clipped = body.length > limit ? `${body.slice(0, limit - 1).trimEnd()}…` : body;
   return thread.last.direction === "out" ? `You: ${clipped}` : clipped;
 }
+
+/** Just the parts of an unknown-number text the incoming list shows. */
+interface UnmatchedLike {
+  id: string;
+  from: string;
+  body: string;
+  receivedAt: TimeLike;
+}
+
+export interface IncomingText {
+  key: string;
+  /** The client it is filed on, or null for a number not on file. */
+  customerId: string | null;
+  /** The client's name as filed, or the phone number for an unknown sender. */
+  from: string;
+  text: string;
+  at: TimeLike;
+}
+
+/**
+ * Every text that came in, newest first, in one list.
+ *
+ * The thread list answers "who is waiting on me"; this answers "what came in
+ * today", which the owner asked for separately. Replies from clients and texts
+ * from numbers not on file are merged, so nothing that arrived is missing from
+ * it. Capped so a long history does not render a thousand rows at once.
+ */
+export function incomingFeed(
+  customers: readonly CustomerLike[],
+  unmatched: readonly UnmatchedLike[],
+  limit = 200,
+): IncomingText[] {
+  const feed: IncomingText[] = [];
+  for (const customer of customers) {
+    for (const note of customer.notes) {
+      if (note.kind !== "sms_in") continue;
+      feed.push({
+        key: `${customer.id}/${note.id}`,
+        customerId: customer.id,
+        from: note.authorName,
+        text: note.text,
+        at: note.createdAt,
+      });
+    }
+  }
+  for (const message of unmatched) {
+    feed.push({
+      key: `unmatched/${message.id}`,
+      customerId: null,
+      from: message.from,
+      text: message.body,
+      at: message.receivedAt,
+    });
+  }
+  return feed.sort((a, b) => b.at.toMillis() - a.at.toMillis()).slice(0, limit);
+}

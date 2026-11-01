@@ -10,7 +10,6 @@ import {
   type BusinessDocument,
 } from "@/lib/documents";
 import { formatDateOnly, formatMoneyExact, formatPhone } from "@/lib/format";
-import { SERVICE_LABEL } from "@/lib/status";
 import type { Customer } from "@/lib/types";
 import {
   Doc,
@@ -20,6 +19,7 @@ import {
   textWidth,
   type JpegImage,
 } from "./writer";
+import { servicesLabel } from "@/lib/serviceText";
 
 /**
  * An estimate or invoice as a PDF.
@@ -153,7 +153,7 @@ export function buildDocumentPdf(
     pdf.text(formatPhone(customer.phone), MARGIN, y, { size: 10, color: MUTED });
     y += 14;
   }
-  pdf.text(SERVICE_LABEL[document.serviceType], MARGIN, y + 4, { size: 10, color: MUTED });
+  pdf.text(servicesLabel(document), MARGIN, y + 4, { size: 10, color: MUTED });
   y += 30;
 
   /* ---------------------------------------------------------------- lines */

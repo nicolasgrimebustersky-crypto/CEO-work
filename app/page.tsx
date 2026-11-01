@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-/** The map is the landing screen, not a menu. */
+/** The dashboard is the landing screen: today at a glance, then everything else. */
 export default function Home() {
-  redirect("/map");
+  redirect("/dashboard");
 }

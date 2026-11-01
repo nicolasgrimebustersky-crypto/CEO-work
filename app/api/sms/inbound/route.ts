@@ -1,3 +1,4 @@
+import { replyNoteId } from "@/lib/replyImport";
 import { classifyReply, recordOptOut } from "@/lib/smsConsent";
 import { formatPhone } from "@/lib/inboundSms";
 import { recordUnmatchedInbound } from "@/lib/server/inboundSms";
@@ -72,6 +73,7 @@ export async function POST(request: Request): Promise<Response> {
 
     const from = params.From ?? "";
     const body = (params.Body ?? "").trim();
+    const messageSid = params.MessageSid || params.SmsMessageSid || "";
     if (!from || !body) return twiml();
 
     const customer = await findCustomerByPhone(from);
@@ -89,7 +91,7 @@ export async function POST(request: Request): Promise<Response> {
       await recordUnmatchedInbound({
         from,
         body,
-        messageSid: params.MessageSid || params.SmsMessageSid || undefined,
+        messageSid: messageSid || undefined,
       });
 
       // No customerId, so `destinationFor` sends this to the Messages screen
@@ -132,7 +134,9 @@ export async function POST(request: Request): Promise<Response> {
       kind: "sms_in",
       authorUid: "customer",
       authorName: who,
-    });
+      // Keyed by the SID so importing old replies later skips this one.
+      id: messageSid ? replyNoteId(messageSid) : undefined,
+    }, { markUnseen: true });
 
     // A reply is the one event with a clock on it — a customer who answers and
     // hears nothing back for six hours has usually called somebody else.

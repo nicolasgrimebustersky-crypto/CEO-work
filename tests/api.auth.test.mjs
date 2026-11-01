@@ -15,6 +15,7 @@
  */
 import assert from "node:assert/strict";
 import { test, before, describe } from "node:test";
+import { randomBytes } from "node:crypto";
 
 const BASE = process.env.TEST_BASE_URL ?? "http://localhost:3133";
 const AUTH_EMULATOR =
@@ -342,5 +343,332 @@ describe("security headers", () => {
   test("API responses are never cached", async () => {
     const res = await fetch(`${BASE}/api/sms/send`, { method: "POST" });
     assert.match(res.headers.get("cache-control") ?? "", /no-store/);
+  });
+});
+
+/**
+ * The one route a stranger is supposed to be able to POST to.
+ *
+ * Everything else here is about keeping people out. This one is open by
+ * design — a customer opening their quote has no account — so what matters is
+ * the opposite question: that being open costs nothing. It must never say
+ * anything back, never need a login, and never let the caller choose what it
+ * writes.
+ *
+ * What the write does to the document is tested against the emulator in
+ * tests/documentViews.server.test.mjs. This is about the reply.
+ */
+describe("the quote-viewed beacon", () => {
+  const PROJECT = process.env.TEST_PROJECT ?? "demo-grimebusters-apitest";
+
+  /**
+   * A share token of the shape the app actually mints.
+   *
+   * It has to pass `looksLikeShareToken` in lib/shareLinks.ts —
+   * /^[A-Za-z0-9_-]{32,64}$/, which is SHARE_TOKEN_BYTES=24 of base64url — and
+   * that check runs BEFORE the database is touched, so a wrongly shaped token
+   * resolves to nothing. The first version of these tests used readable ids
+   * like `viewtest-1760…`, which are too short: every request 204'd, which is
+   * what the assertions expected, and the route had refused the token rather
+   * than done the work. Hence `assertShaped` below — a 204 is the right answer
+   * to both a real open and a rejected token, so the shape is checked directly
+   * instead of being inferred from a reply that cannot tell them apart.
+   */
+  const shareToken = () => randomBytes(24).toString("base64url");
+  const SHAPE = /^[A-Za-z0-9_-]{32,64}$/;
+  const assertShaped = (t) =>
+    assert.match(t, SHAPE, "the test's own token must be one the route will accept");
+
+  let db;
+  let token;
+  let documentId;
+
+  before(async () => {
+    const { initializeApp, getApps } = await import("firebase-admin/app");
+    const { getFirestore } = await import("firebase-admin/firestore");
+    // No credential: against the emulator the Admin SDK does not need one.
+    const app = getApps().find((a) => a.name === "viewed-route-test")
+      ?? initializeApp({ projectId: PROJECT }, "viewed-route-test");
+    db = getFirestore(app);
+
+    token = shareToken();
+    assertShaped(token);
+    const ref = db.collection("documents").doc();
+    await ref.set({
+      orgId: "grime-busters",
+      customerId: "cust-viewed",
+      customerName: "Marta Reyes",
+      kind: "estimate",
+      number: "EST-9001",
+      status: "sent",
+      serviceType: "lawn_care",
+      lineItems: [],
+      total: 18000,
+      shareToken: token,
+    });
+    documentId = ref.id;
+  });
+
+  const post = (t) =>
+    fetch(`${BASE}/api/quote/${encodeURIComponent(t)}/viewed`, { method: "POST" });
+
+  test("an unauthenticated open is accepted and answered with nothing", async () => {
+    const res = await post(token);
+    assert.equal(res.status, 204, "no login, no 401 — a customer has no account");
+    assert.equal(await res.text(), "", "and a bare body");
+  });
+
+  test("and the stamp actually landed", async () => {
+    // So the 204 above cannot pass by the route doing nothing at all.
+    const data = (await db.collection("documents").doc(documentId).get()).data();
+    assert.ok(data.firstViewedAt, "firstViewedAt was written");
+    assert.equal(data.viewCount, 1);
+  });
+
+  test("an unknown token gets the identical answer", async () => {
+    // A different reply would confirm to somebody walking tokens which ones
+    // are real. Same status, same empty body.
+    // Well-shaped but unissued, so this exercises the lookup rather than the
+    // cheap shape check in front of it.
+    const unknown = shareToken();
+    assertShaped(unknown);
+    const res = await post(unknown);
+    assert.equal(res.status, 204);
+    assert.equal(await res.text(), "");
+  });
+
+  test("a draft's token gets the identical answer too", async () => {
+    const ref = db.collection("documents").doc();
+    const draftToken = shareToken();
+    assertShaped(draftToken);
+    await ref.set({
+      orgId: "grime-busters",
+      customerId: "cust-viewed",
+      kind: "estimate",
+      status: "draft",
+      total: 1000,
+      shareToken: draftToken,
+    });
+
+    const res = await post(draftToken);
+    assert.equal(res.status, 204, "the caller is told nothing either way");
+    assert.equal(await res.text(), "");
+    const data = (await ref.get()).data();
+    assert.equal(data.firstViewedAt, undefined, "and a draft is still not stamped");
+  });
+
+  test("a GET does not stamp anything", async () => {
+    // A GET is what a crawler or a link prefetcher issues.
+    const ref = db.collection("documents").doc();
+    const getToken = shareToken();
+    assertShaped(getToken);
+    await ref.set({
+      orgId: "grime-busters",
+      customerId: "cust-viewed",
+      kind: "estimate",
+      status: "sent",
+      total: 1000,
+      shareToken: getToken,
+    });
+
+    const res = await fetch(`${BASE}/api/quote/${encodeURIComponent(getToken)}/viewed`);
+    assert.notEqual(res.status, 204, "there is no GET handler to answer it");
+    assert.equal((await ref.get()).data().firstViewedAt, undefined, "nothing was written");
+  });
+
+  test("hammering one quote's link cannot inflate the count", async () => {
+    // A leaked link must not be usable to turn one open into a story about
+    // interest that never happened.
+    //
+    // Two things stop it and only one is visible from out here: the
+    // same-visit window means a reload writes nothing at all, so the count
+    // stays at one however many times the link is hit. The per-document rate
+    // limit behind it is a second line, and it is deliberately invisible —
+    // every reply is a 204 whether or not the budget is spent, so there is
+    // nothing here to measure it by. That one is checked by its own test in
+    // tests/documentViews.test.mjs.
+    const ref = db.collection("documents").doc();
+    const hotToken = shareToken();
+    assertShaped(hotToken);
+    await ref.set({
+      orgId: "grime-busters",
+      customerId: "cust-viewed",
+      kind: "estimate",
+      status: "sent",
+      total: 1000,
+      shareToken: hotToken,
+    });
+
+    for (let i = 0; i < 24; i += 1) {
+      const res = await post(hotToken);
+      assert.equal(res.status, 204, `request ${i + 1} still answers with nothing`);
+    }
+    const data = (await ref.get()).data();
+    assert.equal(
+      data.viewCount,
+      1,
+      `twenty-four hits on one link is one open, saw ${data.viewCount}`,
+    );
+  });
+});
+
+/**
+ * One handset, several customer records, one STOP.
+ *
+ * The audit's confirmed finding, and the one part of it a source assertion
+ * cannot prove. `canSendTo` reads the opt-out off the single document whose id
+ * the client posts, while an inbound STOP is written to exactly one of the
+ * records a number can have — the Meta lead webhook creates a fresh record per
+ * form submission. So every duplicate record passed the check and the
+ * promotional message went out to somebody who had asked us to stop.
+ *
+ * Checking the source says the route consults a number-keyed map; only running
+ * it proves the consultation refuses. Deleting the lookup is caught by a source
+ * test, but turning its `if` into `if (false)` is not — that mutation survived
+ * until this test existed.
+ */
+describe("a blast never texts a number that replied STOP", () => {
+  const PROJECT = process.env.TEST_PROJECT ?? "demo-grimebusters-apitest";
+  const ORG = "grime-busters";
+  let db;
+  let optedOutId;
+  let duplicateId;
+  let cleanId;
+
+  /**
+   * Hands the blast budget back before each case.
+   *
+   * SMS_BLAST_LIMIT is 4 an hour and an earlier test in this file spends it
+   * deliberately, so without this these cases 429 and prove nothing about
+   * consent. Cleared explicitly rather than by depending on test order, which
+   * would make this suite fragile in the direction of passing for free.
+   */
+  const clearBlastLimit = async () => {
+    // Every blast counter, whoever owns it. Deleting by a uid decoded from the
+    // token was the first attempt and silently matched nothing — the doc id is
+    // built from requireCrew's caller.uid, which is not guaranteed to be the
+    // claim this test picked. A scan cannot miss, and `rateLimits` holds only
+    // a handful of rows in a test run.
+    const snap = await db.collection("rateLimits").get();
+    await Promise.all(
+      snap.docs.filter((d) => d.id.endsWith("__sms_blast")).map((d) => d.ref.delete()),
+    );
+  };
+
+  before(async () => {
+    const { initializeApp, getApps } = await import("firebase-admin/app");
+    const { getFirestore } = await import("firebase-admin/firestore");
+    const app =
+      getApps().find((a) => a.name === "blast-consent-test")
+      ?? initializeApp({ projectId: PROJECT }, "blast-consent-test");
+    db = getFirestore(app);
+
+    // The same handset, typed two ways, as two records — exactly what the
+    // Meta webhook produces alongside a number typed at a door.
+    const shared = "(502) 555-0188";
+    const customer = (fields) => ({
+      orgId: ORG,
+      firstName: "Dup",
+      lastName: "Record",
+      phone: shared,
+      email: "",
+      address: "1 Test Way",
+      status: "lead",
+      notes: [],
+      tags: [],
+      serviceTypes: [],
+      ...fields,
+    });
+
+    const a = db.collection("customers").doc();
+    await a.set(
+      customer({
+        lastName: "WithStop",
+        // A plain-language revocation: lib/smsConsent.ts matches it, Twilio
+        // does not, so without a phone-scoped check this one is DELIVERED.
+        smsOptOut: { at: "2026-09-01T10:00:00Z", keyword: "stop texting me" },
+      }),
+    );
+    optedOutId = a.id;
+
+    const b = db.collection("customers").doc();
+    await b.set(customer({ lastName: "NoStop" }));
+    duplicateId = b.id;
+
+    const c = db.collection("customers").doc();
+    await c.set(customer({ lastName: "Unrelated", phone: "(502) 555-0199" }));
+    cleanId = c.id;
+  });
+
+  test("the record holding the STOP is refused", async () => {
+    await clearBlastLimit();
+    const res = await post(
+      "/api/sms/blast",
+      { customerIds: [optedOutId], body: "Fall promo — 20% off leaf removal" },
+      crewToken,
+    );
+    assert.equal(res.status, 200);
+    const entry = res.json.failed.find((f) => f.customerId === optedOutId);
+    assert.ok(entry, `expected a refusal for the opted-out record: ${JSON.stringify(res.json)}`);
+    assert.match(entry.error, /opted back in|STOP/i);
+    assert.equal(res.json.sent, 0);
+  });
+
+  test("and so is the DUPLICATE record that carries no STOP of its own", async () => {
+    await clearBlastLimit();
+    // The finding. This record's own document is clean; the instruction lives
+    // on its sibling. A per-record check sends to it.
+    const res = await post(
+      "/api/sms/blast",
+      { customerIds: [duplicateId], body: "Fall promo — 20% off leaf removal" },
+      crewToken,
+    );
+    assert.equal(res.status, 200);
+    assert.equal(res.json.sent, 0, "nothing may be sent to this number");
+    const entry = res.json.failed.find((f) => f.customerId === duplicateId);
+    assert.ok(entry, `expected a refusal: ${JSON.stringify(res.json)}`);
+    assert.match(
+      entry.error,
+      /opted back in|STOP/i,
+      "must be refused for the opt-out on the sibling record, not for some " +
+        "unrelated Twilio error — the reason is the whole point",
+    );
+  });
+
+  test("both records in one send are refused, and nothing is sent", async () => {
+    await clearBlastLimit();
+    const res = await post(
+      "/api/sms/blast",
+      { customerIds: [optedOutId, duplicateId], body: "Fall promo — 20% off" },
+      crewToken,
+    );
+    assert.equal(res.status, 200);
+    assert.equal(res.json.sent, 0);
+    assert.equal(res.json.failed.length, 2);
+    for (const f of res.json.failed) {
+      assert.match(f.error, /opted back in|STOP/i, `${f.name}: ${f.error}`);
+    }
+  });
+
+  test("an unrelated number is not caught by somebody else's STOP", async () => {
+    await clearBlastLimit();
+    // The over-blocking direction. Grouping on a wrong key would quietly stop
+    // texting people who never asked for anything — a silent loss of reach.
+    const res = await post(
+      "/api/sms/blast",
+      { customerIds: [cleanId], body: "Fall promo — 20% off" },
+      crewToken,
+    );
+    assert.equal(res.status, 200);
+    const entry = res.json.failed.find((f) => f.customerId === cleanId);
+    // Twilio is deliberately fake here, so the send itself fails — but it must
+    // fail at Twilio, NOT be refused for consent.
+    if (entry) {
+      assert.doesNotMatch(
+        entry.error,
+        /opted back in/i,
+        "this number never opted out; refusing it means the grouping key is wrong",
+      );
+    }
   });
 });

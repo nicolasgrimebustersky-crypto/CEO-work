@@ -13,6 +13,7 @@
  */
 import assert from "node:assert/strict";
 import { test, describe } from "node:test";
+import { readFileSync } from "node:fs";
 
 const {
   computeTotals,
@@ -28,6 +29,8 @@ const {
   NUMBER_SEQUENCE_START,
   round2,
   statusAfterPayment,
+  viewedLabel,
+  STATUS_LABEL,
 } = await import("../lib/documents.ts");
 
 const line = (name, quantity, unitPrice, taxable = true) => ({
@@ -320,5 +323,107 @@ describe("what the preview and the PDF both read", () => {
     const old = { id: "o", name: "o", description: "", quantity: 1, unitPrice: 400, taxable: true };
     assert.equal(documentLineDiscounts([old]), 0);
     assert.equal(documentSaved({ lineItems: [old], discount: 0 }), 0);
+  });
+});
+
+/* --------------------------------------------- the write the rules will take */
+
+describe("scheduling an estimate as a job stamps the org", () => {
+  /**
+   * A source assertion, and weaker than running the code — lib/db/documents.ts
+   * imports firebase and uses `@/` path aliases, so node cannot load it the way
+   * it loads the pure modules above. It is here because the thing it guards
+   * broke in production and nothing in this repository noticed.
+   *
+   * What broke: scheduleAsJob builds its job payload by hand from an estimate
+   * rather than going through createJob, and it never set orgId. firestore.rules
+   * requires `orgId is string` before it compares the value, so every "Schedule
+   * the job" was denied outright — the sheet showed "Missing or insufficient
+   * permissions." and no job was ever created.
+   *
+   * Why the rules suite missed it: its jobDoc fixture hard-codes orgId, so the
+   * rule was tested against a payload the app never actually sent. The rules
+   * suite now also has the matching deny test.
+   */
+  const SOURCE = readFileSync(
+    new URL("../lib/db/documents.ts", import.meta.url),
+    "utf8",
+  );
+
+  /** One exported function's body, so a sibling's orgId cannot satisfy this. */
+  function bodyOf(name) {
+    const start = SOURCE.indexOf(`export async function ${name}(`);
+    assert.ok(start > 0, `${name} not found`);
+    const next = SOURCE.indexOf("\nexport ", start + 1);
+    return SOURCE.slice(start, next === -1 ? undefined : next);
+  }
+
+  test("the job payload carries an orgId", () => {
+    const body = bodyOf("scheduleAsJob");
+    assert.match(
+      body,
+      /orgId: DEFAULT_ORG_ID/,
+      "scheduleAsJob must stamp the job with an org, or firestore.rules denies " +
+        "the write and the estimate can never be put on the calendar",
+    );
+  });
+
+  test("it is on the job, not only on the estimate patch", () => {
+    // The payload and the patch are both in this function. Asserting on the
+    // function alone would pass if orgId were added to the wrong one — the
+    // patch must NOT set it, because keepsOrg requires the estimate's org to
+    // be unchanged.
+    const body = bodyOf("scheduleAsJob");
+    const payload = body.slice(body.indexOf("const jobPayload"), body.indexOf("const estimatePatch"));
+    assert.ok(payload.length > 0, "jobPayload block not found");
+    assert.match(payload, /orgId: DEFAULT_ORG_ID/, "the job itself must be stamped");
+  });
+});
+
+/* ------------------------------------------------------ opened, and when */
+
+describe("telling 'they have not seen it' from 'they are ignoring me'", () => {
+  // The two silences look identical on the board and want opposite responses:
+  // one is a reason to check the text arrived, the other a reason to ring them
+  // about the price. That is the whole feature, so the rule deciding which
+  // word shows is pure and tested by running it.
+  const at = (ms) => ({ toMillis: () => ms });
+  const SEEN = at(Date.parse("2026-10-07T19:12:00Z"));
+
+  test("a sent estimate nobody has opened still reads Sent", () => {
+    assert.equal(viewedLabel("sent", null), "Sent");
+  });
+
+  test("a sent estimate that was opened reads Opened", () => {
+    assert.equal(viewedLabel("sent", SEEN), "Opened");
+  });
+
+  test("a decision outranks the visit", () => {
+    // An accepted estimate the customer opens again must not walk backwards to
+    // Opened. The status says what happened; the visit is a footnote to it.
+    for (const status of ["accepted", "declined", "partial", "paid", "void"]) {
+      assert.equal(viewedLabel(status, SEEN), STATUS_LABEL[status], status);
+    }
+  });
+
+  test("a draft is never Opened, however the field reads", () => {
+    // A draft has no link to open. If this ever says Opened, something has
+    // stamped a document that was never sent and the stamp cannot be trusted.
+    assert.equal(viewedLabel("draft", SEEN), "Draft");
+  });
+
+  test("every status still has a label when nothing was opened", () => {
+    for (const status of Object.keys(STATUS_LABEL)) {
+      assert.equal(viewedLabel(status, null), STATUS_LABEL[status], status);
+    }
+  });
+
+  test("Opened is not a status anyone can set by hand", () => {
+    // It is deliberately a derived word, not a member of the status list: a
+    // status is where the document is in its life, and being read is not a
+    // step in that. Keeping it out of the list is also what stops an opened
+    // estimate dropping out of the follow-up sequence, whose OPEN_QUOTE_STATUSES
+    // is written in terms of real statuses.
+    assert.ok(!Object.keys(STATUS_LABEL).includes("opened"));
   });
 });

@@ -30,6 +30,7 @@ import {
   getDocs,
   query,
   serverTimestamp,
+  Timestamp,
   setDoc,
   updateDoc,
   deleteField,
@@ -50,6 +51,7 @@ const VERIFIED = { auth_time: SIGNED_IN_AT, otpAuths: [SIGNED_IN_AT] };
 let alice;
 let bob;
 let mallory;
+let aliceNoCode;
 let dana;
 let newbie;
 let admin;
@@ -188,6 +190,9 @@ before(async () => {
   alice = testEnv.authenticatedContext("alice", VERIFIED).firestore();
   bob = testEnv.authenticatedContext("bob", VERIFIED).firestore();
   mallory = testEnv.authenticatedContext("mallory").firestore();
+  // Alice again, signed in with her password and nothing else: approved crew,
+  // no otpAuths claim. "Entered the password, never entered the code."
+  aliceNoCode = testEnv.authenticatedContext("alice").firestore();
   // Registered and approved — crew by role rather than by uid.
   dana = testEnv.authenticatedContext("dana", VERIFIED).firestore();
   // Signed in with no profile document at all: the instant after registering.
@@ -244,6 +249,24 @@ beforeEach(async () => {
     });
     await setDoc(doc(db, "conversations/conv1/messages/m1"), {
       text: "on my way",
+      authorUid: "alice",
+      authorName: "Alice",
+    });
+    // A thread a since-revoked account is still named in. Without this, the
+    // pending-account cases below pass for the wrong reason — mallory is not
+    // in conv1, so she was refused for membership and her ROLE was never
+    // what the test proved.
+    await setDoc(doc(db, "conversations/conv2"), {
+      title: "",
+      memberUids: ["alice", "mallory"],
+      createdBy: "alice",
+      createdByName: "Alice",
+      lastMessageAt: null,
+      lastMessageText: "",
+      lastMessageBy: "",
+    });
+    await setDoc(doc(db, "conversations/conv2/messages/m2"), {
+      text: "before the access was pulled",
       authorUid: "alice",
       authorName: "Alice",
     });
@@ -494,6 +517,93 @@ describe("the lead-nurture counters belong to the cron", () => {
   });
 });
 
+describe("several services on one job", () => {
+  test("a job can carry several main services and specific ones", async () => {
+    await assertSucceeds(
+      updateDoc(
+        doc(alice, "jobs/j1"),
+        stampedUpdate("alice", {
+          serviceTypes: ["pressure_washing", "landscaping"],
+          subServices: ["house_wash", "mulching"],
+        }),
+      ),
+    );
+  });
+
+  test("an unknown main service is refused", async () => {
+    await assertFails(
+      updateDoc(doc(alice, "jobs/j1"), stampedUpdate("alice", { serviceTypes: ["pressure_washing", "car_wash"] })),
+    );
+  });
+
+  test("an empty or oversized list is refused", async () => {
+    await assertFails(updateDoc(doc(alice, "jobs/j1"), stampedUpdate("alice", { serviceTypes: [] })));
+    await assertFails(
+      updateDoc(doc(alice, "jobs/j1"), stampedUpdate("alice", { subServices: Array.from({ length: 41 }, (_, i) => `s${i}`) })),
+    );
+  });
+});
+
+describe("a job's visit type", () => {
+  test("each visit type can be saved", async () => {
+    for (const visitType of ["service", "estimate", "walkthrough", "follow_up", "touch_up"]) {
+      await assertSucceeds(
+        updateDoc(doc(alice, "jobs/j1"), stampedUpdate("alice", { visitType, price: 0 })),
+      );
+    }
+  });
+
+  test("a job with no visit type, as every old one is, still saves", async () => {
+    await assertSucceeds(updateDoc(doc(alice, "jobs/j1"), stampedUpdate("alice", { jobNotes: "gate code 4417" })));
+  });
+
+  test("an invented visit type is refused", async () => {
+    await assertFails(updateDoc(doc(alice, "jobs/j1"), stampedUpdate("alice", { visitType: "free_job" })));
+    await assertFails(updateDoc(doc(alice, "jobs/j1"), stampedUpdate("alice", { visitType: 3 })));
+  });
+});
+
+describe("the blue new-client dot from a website form", () => {
+  /** Mark c1 unseen, the way app/api/leads/website does (Admin SDK, no rules). */
+  async function markUnseen() {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), "customers/c1"), {
+        unseenSince: Timestamp.fromMillis(Date.now()),
+      });
+    });
+  }
+
+  test("opening the profile clears it without an author stamp", async () => {
+    await markUnseen();
+    await assertSucceeds(updateDoc(doc(alice, "customers/c1"), { unseenSince: null }));
+  });
+
+  test("the unstamped path can only clear it, never set it", async () => {
+    await assertFails(
+      updateDoc(doc(alice, "customers/c1"), { unseenSince: Timestamp.fromMillis(Date.now()) }),
+    );
+  });
+
+  test("the unstamped path cannot carry any other change with it", async () => {
+    await markUnseen();
+    await assertFails(
+      updateDoc(doc(alice, "customers/c1"), { unseenSince: null, phone: "(502) 555-0199" }),
+    );
+    await assertFails(updateDoc(doc(alice, "customers/c1"), { unseenSince: null, status: "customer" }));
+  });
+
+  test("a stray value is refused on a normal edit", async () => {
+    await assertFails(
+      updateDoc(doc(alice, "customers/c1"), stampedUpdate("alice", { unseenSince: "yes" })),
+    );
+  });
+
+  test("someone outside the business cannot clear it", async () => {
+    await markUnseen();
+    await assertFails(updateDoc(doc(mallory, "customers/c1"), { unseenSince: null }));
+  });
+});
+
 describe("an opt-out is the customer's own instruction", () => {
   /** Put a STOP on c1, the way the inbound webhook does (Admin SDK, no rules). */
   async function withOptOut() {
@@ -570,6 +680,24 @@ describe("jobs", () => {
       updateDoc(doc(alice, `jobs/${ref.id}`), stampedUpdate("alice", { price: 300 })),
     );
     await assertSucceeds(deleteDoc(doc(alice, `jobs/${ref.id}`)));
+  });
+
+  test("a job with no orgId at all is denied", async () => {
+    // The bug behind "Missing or insufficient permissions." on the Schedule
+    // the job sheet. createsInMyOrg asks that orgId `is string` before it
+    // compares anything, so a payload that simply omits the field fails at
+    // that first clause — and lib/db/documents.ts built exactly such a payload
+    // when turning an estimate into a job.
+    //
+    // Every other fixture here hard-codes orgId, which is why the whole suite
+    // stayed green while the real write was denied on every attempt.
+    const noOrg = jobDoc("alice");
+    delete noOrg.orgId;
+    await assertFails(addDoc(collection(alice, "jobs"), noOrg));
+  });
+
+  test("a job with an empty orgId is denied", async () => {
+    await assertFails(addDoc(collection(alice, "jobs"), jobDoc("alice", { orgId: "" })));
   });
 
   test("a job cannot be created under someone else's name", async () => {
@@ -676,6 +804,81 @@ describe("estimates and invoices", () => {
     );
     await assertSucceeds(
       updateDoc(doc(bob, "documents/d1"), stampedUpdate("bob", { shareToken: "a".repeat(32) })),
+    );
+  });
+
+  test("a document cannot be created already stamped as opened", async () => {
+    // The gap behind keepsViewStamps: guarding the update and forgetting the
+    // create. A document that arrives pre-stamped reads Opened from the
+    // moment it is made, about a customer who has never seen it.
+    for (const forged of [
+      { firstViewedAt: serverTimestamp() },
+      { lastViewedAt: serverTimestamp() },
+      { viewCount: 7 },
+    ]) {
+      await assertFails(
+        addDoc(collection(alice, "documents"), businessDoc("alice", forged)),
+        `creating with ${Object.keys(forged)[0]} must be refused`,
+      );
+    }
+  });
+
+  test("an ordinary create, and the app's own explicit nulls, still work", async () => {
+    // The rule must refuse a forged stamp without refusing the client that
+    // initialises the fields honestly — lib/db/documents.ts writes null and 0.
+    await assertSucceeds(addDoc(collection(alice, "documents"), businessDoc("alice")));
+    await assertSucceeds(
+      addDoc(
+        collection(alice, "documents"),
+        businessDoc("alice", { firstViewedAt: null, lastViewedAt: null, viewCount: 0 }),
+      ),
+    );
+  });
+
+  test("a crew client cannot write the view stamps", async () => {
+    // They are evidence, and evidence a crew account can edit from a Firebase
+    // console is not evidence. Only the Admin SDK — writing from a customer's
+    // own browser opening their link — sets these.
+    for (const patch of [
+      { firstViewedAt: serverTimestamp() },
+      { lastViewedAt: serverTimestamp() },
+      { viewCount: 99 },
+    ]) {
+      await assertFails(
+        updateDoc(doc(bob, "documents/d1"), stampedUpdate("bob", patch)),
+        `a crew write of ${Object.keys(patch)[0]} must be refused`,
+      );
+    }
+  });
+
+  test("clearing a view stamp is refused too", async () => {
+    // Marking a quote unopened would be as much a lie as marking it opened.
+    //
+    // The stamp has to be seeded first, and finding that out is the reason
+    // this test is worth its lines: deleting a field that was never set is a
+    // no-op, so it does not appear in affectedKeys and the rule has nothing to
+    // refuse. The guard is sound; a test that skipped the seed would have
+    // passed for a reason that had nothing to do with it.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), "documents/d1"), {
+        firstViewedAt: serverTimestamp(),
+        lastViewedAt: serverTimestamp(),
+        viewCount: 2,
+      });
+    });
+
+    await assertFails(
+      updateDoc(doc(bob, "documents/d1"), stampedUpdate("bob", { firstViewedAt: deleteField() })),
+    );
+    await assertFails(
+      updateDoc(doc(bob, "documents/d1"), stampedUpdate("bob", { viewCount: 0 })),
+    );
+  });
+
+  test("an ordinary edit that leaves the stamps alone still works", async () => {
+    // The guard must pin the three fields, not freeze the document.
+    await assertSucceeds(
+      updateDoc(doc(bob, "documents/d1"), stampedUpdate("bob", { status: "accepted" })),
     );
   });
 
@@ -1098,6 +1301,11 @@ describe("registration grants nothing", () => {
     await assertFails(getDoc(doc(mallory, "documents/d1")));
     await assertFails(getDoc(doc(mallory, "jobs/j1")));
     await assertFails(getDoc(doc(mallory, "territories/t1")));
+    // This line is why the name said "messages" and the body did not: the
+    // claim went untested, and inConversation() omitted isCrew() so a pending
+    // MEMBER could in fact read and post. conv2 names mallory, so the refusal
+    // here is about her role rather than her membership.
+    await assertFails(getDoc(doc(mallory, "conversations/conv2/messages/m2")));
   });
 
   test("a pending account cannot write anything", async () => {
@@ -1854,5 +2062,382 @@ describe("a phone number's nurture history", () => {
     );
     await assertFails(deleteDoc(doc(admin, "nurtureNumbers/5025550147")));
     await assertFails(setDoc(doc(anon, "nurtureNumbers/5025551111"), { step: 0 }));
+  });
+});
+
+/**
+ * Chat was the way around the sign-in code.
+ *
+ * The conversation document itself requires isCrew() on read, create and
+ * update. Its messages and reads subcollections required only
+ * `request.auth != null` plus membership — and isCrew() is what carries both
+ * an approved role and hasVerifiedSession(). So a revoked account kept the
+ * threads it was in, and a password-only session that never entered its
+ * emailed code could read the history and post as that person, while the same
+ * session was refused every customer, document and job in the database.
+ *
+ * The test that should have caught it was named "a pending account cannot read
+ * money, jobs or messages" and asserted on documents, jobs and territories.
+ * It never touched a message, and the pending account was not a member of the
+ * only conversation in the fixture, so a pending MEMBER was never exercised.
+ */
+describe("chat needs standing, not just membership", () => {
+  test("a member who never entered their code is refused", async () => {
+    // Approved crew, in the thread, password-only session.
+    await assertFails(getDoc(doc(aliceNoCode, "conversations/conv1/messages/m1")));
+    await assertFails(
+      addDoc(collection(aliceNoCode, "conversations/conv1/messages"), {
+        text: "posting without the code",
+        authorUid: "alice",
+        authorName: "Alice",
+      }),
+    );
+  });
+
+  test("and cannot mark it read either", async () => {
+    // The reads subcollection is behind the same helper, so it moved with it.
+    await assertFails(
+      setDoc(doc(aliceNoCode, "conversations/conv1/reads/alice"), {
+        readAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  test("a revoked member loses the thread they were in", async () => {
+    // mallory IS in conv2's memberUids. Membership is not standing.
+    await assertFails(getDoc(doc(mallory, "conversations/conv2/messages/m2")));
+    await assertFails(
+      addDoc(collection(mallory, "conversations/conv2/messages"), {
+        text: "still here?",
+        authorUid: "mallory",
+        authorName: "Mallory",
+      }),
+    );
+  });
+
+  test("a revoked member cannot mark it read", async () => {
+    await assertFails(
+      setDoc(doc(mallory, "conversations/conv2/reads/mallory"), {
+        readAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  test("a full crew member in the thread is unaffected", async () => {
+    // The regression guard. Tightening this helper must not lock out the
+    // people the feature is for — and a test suite where everything fails is
+    // not evidence of anything.
+    await assertSucceeds(getDoc(doc(alice, "conversations/conv1/messages/m1")));
+    await assertSucceeds(
+      addDoc(collection(alice, "conversations/conv1/messages"), {
+        text: "with the code entered",
+        authorUid: "alice",
+        authorName: "Alice",
+      }),
+    );
+    await assertSucceeds(
+      setDoc(doc(alice, "conversations/conv1/reads/alice"), { readAt: serverTimestamp() }),
+    );
+  });
+
+  test("a crew member still cannot reach a thread they are not in", async () => {
+    // isCrew() is now necessary; it was never sufficient. dana is approved and
+    // verified, and conv2 is not hers.
+    await assertFails(getDoc(doc(dana, "conversations/conv2/messages/m2")));
+  });
+});
+
+/* ------------------------------------------------------------- automations */
+
+/**
+ * The automations collection decides whether the app texts customers on its
+ * own, so the rules are stricter than anywhere else in this file: the crew can
+ * read, only the owner can write, and the timing ceilings are checked here as
+ * numbers rather than trusted to the client that typed them.
+ *
+ * The ceilings are repeated in lib/automations.ts (clampGuards) and run twice
+ * on the client. A rule is the only one of the three a stale or tampered
+ * client cannot skip, and what is being bounded is how many strangers get a
+ * text from a number this business needs to keep.
+ */
+function automationDoc(overrides = {}) {
+  return {
+    orgId: "grime-busters",
+    kind: "custom",
+    builtinKey: "",
+    name: "Leaf season",
+    enabled: false,
+    trigger: "job_finished",
+    conditions: {
+      minAmount: null,
+      maxAmount: null,
+      serviceTypes: [],
+      stages: [],
+      propertyTypes: [],
+      addressContains: [],
+    },
+    action: { kind: "send_sms", body: "Hi {first_name}", stage: null },
+    guards: {
+      afterDays: 7,
+      repeatEveryDays: null,
+      maxTouches: 1,
+      minGapDays: 3,
+      maxPerRun: 10,
+      staleAfterDays: 37,
+      startHour: 9,
+      endHour: 17,
+      daysOfWeek: [],
+      stopOnReply: true,
+    },
+    createdBy: "nicolas",
+    createdByName: "Nick",
+    updatedBy: "nicolas",
+    updatedByName: "Nick",
+    ...overrides,
+  };
+}
+
+describe("automations", () => {
+  test("the owner can create, read, arm and delete one", async () => {
+    await assertSucceeds(setDoc(doc(admin, "automations/a1"), automationDoc()));
+    await assertSucceeds(getDoc(doc(admin, "automations/a1")));
+    await assertSucceeds(
+      updateDoc(doc(admin, "automations/a1"), {
+        enabled: true,
+        updatedBy: "nicolas",
+        updatedByName: "Nick",
+      }),
+    );
+    await assertSucceeds(deleteDoc(doc(admin, "automations/a1")));
+  });
+
+  test("crew can read them but not change them", async () => {
+    // "What is this app doing without me" is a fair question for anybody who
+    // works here. Arming one is not their decision.
+    await assertSucceeds(setDoc(doc(admin, "automations/a1"), automationDoc()));
+
+    await assertSucceeds(getDocs(collection(dana, "automations")));
+    await assertFails(updateDoc(doc(dana, "automations/a1"), { enabled: true }));
+    await assertFails(setDoc(doc(dana, "automations/a2"), automationDoc({ createdBy: "dana" })));
+    await assertFails(deleteDoc(doc(dana, "automations/a1")));
+  });
+
+  test("a bootstrap crew account is still not the owner here", async () => {
+    // Alice and Bob are crew by uid and can write almost everything else. This
+    // is the collection where that is not enough.
+    await assertFails(setDoc(doc(alice, "automations/a9"), automationDoc({ createdBy: "alice" })));
+  });
+
+  test("the owner without the emailed code cannot arm anything", async () => {
+    // isAdmin() checks an email claim and nothing else, so on its own it would
+    // let a password-only session switch on a sequence that texts customers.
+    // The same gap #66 closed in inConversation().
+    const ownerNoCode = testEnv
+      .authenticatedContext("nicolas", { email: "nicolas.grimebustersky@gmail.com" })
+      .firestore();
+    await assertFails(setDoc(doc(ownerNoCode, "automations/a8"), automationDoc()));
+
+    // The update path needs its own case. A first version of this test only
+    // covered the create, and dropping isCrew() from `allow update` — the one
+    // edit that would let a password-only session flip a sequence ON — passed
+    // it. Arming an existing automation is the dangerous half, not creating a
+    // disabled one.
+    await assertSucceeds(setDoc(doc(admin, "automations/a8b"), automationDoc()));
+    await assertFails(
+      updateDoc(doc(ownerNoCode, "automations/a8b"), {
+        enabled: true,
+        updatedBy: "nicolas",
+        updatedByName: "Nick",
+      }),
+    );
+    await assertFails(deleteDoc(doc(ownerNoCode, "automations/a8b")));
+  });
+
+  test("an outsider and a signed-out stranger get nothing", async () => {
+    await assertFails(getDocs(collection(mallory, "automations")));
+    await assertFails(setDoc(doc(mallory, "automations/a7"), automationDoc()));
+    await assertFails(getDocs(collection(anon, "automations")));
+    await assertFails(setDoc(doc(anon, "automations/a6"), automationDoc()));
+  });
+
+  test("a create with no org is refused outright", async () => {
+    // Deleted rather than destructured away: an unused binding is a lint
+    // warning, and a test file that warns is a test file people stop reading.
+    const noOrg = automationDoc();
+    delete noOrg.orgId;
+    await assertFails(setDoc(doc(admin, "automations/a5"), noOrg));
+  });
+
+  test("another business's automation cannot be written or read", async () => {
+    await assertFails(
+      setDoc(doc(admin, "automations/a4"), automationDoc({ orgId: "someone-else" })),
+    );
+  });
+
+  test("the org cannot be moved by a later edit", async () => {
+    await assertSucceeds(setDoc(doc(admin, "automations/a1"), automationDoc()));
+    await assertFails(updateDoc(doc(admin, "automations/a1"), { orgId: "someone-else" }));
+  });
+
+  test("every timing ceiling is enforced by the rules, not just the client", async () => {
+    const bad = [
+      ["maxPerRun past the cap", { maxPerRun: 500 }],
+      ["maxTouches past the cap", { maxTouches: 40 }],
+      ["a gap under the floor", { minGapDays: 1 }],
+      ["a repeat under the floor", { repeatEveryDays: 1 }],
+      ["sending before 8am", { startHour: 5 }],
+      ["sending after 7pm", { endHour: 23 }],
+      ["a window that ends before it starts", { startHour: 17, endHour: 9 }],
+      ["a net wider than four months", { staleAfterDays: 7 + 400 }],
+      ["a stale day before the automation is even due", { staleAfterDays: 2 }],
+      ["a non-numeric day count", { afterDays: "soon" }],
+    ];
+    for (const [label, guards] of bad) {
+      await assertFails(
+        setDoc(
+          doc(admin, "automations/bad"),
+          automationDoc({ guards: { ...automationDoc().guards, ...guards } }),
+        ),
+        label,
+      );
+    }
+  });
+
+  test("an unknown trigger or action is refused", async () => {
+    await assertFails(
+      setDoc(doc(admin, "automations/b1"), automationDoc({ trigger: "whenever_i_feel_like_it" })),
+    );
+    await assertFails(
+      setDoc(
+        doc(admin, "automations/b2"),
+        automationDoc({ action: { kind: "call_them", body: "", stage: null } }),
+      ),
+    );
+  });
+
+  test("a message long enough to be five texts is refused", async () => {
+    await assertFails(
+      setDoc(
+        doc(admin, "automations/b3"),
+        automationDoc({ action: { kind: "send_sms", body: "x".repeat(600), stage: null } }),
+      ),
+    );
+  });
+
+  test("a built-in's switch row is writable without a trigger or guards", async () => {
+    // The off switch for lead nurture carries nothing but the switch. Requiring
+    // a full definition on it would make the sequence unswitchable.
+    await assertSucceeds(
+      setDoc(doc(admin, "automations/builtin_lead_nurture"), {
+        orgId: "grime-busters",
+        kind: "builtin",
+        builtinKey: "lead_nurture",
+        name: "Chase unanswered estimates",
+        enabled: false,
+        createdBy: "nicolas",
+        createdByName: "Nick",
+        updatedBy: "nicolas",
+        updatedByName: "Nick",
+      }),
+    );
+  });
+
+  test("but an invented built-in key is not", async () => {
+    await assertFails(
+      setDoc(doc(admin, "automations/builtin_whatever"), {
+        orgId: "grime-busters",
+        kind: "builtin",
+        builtinKey: "whatever",
+        name: "Whatever",
+        enabled: true,
+        createdBy: "nicolas",
+        createdByName: "Nick",
+      }),
+    );
+  });
+
+  test("the owner can pause one for a set time, or forever, and lift it", async () => {
+    await assertSucceeds(setDoc(doc(admin, "automations/p1"), automationDoc()));
+    await assertSucceeds(
+      updateDoc(doc(admin, "automations/p1"), {
+        pausedUntil: Timestamp.fromMillis(Date.now() + 60 * 60 * 1000),
+        pausedForever: false,
+        updatedAt: serverTimestamp(),
+        updatedBy: "nicolas",
+        updatedByName: "Nick",
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(doc(admin, "automations/p1"), {
+        pausedUntil: null,
+        pausedForever: true,
+        updatedAt: serverTimestamp(),
+        updatedBy: "nicolas",
+        updatedByName: "Nick",
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(doc(admin, "automations/p1"), {
+        pausedUntil: null,
+        pausedForever: false,
+        updatedAt: serverTimestamp(),
+        updatedBy: "nicolas",
+        updatedByName: "Nick",
+      }),
+    );
+  });
+
+  test("a pause must be a real timestamp and a real boolean", async () => {
+    await assertSucceeds(setDoc(doc(admin, "automations/p2"), automationDoc()));
+    // A string "true" would read as truthy to a careless reader and hold the
+    // sequence forever; a date string is not a time the cron can compare.
+    await assertFails(
+      updateDoc(doc(admin, "automations/p2"), { pausedForever: "true" }),
+    );
+    await assertFails(
+      updateDoc(doc(admin, "automations/p2"), { pausedUntil: "2026-10-17" }),
+    );
+    await assertFails(updateDoc(doc(admin, "automations/p2"), { pausedUntil: 12345 }));
+  });
+
+  test("a built-in with no row yet can be created already paused", async () => {
+    await assertSucceeds(
+      setDoc(doc(admin, "automations/builtin_money_reminders"), {
+        orgId: "grime-busters",
+        kind: "builtin",
+        builtinKey: "money_reminders",
+        name: "Flag money that hasn't come in",
+        enabled: true,
+        pausedUntil: null,
+        pausedForever: true,
+        createdBy: "nicolas",
+        createdByName: "Nick",
+        updatedAt: serverTimestamp(),
+        updatedBy: "nicolas",
+        updatedByName: "Nick",
+      }),
+    );
+  });
+
+  test("the crew can see a pause but not place one", async () => {
+    await assertSucceeds(setDoc(doc(admin, "automations/p3"), automationDoc()));
+    await assertFails(
+      updateDoc(doc(dana, "automations/p3"), {
+        pausedForever: true,
+        updatedAt: serverTimestamp(),
+        updatedBy: "dana",
+        updatedByName: "Dana",
+      }),
+    );
+  });
+
+  test("nobody can read or write the server-only send ledger", async () => {
+    // automationTouches has no match block at all, which is what makes it
+    // server-only: rules deny by default and the Admin SDK bypasses them.
+    await assertFails(getDocs(collection(admin, "automationTouches")));
+    await assertFails(
+      setDoc(doc(admin, "automationTouches/x"), { orgId: "grime-busters", touches: 0 }),
+    );
+    await assertFails(getDocs(collection(dana, "automationTouches")));
   });
 });

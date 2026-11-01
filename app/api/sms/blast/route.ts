@@ -1,9 +1,15 @@
 import { audit } from "@/lib/server/audit";
 import { ApiError, errorResponse, requireCrew } from "@/lib/server/auth";
 import { preflight, withCors } from "@/lib/server/cors";
-import { appendNote, getCustomer } from "@/lib/server/customerNotes";
+import {
+  appendNote,
+  getCustomer,
+  optOutsByPhone,
+  phoneSuppressionKey,
+} from "@/lib/server/customerNotes";
 import { consumeRateLimit, SMS_BLAST_LIMIT } from "@/lib/server/rateLimit";
 import { isTwilioConfigured, sendSms } from "@/lib/server/twilio";
+import { DEFAULT_ORG_ID } from "@/lib/org";
 import { canSendTo } from "@/lib/smsConsent";
 
 export const runtime = "nodejs";
@@ -65,6 +71,30 @@ export async function POST(request: Request): Promise<Response> {
     const failed: { customerId: string; name: string; error: string }[] = [];
     let sent = 0;
 
+    /**
+     * Every STOP in the org, by number, read once before the first send.
+     *
+     * canSendTo alone is not enough here and never was. It reads the opt-out
+     * off the single customer document whose id the client posted, while an
+     * inbound STOP is written to exactly one of the several records a handset
+     * can have — so every duplicate record passed the check and the message
+     * went out to somebody who had asked us to stop. The screen even showed
+     * the same person as blocked and as a recipient at the same time.
+     *
+     * One scan, not one per recipient: optOutForPhone scans the whole customer
+     * collection per call, and 200 of those inside maxDuration=60 is a
+     * timeout rather than a slower correct answer.
+     */
+    const stopped = await optOutsByPhone(DEFAULT_ORG_ID);
+
+    /**
+     * One handset, one message.
+     *
+     * Without this the same person receives the blast once per record they
+     * have — the duplicate problem again, in its less serious direction.
+     */
+    const textedNumbers = new Set<string>();
+
     // Sequential on purpose: firing 200 concurrent requests trips Twilio's rate
     // limit and the failures come back as opaque 429s.
     for (const [index, customerId] of customerIds.entries()) {
@@ -80,6 +110,21 @@ export async function POST(request: Request): Promise<Response> {
       // Never blast someone who asked not to be contacted. A blast is where
       // this matters most: one careless selection is a hundred messages, and
       // the person who replied STOP last week is somewhere in the list.
+      //
+      // Asked of the NUMBER first, because that is where the instruction
+      // lives. Before the rate limit is spent and before the pacing delay, so
+      // 200 refusals still cannot run past maxDuration — the ordering the
+      // chokepoint allowlist exists to preserve.
+      const key = phoneSuppressionKey(customer.phone);
+      const numberOptOut = key ? stopped.get(key) : null;
+      if (numberOptOut) {
+        failed.push({
+          customerId,
+          name,
+          error: `This number replied ${numberOptOut.keyword || "STOP"} and has not opted back in. Call instead.`,
+        });
+        continue;
+      }
       const verdict = canSendTo(customer);
       if (!verdict.allowed) {
         failed.push({ customerId, name, error: verdict.reason });
@@ -89,10 +134,20 @@ export async function POST(request: Request): Promise<Response> {
         failed.push({ customerId, name, error: "Marked do not knock — skipped." });
         continue;
       }
+      // A second record for a number already texted in this run.
+      if (key && textedNumbers.has(key)) {
+        failed.push({
+          customerId,
+          name,
+          error: "Already texted on this number in this send — duplicate record.",
+        });
+        continue;
+      }
 
       const result = await sendSms(customer.phone, body);
       if (result.ok) {
         sent += 1;
+        if (key) textedNumbers.add(key);
         await appendNote(customerId, {
           text: body,
           kind: "sms_out",

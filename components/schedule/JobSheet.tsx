@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chips";
 import { SelectField, TextAreaField, TextField } from "@/components/ui/Field";
 import { Sheet } from "@/components/ui/Sheet";
-import { DEFAULT_SERVICE, OFFERED_SERVICES } from "@/lib/brand";
+import { DEFAULT_SERVICE } from "@/lib/brand";
 import { advancePipeline } from "@/lib/db/customers";
 import {
   createJob,
@@ -25,9 +25,20 @@ import { DEFAULT_JOB_MINUTES } from "@/lib/schedule";
 import { jobConfirmationText, jobRescheduledText } from "@/lib/messages";
 import { SERVICE_LABEL } from "@/lib/status";
 import { trySendSms } from "@/lib/smsClient";
-import type { Job, ServiceType } from "@/lib/types";
+import type { Job } from "@/lib/types";
+import { ServicePicker } from "@/components/ui/ServicePicker";
+import { describeSelection, type ServiceSelection } from "@/lib/subServices";
+import {
+  isBillable,
+  VISIT_LABEL,
+  VISIT_TYPES,
+  visitPhrase,
+  visitTitle,
+  type VisitType,
+} from "@/lib/visitTypes";
 import { JobPhotos } from "./JobPhotos";
 import { JobStatusActions } from "./JobStatusActions";
+import { servicesLabel } from "@/lib/serviceText";
 
 interface JobSheetProps {
   open: boolean;
@@ -62,7 +73,14 @@ export function JobSheet({
   const job = jobProp ? (jobsById.get(jobProp.id) ?? jobProp) : null;
 
   const [selectedCustomer, setSelectedCustomer] = useState("");
-  const [serviceType, setServiceType] = useState<ServiceType>(DEFAULT_SERVICE);
+  const [services, setServices] = useState<ServiceSelection>({
+    serviceTypes: [DEFAULT_SERVICE],
+    subServices: [],
+  });
+  // The first main service picked is the record's serviceType — what reports,
+  // the price book and the rules have always read.
+  const serviceType = services.serviceTypes[0];
+  const [visitType, setVisitType] = useState<VisitType>("service");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [price, setPrice] = useState("");
@@ -80,7 +98,8 @@ export function JobSheet({
 
     if (job) {
       setSelectedCustomer(job.customerId);
-      setServiceType(job.serviceType);
+      setServices({ serviceTypes: job.serviceTypes, subServices: job.subServices });
+      setVisitType(job.visitType);
       setStart(toLocalInput(job.scheduledStart.toDate()));
       setEnd(toLocalInput(job.scheduledEnd.toDate()));
       setPrice(String(job.price));
@@ -91,7 +110,8 @@ export function JobSheet({
 
     const begin = defaultStart ?? addMinutes(new Date(), 60);
     setSelectedCustomer(customerId ?? "");
-    setServiceType(DEFAULT_SERVICE);
+    setServices({ serviceTypes: [DEFAULT_SERVICE], subServices: [] });
+    setVisitType("service");
     setStart(toLocalInput(begin));
     setEnd(toLocalInput(addMinutes(begin, DEFAULT_JOB_MINUTES)));
     setPrice("");
@@ -126,8 +146,14 @@ export function JobSheet({
     }
     if (assignedTo.length === 0) return setError("Assign this job to at least one person.");
 
-    const priceValue = Number.parseFloat(price || "0");
+    const billable = isBillable(visitType);
+    // An unpaid visit carries no price: a leftover figure from a service job
+    // switched to "Estimate" would otherwise count as revenue in the reports.
+    const priceValue = billable ? Number.parseFloat(price || "0") : 0;
     if (Number.isNaN(priceValue) || priceValue < 0) return setError("Enter a valid price.");
+    const described = describeSelection(services, (main) => SERVICE_LABEL[main]);
+    const title = visitTitle(visitType, described);
+    const phrase = visitPhrase(visitType, described);
 
     setSaving(true);
     setError(null);
@@ -147,6 +173,9 @@ export function JobSheet({
           job.id,
           {
             serviceType,
+            serviceTypes: services.serviceTypes,
+            subServices: services.subServices,
+            visitType,
             scheduledStart: startDate,
             scheduledEnd: endDate,
             price: priceValue,
@@ -157,7 +186,7 @@ export function JobSheet({
         );
         await notify({
           type: movedTime ? "job_rescheduled" : "job_updated",
-          body: `${customer ? customerName(customer) : "A job"} · ${SERVICE_LABEL[serviceType]} · ${format(startDate, "EEE MMM d, h:mm a")}`,
+          body: `${customer ? customerName(customer) : "A job"} · ${title} · ${format(startDate, "EEE MMM d, h:mm a")}`,
           customerId: selectedCustomer,
           jobId: job.id,
         });
@@ -166,7 +195,7 @@ export function JobSheet({
         if (movedTime) {
           smsProblem = await trySendSms(
             selectedCustomer,
-            jobRescheduledText(SERVICE_LABEL[serviceType], startDate),
+            jobRescheduledText(phrase, startDate),
             "job_rescheduled",
           );
         }
@@ -175,6 +204,9 @@ export function JobSheet({
           {
             customerId: selectedCustomer,
             serviceType,
+            serviceTypes: services.serviceTypes,
+            subServices: services.subServices,
+            visitType,
             scheduledStart: startDate,
             scheduledEnd: endDate,
             price: priceValue,
@@ -185,13 +217,15 @@ export function JobSheet({
         );
         await notify({
           type: "job_created",
-          body: `${customer ? customerName(customer) : "A job"} · ${SERVICE_LABEL[serviceType]} · ${format(startDate, "EEE MMM d, h:mm a")}`,
+          body: `${customer ? customerName(customer) : "A job"} · ${title} · ${format(startDate, "EEE MMM d, h:mm a")}`,
           customerId: selectedCustomer,
           jobId: newId,
         });
 
         // Booking the work is the moment the lead becomes a scheduled job.
-        if (customer) {
+        // An estimate visit or walkthrough is not booked work, so the
+        // pipeline stays where it is.
+        if (customer && billable) {
           await advancePipeline(customer, "job_scheduled", author, {
             value: priceValue,
             reason: `Job scheduled for ${format(startDate, "EEE MMM d, h:mm a")}`,
@@ -200,7 +234,7 @@ export function JobSheet({
 
         smsProblem = await trySendSms(
           selectedCustomer,
-          jobConfirmationText(SERVICE_LABEL[serviceType], startDate),
+          jobConfirmationText(phrase, startDate),
           "job_confirmation",
         );
       }
@@ -239,7 +273,7 @@ export function JobSheet({
         }
         await notify({
           type: "payment_received",
-          body: `${customer ? customerName(customer) : "A job"} · ${formatMoney(job.price)} · ${SERVICE_LABEL[job.serviceType]}`,
+          body: `${customer ? customerName(customer) : "A job"} · ${formatMoney(job.price)} · ${servicesLabel(job)}`,
           customerId: job.customerId,
           jobId: job.id,
         });
@@ -258,7 +292,7 @@ export function JobSheet({
       await updateJob(job.id, { status: "cancelled" }, author);
       await notify({
         type: "job_cancelled",
-        body: `${customer ? customerName(customer) : "A job"} · ${SERVICE_LABEL[job.serviceType]}`,
+        body: `${customer ? customerName(customer) : "A job"} · ${servicesLabel(job)}`,
         customerId: job.customerId,
         jobId: job.id,
       });
@@ -332,19 +366,24 @@ export function JobSheet({
         ) : null}
 
         <div>
-          <p className="mb-1.5 text-sm font-semibold text-muted">Service</p>
+          <p className="mb-1.5 text-sm font-semibold text-muted">Visit</p>
           <div className="flex flex-wrap gap-2">
-            {OFFERED_SERVICES.map((service) => (
-              <Chip
-                key={service}
-                active={serviceType === service}
-                onClick={() => setServiceType(service)}
-              >
-                {SERVICE_LABEL[service]}
+            {VISIT_TYPES.map((visit) => (
+              <Chip key={visit} active={visitType === visit} onClick={() => setVisitType(visit)}>
+                {VISIT_LABEL[visit]}
               </Chip>
             ))}
           </div>
+          {!isBillable(visitType) ? (
+            <p className="mt-1.5 text-sm font-semibold text-muted">
+              Not paid work — no price, no payment question, and the pipeline
+              doesn&apos;t move. The customer&apos;s text says &ldquo;your{" "}
+              {visitPhrase(visitType, describeSelection(services, (main) => SERVICE_LABEL[main]))}&rdquo;.
+            </p>
+          ) : null}
         </div>
+
+        <ServicePicker value={services} onChange={setServices} />
 
         <TextField
           label="Starts"
@@ -359,6 +398,7 @@ export function JobSheet({
           onChange={(e) => setEnd(e.target.value)}
         />
 
+        {isBillable(visitType) ? (
         <TextField
           label="Price"
           type="number"
@@ -368,6 +408,7 @@ export function JobSheet({
           value={price}
           onChange={(e) => setPrice(e.target.value)}
         />
+        ) : null}
 
         <div>
           <p className="mb-1.5 text-sm font-semibold text-muted">Assigned to</p>
@@ -427,7 +468,7 @@ export function JobSheet({
             {/* Completing a job now happens through the four on-site buttons
                 above, which ask about the money. This stays for the payment
                 that turns up days later, and for correcting a wrong answer. */}
-            {job.status === "complete" ? (
+            {job.status === "complete" && isBillable(job.visitType) ? (
               <Button
                 variant={job.paidAt ? "secondary" : "primary"}
                 full
