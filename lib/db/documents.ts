@@ -97,6 +97,12 @@ function asPayments(value: unknown): Payment[] {
       ...(typeof item.providerRef === "string" && item.providerRef
         ? { providerRef: item.providerRef }
         : {}),
+      // Carried through for the same reason: the array is rebuilt and written
+      // back on every recorded payment, and a tip dropped here is a tip the
+      // crew never sees again.
+      ...(typeof item.tip === "number" && Number.isFinite(item.tip) && item.tip > 0
+        ? { tip: item.tip }
+        : {}),
     }))
     .sort((a, b) => b.receivedAt.toMillis() - a.receivedAt.toMillis());
 }

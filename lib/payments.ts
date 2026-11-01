@@ -172,7 +172,10 @@ export interface WebhookPayment {
   sessionId: string;
   documentId: string;
   orgId: string;
+  /** What was paid against the invoice — the charge less any tip. */
   amount: number;
+  /** The tip on top, in dollars. 0 when there was none. */
+  tip: number;
   /** Only "paid" is acted on; Stripe can complete a session that is still pending. */
   paid: boolean;
 }
@@ -211,7 +214,11 @@ export function readWebhookPayment(event: unknown): WebhookPayment | null {
   if (typeof amountTotal !== "number") return null;
   if (!metadata || typeof metadata !== "object") return null;
 
-  const { documentId, orgId } = metadata as { documentId?: unknown; orgId?: unknown };
+  const { documentId, orgId, tipCents } = metadata as {
+    documentId?: unknown;
+    orgId?: unknown;
+    tipCents?: unknown;
+  };
   if (typeof documentId !== "string" || !documentId) return null;
   if (typeof orgId !== "string" || !orgId) return null;
 
@@ -223,7 +230,22 @@ export function readWebhookPayment(event: unknown): WebhookPayment | null {
   }
   if (amount <= 0) return null;
 
-  return { sessionId: id, documentId, orgId, amount, paid: paymentStatus === "paid" };
+  // The tip rides in our own metadata, written when the session was created.
+  // Anything unreadable, or a "tip" that would swallow the whole charge, is
+  // treated as no tip: the full amount then counts against the invoice, which
+  // errs toward the customer having paid more of their bill, never less.
+  const tipMinor = typeof tipCents === "string" ? Number(tipCents) : Number.NaN;
+  const tipped = Number.isInteger(tipMinor) && tipMinor > 0 && tipMinor < amountTotal;
+
+  return {
+    sessionId: id,
+    documentId,
+    orgId,
+    // Subtracted in cents, so no float ever reaches the ledger.
+    amount: tipped ? fromMinorUnits(amountTotal - tipMinor) : amount,
+    tip: tipped ? fromMinorUnits(tipMinor) : 0,
+    paid: paymentStatus === "paid",
+  };
 }
 
 /**
@@ -237,4 +259,34 @@ export function readWebhookPayment(event: unknown): WebhookPayment | null {
 export function cardPaymentMethod(last4: string): string {
   const digits = last4.replace(/\D/g, "").slice(-4);
   return digits.length === 4 ? `Card ••${digits}` : "Card";
+}
+
+/**
+ * Tips.
+ *
+ * The one amount on the payment page the customer chooses. Everything else is
+ * read from the stored invoice; the tip is bounded here instead, so a link
+ * cannot be used to put an arbitrary charge through: no more than the bill
+ * itself and never more than $500. A choice that cannot be read is no tip,
+ * not an error — the customer still gets to pay what they owe.
+ */
+export const TIP_PRESETS = [10, 15, 20] as const;
+export const MAX_TIP_CENTS = 50_000;
+
+export type TipChoice = { percent: number } | { cents: number } | null | undefined;
+
+/** The tip in cents for a balance in cents. */
+export function tipCentsFor(balanceCents: number, choice: unknown): number {
+  if (!Number.isInteger(balanceCents) || balanceCents <= 0) return 0;
+  if (!choice || typeof choice !== "object") return 0;
+  const { percent, cents } = choice as { percent?: unknown; cents?: unknown };
+  let tip = 0;
+  if (typeof percent === "number") {
+    if (!(TIP_PRESETS as readonly number[]).includes(percent)) return 0;
+    tip = Math.round((balanceCents * percent) / 100);
+  } else if (typeof cents === "number") {
+    if (!Number.isInteger(cents) || cents <= 0) return 0;
+    tip = cents;
+  }
+  return Math.max(0, Math.min(tip, balanceCents, MAX_TIP_CENTS));
 }
