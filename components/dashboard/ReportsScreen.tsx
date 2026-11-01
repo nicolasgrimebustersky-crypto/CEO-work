@@ -10,6 +10,7 @@ import { useTeam } from "@/components/providers/TeamProvider";
 import { ScreenHeader } from "@/components/shell/ScreenHeader";
 import { UserChip } from "@/components/ui/Chips";
 import { Spinner } from "@/components/ui/Spinner";
+import { PayPeriodSection } from "./PayPeriodSection";
 import { fetchJobsBetween } from "@/lib/db/jobs";
 import { quoteCloseRate, subscribeAllQuotes } from "@/lib/db/quotes";
 import { formatMoney } from "@/lib/format";
@@ -176,6 +177,8 @@ export function ReportsScreen() {
                 value={`${close.decided} of ${quotes.length}`}
               />
             </div>
+
+            <PayPeriodSection jobs={jobs} documents={documents} />
 
             <Section title="Revenue by month">
               <ul className="flex flex-col gap-1.5">
