@@ -81,6 +81,7 @@ describe("where a notification lands", () => {
     "pipeline",
     "chat",
     "chatThread",
+    "tasks",
   ]);
 
   test("every event resolves to a screen the app has", () => {
