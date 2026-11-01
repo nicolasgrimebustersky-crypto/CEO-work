@@ -1,5 +1,7 @@
 import "server-only";
 
+import { pricePackages } from "@/lib/packages";
+
 import { adminAuth, adminDb } from "@/lib/server/admin";
 import { ApiError } from "@/lib/server/auth";
 import { corsHeaders } from "@/lib/server/cors";
@@ -170,6 +172,27 @@ export function portalError(request: Request, error: unknown): Response {
  * dropped: the customer is already looking at the document, and the token is
  * the one credential that would let somebody else look at it too.
  */
-export function forPortal(document: SerialDocument): SerialDocument {
-  return { ...document, shareToken: null };
+export function forPortal(
+  document: SerialDocument,
+): SerialDocument & { packageOptions: { id: string; name: string; total: number }[] } {
+  // Good / Better / Best, priced here so the website shows exactly the
+  // numbers the CRM will charge, without its own copy of the arithmetic. The
+  // website sends back only the id; the approve call prices it again.
+  const offering = document.packages.length > 0 && !document.chosenPackageId;
+  return {
+    ...document,
+    shareToken: null,
+    packageOptions: offering
+      ? pricePackages(
+          document.lineItems,
+          document.packages,
+          document.discount,
+          document.taxRatePct,
+        ).map((option) => ({
+          id: option.pkg.id,
+          name: option.pkg.name,
+          total: option.totals.total,
+        }))
+      : [],
+  };
 }
