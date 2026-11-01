@@ -1,11 +1,12 @@
 import {
-  computeTotals,
   DEFAULT_TAX_RATE_PCT,
   type BusinessDocument,
   type DocumentKind,
   type LineItem,
+  type QuotePackage,
   type Totals,
 } from "@/lib/documents";
+import { packagesProblem, storedTotals } from "@/lib/packages";
 import type { ServiceType } from "@/lib/types";
 
 /**
@@ -25,6 +26,8 @@ export interface DraftLine {
   taxable: boolean;
   /** Held as a string for the same reason every other number here is. */
   discountPct: string;
+  /** Package id on a Good / Better / Best estimate; "" means in every package. */
+  package: string;
 }
 
 export interface Draft {
@@ -40,6 +43,8 @@ export interface Draft {
   notes: string;
   /** yyyy-mm-dd, straight from <input type="date">. */
   dueAt: string;
+  /** Good / Better / Best. Empty for an ordinary document. */
+  packages: QuotePackage[];
 }
 
 /** A blank field, a stray "$" or a half-typed "1." all read as zero. */
@@ -63,6 +68,7 @@ export function blankLine(): DraftLine {
     unitPrice: "",
     taxable: true,
     discountPct: "",
+    package: "",
   };
 }
 
@@ -78,6 +84,7 @@ export function emptyDraft(kind: DocumentKind, customerId: string): Draft {
     taxRatePct: String(DEFAULT_TAX_RATE_PCT),
     notes: "",
     dueAt: "",
+    packages: [],
   };
 }
 
@@ -98,12 +105,14 @@ export function draftFrom(document: BusinessDocument): Draft {
             unitPrice: String(item.unitPrice),
             taxable: item.taxable,
             discountPct: item.discountPct ? String(item.discountPct) : "",
+            package: item.package ?? "",
           }))
         : [blankLine()],
     discount: document.discount > 0 ? String(document.discount) : "",
     taxRatePct: String(document.taxRatePct),
     notes: document.notes,
     dueAt: document.dueAt ? isoDate(document.dueAt.toDate()) : "",
+    packages: document.chosenPackageId ? [] : document.packages,
   };
 }
 
@@ -138,12 +147,17 @@ export function lineItemsFrom(draft: Draft): LineItem[] {
       unitPrice: toNumber(line.unitPrice),
       taxable: line.taxable,
       discountPct: toNumber(line.discountPct),
+      ...(line.package && draft.packages.some((pkg) => pkg.id === line.package)
+        ? { package: line.package }
+        : {}),
     }));
 }
 
 export function draftTotals(draft: Draft): Totals {
-  return computeTotals(
+  // With packages, the first package's price — what will be stored.
+  return storedTotals(
     lineItemsFrom(draft),
+    draft.packages,
     toNumber(draft.discount),
     toNumber(draft.taxRatePct),
   );
@@ -161,5 +175,5 @@ export function draftProblem(draft: Draft): string | null {
   if (items.some((item) => item.name === "")) return "Every line needs a service name.";
   if (items.some((item) => item.quantity <= 0)) return "Quantity has to be more than zero.";
   if (items.some((item) => item.unitPrice < 0)) return "A price cannot be negative.";
-  return null;
+  return packagesProblem(items, draft.packages);
 }

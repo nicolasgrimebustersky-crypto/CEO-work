@@ -165,9 +165,20 @@ export function serializeDocument(hit: DocumentSnapshot): SerialDocument | null 
             unitPrice: num(item.unitPrice),
             discountPct: num(item.discountPct),
             taxable: item.taxable !== false,
+            ...(text(item.package) ? { package: text(item.package) } : {}),
           };
         })
       : [],
+    packages: Array.isArray(data.packages)
+      ? data.packages
+          .map((raw) => (raw ?? {}) as Record<string, unknown>)
+          .filter((pkg) => text(pkg.id))
+          .map((pkg) => ({ id: text(pkg.id), name: text(pkg.name) }))
+      : [],
+    chosenPackageId: text(data.chosenPackageId) || null,
+    // The full offer is kept on the crew's side only; the customer's page
+    // shows what they chose.
+    offeredLines: [],
     discount: num(data.discount),
     taxRatePct: num(data.taxRatePct, DEFAULT_TAX_RATE_PCT),
     subtotal: num(data.subtotal),

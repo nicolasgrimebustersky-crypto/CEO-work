@@ -9,6 +9,7 @@ import {
   lineTotal,
   type BusinessDocument,
 } from "@/lib/documents";
+import { pricePackages } from "@/lib/packages";
 import { formatDateOnly, formatMoneyExact, formatPhone } from "@/lib/format";
 import type { Customer } from "@/lib/types";
 import {
@@ -158,6 +159,10 @@ export function buildDocumentPdf(
 
   /* ---------------------------------------------------------------- lines */
 
+  // Good / Better / Best not yet chosen: lines are marked with their package
+  // and the totals become one price per package. See lib/packages.ts.
+  const offering = document.packages.length > 0 && !document.chosenPackageId;
+
   const headOptions = { size: 8, font: "Helvetica-Bold" as const, color: INK };
   pdf.text("SERVICE", MARGIN, y, headOptions);
   pdf.text("QTY", COL_QTY, y, { ...headOptions, align: "right" });
@@ -169,7 +174,14 @@ export function buildDocumentPdf(
 
   for (const item of document.lineItems) {
     const rowTop = y;
-    pdf.text(lineLabel(item), MARGIN, y, { size: 10.5, font: "Helvetica-Bold", color: BODY });
+    const packageName = offering
+      ? document.packages.find((pkg) => pkg.id === item.package)?.name
+      : undefined;
+    pdf.text(packageName ? `${lineLabel(item)} (${packageName} only)` : lineLabel(item), MARGIN, y, {
+      size: 10.5,
+      font: "Helvetica-Bold",
+      color: BODY,
+    });
     pdf.text(String(item.quantity), COL_QTY, y, { size: 10, color: BODY, align: "right" });
     pdf.text(formatMoneyExact(item.unitPrice), COL_PRICE, y, {
       size: 10,
@@ -241,63 +253,81 @@ export function buildDocumentPdf(
     y += 16;
   };
 
-  y += 4;
-  money("Subtotal", formatMoneyExact(document.subtotal));
+  if (offering) {
+    y += 4;
+    pdf.text("CHOOSE ONE OPTION", totalsLeft, y, { size: 9, font: "Helvetica-Bold", color: MONEY });
+    y += 16;
+    for (const option of pricePackages(
+      document.lineItems,
+      document.packages,
+      document.discount,
+      document.taxRatePct,
+    )) {
+      money(option.pkg.name, formatMoneyExact(option.totals.total), true);
+    }
+    if (document.taxRatePct > 0) {
+      pdf.text(`Prices include ${document.taxRatePct}% tax.`, totalsLeft, y, { size: 9, color: MUTED });
+      y += 14;
+    }
+  } else {
+    y += 4;
+    money("Subtotal", formatMoneyExact(document.subtotal));
 
-  const lineDiscounts = documentLineDiscounts(document.lineItems);
-  if (lineDiscounts > 0) {
-    pdf.text("Line discounts", totalsLeft, y, {
-      size: 10,
+    const lineDiscounts = documentLineDiscounts(document.lineItems);
+    if (lineDiscounts > 0) {
+      pdf.text("Line discounts", totalsLeft, y, {
+        size: 10,
+        font: "Helvetica-Bold",
+        color: MONEY,
+      });
+      pdf.text(`-${formatMoneyExact(lineDiscounts)}`, COL_AMOUNT, y, {
+        size: 10,
+        font: "Helvetica-Bold",
+        color: MONEY,
+        align: "right",
+      });
+      y += 16;
+    }
+
+    if (document.discount > 0) money("Discount", `-${formatMoneyExact(document.discount)}`);
+    money(`Tax (${document.taxRatePct}%)`, formatMoneyExact(document.taxAmount));
+
+    // The one number the customer is looking for.
+    y += 4;
+    pdf.rect(totalsLeft - 12, y, 262, 32, MONEY_WASH);
+    pdf.rect(totalsLeft - 12, y, 262, 1.4, MONEY);
+    pdf.rect(totalsLeft - 12, y + 30.6, 262, 1.4, MONEY);
+    pdf.text(document.amountPaid > 0 ? "Total" : "Total due", totalsLeft, y + 10, {
+      size: 12.5,
       font: "Helvetica-Bold",
-      color: MONEY,
+      color: BODY,
     });
-    pdf.text(`-${formatMoneyExact(lineDiscounts)}`, COL_AMOUNT, y, {
-      size: 10,
+    pdf.text(formatMoneyExact(document.total), COL_AMOUNT, y + 10, {
+      size: 12.5,
       font: "Helvetica-Bold",
-      color: MONEY,
+      color: BODY,
       align: "right",
     });
-    y += 16;
-  }
+    y += 44;
 
-  if (document.discount > 0) money("Discount", `-${formatMoneyExact(document.discount)}`);
-  money(`Tax (${document.taxRatePct}%)`, formatMoneyExact(document.taxAmount));
+    // The line the customer repeats to their spouse. Everything above it is
+    // arithmetic; this is the one that makes the discount land.
+    const saved = documentSaved(document);
+    if (saved > 0) {
+      pdf.rect(totalsLeft - 12, y - 6, 262, 24, MONEY);
+      pdf.text(`You saved ${formatMoneyExact(saved)}`, totalsLeft + 119, y + 1, {
+        size: 11.5,
+        font: "Helvetica-Bold",
+        color: INK_ON_MONEY,
+        align: "center",
+      });
+      y += 30;
+    }
 
-  // The one number the customer is looking for.
-  y += 4;
-  pdf.rect(totalsLeft - 12, y, 262, 32, MONEY_WASH);
-  pdf.rect(totalsLeft - 12, y, 262, 1.4, MONEY);
-  pdf.rect(totalsLeft - 12, y + 30.6, 262, 1.4, MONEY);
-  pdf.text(document.amountPaid > 0 ? "Total" : "Total due", totalsLeft, y + 10, {
-    size: 12.5,
-    font: "Helvetica-Bold",
-    color: BODY,
-  });
-  pdf.text(formatMoneyExact(document.total), COL_AMOUNT, y + 10, {
-    size: 12.5,
-    font: "Helvetica-Bold",
-    color: BODY,
-    align: "right",
-  });
-  y += 44;
-
-  // The line the customer repeats to their spouse. Everything above it is
-  // arithmetic; this is the one that makes the discount land.
-  const saved = documentSaved(document);
-  if (saved > 0) {
-    pdf.rect(totalsLeft - 12, y - 6, 262, 24, MONEY);
-    pdf.text(`You saved ${formatMoneyExact(saved)}`, totalsLeft + 119, y + 1, {
-      size: 11.5,
-      font: "Helvetica-Bold",
-      color: INK_ON_MONEY,
-      align: "center",
-    });
-    y += 30;
-  }
-
-  if (document.amountPaid > 0) {
-    money("Paid", `-${formatMoneyExact(document.amountPaid)}`);
-    money("Balance due", formatMoneyExact(document.balanceDue), true);
+    if (document.amountPaid > 0) {
+      money("Paid", `-${formatMoneyExact(document.amountPaid)}`);
+      money("Balance due", formatMoneyExact(document.balanceDue), true);
+    }
   }
 
   /* ---------------------------------------------------------------- notes */

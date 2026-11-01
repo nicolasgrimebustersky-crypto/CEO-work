@@ -31,8 +31,15 @@ export function QuoteActions({
   token,
   today,
   alreadyAnswered,
+  packages = [],
 }: {
   token: string;
+  /**
+   * Good / Better / Best, priced on the server. Empty for an ordinary
+   * estimate. The customer sends back only the id they chose; the server
+   * prices it again from the stored estimate.
+   */
+  packages?: { id: string; name: string; total: string }[];
   /** Today in the business's timezone, decided on the server. */
   today: string;
   alreadyAnswered: "accepted" | "declined" | null;
@@ -45,6 +52,7 @@ export function QuoteActions({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasDrawn, setHasDrawn] = useState(false);
+  const [packageId, setPackageId] = useState<string>("");
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawing = useRef(false);
@@ -145,6 +153,10 @@ export function QuoteActions({
   }
 
   function onApprove() {
+    if (packages.length > 0 && !packageId) {
+      setError("Please choose an option first.");
+      return;
+    }
     const canvas = canvasRef.current;
     if (!canvas || !hasDrawn) {
       setError("Please draw your signature in the box.");
@@ -156,6 +168,7 @@ export function QuoteActions({
       signature: canvas.toDataURL("image/png"),
       requestedDate: date,
       message,
+      ...(packageId ? { packageId } : {}),
     });
   }
 
@@ -240,6 +253,34 @@ export function QuoteActions({
           // scrollable panel are buttons a customer does not know are there.
           <div className="flex max-h-[75vh] flex-col">
             <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
+            {packages.length > 0 ? (
+              <fieldset className="mb-4">
+                <legend className="mb-2 text-lg font-bold text-ink">Choose your option</legend>
+                <div className="flex flex-col gap-2">
+                  {packages.map((option) => (
+                    <label
+                      key={option.id}
+                      className={`tap-target flex cursor-pointer items-center justify-between gap-3 rounded-2xl border px-4 py-3 ${
+                        packageId === option.id ? "border-accent bg-accent/15" : "border-line bg-surface-2"
+                      }`}
+                    >
+                      <span className="flex items-center gap-3">
+                        <input
+                          type="radio"
+                          name="package"
+                          value={option.id}
+                          checked={packageId === option.id}
+                          onChange={() => setPackageId(option.id)}
+                          className="size-5 accent-[var(--color-accent)]"
+                        />
+                        <span className="text-base font-bold text-ink">{option.name}</span>
+                      </span>
+                      <span className="text-base font-extrabold text-money tabular-nums">{option.total}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            ) : null}
             <p className="mb-3 text-lg font-bold text-ink">Sign to approve</p>
 
             <label className="mb-1.5 block text-sm font-bold text-muted" htmlFor="signed-name">

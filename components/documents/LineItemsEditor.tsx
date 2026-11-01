@@ -95,6 +95,28 @@ export function LineItemsEditor({
                 </button>
               </div>
 
+              {draft.packages.length > 0 ? (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5" role="group" aria-label={`Line ${index + 1} package`}>
+                  <span className="text-xs font-bold text-muted">In:</span>
+                  {[{ id: "", name: "All" }, ...draft.packages].map((pkg) => (
+                    <button
+                      key={pkg.id || "all"}
+                      type="button"
+                      disabled={disabled}
+                      aria-pressed={line.package === pkg.id}
+                      onClick={() => patchLine(line.id, { package: pkg.id })}
+                      className={`rounded-full border px-2.5 py-1 text-sm font-bold ${
+                        line.package === pkg.id
+                          ? "border-accent bg-accent text-accent-ink"
+                          : "border-line bg-surface-2 text-ink"
+                      }`}
+                    >
+                      {pkg.name || "Unnamed"}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
               <textarea
                 value={line.description}
                 onChange={(e) => patchLine(line.id, { description: e.target.value })}
