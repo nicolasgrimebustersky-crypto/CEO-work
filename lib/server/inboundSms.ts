@@ -89,6 +89,41 @@ export async function recordUnmatchedInbound(input: {
 }
 
 /**
+ * Files an old unmatched message, unless it is already on the screen.
+ *
+ * Unlike recordUnmatchedInbound this never touches an existing row: running
+ * the import twice must not bring back a message somebody already dismissed.
+ * Returns whether it was new.
+ */
+export async function importUnmatchedInbound(input: {
+  from: string;
+  body: string;
+  messageSid: string;
+  receivedAt: Date;
+}): Promise<boolean> {
+  try {
+    await adminDb()
+      .collection(COLLECTION)
+      .doc(input.messageSid)
+      .create({
+        orgId: DEFAULT_ORG_ID,
+        from: input.from,
+        body: input.body,
+        receivedAt: Timestamp.fromDate(input.receivedAt),
+        handled: false,
+        handledBy: null,
+        handledAt: null,
+        customerId: null,
+      });
+    return true;
+  } catch (error) {
+    // 6 = ALREADY_EXISTS: filed by the webhook or an earlier import.
+    if ((error as { code?: unknown })?.code === 6) return false;
+    throw error;
+  }
+}
+
+/**
  * Marks an unmatched message dealt with.
  *
  * `customerId` is set when the number became a customer, and left null when

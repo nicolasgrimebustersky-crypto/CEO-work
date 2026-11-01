@@ -119,6 +119,39 @@ export async function sendSms(rawTo: string, body: string): Promise<SendResult> 
 }
 
 /**
+ * Texts customers sent to the business, newest first, from Twilio's log.
+ *
+ * Every message on the account is read and outbound ones dropped, rather than
+ * filtering on `to`, because the business number is sent through a messaging
+ * service and TWILIO_PHONE_NUMBER is not guaranteed to be the number itself.
+ */
+export async function listInboundMessages(options: {
+  since: Date;
+  limit: number;
+}): Promise<{
+  replies: { sid: string; from: string; body: string; sentAt: number }[];
+  /** The limit was reached, so older messages were not read. */
+  reachedLimit: boolean;
+}> {
+  const messages = await client().messages.list({
+    dateSentAfter: options.since,
+    limit: options.limit,
+    // Twilio's maximum page, so a year of messages is a handful of requests
+    // rather than a hundred.
+    pageSize: 1000,
+  });
+  const replies = messages
+    .filter((message) => message.direction === "inbound")
+    .map((message) => ({
+      sid: message.sid,
+      from: message.from ?? "",
+      body: message.body ?? "",
+      sentAt: (message.dateSent ?? message.dateCreated)?.getTime() ?? Number.NaN,
+    }));
+  return { replies, reachedLimit: messages.length >= options.limit };
+}
+
+/**
  * Validates that a webhook really came from Twilio. Without this the inbound
  * endpoint would accept forged messages from anyone who guesses the URL — and a
  * forged message writes into a customer's timeline and buzzes both phones.

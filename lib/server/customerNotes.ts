@@ -112,12 +112,18 @@ export async function appendNote(
     kind: NoteKind;
     authorUid: string;
     authorName: string;
+    /**
+     * A fixed id, for a note that must not be filed twice. Customer replies
+     * use their Twilio message SID (see lib/replyImport.ts) so an import of
+     * old replies recognises one the webhook already delivered.
+     */
+    id?: string;
   },
-  options: { markContacted?: boolean } = {},
+  options: { markContacted?: boolean; markUnseen?: boolean } = {},
 ): Promise<void> {
   const patch: Record<string, unknown> = {
     notes: FieldValue.arrayUnion({
-      id: crypto.randomUUID(),
+      id: note.id || crypto.randomUUID(),
       text: note.text,
       kind: note.kind,
       authorUid: note.authorUid,
@@ -135,7 +141,76 @@ export async function appendNote(
     patch.lastContactedByName = note.authorName;
   }
 
+  // The blue dot on the client list, the same one a new website lead gets.
+  // Cleared by opening the record.
+  if (options.markUnseen) patch.unseenSince = Timestamp.now();
+
   await adminDb().collection("customers").doc(customerId).update(patch);
+}
+
+/**
+ * Files replies that arrived before the webhook was connected, in one write.
+ *
+ * Each note keeps the time the customer actually sent it, so the timeline and
+ * the Messages screen put it where it belongs rather than at the top as if it
+ * arrived today. `lastContactedAt` is left alone: that field is about us
+ * reaching them, and an import is not contact.
+ */
+export async function appendImportedReplies(
+  customerId: string,
+  notes: { id: string; text: string; sentAt: number }[],
+  author: { name: string },
+): Promise<void> {
+  if (notes.length === 0) return;
+  await adminDb()
+    .collection("customers")
+    .doc(customerId)
+    .update({
+      notes: FieldValue.arrayUnion(
+        ...notes.map((note) => ({
+          id: note.id,
+          text: note.text,
+          kind: "sms_in",
+          authorUid: "customer",
+          authorName: author.name,
+          createdAt: Timestamp.fromMillis(note.sentAt),
+        })),
+      ),
+      unseenSince: Timestamp.now(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+}
+
+/**
+ * Every customer with the ids of the notes already on their timeline.
+ *
+ * One scan for a whole import, rather than findCustomerByPhone's scan per
+ * message. Scoped to one org: another business's customer is not ours to
+ * file a reply on.
+ */
+export async function customersForReplyImport(
+  orgId: string,
+): Promise<{ id: string; phone: string; name: string; noteIds: Set<string> }[]> {
+  const snap = await adminDb().collection("customers").get();
+  const out: { id: string; phone: string; name: string; noteIds: Set<string> }[] = [];
+  for (const doc of snap.docs) {
+    const data = doc.data();
+    if (asOrgId(data.orgId) !== orgId) continue;
+    const notes = Array.isArray(data.notes) ? data.notes : [];
+    const noteIds = new Set<string>();
+    for (const note of notes) {
+      if (note && typeof note === "object" && typeof note.id === "string") noteIds.add(note.id);
+    }
+    const first = typeof data.firstName === "string" ? data.firstName : "";
+    const last = typeof data.lastName === "string" ? data.lastName : "";
+    out.push({
+      id: doc.id,
+      phone: typeof data.phone === "string" ? data.phone : "",
+      name: `${first} ${last}`.trim() || "Customer",
+      noteIds,
+    });
+  }
+  return out;
 }
 
 /**

@@ -54,6 +54,16 @@ export const SMS_TEST_LIMIT: RateLimitRule = {
 };
 
 /**
+ * Importing old replies reads Twilio's whole log. It files nothing twice, so
+ * running it again is harmless — this only stops a stuck button hammering it.
+ */
+export const REPLY_IMPORT_LIMIT: RateLimitRule = {
+  max: 10,
+  windowMs: 60 * 60 * 1000,
+  label: "reply imports",
+};
+
+/**
  * Each draft is a model call the business pays for, and the button sits on a
  * screen somebody taps while distracted. Thirty an hour is far more estimates
  * than two people can write in an hour, and a low enough ceiling that a stuck
