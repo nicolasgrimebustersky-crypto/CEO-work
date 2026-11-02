@@ -1,4 +1,4 @@
-import { checkPayable, canTakeCardPayments } from "@/lib/payments";
+import { checkPayable, canTakeCardPayments, tipCentsFor, toMinorUnits } from "@/lib/payments";
 import { findByShareToken } from "@/lib/server/publicDocument";
 import { ApiError } from "@/lib/server/auth";
 import { consumeRateLimit, PAY_START_LIMIT } from "@/lib/server/rateLimit";
@@ -34,7 +34,7 @@ function bad(status: number, error: string): Response {
 }
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ token: string }> },
 ): Promise<Response> {
   const { token } = await params;
@@ -67,7 +67,17 @@ export async function POST(
     return bad(503, "We couldn't start the payment just now. Please try again, or call us.");
   }
 
-  const result = await createCheckoutSession(document, customer?.email ?? "");
+  // The one thing the browser may choose. tipCentsFor accepts only the offered
+  // percentages or a bounded whole-cent amount; anything else is no tip.
+  const body = (await request.json().catch(() => null)) as { tip?: unknown } | null;
+  let tipCents = 0;
+  try {
+    tipCents = tipCentsFor(toMinorUnits(document.balanceDue), body?.tip);
+  } catch {
+    tipCents = 0;
+  }
+
+  const result = await createCheckoutSession(document, customer?.email ?? "", undefined, tipCents);
   if (!result.url) {
     // The reason is already logged. A customer gets a way forward instead of a
     // Stripe error message they can do nothing with.

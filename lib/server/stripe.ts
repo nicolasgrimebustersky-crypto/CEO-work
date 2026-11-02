@@ -71,6 +71,8 @@ export async function createCheckoutSession(
   document: SerialDocument,
   customerEmail: string,
   config: StripeConfig = stripeConfig(),
+  /** Already bounded by tipCentsFor; 0 for no tip. */
+  tipCents = 0,
 ): Promise<CheckoutResult> {
   if (!config.secretKey || !config.siteUrl) {
     return { url: "", problem: "Card payments are not configured on this deployment." };
@@ -105,6 +107,16 @@ export async function createCheckoutSession(
     "metadata[orgId]": document.orgId,
     client_reference_id: document.id,
   });
+  // A second line, so the receipt shows the bill and the tip apart, and the
+  // amount in metadata so the webhook can split them back out.
+  const tip = Number.isInteger(tipCents) && tipCents > 0 ? tipCents : 0;
+  if (tip > 0) {
+    body.set("line_items[1][quantity]", "1");
+    body.set("line_items[1][price_data][currency]", "usd");
+    body.set("line_items[1][price_data][unit_amount]", String(tip));
+    body.set("line_items[1][price_data][product_data][name]", "Tip for the crew");
+    body.set("metadata[tipCents]", String(tip));
+  }
   if (customerEmail) body.set("customer_email", customerEmail);
 
   const controller = new AbortController();
@@ -117,7 +129,9 @@ export async function createCheckoutSession(
         "Content-Type": "application/x-www-form-urlencoded",
         // Stripe replays a repeated key rather than creating a second session,
         // so a double-tapped button cannot open two checkouts for one balance.
-        "Idempotency-Key": `doc_${document.id}_${amountCents}`,
+        // The tip is part of the key: changing it is a different checkout, not
+        // a retry of the last one.
+        "Idempotency-Key": `doc_${document.id}_${amountCents}_${tip}`,
       },
       body,
       signal: controller.signal,
@@ -229,6 +243,7 @@ export async function recordCardPayment(
         recordedByName: "Stripe",
         provider: "stripe",
         providerRef: payment.sessionId,
+        ...(payment.tip > 0 ? { tip: payment.tip } : {}),
       };
 
       const payments = [...existing, entry];

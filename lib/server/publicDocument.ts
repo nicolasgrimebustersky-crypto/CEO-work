@@ -260,3 +260,58 @@ export async function customerFor(customerId: string): Promise<SerialCustomer | 
   const snap = await adminDb().collection("customers").doc(customerId).get();
   return serializeCustomer(snap);
 }
+
+/** Who did the work, as the customer's page shows it: first names only. */
+export interface CrewMember {
+  firstName: string;
+}
+
+/**
+ * The crew on this customer's most recent job, for the "your crew" line above
+ * the tip.
+ *
+ * First names only, read through the Admin SDK and never anything else off
+ * the profile: the page is public to anyone holding the link, and a crew
+ * member's email, phone or surname is not the customer's to see. Empty when
+ * there is no job, so the page simply says nothing about a crew.
+ *
+ * Queried on customerId alone and sorted here, because adding a status filter
+ * or an orderBy would need a composite index for a two-person crew's handful
+ * of jobs per customer.
+ */
+export async function crewForCustomer(customerId: string, orgId: string): Promise<CrewMember[]> {
+  if (!customerId) return [];
+  try {
+    const db = adminDb();
+    const jobs = await db.collection("jobs").where("customerId", "==", customerId).get();
+    const candidates = jobs.docs
+      .map((doc) => doc.data())
+      .filter((job) => asOrgId(job.orgId) === orgId && job.status !== "cancelled")
+      .filter((job) => Array.isArray(job.assignedTo) && job.assignedTo.length > 0);
+    const millis = (value: unknown) =>
+      value && typeof (value as { toMillis?: unknown }).toMillis === "function"
+        ? (value as { toMillis: () => number }).toMillis()
+        : 0;
+    // Finished work first — that is the crew being thanked — then the latest.
+    candidates.sort((a, b) => {
+      const doneA = a.status === "complete" ? 1 : 0;
+      const doneB = b.status === "complete" ? 1 : 0;
+      if (doneA !== doneB) return doneB - doneA;
+      return millis(b.completedAt ?? b.scheduledStart) - millis(a.completedAt ?? a.scheduledStart);
+    });
+    const uids = (candidates[0]?.assignedTo ?? []).filter(
+      (uid: unknown): uid is string => typeof uid === "string" && uid.length > 0,
+    );
+    const crew: CrewMember[] = [];
+    for (const uid of uids.slice(0, 4)) {
+      const profile = await db.collection("users").doc(uid).get();
+      const name = text(profile.data()?.displayName).split(/\s+/)[0] ?? "";
+      if (name) crew.push({ firstName: name });
+    }
+    return crew;
+  } catch (error) {
+    // A missing crew line is cosmetic. Never fail the customer's page over it.
+    console.error("Could not read the crew for a shared document:", error);
+    return [];
+  }
+}

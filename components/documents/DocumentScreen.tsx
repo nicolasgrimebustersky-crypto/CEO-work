@@ -738,6 +738,11 @@ export function DocumentScreen() {
                             <span className="font-semibold text-muted">
                               {payment.method ? ` · ${payment.method}` : ""}
                             </span>
+                            {payment.tip ? (
+                              <span className="font-semibold text-money">
+                                {` + ${formatMoneyExact(payment.tip)} tip`}
+                              </span>
+                            ) : null}
                           </span>
                           <span className="block text-sm font-semibold text-muted">
                             {formatDateOnly(payment.receivedAt)} · logged by{" "}
