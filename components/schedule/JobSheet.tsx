@@ -35,6 +35,7 @@ import {
   visitTitle,
   type VisitType,
 } from "@/lib/visitTypes";
+import { JobChecklist } from "./JobChecklist";
 import { JobPhotos } from "./JobPhotos";
 import { JobStatusActions } from "./JobStatusActions";
 import { servicesLabel } from "@/lib/serviceText";
@@ -361,6 +362,12 @@ export function JobSheet({
         {job ? (
           <div className="border-b border-line pb-4">
             <JobStatusActions job={job} customer={customer} onSignedOff={onClose} />
+          </div>
+        ) : null}
+
+        {job ? (
+          <div className="border-b border-line pb-4">
+            <JobChecklist job={job} />
           </div>
         ) : null}
 
