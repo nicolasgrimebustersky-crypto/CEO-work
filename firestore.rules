@@ -412,7 +412,11 @@ service cloud.firestore {
         && data.price is number
         && data.price >= 0
         && data.customerId is string
-        && data.assignedTo is list;
+        && data.assignedTo is list
+        // The on-site checklist (lib/checklists.ts). Optional: jobs saved
+        // before it existed have none. Capped as a runaway guard.
+        && (!('checklist' in data)
+            || (data.checklist is list && data.checklist.size() <= 60));
     }
 
     // Estimates and invoices share one shape and one collection, so one check

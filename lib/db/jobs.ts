@@ -15,6 +15,7 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 
+import { asChecklist, fromSteps, templateSteps, type ChecklistItem } from "@/lib/checklists";
 import { isDemoMode } from "@/lib/demo/enabled";
 import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
@@ -67,6 +68,7 @@ export function toJob(snap: QueryDocumentSnapshot<DocumentData>): Job {
     beforePhotos: asPhotos(data.beforePhotos),
     afterPhotos: asPhotos(data.afterPhotos),
     jobNotes: typeof data.jobNotes === "string" ? data.jobNotes : "",
+    checklist: asChecklist(data.checklist),
     enRouteAt: data.enRouteAt instanceof Timestamp ? data.enRouteAt : null,
     enRouteBy: typeof data.enRouteBy === "string" ? data.enRouteBy : null,
     startedAt: data.startedAt instanceof Timestamp ? data.startedAt : null,
@@ -212,6 +214,9 @@ export async function createJob(input: NewJobInput, author: Author): Promise<str
     beforePhotos: [],
     afterPhotos: [],
     jobNotes: input.jobNotes,
+    // Every new job starts with the usual steps for what it is; the crew can
+    // add, remove or tick from there.
+    checklist: fromSteps(templateSteps(input)),
     orgId: DEFAULT_ORG_ID,
     completedAt: null,
     completedBy: null,
@@ -237,6 +242,20 @@ async function writeJob(jobId: string, patch: Record<string, unknown>): Promise<
     return;
   }
   await updateDoc(doc(getDb(), COLLECTIONS.jobs, jobId), patch);
+}
+
+/** Replaces the whole list: it is small, and a merge of arrays is not a thing Firestore does. */
+export async function setJobChecklist(
+  jobId: string,
+  checklist: ChecklistItem[],
+  author: Author,
+): Promise<void> {
+  await writeJob(jobId, {
+    checklist,
+    updatedAt: serverTimestamp(),
+    updatedBy: author.uid,
+    updatedByName: author.displayName,
+  });
 }
 
 export type JobPatch = Partial<{
