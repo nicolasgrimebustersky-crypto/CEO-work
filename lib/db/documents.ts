@@ -93,7 +93,9 @@ function asPayments(value: unknown): Payment[] {
       // array from this read and write it back, so one crew member recording
       // a check (or deleting any payment) erased the session id from the
       // card entry beside it and re-armed the double credit.
-      ...(item.provider === "stripe" ? { provider: "stripe" as const } : {}),
+      ...(item.provider === "stripe" || item.provider === "venmo"
+        ? { provider: item.provider as "stripe" | "venmo" }
+        : {}),
       ...(typeof item.providerRef === "string" && item.providerRef
         ? { providerRef: item.providerRef }
         : {}),

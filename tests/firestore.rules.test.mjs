@@ -747,6 +747,18 @@ describe("jobs", () => {
   });
 });
 
+describe("venmo payments", () => {
+  test("crew can read what came in; nobody writes from a phone", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "venmoPayments/e1"), { orgId: "grime-busters", payerName: "Larry", amount: 45, status: "needs_match" });
+    });
+    await assertSucceeds(getDoc(doc(alice, "venmoPayments/e1")));
+    await assertFails(getDoc(doc(mallory, "venmoPayments/e1")));
+    await assertFails(updateDoc(doc(alice, "venmoPayments/e1"), { status: "applied" }));
+    await assertFails(setDoc(doc(alice, "venmoPayments/e2"), { orgId: "grime-busters", status: "applied" }));
+  });
+});
+
 /* ------------------------------------------------------------------ quotes */
 
 describe("quotes", () => {
