@@ -13,7 +13,7 @@ test("a handle in any shape becomes the bare username", () => {
 });
 
 test("Nicolas's handle works the same", () => {
-  assert.equal(new URL(venmoPayUrl("@NicolasTimmons", 120, "Invoice 8904")).pathname, "/NicolasTimmons");
+  assert.equal(new URL(venmoPayUrl("https://www.venmo.com/u/grimebustersky", 120, "Invoice 8904")).pathname, "/grimebustersky");
 });
 
 test("the link fills in the amount and names the invoice", () => {
