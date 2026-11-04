@@ -22,10 +22,10 @@ const { checkVenmoSignature, decodeHeader } = await import("../lib/venmoSignatur
 describe("reading a Venmo email", () => {
   test("a payment received: who, how much, and the note", () => {
     const p = parseVenmoEmail({
-      subject: "Larry Lupinski paid you $45.00",
-      text: "Larry Lupinski paid you\n$45.00\nmowing 10/31\nSee transaction\nVenmo is a service of PayPal",
+      subject: "Pat Rivera paid you $45.00",
+      text: "Pat Rivera paid you\n$45.00\nmowing 10/31\nSee transaction\nVenmo is a service of PayPal",
     });
-    assert.deepEqual(p, { payerName: "Larry Lupinski", amount: 45, note: "mowing 10/31" });
+    assert.deepEqual(p, { payerName: "Pat Rivera", amount: 45, note: "mowing 10/31" });
   });
 
   // The layout of a real Venmo "paid you" email (Sept 2026; names and numbers made up), as its plain
@@ -49,7 +49,7 @@ describe("reading a Venmo email", () => {
 
   test("a note with an invoice number from the Pay with Venmo link", () => {
     assert.equal(
-      parseVenmoEmail({ subject: "Larry Lupinski paid you $45.00", text: REAL("Invoice 8904 · Grime Busters").replace("Acme Lawn Co", "Larry Lupinski") }).note,
+      parseVenmoEmail({ subject: "Pat Rivera paid you $45.00", text: REAL("Invoice 8904 · Grime Busters").replace("Acme Lawn Co", "Pat Rivera") }).note,
       "Invoice 8904 · Grime Busters",
     );
   });
@@ -59,28 +59,28 @@ describe("reading a Venmo email", () => {
   });
 
   test("a forwarded copy still reads", () => {
-    assert.equal(parseVenmoEmail({ subject: "Fwd: Tiffany Blackwell paid you $42.00", text: "" }).payerName, "Tiffany Blackwell");
+    assert.equal(parseVenmoEmail({ subject: "Fwd: Jo Park paid you $42.00", text: "" }).payerName, "Jo Park");
   });
 
   test("money going out, requests and other Venmo mail are not payments received", () => {
     for (const subject of [
-      "You paid Larry Lupinski $45.00",
-      "Larry Lupinski requests $45.00",
+      "You paid Pat Rivera $45.00",
+      "Pat Rivera requests $45.00",
       "Your weekly Venmo summary",
-      "Larry Lupinski paid you",
+      "Pat Rivera paid you",
     ]) {
       assert.equal(parseVenmoEmail({ subject, text: "" }), null, subject);
     }
   });
 
   test("no note is an empty note, not boilerplate", () => {
-    assert.equal(noteFromBody("Larry paid you\n$45.00\nSee transaction\nVenmo", "Larry"), "");
+    assert.equal(noteFromBody("Pat paid you\n$45.00\nSee transaction\nVenmo", "Pat"), "");
   });
 });
 
 /* ----------------------------------------------------------- matching */
 
-const bill = (over) => ({ kind: "job", id: "j", customerId: "c", customerName: "Larry Lupinski", owed: 45, at: 0, ...over });
+const bill = (over) => ({ kind: "job", id: "j", customerId: "c", customerName: "Pat Rivera", owed: 45, at: 0, ...over });
 
 describe("choosing the bill", () => {
   test("an invoice number in the note wins", () => {
@@ -96,25 +96,25 @@ describe("choosing the bill", () => {
   });
 
   test("name plus exactly one bill for exactly this amount", () => {
-    const bills = [bill({ id: "j1", owed: 45 }), bill({ id: "j2", owed: 90 }), bill({ id: "j3", customerId: "c2", customerName: "Brian Smith", owed: 45 })];
-    assert.equal(matchVenmoPayment({ payerName: "larry  LUPINSKI", amount: 45, note: "" }, bills).bill?.id, "j1");
+    const bills = [bill({ id: "j1", owed: 45 }), bill({ id: "j2", owed: 90 }), bill({ id: "j3", customerId: "c2", customerName: "Sam Okafor", owed: 45 })];
+    assert.equal(matchVenmoPayment({ payerName: "pat  RIVERA", amount: 45, note: "" }, bills).bill?.id, "j1");
   });
 
   test("two bills for the same amount: nobody guesses", () => {
     const bills = [bill({ id: "j1" }), bill({ id: "j2" })];
-    const r = matchVenmoPayment({ payerName: "Larry Lupinski", amount: 45, note: "" }, bills);
+    const r = matchVenmoPayment({ payerName: "Pat Rivera", amount: 45, note: "" }, bills);
     assert.equal(r.bill, null);
     assert.equal(r.suggestions.length, 2);
   });
 
   test("two clients with the same name: nobody guesses", () => {
     const bills = [bill({ id: "j1", customerId: "a" }), bill({ id: "j2", customerId: "b", owed: 90 })];
-    assert.equal(matchVenmoPayment({ payerName: "Larry Lupinski", amount: 45, note: "" }, bills).bill, null);
+    assert.equal(matchVenmoPayment({ payerName: "Pat Rivera", amount: 45, note: "" }, bills).bill, null);
   });
 
   test("a name nobody has is suggested by amount instead", () => {
     const bills = [bill({ id: "j1", at: 1 }), bill({ id: "j2", customerName: "Ann S", owed: 45, at: 2 })];
-    const r = matchVenmoPayment({ payerName: "Mrs Lupinski", amount: 45, note: "" }, bills);
+    const r = matchVenmoPayment({ payerName: "Mrs Rivera", amount: 45, note: "" }, bills);
     assert.equal(r.bill, null);
     assert.deepEqual(r.suggestions.map((s) => s.id), ["j2", "j1"]);
   });
@@ -157,7 +157,7 @@ describe("Venmo's DKIM signature", () => {
     e.code = "ENOTFOUND";
     throw e;
   };
-  const message = (from, subject, body = "Larry Lupinski paid you\r\n$45.00\r\nmowing\r\n") =>
+  const message = (from, subject, body = "Pat Rivera paid you\r\n$45.00\r\nmowing\r\n") =>
     `From: ${from}\r\nTo: venmo-x@pay.example.com\r\nSubject: ${subject}\r\nDate: Tue, 3 Nov 2026 10:00:00 -0500\r\nMessage-ID: <a@venmo.com>\r\n\r\n${body}`;
   const signAs = async (domain, raw) => {
     const s = await dkimSign(raw, {
@@ -167,33 +167,33 @@ describe("Venmo's DKIM signature", () => {
   };
 
   test("signed by venmo.com: passes, and the signed subject is read", async () => {
-    const raw = await signAs("venmo.com", message("Venmo <venmo@venmo.com>", "Larry Lupinski paid you $45.00"));
+    const raw = await signAs("venmo.com", message("Venmo <venmo@venmo.com>", "Pat Rivera paid you $45.00"));
     const r = await checkVenmoSignature(raw, resolver);
     assert.equal(r.verified, true);
-    assert.equal(r.signedSubject, "Larry Lupinski paid you $45.00");
+    assert.equal(r.signedSubject, "Pat Rivera paid you $45.00");
   });
 
   test("the amount changed after signing: refused", async () => {
-    const raw = await signAs("venmo.com", message("Venmo <venmo@venmo.com>", "Larry Lupinski paid you $45.00"));
+    const raw = await signAs("venmo.com", message("Venmo <venmo@venmo.com>", "Pat Rivera paid you $45.00"));
     const forged = Buffer.from(raw.toString().replace("$45.00", "$450.00"));
     assert.equal((await checkVenmoSignature(forged, resolver)).verified, false);
   });
 
   test("a stranger's own valid signature, claiming to be Venmo: refused", async () => {
-    const raw = await signAs("evil.example", message("Venmo <venmo@venmo.com>", "Larry Lupinski paid you $45.00"));
+    const raw = await signAs("evil.example", message("Venmo <venmo@venmo.com>", "Pat Rivera paid you $45.00"));
     assert.equal((await checkVenmoSignature(raw, resolver)).verified, false);
   });
 
   test("no signature at all: refused", async () => {
-    const raw = Buffer.from(message("Venmo <venmo@venmo.com>", "Larry Lupinski paid you $45.00"));
+    const raw = Buffer.from(message("Venmo <venmo@venmo.com>", "Pat Rivera paid you $45.00"));
     assert.equal((await checkVenmoSignature(raw, resolver)).verified, false);
   });
 
   test("a second Subject added above the signed one does not change what is read", async () => {
-    const raw = await signAs("venmo.com", message("Venmo <venmo@venmo.com>", "Larry Lupinski paid you $45.00"));
-    const injected = Buffer.from("Subject: Larry Lupinski paid you $900.00\r\n" + raw.toString());
+    const raw = await signAs("venmo.com", message("Venmo <venmo@venmo.com>", "Pat Rivera paid you $45.00"));
+    const injected = Buffer.from("Subject: Pat Rivera paid you $900.00\r\n" + raw.toString());
     const r = await checkVenmoSignature(injected, resolver);
-    if (r.verified) assert.equal(r.signedSubject, "Larry Lupinski paid you $45.00");
+    if (r.verified) assert.equal(r.signedSubject, "Pat Rivera paid you $45.00");
   });
 
   test("encoded subjects decode", () => {
