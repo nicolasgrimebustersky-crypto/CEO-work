@@ -27,6 +27,7 @@ import { formatMoneyExact } from "@/lib/format";
 import { routes } from "@/lib/routes";
 import { CustomerPickerSheet } from "./CustomerPickerSheet";
 import { StatusPill } from "./StatusPill";
+import { VenmoInbox } from "./VenmoInbox";
 
 /**
  * Estimates and invoices, one kind at a time, one period at a time.
@@ -235,6 +236,7 @@ export function InvoicesScreen() {
       {/* --------------------------------------------------------- scroll */}
       <div className="relative z-10 min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-3xl flex-col pb-32">
+          <VenmoInbox />
           {/* Period bar */}
           <button
             type="button"
