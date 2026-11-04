@@ -45,7 +45,7 @@ function toAmount(text: string): number | null {
  * whose note matches nothing still goes to the list to be matched by hand.
  */
 const BOILERPLATE =
-  /^(\$|venmo|transfer|money (credited|deposited|available)|see transaction|view (in|on)|payment id|transaction id|privacy|help|terms|©|copyright|this email|you received|sent from|download|like|comment|https?:\/\/)/i;
+  /^(\$|venmo|transfer|money (credited|deposited|available)|see transaction|transaction (details|id)|date$|sent to|view (in|on)|payment id|privacy|help|terms|©|copyright|this email|you received|sent from|download|like|comment|https?:\/\/)/i;
 
 export function noteFromBody(text: string, payerName: string): string {
   const lines = text

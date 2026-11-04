@@ -28,6 +28,32 @@ describe("reading a Venmo email", () => {
     assert.deepEqual(p, { payerName: "Larry Lupinski", amount: 45, note: "mowing 10/31" });
   });
 
+  // The layout of a real Venmo "paid you" email (Sept 2026; names and numbers made up), as its plain
+  // text arrives: the amount split over three lines, then the note, then
+  // the transaction block. Payer and amount changed nothing about the shape.
+  const REAL = (note) =>
+    `\t\n\n\nAcme Lawn Co paid you\n$\n123\n45\n${note ? note + "\n" : ""}\n` +
+    "See transaction <https://venmo.com/story/1>\nMoney credited to your Venmo account.\n" +
+    "Transaction details\nDate\nSep 11, 2026\n\nTransaction ID\n1111222233334444555\n\nSent to\n@grimebustersky\n";
+
+  test("a real Venmo email: the split amount is skipped and the note is read", () => {
+    assert.deepEqual(
+      parseVenmoEmail({ subject: "Acme Lawn Co paid you $123.45", text: REAL("Second half of the spring cleanup") }),
+      { payerName: "Acme Lawn Co", amount: 123.45, note: "Second half of the spring cleanup" },
+    );
+  });
+
+  test("a real Venmo email with no note: no boilerplate is mistaken for one", () => {
+    assert.equal(parseVenmoEmail({ subject: "Acme Lawn Co paid you $123.45", text: REAL("") }).note, "");
+  });
+
+  test("a note with an invoice number from the Pay with Venmo link", () => {
+    assert.equal(
+      parseVenmoEmail({ subject: "Larry Lupinski paid you $45.00", text: REAL("Invoice 8904 · Grime Busters").replace("Acme Lawn Co", "Larry Lupinski") }).note,
+      "Invoice 8904 · Grime Busters",
+    );
+  });
+
   test("commas and missing cents", () => {
     assert.equal(parseVenmoEmail({ subject: "Giles paid you $1,600", text: "" }).amount, 1600);
   });
