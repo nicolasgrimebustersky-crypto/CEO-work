@@ -183,7 +183,11 @@ before(async () => {
   const rules = rulesWithTestCrew(join(repoRoot, "firestore.rules"));
 
   testEnv = await initializeTestEnvironment({
-    projectId: "gb-rules-test",
+    // Its own project, not the storage suite's: the two files run at the
+    // same time, and this one clears Firestore before every test. Sharing an
+    // id wiped the crew profiles the storage suite seeds for its
+    // cross-service approved-hire checks, mid-run.
+    projectId: "gb-rules-test-firestore",
     firestore: { rules, host: "127.0.0.1", port: 8080 },
   });
 
