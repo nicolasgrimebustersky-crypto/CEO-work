@@ -82,7 +82,7 @@ export const DRAWER_ONLY: NavItem[] = [
     href: routes.knockRoutes,
     label: "Routes",
     icon: RouteIcon,
-    hint: "Doors to knock, and who is walking them",
+    hint: "Today's jobs in the best driving order, and doors to knock",
   },
   {
     href: routes.chat,

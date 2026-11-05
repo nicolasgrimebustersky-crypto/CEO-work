@@ -14,10 +14,11 @@ import { formatDateOnly } from "@/lib/format";
 import { estimateRouteMinutes, formatMinutes, routeProgress } from "@/lib/knock/plan";
 import { routes } from "@/lib/routes";
 import { ROUTE_STATUS_LABEL, type KnockRoute } from "@/lib/types";
+import { DayRoutePanel } from "./DayRoutePanel";
 import { TerritoriesPanel } from "./TerritoriesPanel";
 
 type Scope = "mine" | "all";
-type Tab = "routes" | "territories";
+type Tab = "jobs" | "routes" | "territories";
 
 /**
  * Every door-knocking route, opening on the ones still to be walked.
@@ -31,7 +32,8 @@ export function RoutesScreen() {
   const { byId: customersById } = useCustomers();
   const { author, colorFor, nameFor } = useTeam();
   const [scope, setScope] = useState<Scope>("mine");
-  const [tab, setTab] = useState<Tab>("routes");
+  // Today's job route first: on a working day it is the route that matters.
+  const [tab, setTab] = useState<Tab>("jobs");
 
   const visible = useMemo(
     () => (scope === "mine" ? routesFor(allRoutes, author?.uid ?? null) : allRoutes),
@@ -52,24 +54,31 @@ export function RoutesScreen() {
       <ScreenHeader
         title="Routes"
         subtitle={
-          tab === "routes"
-            ? "Doors to knock, and who is walking them"
-            : "Ground you own, and how much of it is covered"
+          tab === "jobs"
+            ? "Today's jobs in the best order to drive them"
+            : tab === "routes"
+              ? "Doors to knock, and who is walking them"
+              : "Ground you own, and how much of it is covered"
         }
       >
         <div className="mt-3 flex items-center gap-2">
+          <Chip active={tab === "jobs"} onClick={() => setTab("jobs")}>
+            Today
+          </Chip>
           <Chip active={tab === "routes"} onClick={() => setTab("routes")}>
-            Routes
+            Doors
           </Chip>
           <Chip active={tab === "territories"} onClick={() => setTab("territories")}>
             Territories
           </Chip>
-          <Link
-            href={tab === "routes" ? routes.newKnockRoute : routes.drawTerritory}
-            className="tap-target ml-auto inline-flex items-center justify-center rounded-full bg-accent px-4 text-base font-semibold text-accent-ink"
-          >
-            {tab === "routes" ? "New route" : "Draw one"}
-          </Link>
+          {tab === "jobs" ? null : (
+            <Link
+              href={tab === "routes" ? routes.newKnockRoute : routes.drawTerritory}
+              className="tap-target ml-auto inline-flex items-center justify-center rounded-full bg-accent px-4 text-base font-semibold text-accent-ink"
+            >
+              {tab === "routes" ? "New route" : "Draw one"}
+            </Link>
+          )}
         </div>
 
         {tab === "routes" ? (
@@ -84,6 +93,7 @@ export function RoutesScreen() {
         ) : null}
       </ScreenHeader>
 
+      {tab === "jobs" ? <DayRoutePanel /> : null}
       {tab === "territories" ? <TerritoriesPanel /> : null}
 
       {tab === "routes" && error ? (
