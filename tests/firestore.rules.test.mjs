@@ -945,6 +945,35 @@ describe("mileage", () => {
   });
 });
 
+describe("owner-only settings (labour rates)", () => {
+  const profit = (uid, over = {}) => ({
+    orgId: ORG_ID,
+    laborRatePerHour: 25,
+    ratesByUid: { alice: 22 },
+    costPerMile: 0.25,
+    targetMarginPct: 30,
+    updatedAt: serverTimestamp(),
+    updatedBy: uid,
+    updatedByName: uid,
+    ...over,
+  });
+
+  test("the owner reads and writes them; crew cannot even read them", async () => {
+    await assertSucceeds(setDoc(doc(admin, "ownerSettings/profit"), profit("nicolas")));
+    await assertSucceeds(getDoc(doc(admin, "ownerSettings/profit")));
+    await assertFails(getDoc(doc(alice, "ownerSettings/profit")));
+    await assertFails(getDoc(doc(bob, "ownerSettings/profit")));
+    await assertFails(setDoc(doc(alice, "ownerSettings/profit"), profit("alice")));
+    await assertFails(getDoc(doc(mallory, "ownerSettings/profit")));
+  });
+
+  test("rates must be sane numbers", async () => {
+    for (const bad of [{ laborRatePerHour: -1 }, { laborRatePerHour: "25" }, { costPerMile: 10 }, { targetMarginPct: 95 }, { ratesByUid: [] }]) {
+      await assertFails(setDoc(doc(admin, "ownerSettings/profit"), profit("nicolas", bad)));
+    }
+  });
+});
+
 /* ------------------------------------------------------------------ quotes */
 
 describe("quotes", () => {

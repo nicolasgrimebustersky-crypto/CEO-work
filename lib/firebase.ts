@@ -166,6 +166,8 @@ export const COLLECTIONS = {
   mileage: "mileage",
   /** Each person's own home location, for mileage. Theirs and the owner's to read. */
   mileageHomes: "mileageHomes",
+  /** Settings only the owner may even read: labour rates, pay. See lib/db/ownerSettings.ts. */
+  ownerSettings: "ownerSettings",
   /** Demo mode only — the real app keeps these as subcollections. */
   chatMessages: "chatMessages",
   chatReads: "chatReads",

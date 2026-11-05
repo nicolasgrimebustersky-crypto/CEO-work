@@ -921,6 +921,23 @@ service cloud.firestore {
         && request.resource.data.label.size() <= 120;
     }
 
+    // Settings only the owner may read, let alone write: labour rates are
+    // what people are paid, and profit is the business's. Crew get nothing.
+    function validProfitSettings() {
+      let data = request.resource.data;
+      return data.laborRatePerHour is number && data.laborRatePerHour >= 0 && data.laborRatePerHour <= 500
+        && data.costPerMile is number && data.costPerMile >= 0 && data.costPerMile <= 5
+        && data.targetMarginPct is number && data.targetMarginPct >= 0 && data.targetMarginPct <= 90
+        && data.ratesByUid is map
+        && stampedByCaller('updatedBy');
+    }
+
+    match /ownerSettings/{settingsId} {
+      allow read: if isCrew() && isAdmin();
+      allow write: if isCrew() && isAdmin()
+        && (settingsId != 'profit' || validProfitSettings());
+    }
+
     match /settings/{settingsId} {
       allow read: if isCrew() && (resource == null || belongsToMyOrg(resource.data));
       allow create: if isCrew() && isAdmin()
