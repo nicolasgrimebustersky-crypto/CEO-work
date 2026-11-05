@@ -1,12 +1,14 @@
 "use client";
 
 import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
+// setDoc with { merge: true } throughout: each section saves only itself.
 import { useEffect, useState } from "react";
 
 import { isDemoMode } from "@/lib/demo/enabled";
 import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
 import { DEFAULT_ORG_ID } from "@/lib/org";
+import { MILEAGE_METHODS, type MileageMethod } from "@/lib/mileage";
 import { asSalesTaxSettings, type SalesTaxSettings } from "@/lib/salesTax";
 import { SALES_TAX_DEFAULTS } from "@/lib/salesTaxDefaults";
 import type { Author } from "@/lib/types";
@@ -61,5 +63,57 @@ export async function saveSalesTaxSettings(settings: SalesTaxSettings, author: A
     demo.put(COLLECTIONS.settings, DOC_ID, payload);
     return;
   }
-  await setDoc(doc(getDb(), COLLECTIONS.settings, DOC_ID), payload);
+  await setDoc(doc(getDb(), COLLECTIONS.settings, DOC_ID), payload, { merge: true });
+}
+
+/* ---------------------------------------------------------------- mileage */
+
+export interface MileageSettings {
+  /** Standard mileage rate, or actual truck costs. Not both for one vehicle. */
+  method: MileageMethod;
+  /** Home counts as the business's main office, so home → first job is business. */
+  homeIsMainOffice: boolean;
+}
+
+export const MILEAGE_DEFAULTS: MileageSettings = { method: "standard", homeIsMainOffice: false };
+
+export function asMileageSettings(raw: unknown): MileageSettings {
+  const r = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return {
+    method: MILEAGE_METHODS.includes(r.method as MileageMethod) ? (r.method as MileageMethod) : MILEAGE_DEFAULTS.method,
+    homeIsMainOffice: r.homeIsMainOffice === true,
+  };
+}
+
+export function useMileageSettings(): MileageSettings {
+  const [settings, setSettings] = useState<MileageSettings>(MILEAGE_DEFAULTS);
+  useEffect(() => {
+    if (isDemoMode) {
+      return demo.subscribe<Record<string, unknown>>(COLLECTIONS.settings, (rows) =>
+        setSettings(asMileageSettings(rows.find((r) => r.id === DOC_ID)?.mileage)),
+      );
+    }
+    return onSnapshot(
+      doc(getDb(), COLLECTIONS.settings, DOC_ID),
+      (snap) => setSettings(asMileageSettings(snap.data()?.mileage)),
+      () => setSettings(MILEAGE_DEFAULTS),
+    );
+  }, []);
+  return settings;
+}
+
+/** Owner only — the rules refuse anyone else. */
+export async function saveMileageSettings(settings: MileageSettings, author: Author): Promise<void> {
+  const payload = {
+    orgId: DEFAULT_ORG_ID,
+    mileage: { method: settings.method, homeIsMainOffice: settings.homeIsMainOffice },
+    updatedAt: serverTimestamp(),
+    updatedBy: author.uid,
+    updatedByName: author.displayName,
+  };
+  if (isDemoMode) {
+    demo.update(COLLECTIONS.settings, DOC_ID, payload);
+    return;
+  }
+  await setDoc(doc(getDb(), COLLECTIONS.settings, DOC_ID), payload, { merge: true });
 }

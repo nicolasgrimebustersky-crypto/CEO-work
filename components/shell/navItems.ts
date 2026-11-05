@@ -12,6 +12,7 @@ import {
   PersonIcon,
   PipelineIcon,
   PriceBookIcon,
+  MileageIcon,
   ReceiptIcon,
   ReportIcon,
   SearchIcon,
@@ -120,6 +121,12 @@ export const DRAWER_ONLY: NavItem[] = [
     label: "Expenses",
     icon: ReceiptIcon,
     hint: "Gas, equipment, tools and supplies, with the receipts",
+  },
+  {
+    href: routes.mileage,
+    label: "Mileage",
+    icon: MileageIcon,
+    hint: "Business miles between jobs, at the IRS rate",
   },
   {
     href: routes.search,

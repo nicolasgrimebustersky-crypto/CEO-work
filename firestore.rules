@@ -846,14 +846,79 @@ service cloud.firestore {
     // settings/business. Every crew member may read it — writing an invoice
     // needs the tax rate and permit number — but only the owner changes it,
     // and nothing secret belongs in it.
+    // Each section is optional (they are saved separately, merged), but any
+    // section present must be whole and sane.
     function validBusinessSettings() {
-      let t = request.resource.data.salesTax;
+      let data = request.resource.data;
+      return (!('salesTax' in data) || validSalesTaxSettings(data.salesTax))
+        && (!('mileage' in data) || validMileageSettings(data.mileage))
+        && stampedByCaller('updatedBy');
+    }
+
+    function validSalesTaxSettings(t) {
       return t is map
         && t.enabled is bool
         && t.permitNumber is string && t.permitNumber.size() <= 40
         && t.filingFrequency in ['monthly', 'quarterly', 'annual']
-        && t.defaultRatePct is number && t.defaultRatePct >= 0 && t.defaultRatePct <= 20
-        && stampedByCaller('updatedBy');
+        && t.defaultRatePct is number && t.defaultRatePct >= 0 && t.defaultRatePct <= 20;
+    }
+
+    function validMileageSettings(m) {
+      return m is map
+        && m.method in ['standard', 'actual']
+        && m.homeIsMainOffice is bool;
+    }
+
+    // Business trips, per person, like expenses: a crew member logs and sees
+    // their own; the owner sees and corrects everyone's.
+    function validPlace(p) {
+      return p is map
+        && p.lat is number && p.lng is number
+        && p.label is string && p.label.size() <= 120;
+    }
+
+    function validTrip() {
+      let data = request.resource.data;
+      return data.date is string
+        && data.date.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && data.miles is number && data.miles > 0 && data.miles < 2000
+        && data.reason is string && data.reason.size() > 0 && data.reason.size() <= 200
+        && data.source in ['job_to_job', 'gps_gap', 'home_to_job', 'manual']
+        && data.estimated is bool
+        && (data.from == null || validPlace(data.from))
+        && (data.to == null || validPlace(data.to))
+        && data.jobIds is list && data.jobIds.size() <= 2;
+    }
+
+    function ownsTrip() {
+      return isAdmin() || resource.data.createdBy == request.auth.uid;
+    }
+
+    match /mileage/{tripId} {
+      allow read: if isCrew() && belongsToMyOrg(resource.data) && ownsTrip();
+      allow create: if isCrew()
+        && stampedByCaller('createdBy')
+        && validTrip()
+        && createsInMyOrg(request.resource.data);
+      allow update: if isCrew()
+        && belongsToMyOrg(resource.data)
+        && ownsTrip()
+        && refreshesAuthorStamp()
+        && request.resource.data.createdBy == resource.data.createdBy
+        && validTrip()
+        && keepsOrg();
+      allow delete: if isCrew() && belongsToMyOrg(resource.data) && ownsTrip();
+    }
+
+    // Where each person lives, for mileage (a drive ending at home is not
+    // business). Private: the person and the owner, nobody else on the crew.
+    match /mileageHomes/{uid} {
+      allow read: if isCrew() && (request.auth.uid == uid || isAdmin());
+      allow write: if isCrew() && request.auth.uid == uid
+        && request.resource.data.lat is number
+        && request.resource.data.lng is number
+        && request.resource.data.label is string
+        && request.resource.data.label.size() <= 120;
     }
 
     match /settings/{settingsId} {
