@@ -783,6 +783,65 @@ service cloud.firestore {
     // /api/venmo/match applies or dismisses them, each inside a transaction
     // that re-reads the bill. Crew read them to see what came in and what is
     // waiting to be matched; nobody writes them from a phone.
+    // Expenses: money the business spent, and what proves it.
+    //
+    // Per person: everyone on the crew can log what they spent, the owner
+    // sees all of it, and nobody else sees anybody else's.
+    //
+    // Strict on the money and the proof, loose on the words. The amount
+    // feeds the tax estimate, so it must be a real positive number; the date
+    // is a calendar day so a year's totals cannot drift with a phone's time
+    // zone; and "receipt on file" must actually carry a file, or the proof
+    // split on the Reports screen would claim paper that does not exist.
+    // The file lives under the uid of whoever the expense belongs to, which
+    // is what storage.rules uses to decide who may open it.
+    function validReceipt(r, ownerUid) {
+      return r is map
+        && r.url is string && r.url.size() > 0 && r.url.size() <= 2048
+        && r.path is string && r.path.matches('expenses/' + ownerUid + '/[^/]+/[^/]+')
+        && r.contentType is string;
+    }
+
+    function validExpense() {
+      let data = request.resource.data;
+      return data.date is string
+        && data.date.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && data.amount is number
+        && data.amount > 0
+        && data.amount < 1000000
+        && data.category in ['fuel', 'vehicle', 'equipment', 'equipment_repair', 'tools', 'supplies', 'dump_fees', 'labor', 'insurance', 'phone_software', 'advertising', 'licenses', 'meals', 'other', 'tax_payment']
+        && data.paymentMethod in ['card', 'cash', 'venmo', 'check', 'bank', 'other']
+        && data.proof in ['receipt', 'statement', 'in_person']
+        && data.vendor is string && data.vendor.size() <= 120
+        && data.forWhat is string && data.forWhat.size() <= 80
+        && data.notes is string && data.notes.size() <= 1000
+        && (data.receipt == null || validReceipt(data.receipt, data.createdBy))
+        && (data.proof != 'receipt' || validReceipt(data.receipt, data.createdBy));
+    }
+
+    // Whose expense this is: the owner sees and fixes everyone's; a crew
+    // member only their own, so nobody on the crew can read the business's
+    // spending or another person's.
+    function ownsExpense() {
+      return isAdmin() || resource.data.createdBy == request.auth.uid;
+    }
+
+    match /expenses/{expenseId} {
+      allow read: if isCrew() && belongsToMyOrg(resource.data) && ownsExpense();
+      allow create: if isCrew()
+        && stampedByCaller('createdBy')
+        && validExpense()
+        && createsInMyOrg(request.resource.data);
+      allow update: if isCrew()
+        && belongsToMyOrg(resource.data)
+        && ownsExpense()
+        && refreshesAuthorStamp()
+        && request.resource.data.createdBy == resource.data.createdBy
+        && validExpense()
+        && keepsOrg();
+      allow delete: if isCrew() && belongsToMyOrg(resource.data) && ownsExpense();
+    }
+
     match /venmoPayments/{paymentId} {
       allow read: if isCrew() && belongsToMyOrg(resource.data);
       allow write: if false;

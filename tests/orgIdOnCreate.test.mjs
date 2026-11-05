@@ -215,6 +215,7 @@ const MUST_HAVE_ORG_ID = [
   "territories.ts",
   "services.ts",
   "automations.ts",
+  "expenses.ts",
 ];
 
 /** Whole files exempt, with the reason. */

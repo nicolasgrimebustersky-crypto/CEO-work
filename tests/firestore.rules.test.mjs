@@ -759,6 +759,102 @@ describe("venmo payments", () => {
   });
 });
 
+describe("expenses", () => {
+  const RECEIPT = { url: "https://example.test/r.jpg", path: "expenses/alice/x1/receipt-1.jpg", contentType: "image/jpeg" };
+  const expenseDoc = (uid, over = {}) => ({
+    orgId: ORG_ID,
+    date: "2026-05-04",
+    amount: 62.4,
+    category: "fuel",
+    vendor: "Shell",
+    forWhat: "Truck",
+    paymentMethod: "card",
+    proof: "in_person",
+    notes: "",
+    receipt: null,
+    createdAt: serverTimestamp(),
+    createdBy: uid,
+    createdByName: uid,
+    updatedAt: serverTimestamp(),
+    updatedBy: uid,
+    updatedByName: uid,
+    ...over,
+  });
+  const stamp = (uid) => ({ updatedAt: serverTimestamp(), updatedBy: uid, updatedByName: uid });
+
+  test("a crew member can log, read, edit and delete their own expense", async () => {
+    await assertSucceeds(setDoc(doc(alice, "expenses/x1"), expenseDoc("alice")));
+    await assertSucceeds(getDoc(doc(alice, "expenses/x1")));
+    await assertSucceeds(updateDoc(doc(alice, "expenses/x1"), { proof: "receipt", receipt: RECEIPT, ...stamp("alice") }));
+    await assertSucceeds(deleteDoc(doc(alice, "expenses/x1")));
+  });
+
+  test("another crew member cannot read, change or delete it", async () => {
+    await assertSucceeds(setDoc(doc(alice, "expenses/x1"), expenseDoc("alice")));
+    await assertFails(getDoc(doc(bob, "expenses/x1")));
+    await assertFails(updateDoc(doc(bob, "expenses/x1"), { amount: 1, ...stamp("bob") }));
+    await assertFails(deleteDoc(doc(bob, "expenses/x1")));
+  });
+
+  test("the owner sees and can correct everyone's expenses", async () => {
+    await assertSucceeds(setDoc(doc(alice, "expenses/x1"), expenseDoc("alice")));
+    await assertSucceeds(getDoc(doc(admin, "expenses/x1")));
+    await assertSucceeds(updateDoc(doc(admin, "expenses/x1"), { amount: 60, ...stamp("nicolas") }));
+    await assertSucceeds(getDocs(collection(admin, "expenses")));
+    await assertSucceeds(deleteDoc(doc(admin, "expenses/x1")));
+  });
+
+  test("a crew member's list must ask for their own — the whole collection is refused", async () => {
+    await assertSucceeds(setDoc(doc(alice, "expenses/x1"), expenseDoc("alice")));
+    await assertSucceeds(getDocs(query(collection(bob, "expenses"), where("createdBy", "==", "bob"))));
+    await assertFails(getDocs(collection(bob, "expenses")));
+    await assertFails(getDocs(query(collection(bob, "expenses"), where("createdBy", "==", "alice"))));
+  });
+
+  test("outsiders get nothing", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "expenses/x2"), { ...expenseDoc("alice"), createdAt: Timestamp.now(), updatedAt: Timestamp.now() });
+    });
+    await assertFails(getDoc(doc(mallory, "expenses/x2")));
+    await assertFails(setDoc(doc(mallory, "expenses/x3"), expenseDoc("mallory")));
+    await assertFails(deleteDoc(doc(mallory, "expenses/x2")));
+  });
+
+  test("the amount, date, kind and proof must be real", async () => {
+    for (const bad of [
+      { amount: 0 },
+      { amount: -5 },
+      { amount: "62.40" },
+      { amount: 1000000 },
+      { date: "May 4" },
+      { category: "vacation" },
+      { paymentMethod: "crypto" },
+      { proof: "pinky_swear" },
+    ]) {
+      await assertFails(setDoc(doc(alice, "expenses/bad"), expenseDoc("alice", bad)));
+    }
+  });
+
+  test("'receipt on file' must carry a receipt, filed under the expense's owner", async () => {
+    await assertFails(setDoc(doc(alice, "expenses/r1"), expenseDoc("alice", { proof: "receipt" })));
+    await assertFails(
+      setDoc(doc(alice, "expenses/r1"), expenseDoc("alice", { proof: "receipt", receipt: { ...RECEIPT, path: "jobs/j1/x.jpg" } })),
+    );
+    // Pointing at somebody else's receipt folder is refused too.
+    await assertFails(
+      setDoc(doc(alice, "expenses/r1"), expenseDoc("alice", { proof: "receipt", receipt: { ...RECEIPT, path: "expenses/bob/x9/r.jpg" } })),
+    );
+    await assertSucceeds(setDoc(doc(alice, "expenses/r1"), expenseDoc("alice", { proof: "receipt", receipt: RECEIPT })));
+  });
+
+  test("an expense cannot be logged under someone else's name, or re-attributed later", async () => {
+    await assertFails(setDoc(doc(alice, "expenses/n1"), expenseDoc("bob")));
+    await assertSucceeds(setDoc(doc(alice, "expenses/n1"), expenseDoc("alice")));
+    await assertFails(updateDoc(doc(alice, "expenses/n1"), { createdBy: "bob", ...stamp("alice") }));
+    await assertFails(updateDoc(doc(admin, "expenses/n1"), { createdBy: "nicolas", ...stamp("nicolas") }));
+  });
+});
+
 /* ------------------------------------------------------------------ quotes */
 
 describe("quotes", () => {

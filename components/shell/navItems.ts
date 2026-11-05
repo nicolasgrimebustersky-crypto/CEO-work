@@ -12,6 +12,7 @@ import {
   PersonIcon,
   PipelineIcon,
   PriceBookIcon,
+  ReceiptIcon,
   ReportIcon,
   SearchIcon,
   type NavIconProps,
@@ -112,7 +113,13 @@ export const DRAWER_ONLY: NavItem[] = [
     href: routes.reports,
     label: "Reports",
     icon: ReportIcon,
-    hint: "Revenue, doors, conversion",
+    hint: "Revenue, doors, conversion, and the tax to set aside",
+  },
+  {
+    href: routes.expenses,
+    label: "Expenses",
+    icon: ReceiptIcon,
+    hint: "Gas, equipment, tools and supplies, with the receipts",
   },
   {
     href: routes.search,

@@ -227,6 +227,22 @@ export function ReportIcon({ active }: NavIconProps) {
   );
 }
 
+/** A till receipt with a torn bottom edge: money that went out. */
+export function ReceiptIcon({ active }: NavIconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className="size-6" aria-hidden="true">
+      <path
+        d="M6 3h12v18l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5L6 21V3Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={w(active)}
+        strokeLinejoin="round"
+      />
+      <path d="M9 8h6M9 11.5h6M9 15h3.5" stroke="currentColor" strokeWidth={w(active)} strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function PriceBookIcon({ active }: NavIconProps) {
   return (
     <svg viewBox="0 0 24 24" className="size-6" aria-hidden="true">
