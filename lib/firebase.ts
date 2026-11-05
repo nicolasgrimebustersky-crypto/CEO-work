@@ -160,6 +160,8 @@ export const COLLECTIONS = {
   automations: "automations",
   /** Money the business spent, with its receipt. See lib/db/expenses.ts. */
   expenses: "expenses",
+  /** Business-wide settings the owner sets, e.g. sales tax. See lib/db/settings.ts. */
+  settings: "settings",
   /** Demo mode only — the real app keeps these as subcollections. */
   chatMessages: "chatMessages",
   chatReads: "chatReads",

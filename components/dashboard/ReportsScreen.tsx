@@ -11,6 +11,7 @@ import { ScreenHeader } from "@/components/shell/ScreenHeader";
 import { UserChip } from "@/components/ui/Chips";
 import { Spinner } from "@/components/ui/Spinner";
 import { PayPeriodSection } from "./PayPeriodSection";
+import { SalesTaxSection } from "./SalesTaxSection";
 import { TaxEstimateSection } from "./TaxEstimateSection";
 import { fetchJobsBetween } from "@/lib/db/jobs";
 import { quoteCloseRate, subscribeAllQuotes } from "@/lib/db/quotes";
@@ -183,6 +184,7 @@ export function ReportsScreen() {
 
             {/* Owner only: the business's profit and tax are not crew business. */}
             {isAdmin ? <TaxEstimateSection year={thisYear.year} grossSoFar={thisYear.total} /> : null}
+            {isAdmin ? <SalesTaxSection /> : null}
 
             <Section title="Revenue by month">
               <ul className="flex flex-col gap-1.5">

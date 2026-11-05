@@ -855,6 +855,39 @@ describe("expenses", () => {
   });
 });
 
+describe("business settings (sales tax)", () => {
+  const settings = (uid, over = {}) => ({
+    orgId: ORG_ID,
+    salesTax: { enabled: true, permitNumber: "123456", filingFrequency: "monthly", defaultRatePct: 6, ...over },
+    updatedAt: serverTimestamp(),
+    updatedBy: uid,
+    updatedByName: uid,
+  });
+
+  test("only the owner can save them", async () => {
+    await assertFails(setDoc(doc(alice, "settings/business"), settings("alice")));
+    await assertSucceeds(setDoc(doc(admin, "settings/business"), settings("nicolas")));
+    await assertFails(setDoc(doc(bob, "settings/business"), settings("bob", { enabled: false })));
+    await assertSucceeds(setDoc(doc(admin, "settings/business"), settings("nicolas", { filingFrequency: "quarterly" })));
+  });
+
+  test("every crew member can read them — a new invoice needs the rate and permit", async () => {
+    await assertSucceeds(getDoc(doc(alice, "settings/business")));
+    await assertSucceeds(setDoc(doc(admin, "settings/business"), settings("nicolas")));
+    await assertSucceeds(getDoc(doc(bob, "settings/business")));
+    await assertFails(getDoc(doc(mallory, "settings/business")));
+  });
+
+  test("bad values and other document ids are refused, and nobody deletes them", async () => {
+    for (const bad of [{ filingFrequency: "weekly" }, { defaultRatePct: 50 }, { defaultRatePct: "6" }, { enabled: "yes" }]) {
+      await assertFails(setDoc(doc(admin, "settings/business"), settings("nicolas", bad)));
+    }
+    await assertFails(setDoc(doc(admin, "settings/other"), settings("nicolas")));
+    await assertSucceeds(setDoc(doc(admin, "settings/business"), settings("nicolas")));
+    await assertFails(deleteDoc(doc(admin, "settings/business")));
+  });
+});
+
 /* ------------------------------------------------------------------ quotes */
 
 describe("quotes", () => {

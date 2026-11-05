@@ -842,6 +842,34 @@ service cloud.firestore {
       allow delete: if isCrew() && belongsToMyOrg(resource.data) && ownsExpense();
     }
 
+    // Business-wide settings the owner sets (sales tax today). One document,
+    // settings/business. Every crew member may read it — writing an invoice
+    // needs the tax rate and permit number — but only the owner changes it,
+    // and nothing secret belongs in it.
+    function validBusinessSettings() {
+      let t = request.resource.data.salesTax;
+      return t is map
+        && t.enabled is bool
+        && t.permitNumber is string && t.permitNumber.size() <= 40
+        && t.filingFrequency in ['monthly', 'quarterly', 'annual']
+        && t.defaultRatePct is number && t.defaultRatePct >= 0 && t.defaultRatePct <= 20
+        && stampedByCaller('updatedBy');
+    }
+
+    match /settings/{settingsId} {
+      allow read: if isCrew() && (resource == null || belongsToMyOrg(resource.data));
+      allow create: if isCrew() && isAdmin()
+        && settingsId == 'business'
+        && validBusinessSettings()
+        && createsInMyOrg(request.resource.data);
+      allow update: if isCrew() && isAdmin()
+        && settingsId == 'business'
+        && belongsToMyOrg(resource.data)
+        && validBusinessSettings()
+        && keepsOrg();
+      allow delete: if false;
+    }
+
     match /venmoPayments/{paymentId} {
       allow read: if isCrew() && belongsToMyOrg(resource.data);
       allow write: if false;
