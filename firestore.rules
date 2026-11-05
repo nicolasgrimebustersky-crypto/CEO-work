@@ -842,8 +842,9 @@ service cloud.firestore {
       allow delete: if isCrew() && belongsToMyOrg(resource.data) && ownsExpense();
     }
 
+    // Payments that came in are the business's takings: the owner's to see.
     match /venmoPayments/{paymentId} {
-      allow read: if isCrew() && belongsToMyOrg(resource.data);
+      allow read: if isCrew() && isAdmin() && belongsToMyOrg(resource.data);
       allow write: if false;
     }
 

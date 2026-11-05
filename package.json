@@ -9,7 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "emulators": "firebase emulators:start --only auth,firestore,storage",
-    "test:rules": "firebase emulators:exec --only firestore,storage \"node --test tests/firestore.rules.test.mjs tests/orgIsolation.rules.test.mjs tests/storage.rules.test.mjs\"",
+    "test:rules": "firebase emulators:exec --project gb-rules-test --only firestore,storage \"node --test tests/firestore.rules.test.mjs tests/orgIsolation.rules.test.mjs tests/storage.rules.test.mjs\"",
     "test:api": "bash scripts/test-api.sh",
     "test:server": "firebase emulators:exec --only firestore --project demo-grimebusters-views \"node --experimental-strip-types --conditions=react-server --import=./tests/helpers/register.mjs --test tests/documentViews.server.test.mjs tests/automationRun.server.test.mjs tests/trustedDevices.server.test.mjs\"",
     "seed": "node scripts/seed-test-data.mjs",

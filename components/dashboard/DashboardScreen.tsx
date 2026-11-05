@@ -43,7 +43,7 @@ export function DashboardScreen() {
   const { jobs, loading: jobsLoading } = useJobs();
   const { customers } = useCustomers();
   const { documents, outstanding, loading: documentsLoading } = useDocuments();
-  const { users, author, colorFor, nameFor } = useTeam();
+  const { users, author, colorFor, nameFor, isAdmin } = useTeam();
   const openMenu = useOpenMenu();
   const [quotes, setQuotes] = useState<Quote[]>([]);
 
@@ -165,7 +165,9 @@ export function DashboardScreen() {
             </div>
           ) : (
             <>
-              {/* Hero: the month */}
+              {/* Hero: the month. The business's takings are the owner's to
+                  see; a crew member gets their own day instead. */}
+              {isAdmin ? (
               <Link
                 href={routes.invoices}
                 className="block rounded-3xl border border-line bg-surface p-5 transition active:bg-surface-2"
@@ -212,6 +214,18 @@ export function DashboardScreen() {
                   <span className="text-accent">Open Money →</span>
                 </div>
               </Link>
+              ) : (
+                <div className="rounded-3xl border border-line bg-surface p-5">
+                  <p className="text-sm font-bold text-muted">Your jobs today</p>
+                  <p className="mt-1 text-[2.4rem] leading-none font-extrabold tracking-tight text-ink tabular-nums">
+                    {todayJobs.filter((job) => job.assignedTo.includes(author?.uid ?? "")).length}
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-muted">
+                    {todayJobs.filter((job) => job.assignedTo.includes(author?.uid ?? "") && job.status === "complete").length}{" "}
+                    finished
+                  </p>
+                </div>
+              )}
 
               {/* Four tiles */}
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -222,11 +236,14 @@ export function DashboardScreen() {
                   detail={
                     todayJobs.length === 0
                       ? "Nothing booked"
-                      : `${formatMoney(todayRevenue)} expected${todayDone ? ` · ${todayDone} done` : ""}`
+                      : isAdmin
+                        ? `${formatMoney(todayRevenue)} expected${todayDone ? ` · ${todayDone} done` : ""}`
+                        : `${todayDone} done`
                   }
                   icon={<CalendarGlyph />}
                   tone="accent"
                 />
+                {isAdmin ? (
                 <Tile
                   href={routes.invoices}
                   label="Owed to you"
@@ -235,6 +252,7 @@ export function DashboardScreen() {
                   icon={<CoinGlyph />}
                   tone={outstanding > 0 ? "warn" : "money"}
                 />
+                ) : null}
                 <Tile
                   href={routes.schedule}
                   label="Done this week"
@@ -242,7 +260,9 @@ export function DashboardScreen() {
                   detail={
                     completedThisWeek.length === 0
                       ? "No jobs finished yet"
-                      : `${formatMoney(weekRevenue)} of work`
+                      : isAdmin
+                        ? `${formatMoney(weekRevenue)} of work`
+                        : "Across the crew"
                   }
                   icon={<CheckGlyph />}
                   tone="money"
@@ -254,7 +274,9 @@ export function DashboardScreen() {
                   detail={
                     outForQuoteCount === 0
                       ? "No estimates waiting"
-                      : `${formatMoney(outForQuote)} waiting on a yes`
+                      : isAdmin
+                        ? `${formatMoney(outForQuote)} waiting on a yes`
+                        : "Waiting on a yes"
                   }
                   icon={<QuoteGlyph />}
                   tone="accent"
@@ -379,9 +401,12 @@ export function DashboardScreen() {
                             {knocksThisWeek.get(user.uid) ?? 0} doors this week
                           </span>
                         </span>
-                        <span className="shrink-0 text-lg font-extrabold text-money tabular-nums">
-                          {formatMoney(revenue)}
-                        </span>
+                        {/* What each person's day is worth is the owner's view. */}
+                        {isAdmin ? (
+                          <span className="shrink-0 text-lg font-extrabold text-money tabular-nums">
+                            {formatMoney(revenue)}
+                          </span>
+                        ) : null}
                       </div>
                     );
                   })}
