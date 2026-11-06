@@ -6,6 +6,7 @@ import { useCustomers } from "@/components/providers/CustomersProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { dayKey, isInMonth, jobsOnDay, monthGridDays } from "@/lib/schedule";
 import type { Job } from "@/lib/types";
+import { isBillable } from "@/lib/visitTypes";
 import { assigneeStripe } from "./JobBlock";
 import type { DropTarget } from "./useJobDrag";
 
@@ -90,9 +91,10 @@ export function MonthView({
                     style={{
                       touchAction: "none",
                       opacity: draggingJobId === job.id ? 0.35 : 1,
-                      background: assigneeStripe(
-                        job.assignedTo.map((uid) => colorFor(uid)),
-                      ),
+                      // Appointments are amber here as on every other view.
+                      background: isBillable(job.visitType)
+                        ? assigneeStripe(job.assignedTo.map((uid) => colorFor(uid)))
+                        : "var(--color-appt)",
                     }}
                     className="block h-3.5 w-full truncate rounded-sm px-1 text-left text-[9px] font-extrabold text-black/80"
                   >
