@@ -38,6 +38,7 @@ export type AuditAction =
   | "device.revoked"
   | "sms.sent"
   | "sms.blast"
+  | "sms.campaign"
   | "sms.test"
   | "sms.import_replies"
   | "estimate.drafted"

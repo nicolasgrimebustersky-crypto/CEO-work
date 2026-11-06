@@ -168,6 +168,16 @@ export const COLLECTIONS = {
   mileageHomes: "mileageHomes",
   /** Settings only the owner may even read: labour rates, pay. See lib/db/ownerSettings.ts. */
   ownerSettings: "ownerSettings",
+  /** Corrections to someone's hours, logged with a reason. See lib/db/crewPay.ts. */
+  timeEdits: "timeEdits",
+  /** What each person was paid for a pay period. See lib/db/crewPay.ts. */
+  payRuns: "payRuns",
+  /** Mowers, the truck, trimmers — and their service tasks. See lib/db/maintenance.ts. */
+  equipment: "equipment",
+  /** Service done and meter readings, append-only. See lib/db/maintenance.ts. */
+  maintenanceLog: "maintenanceLog",
+  /** Seasonal upsell campaigns that were sent. See lib/db/campaigns.ts. */
+  campaigns: "campaigns",
   /** Demo mode only — the real app keeps these as subcollections. */
   chatMessages: "chatMessages",
   chatReads: "chatReads",

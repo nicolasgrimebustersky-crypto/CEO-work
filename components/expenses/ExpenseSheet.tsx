@@ -24,6 +24,7 @@ import {
   PAYMENT_METHOD_LABEL,
   PROOF_LABEL,
   expenseProblem,
+  isTaxRemittance,
   localDate,
   parseAmount,
   type ExpenseCategory,
@@ -32,6 +33,17 @@ import {
   type ProofKind,
   type ReceiptFile,
 } from "@/lib/expenses";
+import {
+  deleteExpenseLogEntry,
+  logMaintenance,
+  subscribeEquipment,
+  subscribeMaintenanceLog,
+  type StoredLogEntry,
+} from "@/lib/db/maintenance";
+import { equipmentFor, METER_UNIT, type Equipment } from "@/lib/maintenance";
+
+/** Expense kinds that can be service work on a piece of equipment. */
+const SERVICE_CATEGORIES: readonly ExpenseCategory[] = ["equipment_repair", "vehicle", "equipment"];
 
 /**
  * Adds or edits one expense.
@@ -76,6 +88,31 @@ export function ExpenseSheet({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Equipment with service tasks: a repair expense for one can say which
+  // tasks it was, and that restarts their reminders (lib/maintenance.ts).
+  const [equipment, setEquipment] = useState<Equipment[]>([]);
+  const [serviceLog, setServiceLog] = useState<StoredLogEntry[]>([]);
+  const [serviceTaskIds, setServiceTaskIds] = useState<string[]>([]);
+  const [serviceReading, setServiceReading] = useState("");
+  useEffect(() => {
+    if (!open) return;
+    const a = subscribeEquipment(setEquipment, () => setEquipment([]));
+    const b = subscribeMaintenanceLog(setServiceLog, () => setServiceLog([]));
+    return () => {
+      a();
+      b();
+    };
+  }, [open]);
+  const existingService = expense ? serviceLog.find((e) => e.expenseId === expense.id) ?? null : null;
+  useEffect(() => {
+    if (!open) return;
+    setServiceTaskIds(existingService?.taskIds ?? []);
+    setServiceReading(existingService?.reading != null ? String(existingService.reading) : "");
+    // Only when the sheet opens or the stored entry first arrives.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, existingService?.id]);
+  const serviced = SERVICE_CATEGORIES.includes(category) ? equipmentFor(forWhat, equipment) : null;
+
   useEffect(() => {
     if (!open) return;
     setId(expense?.id ?? newExpenseId());
@@ -95,9 +132,10 @@ export function ExpenseSheet({
 
   const assetChoices = useMemo(() => {
     const list = [...assets];
+    for (const e of equipment) if (!list.some((a) => a.toLowerCase() === e.name.toLowerCase())) list.push(e.name);
     if (forWhat && !list.some((a) => a.toLowerCase() === forWhat.toLowerCase())) list.unshift(forWhat);
     return list;
-  }, [assets, forWhat]);
+  }, [assets, forWhat, equipment]);
 
   async function onFile(file: File | undefined) {
     if (!file || !id || !author) return;
@@ -154,6 +192,25 @@ export function ExpenseSheet({
     try {
       if (expense) await updateExpense(expense.id, fields, author);
       else await createExpense(id, fields, author);
+      // Service work restarts the equipment's reminders; un-ticking it all
+      // (or changing what it was for) takes the entry back out.
+      const tasks = serviced ? serviceTaskIds.filter((t) => serviced.tasks.some((x) => x.id === t)) : [];
+      if (serviced && tasks.length > 0) {
+        const reading = Number(serviceReading.replace(/[^0-9.]/g, ""));
+        await logMaintenance(
+          {
+            equipmentId: serviced.id,
+            date,
+            taskIds: tasks,
+            reading: serviceReading.trim() && Number.isFinite(reading) ? reading : null,
+            note: vendor,
+            expenseId: expense?.id ?? id,
+          },
+          author,
+        );
+      } else if (existingService) {
+        await deleteExpenseLogEntry(existingService.expenseId ?? "");
+      }
       // The receipt this one replaced, if any, is no longer pointed at.
       if (expense?.receipt && expense.receipt.path !== receipt?.path) {
         void removeReceiptFile(expense.receipt);
@@ -173,6 +230,7 @@ export function ExpenseSheet({
     try {
       if (freshReceipt) void removeReceiptFile(freshReceipt);
       await deleteExpense(expense);
+      if (existingService) void deleteExpenseLogEntry(expense.id);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not delete the expense.");
@@ -306,7 +364,7 @@ export function ExpenseSheet({
           <p className="mt-1.5 text-sm font-semibold text-muted">{EXPENSE_CATEGORY_HINT[category]}</p>
         </div>
 
-        {category !== "tax_payment" ? (
+        {!isTaxRemittance(category) ? (
           <div>
             <p className="mb-1.5 text-sm font-semibold text-muted">What it was for</p>
             <div className="mb-2 flex flex-wrap gap-2">
@@ -330,9 +388,40 @@ export function ExpenseSheet({
           </div>
         ) : null}
 
+        {serviced && serviced.tasks.length > 0 ? (
+          <div className="rounded-xl border border-line bg-surface-2 p-3">
+            <p className="text-sm font-bold text-ink">Service on the {serviced.name}? Tick what was done</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {serviced.tasks.map((t) => {
+                const on = serviceTaskIds.includes(t.id);
+                return (
+                  <Chip
+                    key={t.id}
+                    active={on}
+                    onClick={() => setServiceTaskIds(on ? serviceTaskIds.filter((x) => x !== t.id) : [...serviceTaskIds, t.id])}
+                  >
+                    {t.what}
+                  </Chip>
+                );
+              })}
+            </div>
+            {serviced.meter !== "none" && serviceTaskIds.length > 0 ? (
+              <div className="mt-2">
+                <TextField
+                  label={`${serviced.meter === "miles" ? "Odometer" : "Hour meter"} (${METER_UNIT[serviced.meter]}), if you have it`}
+                  inputMode="decimal"
+                  value={serviceReading}
+                  onChange={(e) => setServiceReading(e.target.value)}
+                />
+              </div>
+            ) : null}
+            <p className="mt-1.5 text-xs font-semibold text-muted">Ticked tasks restart their maintenance reminders.</p>
+          </div>
+        ) : null}
+
         <TextField
-          label={category === "tax_payment" ? "Paid to" : "Where"}
-          placeholder={category === "tax_payment" ? "IRS, Kentucky DOR" : "Shell, Home Depot, the dealer…"}
+          label={isTaxRemittance(category) ? "Paid to" : "Where"}
+          placeholder={isTaxRemittance(category) ? "IRS, Kentucky DOR" : "Shell, Home Depot, the dealer…"}
           maxLength={120}
           value={vendor}
           onChange={(e) => setVendor(e.target.value)}

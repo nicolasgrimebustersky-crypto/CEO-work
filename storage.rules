@@ -62,5 +62,16 @@ service firebase.storage {
             || request.resource.contentType == 'application/pdf');
       allow delete: if isCrew() && (isAdmin() || request.auth.uid == ownerUid);
     }
+
+    // W-9s. A W-9 carries a Social Security or tax ID number, so only the
+    // owner can upload, open or delete one — not even the person it is for
+    // reads it back from here.
+    match /w9/{uid}/{fileName} {
+      allow read, delete: if isCrew() && isAdmin();
+      allow create, update: if isCrew() && isAdmin()
+        && request.resource.size < 15 * 1024 * 1024
+        && (request.resource.contentType.matches('image/.*')
+            || request.resource.contentType == 'application/pdf');
+    }
   }
 }

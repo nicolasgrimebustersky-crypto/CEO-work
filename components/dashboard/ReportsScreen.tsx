@@ -18,6 +18,7 @@ import { fetchJobsBetween } from "@/lib/db/jobs";
 import { quoteCloseRate, subscribeAllQuotes } from "@/lib/db/quotes";
 import { formatMoney } from "@/lib/format";
 import { grossFor } from "@/lib/money/summary";
+import { routes } from "@/lib/routes";
 import { zipFromAddress } from "@/lib/geocode";
 import { SERVICE_LABEL } from "@/lib/status";
 import { SERVICE_TYPES, type Job, type Quote, type ServiceType } from "@/lib/types";
@@ -187,6 +188,15 @@ export function ReportsScreen() {
             {isAdmin ? <TaxEstimateSection year={thisYear.year} grossSoFar={thisYear.total} /> : null}
             {isAdmin ? <SalesTaxSection /> : null}
             {isAdmin ? <ProfitSection jobs={jobs} /> : null}
+            {isAdmin ? (
+              <Link
+                href={routes.yearEndPacket}
+                className="tap-target mt-6 flex items-center justify-between rounded-2xl border border-accent/60 bg-accent/10 px-4 py-3 text-base font-bold text-ink"
+              >
+                Year-end packet for your accountant
+                <span className="text-accent">PDF · CSV →</span>
+              </Link>
+            ) : null}
 
             <Section title="Revenue by month">
               <ul className="flex flex-col gap-1.5">

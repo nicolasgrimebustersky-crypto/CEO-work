@@ -1,0 +1,288 @@
+/**
+ * Crew pay: what each person is owed for a pay period, and what they were
+ * paid over the year.
+ *
+ *   Hours  come from the Start and Finish taps on each job (lib/payPeriods.ts),
+ *          plus time corrections. A correction is never an edit of the taps:
+ *          it is its own logged entry with a reason, and one a crew member
+ *          adds for themselves counts only once the owner approves it.
+ *   Rate   is set by the owner per person: by the hour, by the job, or a
+ *          share of the revenue on their jobs. Only the owner can read it.
+ *   Pay    is recorded by the owner when it is paid, with the rate copied
+ *          onto the record, so a later raise never rewrites last month.
+ *
+ * W-2 or 1099: for a 1099 contractor the year's payments are checked
+ * against the 1099-NEC threshold and a missing W-9 is flagged. For a W-2
+ * employee this tracks gross pay only — withholding, payroll taxes and the
+ * W-2 itself belong with a payroll service.
+ *
+ * Free of imports so every rule is tested by calling it.
+ */
+
+export const CLASSIFICATIONS = ["w2", "1099"] as const;
+export type Classification = (typeof CLASSIFICATIONS)[number];
+
+export const CLASSIFICATION_LABEL: Record<Classification, string> = {
+  w2: "Employee (W-2)",
+  "1099": "Contractor (1099)",
+};
+
+export const PAY_BASES = ["hourly", "per_job", "share"] as const;
+export type PayBasis = (typeof PAY_BASES)[number];
+
+export const PAY_BASIS_LABEL: Record<PayBasis, string> = {
+  hourly: "By the hour",
+  per_job: "By the job",
+  share: "Share of job revenue",
+};
+
+export interface W9File {
+  url: string;
+  /** Storage path, for replacing or removing it. */
+  path: string;
+  contentType: string;
+  /** "YYYY-MM-DD" */
+  receivedOn: string;
+}
+
+export interface PersonPay {
+  classification: Classification;
+  basis: PayBasis;
+  /** Dollars per hour or per job; percent for a revenue share. */
+  rate: number;
+  w9: W9File | null;
+}
+
+export const DEFAULT_PERSON_PAY: PersonPay = { classification: "1099", basis: "hourly", rate: 0, w9: null };
+
+export interface PaySettings {
+  people: Record<string, PersonPay>;
+}
+
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const round2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
+
+/** Upper bound on a rate: catches a typo like 2500 for $25.00. */
+export function maxRate(basis: PayBasis): number {
+  return basis === "share" ? 100 : basis === "hourly" ? 500 : 5000;
+}
+
+export function asPersonPay(raw: unknown): PersonPay {
+  const r = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const classification = (CLASSIFICATIONS as readonly string[]).includes(String(r.classification))
+    ? (r.classification as Classification)
+    : DEFAULT_PERSON_PAY.classification;
+  const basis = (PAY_BASES as readonly string[]).includes(String(r.basis)) ? (r.basis as PayBasis) : DEFAULT_PERSON_PAY.basis;
+  const rate = typeof r.rate === "number" && Number.isFinite(r.rate) && r.rate >= 0 && r.rate <= maxRate(basis) ? r.rate : 0;
+  const w = r.w9 && typeof r.w9 === "object" ? (r.w9 as Record<string, unknown>) : null;
+  const w9 =
+    w && typeof w.url === "string" && typeof w.path === "string"
+      ? {
+          url: w.url,
+          path: w.path,
+          contentType: typeof w.contentType === "string" ? w.contentType : "application/pdf",
+          receivedOn: typeof w.receivedOn === "string" && DATE.test(w.receivedOn) ? w.receivedOn : "",
+        }
+      : null;
+  return { classification, basis, rate, w9 };
+}
+
+export function asPaySettings(raw: unknown): PaySettings {
+  const r = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const people: Record<string, PersonPay> = {};
+  if (r.people && typeof r.people === "object") {
+    for (const [uid, value] of Object.entries(r.people as Record<string, unknown>)) people[uid] = asPersonPay(value);
+  }
+  return { people };
+}
+
+export function payFor(settings: PaySettings, uid: string): PersonPay {
+  return settings.people[uid] ?? DEFAULT_PERSON_PAY;
+}
+
+/* ------------------------------------------------------------ dates */
+
+/** "YYYY-MM-DD" in local time, the way pay periods and edits are dated. */
+export function dateKey(date: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}`;
+}
+
+/* ---------------------------------------------------- time corrections */
+
+/** A logged correction to someone's hours: plus for time the taps missed, minus for time they overcounted. */
+export interface TimeEdit {
+  id: string;
+  /** Whose hours. */
+  uid: string;
+  /** "YYYY-MM-DD", the day the work was done. */
+  date: string;
+  minutes: number;
+  reason: string;
+  /** Owner-entered corrections are approved when made; a crew member's wait for the owner. */
+  approved: boolean;
+}
+
+/** Sixteen hours either way: the same cap as one job's hours. */
+export const MAX_EDIT_MINUTES = 16 * 60;
+
+/**
+ * "1.5", "-0.25", "1:30" or "-0:45" hours to whole minutes, or null when it
+ * is not a usable correction (zero, unreadable, or over 16 hours).
+ */
+export function parseHours(text: string): number | null {
+  const t = text.trim().replace(/\s+/g, "");
+  let minutes: number;
+  const clock = /^([+-]?)(\d{1,2}):([0-5]\d)$/.exec(t);
+  if (clock) {
+    minutes = Number(clock[2]) * 60 + Number(clock[3]);
+    if (clock[1] === "-") minutes = -minutes;
+  } else if (/^[+-]?(\d+(\.\d*)?|\.\d+)$/.test(t)) {
+    minutes = Math.round(Number(t) * 60);
+  } else {
+    return null;
+  }
+  if (!Number.isFinite(minutes) || minutes === 0 || Math.abs(minutes) > MAX_EDIT_MINUTES) return null;
+  return minutes;
+}
+
+const inPeriod = (date: string, startKey: string, endKey: string) => date >= startKey && date < endKey;
+
+/** Approved and pending correction minutes for one person in [startKey, endKey). */
+export function editMinutes(
+  edits: readonly TimeEdit[],
+  uid: string,
+  startKey: string,
+  endKey: string,
+): { approved: number; pending: number } {
+  let approved = 0;
+  let pending = 0;
+  for (const e of edits) {
+    if (e.uid !== uid || !inPeriod(e.date, startKey, endKey) || !Number.isFinite(e.minutes)) continue;
+    if (e.approved) approved += e.minutes;
+    else pending += e.minutes;
+  }
+  return { approved, pending };
+}
+
+/* --------------------------------------------------------------- pay */
+
+export interface PeriodWork {
+  /** Hours from the Start and Finish taps. */
+  hours: number;
+  jobs: number;
+  /** Their share of the revenue on jobs they finished. */
+  revenue: number;
+}
+
+export interface PeriodPay {
+  tapHours: number;
+  /** Approved corrections, in hours. */
+  correctionHours: number;
+  /** Corrections waiting for the owner, in hours; not paid until approved. */
+  pendingHours: number;
+  hours: number;
+  jobs: number;
+  revenue: number;
+  gross: number;
+}
+
+/** What one person earned in a period at their rate. Hours are never below zero. */
+export function periodPay(person: PersonPay, work: PeriodWork, edits: { approved: number; pending: number }): PeriodPay {
+  const tapHours = Math.max(0, work.hours);
+  const hours = Math.max(0, Math.round((tapHours + edits.approved / 60) * 100) / 100);
+  const jobs = Math.max(0, work.jobs);
+  const revenue = Math.max(0, work.revenue);
+  const gross =
+    person.basis === "hourly"
+      ? hours * person.rate
+      : person.basis === "per_job"
+        ? jobs * person.rate
+        : (revenue * person.rate) / 100;
+  return {
+    tapHours: Math.round(tapHours * 100) / 100,
+    correctionHours: Math.round((edits.approved / 60) * 100) / 100,
+    pendingHours: Math.round((edits.pending / 60) * 100) / 100,
+    hours,
+    jobs,
+    revenue: round2(revenue),
+    gross: round2(gross),
+  };
+}
+
+/* -------------------------------------------------------- paid records */
+
+export interface PayRun {
+  id: string;
+  uid: string;
+  name: string;
+  /** "YYYY-MM-DD", first day of the period. */
+  periodStart: string;
+  /** "YYYY-MM-DD", exclusive. */
+  periodEnd: string;
+  gross: number;
+  classification: Classification;
+  /** "YYYY-MM-DD", the day it was paid — what the 1099 year goes by. */
+  paidOn: string;
+}
+
+/** The record of this person's pay for the period starting `startKey`, if it was paid. */
+export function runFor<T extends PayRun>(runs: readonly T[], uid: string, startKey: string): T | undefined {
+  return runs.find((r) => r.uid === uid && r.periodStart === startKey);
+}
+
+/** Total paid to one person in a calendar year, by the date paid. */
+export function paidInYear(runs: readonly PayRun[], uid: string, year: number): number {
+  const prefix = `${year}-`;
+  return round2(
+    runs
+      .filter((r) => r.uid === uid && r.paidOn.startsWith(prefix) && Number.isFinite(r.gross))
+      .reduce((s, r) => s + r.gross, 0),
+  );
+}
+
+export type ContractorFlag = "employee" | "below" | "approaching" | "needs_1099";
+
+export interface ContractorStatus {
+  flag: ContractorFlag;
+  /** A 1099 contractor with no W-9 on file. Collect it before the first payment. */
+  w9Missing: boolean;
+}
+
+/**
+ * Where a person stands for the 1099-NEC. `threshold` is the year's filing
+ * threshold (lib/cpaPacket.ts contractorThreshold). "approaching" from 75%.
+ */
+export function contractorStatus(person: PersonPay, paidThisYear: number, threshold: number): ContractorStatus {
+  if (person.classification === "w2") return { flag: "employee", w9Missing: false };
+  const w9Missing = !person.w9;
+  if (paidThisYear >= threshold) return { flag: "needs_1099", w9Missing };
+  if (paidThisYear >= threshold * 0.75) return { flag: "approaching", w9Missing };
+  return { flag: "below", w9Missing };
+}
+
+/** A year's pay, split the way Schedule C wants it: W-2 wages, and 1099 contract labour per person. */
+export function yearPayTotals(
+  runs: readonly PayRun[],
+  year: number,
+): { wages: number; contract: number; byPerson: { uid: string; name: string; classification: Classification; paid: number; payments: number }[] } {
+  const prefix = `${year}-`;
+  const people = new Map<string, { uid: string; name: string; classification: Classification; paid: number; payments: number }>();
+  let wages = 0;
+  let contract = 0;
+  for (const r of runs) {
+    if (!r.paidOn.startsWith(prefix) || !Number.isFinite(r.gross) || r.gross <= 0) continue;
+    if (r.classification === "w2") wages += r.gross;
+    else contract += r.gross;
+    const key = `${r.uid}:${r.classification}`;
+    const p = people.get(key) ?? { uid: r.uid, name: r.name, classification: r.classification, paid: 0, payments: 0 };
+    p.paid += r.gross;
+    p.payments += 1;
+    people.set(key, p);
+  }
+  return {
+    wages: round2(wages),
+    contract: round2(contract),
+    byPerson: [...people.values()].map((p) => ({ ...p, paid: round2(p.paid) })).sort((a, b) => b.paid - a.paid),
+  };
+}

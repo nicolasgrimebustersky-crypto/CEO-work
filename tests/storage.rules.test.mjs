@@ -189,3 +189,21 @@ describe("expense receipts", () => {
     await assertFails(uploadBytes(ref(alice, "expenses/alice/x5/huge.jpg"), tooBig, IMAGE));
   });
 });
+
+describe("W-9s", () => {
+  test("only the owner uploads, opens or deletes one — not even the person it is for", async () => {
+    const owner = testEnv
+      .authenticatedContext("nicolas", { email: "nicolas.grimebustersky@gmail.com", ...VERIFIED })
+      .storage();
+    const path = "w9/alice/w9-1.pdf";
+    await assertFails(uploadBytes(ref(alice, path), IMAGE_BYTES, { contentType: "application/pdf" }));
+    await assertSucceeds(uploadBytes(ref(owner, path), IMAGE_BYTES, { contentType: "application/pdf" }));
+    await assertSucceeds(getDownloadURL(ref(owner, path)));
+    await assertFails(getDownloadURL(ref(alice, path)));
+    await assertFails(getDownloadURL(ref(bob, path)));
+    await assertFails(getDownloadURL(ref(mallory, path)));
+    await assertFails(deleteObject(ref(alice, path)));
+    await assertFails(uploadBytes(ref(owner, "w9/alice/w9.html"), IMAGE_BYTES, { contentType: "text/html" }));
+    await assertSucceeds(deleteObject(ref(owner, path)));
+  });
+});

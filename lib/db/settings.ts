@@ -9,6 +9,7 @@ import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
 import { DEFAULT_ORG_ID } from "@/lib/org";
 import { MILEAGE_METHODS, type MileageMethod } from "@/lib/mileage";
+import { DEFAULT_SCHEDULE, FREQUENCIES, type Frequency, type PaySchedule, type Weekday } from "@/lib/payPeriods";
 import { asSalesTaxSettings, type SalesTaxSettings } from "@/lib/salesTax";
 import { SALES_TAX_DEFAULTS } from "@/lib/salesTaxDefaults";
 import type { Author } from "@/lib/types";
@@ -21,6 +22,16 @@ import type { Author } from "@/lib/types";
  * Nothing secret goes here: pay rates and the like belong elsewhere.
  */
 const DOC_ID = "business";
+
+/**
+ * Demo mode's stand-in for setDoc with { merge: true }: the demo store's
+ * update ignores a row that does not exist yet, which would make the first
+ * save of a section silently do nothing.
+ */
+function demoMerge(payload: Record<string, unknown>): void {
+  const existing = demo.get<Record<string, unknown>>(COLLECTIONS.settings, DOC_ID) ?? {};
+  demo.put(COLLECTIONS.settings, DOC_ID, { ...existing, ...payload });
+}
 
 export function subscribeSalesTaxSettings(
   onChange: (settings: SalesTaxSettings) => void,
@@ -60,7 +71,7 @@ export async function saveSalesTaxSettings(settings: SalesTaxSettings, author: A
     updatedByName: author.displayName,
   };
   if (isDemoMode) {
-    demo.put(COLLECTIONS.settings, DOC_ID, payload);
+    demoMerge(payload);
     return;
   }
   await setDoc(doc(getDb(), COLLECTIONS.settings, DOC_ID), payload, { merge: true });
@@ -112,7 +123,55 @@ export async function saveMileageSettings(settings: MileageSettings, author: Aut
     updatedByName: author.displayName,
   };
   if (isDemoMode) {
-    demo.update(COLLECTIONS.settings, DOC_ID, payload);
+    demoMerge(payload);
+    return;
+  }
+  await setDoc(doc(getDb(), COLLECTIONS.settings, DOC_ID), payload, { merge: true });
+}
+
+/* ---------------------------------------------------------- pay schedule */
+
+function asPaySchedule(raw: unknown): PaySchedule {
+  const r = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const frequency = (FREQUENCIES as readonly string[]).includes(String(r.frequency))
+    ? (r.frequency as Frequency)
+    : DEFAULT_SCHEDULE.frequency;
+  const startsOn =
+    typeof r.startsOn === "number" && Number.isInteger(r.startsOn) && r.startsOn >= 0 && r.startsOn <= 6
+      ? (r.startsOn as Weekday)
+      : DEFAULT_SCHEDULE.startsOn;
+  return { frequency, startsOn };
+}
+
+/** How often the crew is paid. Shared, so everyone's "this pay period" is the same dates. */
+export function usePaySchedule(): PaySchedule {
+  const [schedule, setSchedule] = useState<PaySchedule>(DEFAULT_SCHEDULE);
+  useEffect(() => {
+    if (isDemoMode) {
+      return demo.subscribe<Record<string, unknown>>(COLLECTIONS.settings, (rows) =>
+        setSchedule(asPaySchedule(rows.find((r) => r.id === DOC_ID)?.paySchedule)),
+      );
+    }
+    return onSnapshot(
+      doc(getDb(), COLLECTIONS.settings, DOC_ID),
+      (snap) => setSchedule(asPaySchedule(snap.data()?.paySchedule)),
+      () => setSchedule(DEFAULT_SCHEDULE),
+    );
+  }, []);
+  return schedule;
+}
+
+/** Owner only — the rules refuse anyone else. */
+export async function savePaySchedule(schedule: PaySchedule, author: Author): Promise<void> {
+  const payload = {
+    orgId: DEFAULT_ORG_ID,
+    paySchedule: { frequency: schedule.frequency, startsOn: schedule.startsOn },
+    updatedAt: serverTimestamp(),
+    updatedBy: author.uid,
+    updatedByName: author.displayName,
+  };
+  if (isDemoMode) {
+    demoMerge(payload);
     return;
   }
   await setDoc(doc(getDb(), COLLECTIONS.settings, DOC_ID), payload, { merge: true });
