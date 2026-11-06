@@ -144,7 +144,7 @@ function DayRoute() {
 
   const plan = useMemo(() => {
     if (!startPoint) return null;
-    const stops = toRoute.map((job) => ({ id: job.id, ...pointOf(job) }));
+    const stops = toRoute.map((job) => ({ id: job.id, ...pointOf(job), fixed: job.fixedTime }));
     return planRoute(startPoint, stops, matrix);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startPoint?.lat, startPoint?.lng, toRoute, matrix, customersById]);
@@ -187,6 +187,8 @@ function DayRoute() {
       ordered.map((job) => ({
         id: job.id,
         durationMinutes: (job.scheduledEnd.toMillis() - job.scheduledStart.toMillis()) / 60_000,
+        // A promised time is kept: the route waits for it, or warns it runs late.
+        fixedStart: job.fixedTime ? job.scheduledStart.toDate() : null,
       })),
       legs.map((l) => l ?? 0),
       first,
@@ -195,8 +197,9 @@ function DayRoute() {
 
   const changes = proposal.filter((p) => {
     const job = toRoute.find((j) => j.id === p.id);
-    return job && Math.abs(job.scheduledStart.toMillis() - p.start.getTime()) >= 60_000;
+    return !p.fixed && job && Math.abs(job.scheduledStart.toMillis() - p.start.getTime()) >= 60_000;
   });
+  const lateFor = proposal.filter((p) => p.lateMinutes > 0);
 
   async function applyTimes() {
     if (!author) return;
@@ -305,18 +308,36 @@ function DayRoute() {
                 index={i + 1}
                 job={job}
                 customer={customerOf(job)}
-                note={
+                note={[
+                  job.fixedTime ? "promised time" : "",
                   !hasFix(pointOf(job))
                     ? "No map location — fix the address"
                     : legs[i] != null
                       ? `${formatDriveMinutes(Math.max(1, Math.round(legs[i]!)))} drive`
-                      : ""
-                }
+                      : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
                 apple={apple}
                 onStartHere={() => setStartChoice({ kind: "job", jobId: job.id })}
               />
             ))}
           </ol>
+
+          {lateFor.length > 0 ? (
+            <div className="mt-3 rounded-2xl border border-warn/60 bg-warn/10 p-3 text-sm font-semibold text-ink">
+              {lateFor.map((p) => {
+                const job = toRoute.find((j) => j.id === p.id);
+                const customer = job ? customerOf(job) : undefined;
+                return (
+                  <p key={p.id}>
+                    This order gets to {customer ? customerName(customer) : "a job"} about {p.lateMinutes} min after the
+                    promised {timeLabel(p.start)}. Move a job, or call ahead.
+                  </p>
+                );
+              })}
+            </div>
+          ) : null}
 
           {changes.length > 0 ? (
             <div className="mt-3 rounded-2xl border border-line bg-surface-2 p-3">
@@ -336,7 +357,7 @@ function DayRoute() {
                     })}
                   </ul>
                   <p className="mt-2 text-sm font-semibold text-muted">
-                    No texts go out. If a customer was promised a time, keep that job where it is.
+                    No texts go out. Jobs marked &ldquo;Promised time&rdquo; keep their times.
                   </p>
                   <div className="mt-3 flex gap-2">
                     <Button variant="secondary" onClick={() => setConfirming(false)} disabled={saving}>

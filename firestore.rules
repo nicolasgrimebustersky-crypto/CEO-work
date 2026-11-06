@@ -417,6 +417,8 @@ service cloud.firestore {
         // before it existed have none. Capped as a runaway guard.
         && (!('checklist' in data)
             || (data.checklist is list && data.checklist.size() <= 60))
+        // A time the customer was promised (lib/dayRoute.ts). Optional.
+        && (!('fixedTime' in data) || data.fixedTime is bool)
         // Why a rain day moved or skipped it (lib/rainDay.ts). Optional.
         && (!('rainDelay' in data)
             || (data.rainDelay is map

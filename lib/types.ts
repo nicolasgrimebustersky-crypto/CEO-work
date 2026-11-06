@@ -268,6 +268,12 @@ export interface Job {
    * service job is billable; see lib/visitTypes.ts.
    */
   visitType: VisitType;
+  /**
+   * The customer was promised this time. Optimize Route never moves it, and
+   * "Update today's times" leaves it alone (lib/dayRoute.ts). False on every
+   * job saved before this existed.
+   */
+  fixedTime: boolean;
   scheduledStart: Timestamp;
   scheduledEnd: Timestamp;
   status: JobStatus;

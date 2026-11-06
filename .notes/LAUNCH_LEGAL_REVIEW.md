@@ -133,9 +133,12 @@ Each feature PR adds its own entries here. Highest risk first.
   - **Still not covered:** withholding, employer payroll taxes, and W-2
     forms. Keep running W-2 pay through a payroll service, and treat its
     figure as the one that counts.
-  - [Guessing] Kentucky's daily rules weren't modelled: the seventh-day
-    rule (KRS 337.050) and the 1.5× pay for a seventh consecutive workday.
-    Check with the payroll service.
+  - Kentucky's seventh-day rule (KRS 337.050) is modelled. When all seven
+    days of a workweek are worked and the week passes 40 hours, the
+    seventh day's hours get the premium. Because the statute credits one
+    rule against the other, the week's premium is on whichever is larger,
+    never both. [Guessing] Exceptions such as supervisors aren't modelled;
+    check with the payroll service.
 - **Hour corrections:** [Certain] each is logged with a reason, and a crew
   member's own correction needs the owner's approval. [Likely] Keep these
   records 3 years (FLSA record-keeping).

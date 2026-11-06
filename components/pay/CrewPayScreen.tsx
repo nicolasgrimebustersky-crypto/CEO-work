@@ -233,7 +233,7 @@ export function CrewPayScreen() {
           corrections. A correction never changes the taps; it is logged with a reason, and one you add for yourself
           counts once the owner approves it.
           {isAdmin
-            ? " For a W-2 employee, Owed includes overtime: time and a half for hours past 40 in a workweek, counted in the period the workweek ends. It is still gross pay only: withholding, payroll taxes and the W-2 itself come from a payroll service. Contractors are flagged at the year's 1099-NEC threshold, by the date paid."
+            ? " For a W-2 employee, Owed includes overtime: time and a half for hours past 40 in a workweek, or for the seventh day when all seven are worked (Kentucky), counted in the period the workweek ends. It is still gross pay only: withholding, payroll taxes and the W-2 itself come from a payroll service. Contractors are flagged at the year's 1099-NEC threshold, by the date paid."
             : ""}
         </p>
       </div>
@@ -306,8 +306,8 @@ function PersonCard({
       </p>
       {isOwner && pay.overtimeHours > 0 ? (
         <p className="mt-1 text-xs font-bold text-warn">
-          Includes overtime: {hrs(pay.overtimeHours)} past 40 in a workweek, +{money(pay.overtimePremium)} (half-time
-          premium on top of straight time)
+          Includes overtime: {hrs(pay.overtimeHours)}, +{money(pay.overtimePremium)} (half-time premium on top of
+          straight time, for hours past 40 in a workweek or a seventh day worked)
         </p>
       ) : null}
 

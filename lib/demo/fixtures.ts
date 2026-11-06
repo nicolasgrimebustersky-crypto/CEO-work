@@ -532,6 +532,7 @@ function job(
     serviceTypes: [serviceType],
     subServices: [],
     visitType: "service",
+    fixedTime: false,
     scheduledStart: start,
     scheduledEnd: Timestamp.fromMillis(start.toMillis() + hours * 3_600_000),
     status,
