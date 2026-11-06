@@ -408,6 +408,9 @@ export function DocumentPaper({
               color: "#6b7280",
             }}
           >
+            {businessDocument.taxPermit
+              ? `Kentucky sales tax permit #${businessDocument.taxPermit}. `
+              : ""}
             {BUSINESS.footer}
           </p>
 

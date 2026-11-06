@@ -66,7 +66,12 @@ export function blankLine(): DraftLine {
   };
 }
 
-export function emptyDraft(kind: DocumentKind, customerId: string): Draft {
+/** `taxRatePct`: the rate a new document starts with — the owner's sales-tax setting. */
+export function emptyDraft(
+  kind: DocumentKind,
+  customerId: string,
+  taxRatePct: number = DEFAULT_TAX_RATE_PCT,
+): Draft {
   return {
     kind,
     customerId,
@@ -75,7 +80,7 @@ export function emptyDraft(kind: DocumentKind, customerId: string): Draft {
     subServices: [],
     lines: [blankLine()],
     discount: "",
-    taxRatePct: String(DEFAULT_TAX_RATE_PCT),
+    taxRatePct: String(taxRatePct),
     notes: "",
     dueAt: "",
   };

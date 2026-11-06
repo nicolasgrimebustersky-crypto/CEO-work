@@ -160,6 +160,14 @@ export const COLLECTIONS = {
   automations: "automations",
   /** Money the business spent, with its receipt. See lib/db/expenses.ts. */
   expenses: "expenses",
+  /** Business-wide settings the owner sets, e.g. sales tax. See lib/db/settings.ts. */
+  settings: "settings",
+  /** Business trips, per person. See lib/db/mileage.ts. */
+  mileage: "mileage",
+  /** Each person's own home location, for mileage. Theirs and the owner's to read. */
+  mileageHomes: "mileageHomes",
+  /** Settings only the owner may even read: labour rates, pay. See lib/db/ownerSettings.ts. */
+  ownerSettings: "ownerSettings",
   /** Demo mode only — the real app keeps these as subcollections. */
   chatMessages: "chatMessages",
   chatReads: "chatReads",

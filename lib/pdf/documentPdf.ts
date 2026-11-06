@@ -318,7 +318,10 @@ export function buildDocumentPdf(
 
   const footerY = Math.max(y + 26, 10.1 * PT_PER_INCH);
   pdf.line(MARGIN, footerY, CONTENT_WIDTH, HAIRLINE, 0.6);
-  pdf.paragraph(BUSINESS.footer, MARGIN, footerY + 10, CONTENT_WIDTH, {
+  const footerText = document.taxPermit
+    ? `Kentucky sales tax permit #${document.taxPermit}. ${BUSINESS.footer}`
+    : BUSINESS.footer;
+  pdf.paragraph(footerText, MARGIN, footerY + 10, CONTENT_WIDTH, {
     size: 9,
     color: MUTED,
   });

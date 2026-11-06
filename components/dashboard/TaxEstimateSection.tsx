@@ -6,6 +6,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { Chip } from "@/components/ui/Chips";
 import { subscribeExpenses, type Expense } from "@/lib/db/expenses";
+import { subscribeTrips, type Trip } from "@/lib/db/mileage";
+import { useMileageSettings } from "@/lib/db/settings";
+import { mileageTotals } from "@/lib/mileage";
 import { expenseTotals } from "@/lib/expenses";
 import { formatMoney } from "@/lib/format";
 import { routes } from "@/lib/routes";
@@ -82,14 +85,32 @@ export function TaxEstimateSection({ year, grossSoFar }: { year: number; grossSo
     saveSettings(next);
   }
 
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const mileage = useMileageSettings();
+  useEffect(() => {
+    if (!uid) return;
+    return subscribeTrips({ uid, isOwner: true }, setTrips, () => setTrips([]));
+  }, [uid]);
+
   const totals = useMemo(() => expenseTotals(expenses ?? [], year), [expenses, year]);
+  const miles = useMemo(() => mileageTotals(trips, year), [trips, year]);
+  // Standard mileage and actual truck costs can't both be claimed for the
+  // same vehicle. With the mileage rate, gas and truck upkeep come out of the
+  // expenses and the miles go in; with actual costs, the miles don't count.
+  const truckCosts = totals.byCategory
+    .filter((row) => row.category === "fuel" || row.category === "vehicle")
+    .reduce((sum, row) => sum + row.amount, 0);
+  const usesMileage = mileage.method === "standard";
+  const vehicleDeduction = usesMileage ? miles.deduction : 0;
+  const otherExpenses = usesMileage ? totals.deductible - truckCosts : totals.deductible;
+  const deductible = otherExpenses + vehicleDeduction;
   const { exact } = taxYearFor(year);
   const options = { year, filing: settings.filing, localRate: settings.localPercent / 100 };
 
-  const profitSoFar = grossSoFar - totals.deductible;
+  const profitSoFar = grossSoFar - deductible;
   const soFar = estimateTax(profitSoFar, options);
   const grossAtPace = atYearPace(grossSoFar, year);
-  const expensesAtPace = atYearPace(totals.deductible, year);
+  const expensesAtPace = atYearPace(deductible, year);
   const fullYear = estimateTax(grossAtPace - expensesAtPace, options);
   const stillToSetAside = Math.max(0, fullYear.total - totals.taxPaid);
   const due = nextEstimatedPaymentDue();
@@ -123,8 +144,8 @@ export function TaxEstimateSection({ year, grossSoFar }: { year: number; grossSo
       <ul className="mt-2 flex flex-col gap-1.5">
         <Line label="Money in" value={isCurrentYear ? grossAtPace : grossSoFar} />
         <Line
-          label="Less expenses"
-          value={-(isCurrentYear ? expensesAtPace : totals.deductible)}
+          label={usesMileage ? `Less expenses and ${miles.miles} business miles` : "Less expenses"}
+          value={-(isCurrentYear ? expensesAtPace : deductible)}
           link={routes.expenses}
         />
         <Line label="Profit" value={(isCurrentYear ? fullYear : soFar).profit} bold />
