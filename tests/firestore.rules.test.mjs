@@ -675,6 +675,14 @@ describe("an opt-out is the customer's own instruction", () => {
 });
 
 describe("jobs", () => {
+  test("a rain-day note must say when it rained and what happened", async () => {
+    const ok = { rainedOn: "2026-11-10", from: "2026-11-10", action: "moved" };
+    await assertSucceeds(addDoc(collection(alice, "jobs"), jobDoc("alice", { rainDelay: ok })));
+    await assertSucceeds(addDoc(collection(alice, "jobs"), jobDoc("alice", { rainDelay: { ...ok, action: "skipped" } })));
+    await assertFails(addDoc(collection(alice, "jobs"), jobDoc("alice", { rainDelay: { ...ok, action: "vanished" } })));
+    await assertFails(addDoc(collection(alice, "jobs"), jobDoc("alice", { rainDelay: "rained" })));
+  });
+
   test("a crew member can schedule, edit and delete a job", async () => {
     const ref = await assertSucceeds(
       addDoc(collection(alice, "jobs"), jobDoc("alice")),
@@ -982,6 +990,99 @@ describe("owner-only settings (labour rates)", () => {
 });
 
 /* ------------------------------------------------------------------ quotes */
+
+describe("equipment maintenance", () => {
+  const equipment = (uid, over = {}) => ({
+    orgId: ORG_ID,
+    name: "Zero-turn",
+    meter: "hours",
+    tasks: [{ id: "oil", what: "Oil change", everyDays: null, everyUnits: 50 }],
+    createdAt: serverTimestamp(),
+    createdBy: uid,
+    createdByName: uid,
+    updatedAt: serverTimestamp(),
+    updatedBy: uid,
+    updatedByName: uid,
+    ...over,
+  });
+  const entry = (uid, over = {}) => ({
+    orgId: ORG_ID,
+    equipmentId: "m1",
+    date: "2026-11-03",
+    taskIds: ["oil"],
+    reading: 250,
+    note: "",
+    expenseId: null,
+    createdAt: serverTimestamp(),
+    createdBy: uid,
+    createdByName: uid,
+    ...over,
+  });
+
+  test("crew add and adjust equipment; only the owner deletes it; nobody but the cron touches reminders", async () => {
+    await assertSucceeds(setDoc(doc(alice, "equipment/m1"), equipment("alice")));
+    await assertSucceeds(getDoc(doc(bob, "equipment/m1")));
+    await assertSucceeds(updateDoc(doc(bob, "equipment/m1"), { meter: "none", updatedAt: serverTimestamp(), updatedBy: "bob" }));
+    await assertFails(updateDoc(doc(bob, "equipment/m1"), { notified: { oil: "overdue:" }, updatedAt: serverTimestamp(), updatedBy: "bob" }));
+    await assertFails(setDoc(doc(alice, "equipment/m2"), equipment("alice", { notified: {} })));
+    await assertFails(setDoc(doc(alice, "equipment/m3"), equipment("alice", { name: "" })));
+    await assertFails(setDoc(doc(alice, "equipment/m4"), equipment("alice", { meter: "furlongs" })));
+    await assertFails(deleteDoc(doc(alice, "equipment/m1")));
+    await assertSucceeds(deleteDoc(doc(admin, "equipment/m1")));
+    await assertFails(setDoc(doc(mallory, "equipment/m5"), equipment("mallory")));
+  });
+
+  test("whoever did the work logs it; they or the owner correct it; nobody else", async () => {
+    await assertSucceeds(setDoc(doc(alice, "maintenanceLog/l1"), entry("alice")));
+    await assertSucceeds(getDoc(doc(bob, "maintenanceLog/l1")));
+    await assertFails(setDoc(doc(bob, "maintenanceLog/l1"), entry("bob")));
+    await assertFails(deleteDoc(doc(bob, "maintenanceLog/l1")));
+    await assertSucceeds(setDoc(doc(alice, "maintenanceLog/l1"), entry("alice", { reading: 251 })));
+    await assertSucceeds(setDoc(doc(admin, "maintenanceLog/l1"), entry("nicolas", { reading: 252 })));
+    await assertSucceeds(deleteDoc(doc(admin, "maintenanceLog/l1")));
+    await assertFails(setDoc(doc(alice, "maintenanceLog/l2"), entry("bob")));
+  });
+
+  test("an entry is a task done or a reading, with a real date", async () => {
+    for (const bad of [{ taskIds: [], reading: null }, { date: "today" }, { reading: -1 }, { reading: "250" }, { note: "x".repeat(201) }]) {
+      await assertFails(setDoc(doc(alice, "maintenanceLog/bad"), entry("alice", bad)));
+    }
+    await assertSucceeds(setDoc(doc(alice, "maintenanceLog/reading"), entry("alice", { taskIds: [] })));
+  });
+});
+
+describe("seasonal campaigns", () => {
+  const campaign = (uid, over = {}) => ({
+    orgId: ORG_ID,
+    templateId: "fall_aeration",
+    name: "Fall aeration & overseeding",
+    service: "aeration",
+    message: "Fall is the best time to aerate. Reply STOP to opt out.",
+    recipients: ["c1", "c2"],
+    excluded: 3,
+    sentAt: serverTimestamp(),
+    createdAt: serverTimestamp(),
+    createdBy: uid,
+    createdByName: uid,
+    ...over,
+  });
+
+  test("only the owner records a campaign; crew read it; nobody edits it", async () => {
+    await assertFails(setDoc(doc(alice, "campaigns/c1"), campaign("alice")));
+    await assertSucceeds(setDoc(doc(admin, "campaigns/c1"), campaign("nicolas")));
+    await assertSucceeds(getDoc(doc(alice, "campaigns/c1")));
+    await assertFails(getDoc(doc(mallory, "campaigns/c1")));
+    await assertFails(updateDoc(doc(admin, "campaigns/c1"), { recipients: ["c9"] }));
+    await assertFails(deleteDoc(doc(alice, "campaigns/c1")));
+    await assertSucceeds(deleteDoc(doc(admin, "campaigns/c1")));
+  });
+
+  test("a campaign record must be whole", async () => {
+    for (const bad of [{ message: "" }, { recipients: "c1" }, { excluded: -1 }, { sentAt: "today" }, { name: "" }]) {
+      await assertFails(setDoc(doc(admin, "campaigns/bad"), campaign("nicolas", bad)));
+    }
+  });
+});
 
 describe("crew pay", () => {
   const edit = (createdBy, over = {}) => ({

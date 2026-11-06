@@ -14,6 +14,8 @@ import {
   PriceBookIcon,
   MileageIcon,
   PayIcon,
+  WrenchIcon,
+  MegaphoneIcon,
   ReceiptIcon,
   ReportIcon,
   SearchIcon,
@@ -100,6 +102,12 @@ export const DRAWER_ONLY: NavItem[] = [
     hint: "Texts to and from customers, and who is waiting",
   },
   {
+    href: routes.campaigns,
+    label: "Campaigns",
+    icon: MegaphoneIcon,
+    hint: "Seasonal offers to your own customers, and what came of them",
+  },
+  {
     href: routes.automations,
     label: "Automations",
     icon: AutomationIcon,
@@ -128,6 +136,12 @@ export const DRAWER_ONLY: NavItem[] = [
     label: "Mileage",
     icon: MileageIcon,
     hint: "Business miles between jobs, at the IRS rate",
+  },
+  {
+    href: routes.equipment,
+    label: "Equipment",
+    icon: WrenchIcon,
+    hint: "Oil changes, blades and the truck's service — what's due",
   },
   {
     href: routes.crewPay,

@@ -31,6 +31,8 @@ export function notificationLink(item: {
       return routes.schedule;
     case "pipeline":
       return routes.pipeline;
+    case "equipment":
+      return routes.equipment;
     case "chatThread":
       return routes.chatThread(target.id ?? "");
     case "chat":

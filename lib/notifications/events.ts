@@ -35,7 +35,7 @@ export const CATEGORY_LABEL: Record<NotificationCategory, string> = {
 };
 
 export const CATEGORY_HINT: Record<NotificationCategory, string> = {
-  jobs: "Jobs booked, moved, finished or cancelled, and routes handed to you.",
+  jobs: "Jobs booked, moved, finished or cancelled, routes handed to you, and equipment service coming due.",
   customers: "New doors knocked, status changes, photos added to a job.",
   money: "Estimates and invoices sent, and payments landing.",
   messages: "A customer texts back.",
@@ -59,7 +59,8 @@ type Destination =
   | "knockRoutes"
   | "schedule"
   | "pipeline"
-  | "chat";
+  | "chat"
+  | "equipment";
 
 interface EventDefinition {
   category: NotificationCategory;
@@ -79,6 +80,8 @@ export const NOTIFICATION_EVENTS = {
   },
   job_completed: { category: "jobs", title: "Job completed", destination: "customer" },
   job_cancelled: { category: "jobs", title: "Job cancelled", destination: "schedule" },
+  /** Raised by the daily maintenance cron: once when due soon, once when overdue. */
+  maintenance_due: { category: "jobs", title: "Equipment service due", destination: "equipment" },
 
   /* ------------------------------------------------------------ customers */
   customer_added: {
@@ -222,7 +225,8 @@ export interface ResolvedDestination {
     | "schedule"
     | "pipeline"
     | "chat"
-    | "chatThread";
+    | "chatThread"
+    | "equipment";
   /** The record to open, when there is one. */
   id?: string;
 }
@@ -252,6 +256,8 @@ export function destinationFor(item: {
       return { screen: "schedule" };
     case "pipeline":
       return { screen: "pipeline" };
+    case "equipment":
+      return { screen: "equipment" };
     case "messages":
       // Straight to the record when we know whose it is — that is the fuller
       // context. Only a text we could not match falls through to the inbox.

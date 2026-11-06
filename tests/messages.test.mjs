@@ -30,6 +30,12 @@ const OPT_OUT = "Reply STOP to opt out.";
 const CALLS = {
   jobConfirmationText: ["Pressure washing", new Date("2026-05-04T14:00:00Z")],
   jobRescheduledText: ["Pressure washing", new Date("2026-05-06T09:30:00Z")],
+  rainDayText: [
+    [
+      { service: "Mowing", start: new Date("2026-05-07T13:00:00Z") },
+      { service: "Mowing", nextVisit: new Date("2026-05-12T13:00:00Z") },
+    ],
+  ],
   greetingFor: ["Marta"],
   enRouteText: ["Marta"],
   jobStartedText: ["Noah"],
