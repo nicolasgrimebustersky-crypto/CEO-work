@@ -696,6 +696,7 @@ function demoDoc(
     lineItems,
     discount: totals.discount,
     taxRatePct: DEFAULT_TAX_RATE_PCT,
+    taxPermit: null,
     subtotal: totals.subtotal,
     taxAmount: totals.taxAmount,
     total: totals.total,

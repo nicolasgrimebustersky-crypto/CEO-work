@@ -209,6 +209,12 @@ export interface BusinessDocument {
   /** Flat amount off, not a percentage — that is how it was always quoted. */
   discount: number;
   taxRatePct: number;
+  /**
+   * The sales-tax permit number printed on this document, copied from the
+   * settings when it was created so a later change never rewrites an old
+   * invoice. Null when tax tracking was off or no permit was set.
+   */
+  taxPermit: string | null;
 
   /**
    * Totals are stored, not only computed. An invoice sent last March has to

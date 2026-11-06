@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// Job photos (Phase 4). Same two-account allowlist as Firestore — keep the two
+// Job photos (Phase 4) and expense receipts. Same two-account allowlist as Firestore — keep the two
 // uid placeholders in sync with firestore.rules.
 
 service firebase.storage {
@@ -16,13 +16,22 @@ service firebase.storage {
         && request.auth.token.auth_time in request.auth.token.otpAuths;
     }
 
+    // Same email check as isAdmin() in firestore.rules. The owner is crew
+    // there, so the owner is crew here too, whatever account they sign in on.
+    function isAdmin() {
+      return request.auth != null
+        && 'email' in request.auth.token
+        && request.auth.token.email is string
+        && request.auth.token.email.lower() == 'nicolas.grimebustersky@gmail.com';
+    }
+
     function isCrew() {
       return request.auth != null
         && hasVerifiedSession()
-        && request.auth.uid in [
+        && (isAdmin() || request.auth.uid in [
              'Bzo7rclax4SdT7PaAua1monNxXG3',
              'QLMsTAHbbceHBAWBXPqtScGdGon2'
-           ];
+           ]);
     }
 
     match /jobs/{jobId}/{fileName} {
@@ -38,6 +47,20 @@ service firebase.storage {
       // delete: folding it into the rule above would make every delete fail
       // the size check and leave orphaned files behind.
       allow delete: if isCrew();
+    }
+
+    // Expense receipts: a photo off the phone camera, or a PDF of an emailed
+    // receipt. Filed under the uid of whoever the expense belongs to: that
+    // person and the owner may open and replace it, nobody else — a receipt
+    // is the business's spending, which the rest of the crew does not see.
+    match /expenses/{ownerUid}/{expenseId}/{fileName} {
+      allow read: if isCrew() && (isAdmin() || request.auth.uid == ownerUid);
+      allow create, update: if isCrew()
+        && (isAdmin() || request.auth.uid == ownerUid)
+        && request.resource.size < 15 * 1024 * 1024
+        && (request.resource.contentType.matches('image/.*')
+            || request.resource.contentType == 'application/pdf');
+      allow delete: if isCrew() && (isAdmin() || request.auth.uid == ownerUid);
     }
   }
 }

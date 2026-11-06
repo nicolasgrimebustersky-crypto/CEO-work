@@ -11,6 +11,9 @@ import { ScreenHeader } from "@/components/shell/ScreenHeader";
 import { UserChip } from "@/components/ui/Chips";
 import { Spinner } from "@/components/ui/Spinner";
 import { PayPeriodSection } from "./PayPeriodSection";
+import { ProfitSection } from "./ProfitSection";
+import { SalesTaxSection } from "./SalesTaxSection";
+import { TaxEstimateSection } from "./TaxEstimateSection";
 import { fetchJobsBetween } from "@/lib/db/jobs";
 import { quoteCloseRate, subscribeAllQuotes } from "@/lib/db/quotes";
 import { formatMoney } from "@/lib/format";
@@ -24,7 +27,7 @@ const MONTHS_BACK = 12;
 export function ReportsScreen() {
   const { customers } = useCustomers();
   const { documents } = useDocuments();
-  const { users, colorFor } = useTeam();
+  const { users, colorFor, isAdmin } = useTeam();
 
   const [jobs, setJobs] = useState<Job[] | null>(null);
   const [quotes, setQuotes] = useState<Quote[]>([]);
@@ -179,6 +182,11 @@ export function ReportsScreen() {
             </div>
 
             <PayPeriodSection jobs={jobs} documents={documents} />
+
+            {/* Owner only: the business's profit and tax are not crew business. */}
+            {isAdmin ? <TaxEstimateSection year={thisYear.year} grossSoFar={thisYear.total} /> : null}
+            {isAdmin ? <SalesTaxSection /> : null}
+            {isAdmin ? <ProfitSection jobs={jobs} /> : null}
 
             <Section title="Revenue by month">
               <ul className="flex flex-col gap-1.5">

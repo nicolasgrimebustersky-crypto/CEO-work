@@ -160,3 +160,28 @@ export function useTravelMatrix(points: LatLng[]): { matrix: number[][] | null; 
 
   return { matrix, source: matrix ? "google" : "estimate" };
 }
+
+/**
+ * Road miles between two places, from the Distance Matrix when it answers,
+ * else the straight-line estimate (marked `estimated`). For logging a trip.
+ */
+export function useRoadMiles(): (a: LatLng, b: LatLng) => Promise<{ miles: number; estimated: boolean }> {
+  const routesLib = useMapsLibrary("routes");
+  return async (a, b) => {
+    const fallback = { miles: Math.round(((distanceMeters(a, b) * ROAD_WINDING_FACTOR) / 1609.34) * 10) / 10, estimated: true };
+    if (!routesLib) return fallback;
+    try {
+      const response = await new routesLib.DistanceMatrixService().getDistanceMatrix({
+        origins: [a],
+        destinations: [b],
+        travelMode: google.maps.TravelMode.DRIVING,
+        unitSystem: google.maps.UnitSystem.IMPERIAL,
+      });
+      const element = response.rows[0]?.elements[0];
+      if (!element || element.status !== "OK" || !element.distance) return fallback;
+      return { miles: Math.round((element.distance.value / 1609.34) * 10) / 10, estimated: false };
+    } catch {
+      return fallback;
+    }
+  };
+}

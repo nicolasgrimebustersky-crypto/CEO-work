@@ -127,3 +127,65 @@ describe("job photos", () => {
     );
   });
 });
+
+test("the owner is crew here too, as in firestore.rules", async () => {
+  const owner = testEnv
+    .authenticatedContext("nicolas", { email: "nicolas.grimebustersky@gmail.com", ...VERIFIED })
+    .storage();
+  await assertSucceeds(uploadBytes(ref(owner, "jobs/j9/before-1.jpg"), IMAGE_BYTES, IMAGE));
+  // The email alone, without this sign-in's code, is not enough.
+  const ownerNoCode = testEnv
+    .authenticatedContext("nicolas", { email: "nicolas.grimebustersky@gmail.com" })
+    .storage();
+  await assertFails(uploadBytes(ref(ownerNoCode, "jobs/j9/before-2.jpg"), IMAGE_BYTES, IMAGE));
+});
+
+describe("expense receipts", () => {
+  const PDF = { contentType: "application/pdf" };
+  let owner;
+  before(() => {
+    owner = testEnv
+      .authenticatedContext("nicolas", { email: "nicolas.grimebustersky@gmail.com", ...VERIFIED })
+      .storage();
+  });
+
+  test("a crew member can file a receipt photo or PDF under their own name, read it and delete it", async () => {
+    await assertSucceeds(uploadBytes(ref(alice, "expenses/alice/x1/receipt-1.jpg"), IMAGE_BYTES, IMAGE));
+    await assertSucceeds(uploadBytes(ref(alice, "expenses/alice/x1/receipt-2.pdf"), IMAGE_BYTES, PDF));
+    await assertSucceeds(getDownloadURL(ref(alice, "expenses/alice/x1/receipt-1.jpg")));
+    await assertSucceeds(deleteObject(ref(alice, "expenses/alice/x1/receipt-1.jpg")));
+  });
+
+  test("another crew member cannot open, add to or delete someone else's receipts", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await uploadBytes(ref(ctx.storage(), "expenses/alice/x2/receipt-1.jpg"), IMAGE_BYTES, IMAGE);
+    });
+    await assertFails(getDownloadURL(ref(bob, "expenses/alice/x2/receipt-1.jpg")));
+    await assertFails(uploadBytes(ref(bob, "expenses/alice/x2/sneaky.jpg"), IMAGE_BYTES, IMAGE));
+    await assertFails(deleteObject(ref(bob, "expenses/alice/x2/receipt-1.jpg")));
+  });
+
+  test("the owner can open and replace anyone's receipts", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await uploadBytes(ref(ctx.storage(), "expenses/alice/x3/receipt-1.jpg"), IMAGE_BYTES, IMAGE);
+    });
+    await assertSucceeds(getDownloadURL(ref(owner, "expenses/alice/x3/receipt-1.jpg")));
+    await assertSucceeds(uploadBytes(ref(owner, "expenses/alice/x3/receipt-2.jpg"), IMAGE_BYTES, IMAGE));
+    await assertSucceeds(deleteObject(ref(owner, "expenses/alice/x3/receipt-1.jpg")));
+  });
+
+  test("outsiders cannot upload or read receipts", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await uploadBytes(ref(ctx.storage(), "expenses/alice/x4/receipt-1.jpg"), IMAGE_BYTES, IMAGE);
+    });
+    await assertFails(uploadBytes(ref(mallory, "expenses/mallory/x4/sneaky.jpg"), IMAGE_BYTES, IMAGE));
+    await assertFails(getDownloadURL(ref(mallory, "expenses/alice/x4/receipt-1.jpg")));
+    await assertFails(getDownloadURL(ref(anon, "expenses/alice/x4/receipt-1.jpg")));
+  });
+
+  test("only images and PDFs, under 15 MB", async () => {
+    await assertFails(uploadBytes(ref(alice, "expenses/alice/x5/r.html"), IMAGE_BYTES, { contentType: "text/html" }));
+    const tooBig = new Uint8Array(16 * 1024 * 1024);
+    await assertFails(uploadBytes(ref(alice, "expenses/alice/x5/huge.jpg"), tooBig, IMAGE));
+  });
+});

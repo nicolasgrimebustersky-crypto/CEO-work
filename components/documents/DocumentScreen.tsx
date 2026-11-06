@@ -64,6 +64,7 @@ import {
 } from "./draft";
 import { ServicePicker } from "@/components/ui/ServicePicker";
 import { servicesLabel } from "@/lib/serviceText";
+import { useSalesTaxSettings } from "@/lib/db/settings";
 
 const INPUT =
   "tap-target w-full rounded-xl border border-line bg-surface-2 px-3 py-3 text-base text-ink placeholder:text-muted/70 focus:border-accent focus:outline-none";
@@ -110,6 +111,7 @@ export function DocumentScreen() {
   const { byId: customersById } = useCustomers();
   const { byId: jobsById } = useJobs();
   const { author } = useTeam();
+  const salesTax = useSalesTaxSettings();
   const notify = useNotify();
 
   const document = documentId ? (byId.get(documentId) ?? null) : null;
@@ -141,8 +143,10 @@ export function DocumentScreen() {
   // backing out of one leaves nothing behind.
   useEffect(() => {
     if (!isNew || !newKind) return;
-    setDraft(emptyDraft(newKind, presetCustomer));
+    setDraft(emptyDraft(newKind, presetCustomer, salesTax.defaultRatePct));
     setEditing(true);
+    // Settings arriving after the draft opened must not wipe what was typed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isNew, newKind, presetCustomer]);
 
   const customer =
@@ -240,6 +244,9 @@ export function DocumentScreen() {
             lineItems: lineItemsFrom(draft),
             discount: toNumber(draft.discount),
             taxRatePct: toNumber(draft.taxRatePct),
+            // Printed on the document; copied now so a later settings change
+            // never alters what an old invoice says.
+            taxPermit: salesTax.enabled && toNumber(draft.taxRatePct) > 0 ? salesTax.permitNumber : null,
             notes: draft.notes,
             dueAt: parseDueDate(draft.dueAt),
           },
