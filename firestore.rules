@@ -809,7 +809,7 @@ service cloud.firestore {
         && data.amount is number
         && data.amount > 0
         && data.amount < 1000000
-        && data.category in ['fuel', 'vehicle', 'equipment', 'equipment_repair', 'tools', 'supplies', 'dump_fees', 'labor', 'insurance', 'phone_software', 'advertising', 'licenses', 'meals', 'other', 'tax_payment']
+        && data.category in ['fuel', 'vehicle', 'equipment', 'equipment_repair', 'tools', 'supplies', 'dump_fees', 'labor', 'insurance', 'phone_software', 'advertising', 'licenses', 'meals', 'other', 'tax_payment', 'sales_tax_remitted']
         && data.paymentMethod in ['card', 'cash', 'venmo', 'check', 'bank', 'other']
         && data.proof in ['receipt', 'statement', 'in_person']
         && data.vendor is string && data.vendor.size() <= 120

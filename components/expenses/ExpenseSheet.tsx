@@ -24,6 +24,7 @@ import {
   PAYMENT_METHOD_LABEL,
   PROOF_LABEL,
   expenseProblem,
+  isTaxRemittance,
   localDate,
   parseAmount,
   type ExpenseCategory,
@@ -306,7 +307,7 @@ export function ExpenseSheet({
           <p className="mt-1.5 text-sm font-semibold text-muted">{EXPENSE_CATEGORY_HINT[category]}</p>
         </div>
 
-        {category !== "tax_payment" ? (
+        {!isTaxRemittance(category) ? (
           <div>
             <p className="mb-1.5 text-sm font-semibold text-muted">What it was for</p>
             <div className="mb-2 flex flex-wrap gap-2">
@@ -331,8 +332,8 @@ export function ExpenseSheet({
         ) : null}
 
         <TextField
-          label={category === "tax_payment" ? "Paid to" : "Where"}
-          placeholder={category === "tax_payment" ? "IRS, Kentucky DOR" : "Shell, Home Depot, the dealer…"}
+          label={isTaxRemittance(category) ? "Paid to" : "Where"}
+          placeholder={isTaxRemittance(category) ? "IRS, Kentucky DOR" : "Shell, Home Depot, the dealer…"}
           maxLength={120}
           value={vendor}
           onChange={(e) => setVendor(e.target.value)}

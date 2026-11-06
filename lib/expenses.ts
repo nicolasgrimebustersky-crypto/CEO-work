@@ -34,6 +34,7 @@ export const EXPENSE_CATEGORIES = [
   "meals",
   "other",
   "tax_payment",
+  "sales_tax_remitted",
 ] as const;
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
 
@@ -53,6 +54,7 @@ export const EXPENSE_CATEGORY_LABEL: Record<ExpenseCategory, string> = {
   meals: "Meals",
   other: "Other",
   tax_payment: "Tax payment",
+  sales_tax_remitted: "Sales tax sent to the state",
 };
 
 /** A line under the category chip, so the right one is obvious on a porch. */
@@ -72,6 +74,7 @@ export const EXPENSE_CATEGORY_HINT: Record<ExpenseCategory, string> = {
   meals: "Meals while working away — only half counts",
   other: "Anything else the business paid for",
   tax_payment: "An estimated tax payment to the IRS or state — not an expense",
+  sales_tax_remitted: "Sales tax collected from customers and paid to the state — not an expense",
 };
 
 /** Suggestions for "what was it for", before any history exists to learn from. */
@@ -151,7 +154,13 @@ export const DEDUCTIBLE_SHARE: Record<ExpenseCategory, number> = {
   meals: 0.5,
   other: 1,
   tax_payment: 0,
+  sales_tax_remitted: 0,
 };
+
+/** Money out that is a tax being paid over, not a business expense. */
+export function isTaxRemittance(category: ExpenseCategory): boolean {
+  return category === "tax_payment" || category === "sales_tax_remitted";
+}
 
 const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -215,6 +224,8 @@ export interface ExpenseTotals {
   deductible: number;
   /** Estimated tax already paid. */
   taxPaid: number;
+  /** Sales tax paid over to the state. Not an expense either. */
+  salesTaxRemitted: number;
   byCategory: { category: ExpenseCategory; amount: number; count: number }[];
   /** Spending split by what proves it, tax payments left out. */
   byProof: Record<ProofKind, number>;
@@ -229,6 +240,7 @@ export function expenseTotals(expenses: readonly ExpenseLike[], year: number): E
   let spent = 0;
   let deductible = 0;
   let taxPaid = 0;
+  let salesTaxRemitted = 0;
   let count = 0;
 
   for (const expense of expenses) {
@@ -245,6 +257,10 @@ export function expenseTotals(expenses: readonly ExpenseLike[], year: number): E
       taxPaid += amount;
       continue;
     }
+    if (expense.category === "sales_tax_remitted") {
+      salesTaxRemitted += amount;
+      continue;
+    }
     spent += amount;
     deductible += amount * (DEDUCTIBLE_SHARE[expense.category] ?? 1);
     if (expense.proof in byProof) byProof[expense.proof] += amount;
@@ -254,6 +270,7 @@ export function expenseTotals(expenses: readonly ExpenseLike[], year: number): E
     spent: round2(spent),
     deductible: round2(deductible),
     taxPaid: round2(taxPaid),
+    salesTaxRemitted: round2(salesTaxRemitted),
     byCategory: [...byCategory.entries()]
       .map(([category, entry]) => ({ category, amount: round2(entry.amount), count: entry.count }))
       .sort((a, b) => b.amount - a.amount),

@@ -183,7 +183,10 @@ before(async () => {
   const rules = rulesWithTestCrew(join(repoRoot, "firestore.rules"));
 
   testEnv = await initializeTestEnvironment({
-    projectId: "gb-rules-test",
+    // Its own project, not the storage suite's: the two files run at the
+    // same time, and this one clears Firestore before every test. Sharing an
+    // id wiped the crew profiles the storage suite seeds, mid-run.
+    projectId: "gb-rules-test-firestore",
     firestore: { rules, host: "127.0.0.1", port: 8080 },
   });
 
@@ -833,6 +836,10 @@ describe("expenses", () => {
     ]) {
       await assertFails(setDoc(doc(alice, "expenses/bad"), expenseDoc("alice", bad)));
     }
+  });
+
+  test("sales tax paid to the state can be logged like a tax payment", async () => {
+    await assertSucceeds(setDoc(doc(alice, "expenses/st1"), expenseDoc("alice", { category: "sales_tax_remitted", vendor: "Kentucky DOR" })));
   });
 
   test("'receipt on file' must carry a receipt, filed under the expense's owner", async () => {
