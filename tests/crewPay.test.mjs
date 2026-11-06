@@ -126,3 +126,66 @@ describe("stored settings", () => {
     assert.equal(dateKey(new Date(2026, 0, 5, 23, 59)), "2026-01-05");
   });
 });
+
+describe("overtime (W-2 only, by the workweek)", async () => {
+  const { overtimeFor, OVERTIME_AFTER_HOURS } = await import("../lib/crewPay.ts");
+  const { dailyWork } = await import("../lib/payPeriods.ts");
+  const w2 = { classification: "w2", basis: "hourly", rate: 20, w9: null };
+  // Mon 2026-11-02 … Sun 2026-11-08; workweek starts Monday (1).
+  const week = (hoursPerDay, from = 2) =>
+    hoursPerDay.map((h, i) => ({ date: `2026-11-${String(from + i).padStart(2, "0")}`, hours: h, jobs: h ? 1 : 0, revenue: h * 30 }));
+
+  test("hours past 40 get the half-time premium on top of straight time", () => {
+    const o = overtimeFor(w2, week([9, 9, 9, 9, 9, 0, 0]), "2026-11-02", "2026-11-09", 1);
+    assert.equal(OVERTIME_AFTER_HOURS, 40);
+    assert.equal(o.hours, 5);
+    assert.equal(o.premium, 50); // 5 h × $20 × 0.5 — with 45 h straight time, 45×20 + 50 = 5 × 30 + 40 × 20
+    const p = periodPay(w2, { hours: 45, jobs: 5, revenue: 0 }, { approved: 0, pending: 0 }, o);
+    assert.equal(p.gross, 950);
+    assert.equal(p.overtimeHours, 5);
+  });
+
+  test("40 hours or less, and contractors, get none", () => {
+    assert.equal(overtimeFor(w2, week([8, 8, 8, 8, 8, 0, 0]), "2026-11-02", "2026-11-09", 1).hours, 0);
+    assert.equal(overtimeFor({ ...w2, classification: "1099" }, week([12, 12, 12, 12, 0, 0, 0]), "2026-11-02", "2026-11-09", 1).hours, 0);
+  });
+
+  test("a workweek is counted in the period it ends in, with hours from before the period", () => {
+    // Semimonthly period Nov 1–15. The week Mon Oct 26–Sun Nov 1 ends on Nov 1, inside it.
+    const days = [
+      ...["2026-10-26", "2026-10-27", "2026-10-28", "2026-10-29", "2026-10-30"].map((date) => ({ date, hours: 10, jobs: 1, revenue: 0 })),
+    ];
+    const o = overtimeFor(w2, days, "2026-11-01", "2026-11-16", 1);
+    assert.deepEqual(o.weeks.map((w) => [w.start, w.overtimeHours]), [["2026-10-26", 10]]);
+    // The same week is not counted again by the period before it.
+    assert.equal(overtimeFor(w2, days, "2026-10-16", "2026-11-01", 1).hours, 0);
+  });
+
+  test("pay by the job: premium on the week's regular rate (earnings ÷ hours)", () => {
+    const perJob = { ...w2, basis: "per_job", rate: 100 };
+    // 10 jobs × $100 = $1,000 over 50 h → $20/h regular rate → 10 OT h × $10 = $100.
+    const days = week([10, 10, 10, 10, 10, 0, 0]).map((d) => ({ ...d, jobs: d.hours ? 2 : 0 }));
+    const o = overtimeFor(perJob, days, "2026-11-02", "2026-11-09", 1);
+    assert.equal(o.weeks[0].regularRate, 20);
+    assert.equal(o.premium, 100);
+  });
+
+  test("daily work is counted the way the period summary counts it", () => {
+    const stamp = (iso) => ({ toMillis: () => new Date(iso).getTime() });
+    const job = (over) => ({
+      status: "complete",
+      price: 200,
+      visitType: "service",
+      assignedTo: ["a", "b"],
+      completedAt: stamp("2026-11-03T15:00:00"),
+      startedAt: stamp("2026-11-03T09:00:00"),
+      finishedAt: stamp("2026-11-03T15:00:00"),
+      scheduledStart: stamp("2026-11-03T09:00:00"),
+      scheduledEnd: stamp("2026-11-03T11:00:00"),
+      ...over,
+    });
+    const window = { start: new Date(2026, 9, 26), end: new Date(2026, 10, 9) };
+    const days = dailyWork("a", ["a", "b"], [job({}), job({ assignedTo: ["b"] }), job({ status: "scheduled" })], window);
+    assert.deepEqual(days, [{ date: "2026-11-03", hours: 6, jobs: 1, revenue: 100 }]);
+  });
+});

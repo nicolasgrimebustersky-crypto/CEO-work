@@ -13,8 +13,9 @@
  *
  * W-2 or 1099: for a 1099 contractor the year's payments are checked
  * against the 1099-NEC threshold and a missing W-9 is flagged. For a W-2
- * employee this tracks gross pay only — withholding, payroll taxes and the
- * W-2 itself belong with a payroll service.
+ * employee gross pay includes overtime (overtimeFor: time and a half past
+ * 40 hours in a workweek); withholding, payroll taxes and the W-2 itself
+ * still belong with a payroll service.
  *
  * Free of imports so every rule is tested by calling it.
  */
@@ -184,11 +185,23 @@ export interface PeriodPay {
   hours: number;
   jobs: number;
   revenue: number;
+  /** Overtime hours in workweeks ending this period (W-2 only). */
+  overtimeHours: number;
+  /** The half-time premium on them; included in `gross`. */
+  overtimePremium: number;
   gross: number;
 }
 
-/** What one person earned in a period at their rate. Hours are never below zero. */
-export function periodPay(person: PersonPay, work: PeriodWork, edits: { approved: number; pending: number }): PeriodPay {
+/**
+ * What one person earned in a period at their rate, plus any overtime
+ * premium (overtimeFor). Hours are never below zero.
+ */
+export function periodPay(
+  person: PersonPay,
+  work: PeriodWork,
+  edits: { approved: number; pending: number },
+  overtime: Overtime = NO_OVERTIME,
+): PeriodPay {
   const tapHours = Math.max(0, work.hours);
   const hours = Math.max(0, Math.round((tapHours + edits.approved / 60) * 100) / 100);
   const jobs = Math.max(0, work.jobs);
@@ -206,7 +219,121 @@ export function periodPay(person: PersonPay, work: PeriodWork, edits: { approved
     hours,
     jobs,
     revenue: round2(revenue),
-    gross: round2(gross),
+    overtimeHours: overtime.hours,
+    overtimePremium: overtime.premium,
+    gross: round2(gross + overtime.premium),
+  };
+}
+
+/* ------------------------------------------------------------ overtime */
+
+/** Hours in a workweek past which a W-2 employee is owed time and a half (FLSA; KRS 337.285). */
+export const OVERTIME_AFTER_HOURS = 40;
+
+export interface DayHours {
+  /** "YYYY-MM-DD" */
+  date: string;
+  hours: number;
+  jobs: number;
+  revenue: number;
+}
+
+export interface OvertimeWeek {
+  /** "YYYY-MM-DD", first day of the workweek. */
+  start: string;
+  hours: number;
+  overtimeHours: number;
+  /** What the hours were paid at straight time, divided by the hours: the "regular rate". */
+  regularRate: number;
+  premium: number;
+}
+
+export interface Overtime {
+  hours: number;
+  premium: number;
+  weeks: OvertimeWeek[];
+}
+
+const NO_OVERTIME: Overtime = { hours: 0, premium: 0, weeks: [] };
+
+function dayNum(key: string): number {
+  return Math.round(Date.UTC(+key.slice(0, 4), +key.slice(5, 7) - 1, +key.slice(8, 10)) / 86_400_000);
+}
+
+function keyOf(day: number): string {
+  return new Date(day * 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
+ * Overtime owed in the pay period [startKey, endKey) to a W-2 employee.
+ *
+ * Overtime goes by the workweek — a fixed 7 days starting on `weekStartsOn`
+ * (0 = Sunday) — never by the pay period, so a week that straddles two
+ * periods is still one week. Every hour is already paid at straight time in
+ * the period it was worked (periodPay); what this adds is the half-time
+ * premium on the hours past 40, in the period the workweek ends.
+ *
+ * The premium is half the week's regular rate per overtime hour. For an
+ * hourly rate that is half the rate; for pay by the job or a revenue share
+ * it is the week's straight-time earnings divided by its hours, as the FLSA
+ * requires for piece-rate pay (29 CFR 778.111). Contractors (1099) get none.
+ *
+ * `days` must cover every day of each workweek ending in the period, which
+ * can start up to six days before the period does.
+ */
+export function overtimeFor(
+  person: PersonPay,
+  days: readonly DayHours[],
+  startKey: string,
+  endKey: string,
+  weekStartsOn: number,
+): Overtime {
+  if (person.classification !== "w2" || person.rate <= 0) return NO_OVERTIME;
+  const byDay = new Map<number, DayHours>();
+  for (const d of days) {
+    const n = dayNum(d.date);
+    const prev = byDay.get(n);
+    byDay.set(
+      n,
+      prev
+        ? { date: d.date, hours: prev.hours + d.hours, jobs: prev.jobs + d.jobs, revenue: prev.revenue + d.revenue }
+        : { ...d },
+    );
+  }
+
+  const first = dayNum(startKey);
+  const last = dayNum(endKey) - 1;
+  const weeks: OvertimeWeek[] = [];
+  for (let end = first; end <= last; end += 1) {
+    // A workweek's last day is the day before the weekday it starts on.
+    if (new Date(end * 86_400_000).getUTCDay() !== (weekStartsOn + 6) % 7) continue;
+    let hours = 0;
+    let jobs = 0;
+    let revenue = 0;
+    for (let d = end - 6; d <= end; d += 1) {
+      const w = byDay.get(d);
+      if (!w) continue;
+      hours += Math.max(0, w.hours);
+      jobs += Math.max(0, w.jobs);
+      revenue += Math.max(0, w.revenue);
+    }
+    const overtimeHours = Math.max(0, hours - OVERTIME_AFTER_HOURS);
+    if (overtimeHours <= 0) continue;
+    const straight =
+      person.basis === "hourly" ? hours * person.rate : person.basis === "per_job" ? jobs * person.rate : (revenue * person.rate) / 100;
+    const regularRate = hours > 0 ? straight / hours : 0;
+    weeks.push({
+      start: keyOf(end - 6),
+      hours: Math.round(hours * 100) / 100,
+      overtimeHours: Math.round(overtimeHours * 100) / 100,
+      regularRate: round2(regularRate),
+      premium: round2(overtimeHours * regularRate * 0.5),
+    });
+  }
+  return {
+    hours: Math.round(weeks.reduce((s, w) => s + w.overtimeHours, 0) * 100) / 100,
+    premium: round2(weeks.reduce((s, w) => s + w.premium, 0)),
+    weeks,
   };
 }
 

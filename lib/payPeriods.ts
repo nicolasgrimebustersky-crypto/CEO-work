@@ -226,3 +226,48 @@ export function periodSummary(
     wonValue: round2(row.wonValue),
   }));
 }
+
+export interface DayWork {
+  /** "YYYY-MM-DD", local. */
+  date: string;
+  hours: number;
+  jobs: number;
+  /** This person's share of the revenue on the jobs they finished that day. */
+  revenue: number;
+}
+
+function localKey(ms: number): string {
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/**
+ * One person's work, day by day, between `from` and `to` (by the day each
+ * job was finished) — what overtime is worked out from, since it goes by the
+ * workweek and not the pay period. Counted exactly as periodSummary counts
+ * it: the same hours, and a job's price split evenly among `crew` on it.
+ */
+export function dailyWork(
+  uid: string,
+  crew: readonly string[],
+  jobs: readonly PayJob[],
+  window: Period,
+): DayWork[] {
+  const crewSet = new Set(crew);
+  const days = new Map<string, DayWork>();
+  for (const job of jobs) {
+    if (job.status !== "complete" || !within(job.completedAt, window)) continue;
+    if (!job.assignedTo.includes(uid)) continue;
+    const on = job.assignedTo.filter((u) => crewSet.has(u)).length || 1;
+    const billable = !job.visitType || job.visitType === "service";
+    const price = billable && Number.isFinite(job.price) && job.price > 0 ? job.price : 0;
+    const date = localKey((job.completedAt as Stamp).toMillis());
+    const day = days.get(date) ?? { date, hours: 0, jobs: 0, revenue: 0 };
+    day.hours += hoursFor(job);
+    day.jobs += 1;
+    day.revenue += price / on;
+    days.set(date, day);
+  }
+  return [...days.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
