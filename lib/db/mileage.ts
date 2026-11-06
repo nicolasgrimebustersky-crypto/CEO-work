@@ -35,7 +35,7 @@ export interface Trip {
   from: (Place & { label: string }) | null;
   to: (Place & { label: string }) | null;
   jobIds: string[];
-  /** For a suggested trip: its key, so it is not offered again once logged. */
+  /** For a trip logged from a job tap: "auto:<jobId>", so a second tap rewrites it rather than adding one. */
   suggestionKey: string | null;
   createdAt: Timestamp;
   createdBy: string;
@@ -126,15 +126,15 @@ export async function logTrip(trip: NewTrip, author: Author): Promise<void> {
     updatedBy: author.uid,
     updatedByName: author.displayName,
   };
+  // A keyed trip's id is derived from its key, so logging it twice — a second
+  // "On my way" tap, two phones — writes one trip, not two.
+  const id = trip.suggestionKey ? `${author.uid}_${trip.suggestionKey.replace(/[^A-Za-z0-9_-]/g, "_")}` : null;
   if (isDemoMode) {
-    demo.add(COLLECTION, payload);
+    if (id) demo.put(COLLECTION, id, payload);
+    else demo.add(COLLECTION, payload);
     return;
   }
-  // A suggested trip's id is derived from its key, so logging it twice from
-  // two taps or two phones writes one trip, not two.
-  const ref = trip.suggestionKey
-    ? doc(getDb(), COLLECTION, `${author.uid}_${trip.suggestionKey.replace(/[^A-Za-z0-9_-]/g, "_")}`)
-    : doc(collection(getDb(), COLLECTION));
+  const ref = id ? doc(getDb(), COLLECTION, id) : doc(collection(getDb(), COLLECTION));
   await setDoc(ref, payload);
 }
 

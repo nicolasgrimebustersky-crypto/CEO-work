@@ -1,12 +1,12 @@
 /**
- * Mileage: the dated IRS rate, the trips a day implies, and when the app may
- * ask about a drive. Pinned because a wrong rate or a silent trip is a wrong
- * deduction.
+ * Mileage: the dated IRS rate, and which drives the job taps log on their
+ * own. Pinned because a wrong rate, or a commute claimed as business, is a
+ * wrong deduction.
  */
 import assert from "node:assert/strict";
 import { test, describe } from "node:test";
 
-const { rateFor, mileageTotals, suggestTrips, gapDecision, estimateRoadMiles } = await import("../lib/mileage.ts");
+const { rateFor, mileageTotals, driveToJob, autoTripKey, estimateRoadMiles } = await import("../lib/mileage.ts");
 
 describe("the IRS rate", () => {
   test("is the one in force on the trip's date, including 2026's mid-year change", () => {
@@ -33,52 +33,53 @@ describe("the IRS rate", () => {
   });
 });
 
-const job = (id, lat, lng, startedAt, label = id) => ({ id, lat, lng, startedAt, label });
+describe("the drive to a job, from the job taps", () => {
+  const to = { lat: 38.45, lng: -85.4, label: "Jones" };
+  const prev = { id: "a", lat: 38.4, lng: -85.4, label: "Smith" };
+  const home = { lat: 38.3, lng: -85.5 };
+  const base = { to, gps: null, previousJob: null, home: null, homeIsMainOffice: false };
 
-describe("trips a day implies", () => {
-  const jobs = [job("b", 38.41, -85.4, 2000, "Jones"), job("a", 38.4, -85.4, 1000, "Smith"), job("x", 0, 0, 1500)];
-
-  test("job to job in the order the work started, no-location jobs skipped", () => {
-    const trips = suggestTrips("2026-05-04", jobs, null, false);
-    assert.equal(trips.length, 1);
-    assert.equal(trips[0].reason, "Job: Smith → Jones");
-    assert.equal(trips[0].key, "2026-05-04:a:b");
-    assert.equal(trips[0].source, "job_to_job");
+  test("the day's first drive is commuting, wherever it starts, unless home is the main office", () => {
+    assert.deepEqual(driveToJob({ ...base, gps: { lat: 38.2, lng: -85.3 } }), { kind: "skip", reason: "commute" });
+    const office = driveToJob({ ...base, gps: home, home, homeIsMainOffice: true });
+    assert.equal(office.kind, "log");
+    assert.equal(office.source, "home_to_job");
+    assert.equal(office.reason, "Office → Job: Jones");
+    assert.equal(office.fromJobId, null);
   });
 
-  test("home to the first job only when home is the main office", () => {
-    const home = { lat: 38.39, lng: -85.41, label: "Home" };
-    assert.equal(suggestTrips("2026-05-04", jobs, home, false).length, 1);
-    const withOffice = suggestTrips("2026-05-04", jobs, home, true);
-    assert.equal(withOffice.length, 2);
-    assert.equal(withOffice[0].source, "home_to_job");
-    assert.equal(withOffice[0].reason, "Office → Job: Smith");
-  });
-});
-
-describe("asking about a GPS gap", () => {
-  const jobs = [job("a", 38.4, -85.4, 0, "Smith")];
-  const now = { lat: 38.45, lng: -85.4, at: 3 * 3600_000 };
-  const atJob = { lat: 38.4001, lng: -85.4, at: 3600_000 };
-
-  test("asks when the last position was at a job and the drive is real", () => {
-    const d = gapDecision({ last: atJob, now, jobs, home: null });
-    assert.equal(d.kind, "ask");
-    assert.equal(d.fromJob.id, "a");
+  test("with home as the office but no location, home's pin is the start; with neither, nothing", () => {
+    assert.equal(driveToJob({ ...base, home, homeIsMainOffice: true }).from.lat, 38.3);
+    assert.deepEqual(driveToJob({ ...base, homeIsMainOffice: true }), { kind: "skip", reason: "no_origin" });
   });
 
-  test("never asks for a gap over four hours", () => {
-    assert.equal(gapDecision({ last: { ...atJob, at: 0 }, now: { ...now, at: 5 * 3600_000 }, jobs, home: null }).reason, "too_long");
+  test("still at the last job, already at this one (a late tap), or no location: job to job from its pin", () => {
+    for (const gps of [{ lat: 38.4005, lng: -85.4 }, { lat: 38.4501, lng: -85.4 }, null]) {
+      const d = driveToJob({ ...base, gps, previousJob: prev });
+      assert.equal(d.kind, "log");
+      assert.equal(d.source, "job_to_job");
+      assert.equal(d.reason, "Job: Smith → Jones");
+      assert.deepEqual([d.from.lat, d.fromJobId], [38.4, "a"]);
+    }
   });
 
-  test("never asks when the drive ended at home", () => {
-    assert.equal(gapDecision({ last: atJob, now, jobs, home: { lat: 38.4501, lng: -85.4 } }).reason, "near_home");
+  test("somewhere else after a job (the supply yard): from where the phone is", () => {
+    const d = driveToJob({ ...base, gps: { lat: 38.5, lng: -85.45 }, previousJob: prev });
+    assert.equal(d.source, "en_route");
+    assert.equal(d.from.lat, 38.5);
+    assert.equal(d.reason, "After Smith → Job: Jones");
   });
 
-  test("never asks when the last position was not at a job, or nothing moved", () => {
-    assert.equal(gapDecision({ last: { lat: 38.5, lng: -85.5, at: 3600_000 }, now, jobs, home: null }).reason, "not_at_job");
-    assert.equal(gapDecision({ last: atJob, now: { lat: 38.4005, lng: -85.4, at: 2 * 3600_000 }, jobs, home: null }).reason, "too_short");
-    assert.equal(gapDecision({ last: null, now, jobs, home: null }).reason, "no_last");
+  test("no pin on the job, or a drive of a few hundred feet, logs nothing", () => {
+    assert.deepEqual(driveToJob({ ...base, to: { lat: 0, lng: 0, label: "x" }, previousJob: prev }), { kind: "skip", reason: "no_destination" });
+    assert.deepEqual(
+      driveToJob({ ...base, previousJob: { ...prev, lat: 38.4501, lng: -85.4001 } }),
+      { kind: "skip", reason: "too_short" },
+    );
+  });
+
+  test("one trip per job: the key is the job's", () => {
+    assert.equal(autoTripKey("j1"), "auto:j1");
   });
 
   test("the fallback road estimate is the straight line plus a third for winding roads", () => {
