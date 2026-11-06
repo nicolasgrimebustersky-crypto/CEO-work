@@ -25,10 +25,25 @@ service firebase.storage {
         && request.auth.token.email.lower() == 'nicolas.grimebustersky@gmail.com';
     }
 
+    // Anyone the owner has approved in the app: their profile says role
+    // 'crew'. The same test as isApprovedCrew() in firestore.rules, read
+    // across services, so approving a hire on the Account screen is all it
+    // takes — no rules change per person. A pending sign-up, a removed crew
+    // member and a customer-portal account have no such profile and stay out.
+    //
+    // Cross-service reads need the Storage service agent to hold
+    // roles/firebaserules.firestoreServiceAgent on the project; without it this
+    // read fails closed and only the owner and the listed crew get in.
+    function isApprovedCrew() {
+      return request.auth != null
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'crew';
+    }
+
     function isCrew() {
       return request.auth != null
         && hasVerifiedSession()
-        && (isAdmin() || request.auth.uid in [
+        && (isAdmin() || isApprovedCrew() || request.auth.uid in [
              'Bzo7rclax4SdT7PaAua1monNxXG3',
              'QLMsTAHbbceHBAWBXPqtScGdGon2'
            ]);

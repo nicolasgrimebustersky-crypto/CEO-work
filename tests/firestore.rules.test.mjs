@@ -185,7 +185,8 @@ before(async () => {
   testEnv = await initializeTestEnvironment({
     // Its own project, not the storage suite's: the two files run at the
     // same time, and this one clears Firestore before every test. Sharing an
-    // id wiped the crew profiles the storage suite seeds, mid-run.
+    // id wiped the crew profiles the storage suite seeds for its
+    // cross-service approved-hire checks, mid-run.
     projectId: "gb-rules-test-firestore",
     firestore: { rules, host: "127.0.0.1", port: 8080 },
   });
@@ -759,11 +760,13 @@ describe("jobs", () => {
 });
 
 describe("venmo payments", () => {
-  test("crew can read what came in; nobody writes from a phone", async () => {
+  test("the owner can read what came in; the rest of the crew cannot; nobody writes from a phone", async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), "venmoPayments/e1"), { orgId: "grime-busters", payerName: "Larry", amount: 45, status: "needs_match" });
     });
-    await assertSucceeds(getDoc(doc(alice, "venmoPayments/e1")));
+    await assertSucceeds(getDoc(doc(admin, "venmoPayments/e1")));
+    await assertFails(getDoc(doc(alice, "venmoPayments/e1")));
+    await assertFails(getDoc(doc(bob, "venmoPayments/e1")));
     await assertFails(getDoc(doc(mallory, "venmoPayments/e1")));
     await assertFails(updateDoc(doc(alice, "venmoPayments/e1"), { status: "applied" }));
     await assertFails(setDoc(doc(alice, "venmoPayments/e2"), { orgId: "grime-busters", status: "applied" }));

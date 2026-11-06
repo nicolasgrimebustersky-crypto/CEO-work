@@ -28,7 +28,7 @@ const MONTHS_BACK = 12;
 export function ReportsScreen() {
   const { customers } = useCustomers();
   const { documents } = useDocuments();
-  const { users, colorFor, isAdmin } = useTeam();
+  const { users, colorFor, isAdmin, author } = useTeam();
 
   const [jobs, setJobs] = useState<Job[] | null>(null);
   const [quotes, setQuotes] = useState<Quote[]>([]);
@@ -126,6 +126,41 @@ export function ReportsScreen() {
     return { year, ...grossFor(year, jobs ?? [], documents) };
   }, [jobs, documents]);
   const maxMonth = Math.max(1, ...byMonth.map(([, value]) => value));
+
+  // Revenue, takings, tax and everyone's figures are the owner's. A crew
+  // member's Reports is their own work.
+  if (!isAdmin) {
+    const me = author?.uid ?? "";
+    const mine = completed.filter((job) => job.assignedTo.includes(me));
+    const thisYearMine = mine.filter(
+      (job) => (job.completedAt?.toDate() ?? job.scheduledStart.toDate()).getFullYear() === thisYear.year,
+    );
+    return (
+      <div className="flex h-full flex-col">
+        <ScreenHeader title="My work" subtitle={`Last ${MONTHS_BACK} months`} />
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+          {jobs === null ? (
+            <Spinner label="Crunching numbers…" />
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <Stat label={`Jobs finished in ${thisYear.year}`} value={String(thisYearMine.length)} />
+                <Stat label={`Last ${MONTHS_BACK} months`} value={String(mine.length)} />
+              </div>
+              <div className="py-6">
+                <Link
+                  href={routes.expenses}
+                  className="tap-target flex items-center justify-center rounded-xl border border-line bg-surface-2 px-4 py-3 text-base font-bold text-ink"
+                >
+                  My expenses
+                </Link>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
   const maxService = Math.max(1, ...byService.map(([, value]) => value));
 
   return (
