@@ -32,6 +32,41 @@ Each feature PR adds its own entries here. Highest risk first.
   A2P 10DLC registration, and keep upsell campaigns limited to customers
   with marketing consent.
 
+### 1a. Seasonal campaigns (built: `lib/campaigns.ts`, `/api/sms/blast` with `marketing: true`)
+
+- **What the code does:** [Certain]
+  - Sends only to existing customers who have a consent record with
+    `granted: true`. Not having replied STOP is not enough.
+  - Only the owner's account can send.
+  - Nothing is sent in quiet hours (9pm–7am Eastern).
+  - Every message has the STOP line.
+- **Gap 1, verbal consent counts.** [Certain] A consent recorded as
+  `verbal` (at the door) counts as consent for campaigns today.
+  - [Likely] The FCC's "prior express written consent" rule for marketing
+    applies to autodialed texts. After *Facebook v. Duguid* (2021) a Twilio
+    send from a list is arguably not an autodialer, but that is a legal
+    argument, not a safe harbour.
+  - [Likely] Several state laws (Florida, Oklahoma, Maryland and others)
+    are stricter and have their own private lawsuits.
+  - **Safest fix:** campaigns accept only `web_form` or `written` consent.
+    It's a one-line change in `campaignAudience` and in the blast route,
+    and it would shrink the audience.
+- **Gap 2, Do Not Call list.** [Likely] A marketing text to a number on the
+  National Do Not Call list is a "telephone solicitation" unless there's
+  an established business relationship. That relationship lasts 18 months
+  after a purchase, or 3 months after an inquiry.
+  - The audience rule only uses a lookback of up to 420 days on job
+    history, so it roughly matches.
+  - Nothing checks the DNC list itself.
+- **Gap 3, 10DLC use case.** [Likely] If the Twilio A2P campaign is
+  registered as customer care, notifications, or mixed without marketing,
+  sending promotions on it breaks carrier rules, and the number can be
+  filtered or suspended.
+  - **Before the first campaign:** check the registered use case, and add
+    Marketing if it isn't there.
+- **Rain-day texts:** [Likely] transactional (about a booked visit), so not
+  marketing. They still go through consent and STOP checks and quiet hours.
+
 ## 2. Payments through personal Venmo
 
 - **Risk:** [Likely] Venmo's user agreement does not allow taking payment for
@@ -85,6 +120,28 @@ Each feature PR adds its own entries here. Highest risk first.
   the image at all once the TIN is recorded.
 - **Before launch:** employment lawyer or payroll service for
   classification; written location-tracking consent in the crew onboarding.
+
+### 6a. Crew pay (built: `lib/crewPay.ts`, the `/pay` screen)
+
+- **Gap, no overtime.** [Certain] For a W-2 hourly employee, "Owed" is
+  hours × rate.
+  - It does **not** add overtime: 1.5× past 40 hours in a workweek
+    (FLSA; Kentucky KRS 337.285).
+  - It does not compute withholding or employer payroll taxes.
+  - The screen tells the owner to run W-2 pay through a payroll service.
+  - [Likely] If someone pays straight from the "Owed" figure, an hourly
+    employee who worked 45 hours is underpaid. That is a wage claim with
+    double damages.
+  - **Fix:** use a payroll service for W-2 workers, or add per-workweek
+    overtime to `periodPay` before anyone relies on it.
+- **Hour corrections:** [Certain] each is logged with a reason, and a crew
+  member's own correction needs the owner's approval. [Likely] Keep these
+  records 3 years (FLSA record-keeping).
+- **W-9 storage:** [Certain] owner-only Storage folder (`w9/{uid}/`). The
+  breach-notification point above applies.
+- **Per-job and revenue-share pay for W-2 workers:** [Likely] still needs
+  an overtime "regular rate" calculation under the FLSA. That's another
+  reason to keep W-2 pay in a payroll service.
 
 ## 7. Customer data and privacy
 
