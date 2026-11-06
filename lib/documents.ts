@@ -127,6 +127,19 @@ export interface LineItem {
    * read goes through `lineDiscountPct` rather than touching the field.
    */
   discountPct?: number;
+  /**
+   * The package this line belongs to on a Good / Better / Best estimate, by
+   * QuotePackage id. Absent means the line is in every package — the base
+   * work all three include. See lib/packages.ts.
+   */
+  package?: string;
+}
+
+/** One option on a Good / Better / Best estimate. */
+export interface QuotePackage {
+  id: string;
+  /** "Good", "Better", "Best" — or whatever the crew calls them. */
+  name: string;
 }
 
 /** A file attached to an estimate or invoice. Stored under documents/{id}/files/. */
@@ -274,6 +287,18 @@ export interface BusinessDocument {
    * Empty on everything saved before attachments existed.
    */
   attachments: DocumentAttachment[];
+  /**
+   * Good / Better / Best. Empty on an ordinary estimate. While the customer
+   * has not chosen, the stored totals are the first package's — the "from"
+   * price. Choosing rewrites the document to the chosen package's lines and
+   * totals (lib/packages.ts choosePackage), so every invoice, PDF and report
+   * after that sees an ordinary document.
+   */
+  packages: QuotePackage[];
+  /** Which package the customer approved. Null until they do. */
+  chosenPackageId: string | null;
+  /** Every line as it stood before the choice, for the record. Empty until then. */
+  offeredLines: LineItem[];
 
   notes: string;
   issuedAt: Timestamp;

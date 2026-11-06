@@ -22,7 +22,6 @@ import { isDemoMode } from "@/lib/demo/enabled";
 import { SHARE_TOKEN_BYTES } from "@/lib/shareLinks";
 import * as demo from "@/lib/demo/store";
 import {
-  computeTotals,
   DEFAULT_TAX_RATE_PCT,
   defaultInvoiceDueDate,
   nextNumber,
@@ -36,12 +35,14 @@ import {
   type DocumentStatus,
   type LineItem,
   type Payment,
+  type QuotePackage,
 } from "@/lib/documents";
 import { COLLECTIONS, getDb } from "@/lib/firebase";
 import { asOrgId, DEFAULT_ORG_ID } from "@/lib/org";
 import { SERVICE_TYPES } from "@/lib/types";
 import type { Author, Customer, ServiceType } from "@/lib/types";
 import { cleanSelection } from "@/lib/subServices";
+import { choosePackage, storedTotals, tidyLines } from "@/lib/packages";
 
 const COLLECTION = COLLECTIONS.documents;
 
@@ -71,8 +72,23 @@ function asLineItems(value: unknown): LineItem[] {
           typeof item.discountPct === "number" && Number.isFinite(item.discountPct)
             ? item.discountPct
             : 0,
+        // Good / Better / Best. Carried through because the editor rebuilds
+        // and writes back the whole list; dropping it here would quietly move
+        // every package's lines into all three.
+        ...(typeof item.package === "string" && item.package ? { package: item.package } : {}),
       };
     });
+}
+
+function asPackages(value: unknown): QuotePackage[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is DocumentData => typeof item === "object" && item !== null)
+    .filter((item) => typeof item.id === "string" && item.id)
+    .map((item) => ({
+      id: item.id as string,
+      name: typeof item.name === "string" ? item.name : "",
+    }));
 }
 
 function asPayments(value: unknown): Payment[] {
@@ -169,6 +185,10 @@ export function toDocument(snap: QueryDocumentSnapshot<DocumentData>): BusinessD
     serviceType,
     ...cleanSelection(data, serviceType),
     lineItems: asLineItems(data.lineItems),
+    packages: asPackages(data.packages),
+    chosenPackageId:
+      typeof data.chosenPackageId === "string" && data.chosenPackageId ? data.chosenPackageId : null,
+    offeredLines: asLineItems(data.offeredLines),
     discount: typeof data.discount === "number" ? data.discount : 0,
     taxRatePct: typeof data.taxRatePct === "number" ? data.taxRatePct : DEFAULT_TAX_RATE_PCT,
     subtotal: typeof data.subtotal === "number" ? data.subtotal : 0,
@@ -276,6 +296,8 @@ export interface NewDocumentInput {
   taxPermit?: string | null;
   notes?: string;
   dueAt?: Date | null;
+  /** Good / Better / Best on an estimate. See lib/packages.ts. */
+  packages?: QuotePackage[];
 }
 
 export async function createDocument(
@@ -284,7 +306,10 @@ export async function createDocument(
 ): Promise<string> {
   const taxRatePct = input.taxRatePct ?? DEFAULT_TAX_RATE_PCT;
   const discount = input.discount ?? 0;
-  const totals = computeTotals(input.lineItems, discount, taxRatePct);
+  const packages = input.kind === "estimate" ? (input.packages ?? []) : [];
+  const lineItems = tidyLines(input.lineItems, packages);
+  // With packages, the stored price is the first package's — the "from" price.
+  const totals = storedTotals(lineItems, packages, discount, taxRatePct);
 
   const payload = {
     number: await allocateNumber(),
@@ -295,7 +320,10 @@ export async function createDocument(
     serviceType: input.serviceType,
     serviceTypes: input.serviceTypes,
     subServices: input.subServices,
-    lineItems: input.lineItems,
+    lineItems,
+    packages,
+    chosenPackageId: null,
+    offeredLines: [],
     discount: totals.discount,
     taxRatePct,
     taxPermit: input.taxPermit?.trim() ? input.taxPermit.trim() : null,
@@ -339,6 +367,7 @@ export interface DocumentPatch {
   taxRatePct?: number;
   notes?: string;
   dueAt?: Date | null;
+  packages?: QuotePackage[];
 }
 
 /**
@@ -350,14 +379,21 @@ export async function updateDocument(
   patch: DocumentPatch,
   author: Author,
 ): Promise<void> {
-  const lineItems = patch.lineItems ?? document.lineItems;
+  // Packages only while an estimate is still open: once a package is chosen
+  // the document has been rewritten to it, and an invoice never has them.
+  const packages =
+    document.kind === "estimate" && !document.chosenPackageId
+      ? (patch.packages ?? document.packages)
+      : [];
+  const lineItems = tidyLines(patch.lineItems ?? document.lineItems, packages);
   const discount = patch.discount ?? document.discount;
   const taxRatePct = patch.taxRatePct ?? document.taxRatePct;
-  const totals = computeTotals(lineItems, discount, taxRatePct);
+  const totals = storedTotals(lineItems, packages, discount, taxRatePct);
   const balanceDue = Math.max(0, Number((totals.total - document.amountPaid).toFixed(2)));
 
   const payload: Record<string, unknown> = {
     lineItems,
+    packages,
     discount: totals.discount,
     taxRatePct,
     subtotal: totals.subtotal,
@@ -379,6 +415,40 @@ export async function updateDocument(
   }
 
   await writeDocument(document.id, payload);
+}
+
+/**
+ * The crew recording which package the customer chose — when the answer came
+ * by phone or in person rather than through the link. Same rewrite the link
+ * does on the server: the estimate becomes the chosen package's lines and
+ * price, and the full offer is kept in `offeredLines`.
+ */
+export async function chooseDocumentPackage(
+  document: BusinessDocument,
+  packageId: string,
+  author: Author,
+): Promise<void> {
+  const chosen = choosePackage(
+    document.lineItems,
+    document.packages,
+    packageId,
+    document.discount,
+    document.taxRatePct,
+  );
+  if (!chosen) throw new Error("That package is not on this estimate.");
+  await writeDocument(document.id, {
+    chosenPackageId: chosen.pkg.id,
+    offeredLines: document.lineItems,
+    lineItems: chosen.lineItems,
+    discount: chosen.totals.discount,
+    subtotal: chosen.totals.subtotal,
+    taxAmount: chosen.totals.taxAmount,
+    total: chosen.totals.total,
+    balanceDue: Math.max(0, Number((chosen.totals.total - document.amountPaid).toFixed(2))),
+    updatedAt: serverTimestamp(),
+    updatedBy: author.uid,
+    updatedByName: author.displayName,
+  });
 }
 
 export async function setDocumentStatus(
@@ -480,6 +550,11 @@ export async function convertToInvoice(
   dueAt: Date | null | undefined = undefined,
 ): Promise<string> {
   if (estimate.convertedToId) return estimate.convertedToId;
+  // A Good / Better / Best estimate nobody has chosen from has every
+  // package's lines on it. Billing it as it stands would charge for all three.
+  if (estimate.packages.length > 0 && !estimate.chosenPackageId) {
+    throw new Error("Pick which package the customer chose before turning this into an invoice.");
+  }
 
   const due = dueAt === undefined ? defaultInvoiceDueDate() : dueAt;
 

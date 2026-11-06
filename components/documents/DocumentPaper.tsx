@@ -13,7 +13,9 @@ import {
   lineLabel,
   lineTotal,
   type BusinessDocument,
+  type LineItem,
 } from "@/lib/documents";
+import { pricePackages, sharedLines } from "@/lib/packages";
 import { formatDateOnly, formatMoneyExact, formatPhone } from "@/lib/format";
 import { SERVICE_LABEL } from "@/lib/status";
 
@@ -105,6 +107,100 @@ export function DocumentPaper({
     fontSize: "12.5px",
   };
 
+
+  // Good / Better / Best while the customer has not yet chosen. Once they
+  // have, the document is rewritten to the chosen package and prints as an
+  // ordinary one — see lib/packages.ts.
+  const offering =
+    businessDocument.packages.length > 0 && !businessDocument.chosenPackageId;
+  const priced = offering
+    ? pricePackages(
+        businessDocument.lineItems,
+        businessDocument.packages,
+        businessDocument.discount,
+        businessDocument.taxRatePct,
+      )
+    : [];
+  const packageHead: React.CSSProperties = {
+    padding: "12px 6px 6px",
+    fontSize: "12px",
+    fontWeight: 800,
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
+    color: BRAND.money,
+    borderBottom: `1.5px solid ${BRAND.money}`,
+  };
+  const renderItem = (item: LineItem) => (
+                <Fragment key={item.id}>
+                <tr>
+                  <td style={{ ...serviceCell, borderBottom: descriptionOf(item) ? "none" : cell.borderBottom }}>
+                    <span style={{ fontWeight: 700 }}>{lineLabel(item)}</span>
+                  </td>
+                  <td style={moneyCell}>{item.quantity}</td>
+                  <td style={moneyCell}>{formatMoneyExact(item.unitPrice)}</td>
+                  <td style={{ ...moneyCell, fontWeight: 600 }}>
+                    {/* The full price stays visible, struck through. A discount
+                        the customer cannot see is money given away for nothing —
+                        they have to be able to tell they were given something. */}
+                    {lineDiscount(item) > 0 ? (
+                      <span
+                        style={{
+                          display: "block",
+                          fontWeight: 500,
+                          color: "#9ca3af",
+                          textDecoration: "line-through",
+                        }}
+                      >
+                        {formatMoneyExact(lineGross(item))}
+                      </span>
+                    ) : null}
+                    <span style={{ color: lineDiscount(item) > 0 ? BRAND.money : undefined }}>
+                      {formatMoneyExact(lineTotal(item))}
+                    </span>
+                    {lineDiscount(item) > 0 ? (
+                      <span
+                        style={{
+                          display: "block",
+                          marginTop: "2px",
+                          fontSize: "10px",
+                          fontWeight: 700,
+                          color: BRAND.money,
+                          // The cell is nowrap so a price cannot break; this
+                          // note is a sentence and must be allowed to, or it
+                          // runs off the side of the page.
+                          whiteSpace: "normal",
+                        }}
+                      >
+                        {lineDiscountPct(item)}% off · saved{" "}
+                        {formatMoneyExact(lineDiscount(item))}
+                      </span>
+                    ) : null}
+                  </td>
+                </tr>
+                {/* The description spans the full width beneath the row rather
+                    than sitting inside the service column. That is what the PDF
+                    does, and on a phone the narrow column turned every sentence
+                    into a ladder of two-word lines while squeezing the money
+                    columns until the prices broke in half. */}
+                {descriptionOf(item) ? (
+                  <tr>
+                    <td
+                      colSpan={4}
+                      style={{
+                        ...cell,
+                        paddingTop: 0,
+                        fontSize: "11px",
+                        color: "#4b5563",
+                        whiteSpace: "pre-wrap",
+                        textAlign: "left",
+                      }}
+                    >
+                      {descriptionOf(item)}
+                    </td>
+                  </tr>
+                ) : null}
+                </Fragment>
+  );
 
   return (
         <div style={{ maxWidth: "612px", margin: "0 auto" }}>
@@ -232,80 +328,47 @@ export function DocumentPaper({
               </tr>
             </thead>
             <tbody>
-              {businessDocument.lineItems.map((item) => (
-                <Fragment key={item.id}>
-                <tr>
-                  <td style={{ ...serviceCell, borderBottom: descriptionOf(item) ? "none" : cell.borderBottom }}>
-                    <span style={{ fontWeight: 700 }}>{lineLabel(item)}</span>
-                  </td>
-                  <td style={moneyCell}>{item.quantity}</td>
-                  <td style={moneyCell}>{formatMoneyExact(item.unitPrice)}</td>
-                  <td style={{ ...moneyCell, fontWeight: 600 }}>
-                    {/* The full price stays visible, struck through. A discount
-                        the customer cannot see is money given away for nothing —
-                        they have to be able to tell they were given something. */}
-                    {lineDiscount(item) > 0 ? (
-                      <span
-                        style={{
-                          display: "block",
-                          fontWeight: 500,
-                          color: "#9ca3af",
-                          textDecoration: "line-through",
-                        }}
-                      >
-                        {formatMoneyExact(lineGross(item))}
-                      </span>
+              {offering
+                ? (
+                  <>
+                    {sharedLines(businessDocument.lineItems).length > 0 ? (
+                      <>
+                        <tr>
+                          <td colSpan={4} style={packageHead}>Included in every option</td>
+                        </tr>
+                        {sharedLines(businessDocument.lineItems).map(renderItem)}
+                      </>
                     ) : null}
-                    <span style={{ color: lineDiscount(item) > 0 ? BRAND.money : undefined }}>
-                      {formatMoneyExact(lineTotal(item))}
-                    </span>
-                    {lineDiscount(item) > 0 ? (
-                      <span
-                        style={{
-                          display: "block",
-                          marginTop: "2px",
-                          fontSize: "10px",
-                          fontWeight: 700,
-                          color: BRAND.money,
-                          // The cell is nowrap so a price cannot break; this
-                          // note is a sentence and must be allowed to, or it
-                          // runs off the side of the page.
-                          whiteSpace: "normal",
-                        }}
-                      >
-                        {lineDiscountPct(item)}% off · saved{" "}
-                        {formatMoneyExact(lineDiscount(item))}
-                      </span>
-                    ) : null}
-                  </td>
-                </tr>
-                {/* The description spans the full width beneath the row rather
-                    than sitting inside the service column. That is what the PDF
-                    does, and on a phone the narrow column turned every sentence
-                    into a ladder of two-word lines while squeezing the money
-                    columns until the prices broke in half. */}
-                {descriptionOf(item) ? (
-                  <tr>
-                    <td
-                      colSpan={4}
-                      style={{
-                        ...cell,
-                        paddingTop: 0,
-                        fontSize: "11px",
-                        color: "#4b5563",
-                        whiteSpace: "pre-wrap",
-                        textAlign: "left",
-                      }}
-                    >
-                      {descriptionOf(item)}
-                    </td>
-                  </tr>
-                ) : null}
-                </Fragment>
-              ))}
+                    {priced.map((option) => (
+                      <Fragment key={option.pkg.id}>
+                        <tr>
+                          <td colSpan={3} style={packageHead}>{option.pkg.name}</td>
+                          <td style={{ ...packageHead, textAlign: "right" }}>
+                            {formatMoneyExact(option.totals.total)}
+                          </td>
+                        </tr>
+                        {option.ownLines.map(renderItem)}
+                      </Fragment>
+                    ))}
+                  </>
+                )
+                : businessDocument.lineItems.map(renderItem)}
             </tbody>
           </table>
 
+          {offering ? (
+            <div style={{ marginTop: "14px", border: `1.5px solid ${BRAND.money}`, borderRadius: "8px", padding: "10px 12px", background: BRAND.moneyWash }}>
+              <div style={{ fontSize: "12px", fontWeight: 800, color: BRAND.money, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                Choose one option{businessDocument.taxRatePct > 0 ? " · prices include tax" : ""}
+              </div>
+              {priced.map((option) => (
+                <div key={option.pkg.id} style={{ ...totalRow, fontSize: "15px", fontWeight: 800 }}>
+                  <span>{option.pkg.name}</span>
+                  <span>{formatMoneyExact(option.totals.total)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "14px" }}>
             <div style={{ width: "260px", maxWidth: "100%" }}>
               <div style={totalRow}>
@@ -383,6 +446,7 @@ export function DocumentPaper({
               ) : null}
             </div>
           </div>
+          )}
 
           {businessDocument.notes.trim() ? (
             <div

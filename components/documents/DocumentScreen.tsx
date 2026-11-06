@@ -16,6 +16,7 @@ import { Sheet } from "@/components/ui/Sheet";
 import { Spinner } from "@/components/ui/Spinner";
 import { advancePipeline, setPipelineStage } from "@/lib/db/customers";
 import {
+  chooseDocumentPackage,
   convertToInvoice,
   createDocument,
   deleteDocument,
@@ -50,6 +51,8 @@ import { ScheduleJobSheet } from "./ScheduleJobSheet";
 import { declineReasonLabel } from "@/lib/quoteResponse";
 import { DraftEstimateSheet } from "./DraftEstimateSheet";
 import { LineItemsEditor } from "./LineItemsEditor";
+import { PackagesEditor } from "./PackagesEditor";
+import { pricePackages } from "@/lib/packages";
 import { PaymentSheet } from "./PaymentSheet";
 import { StatusPill } from "./StatusPill";
 import {
@@ -224,6 +227,7 @@ export function DocumentScreen() {
             taxRatePct: toNumber(draft.taxRatePct),
             notes: draft.notes,
             dueAt: parseDueDate(draft.dueAt),
+            packages: draft.kind === "estimate" ? draft.packages : [],
           },
           author,
         );
@@ -250,6 +254,7 @@ export function DocumentScreen() {
             taxPermit: salesTax.enabled && toNumber(draft.taxRatePct) > 0 ? salesTax.permitNumber : null,
             notes: draft.notes,
             dueAt: parseDueDate(draft.dueAt),
+            packages: draft.kind === "estimate" ? draft.packages : [],
           },
           author,
         );
@@ -544,6 +549,11 @@ export function DocumentScreen() {
                   </Button>
                 ) : null}
               </div>
+              {draft.kind === "estimate" ? (
+                <div className="mb-3">
+                  <PackagesEditor draft={draft} onChange={setDraft} disabled={busy} />
+                </div>
+              ) : null}
               <LineItemsEditor
                 draft={draft}
                 onChange={setDraft}
@@ -587,7 +597,9 @@ export function DocumentScreen() {
                 {busy
                   ? "Saving…"
                   : `Save ${kindLabel.toLowerCase()}${
-                      totals ? ` · ${formatMoneyExact(totals.total)}` : ""
+                      totals
+                        ? ` · ${draft.packages.length > 0 ? "from " : ""}${formatMoneyExact(totals.total)}`
+                        : ""
                     }`}
               </Button>
             </section>
@@ -658,6 +670,11 @@ export function DocumentScreen() {
                     <span className="min-w-0">
                       <span className="block text-base font-bold break-words text-ink">
                         {lineLabel(item)}
+                        {item.package && document.packages.length > 0 ? (
+                          <span className="ml-2 rounded-full bg-accent/15 px-2 py-0.5 text-xs font-bold text-accent">
+                            {document.packages.find((pkg) => pkg.id === item.package)?.name ?? "Package"}
+                          </span>
+                        ) : null}
                       </span>
                       {item.name && item.description ? (
                         <span className="mt-0.5 block text-sm font-semibold break-words text-muted">
@@ -686,7 +703,11 @@ export function DocumentScreen() {
                   value={document.taxAmount}
                 />
                 <div className="mt-2 flex items-baseline justify-between gap-3 border-t border-line pt-2">
-                  <span className="text-lg font-extrabold text-ink">Total</span>
+                  <span className="text-lg font-extrabold text-ink">
+                    {document.packages.length > 0 && !document.chosenPackageId
+                      ? `From (${document.packages[0]?.name ?? "first package"})`
+                      : "Total"}
+                  </span>
                   <span className="text-2xl font-extrabold text-money tabular-nums">
                     {formatMoneyExact(document.total)}
                   </span>
@@ -794,6 +815,51 @@ export function DocumentScreen() {
                 </p>
               ) : null}
             </section>
+
+            {document.kind === "estimate" &&
+            document.packages.length > 0 &&
+            !document.chosenPackageId ? (
+              <section className="mb-4 rounded-2xl border border-accent/40 bg-accent/5 p-4">
+                <p className="text-base font-bold text-ink">Which package did they choose?</p>
+                <p className="mt-0.5 text-sm font-semibold text-muted">
+                  The customer picks on their link. If they told you by phone, record it here — the
+                  estimate becomes that package&rsquo;s lines and price.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {pricePackages(
+                    document.lineItems,
+                    document.packages,
+                    document.discount,
+                    document.taxRatePct,
+                  ).map((option) => (
+                    <Button
+                      key={option.pkg.id}
+                      variant="secondary"
+                      disabled={busy || !author}
+                      onClick={() => {
+                        if (!author) return;
+                        setBusy(true);
+                        void chooseDocumentPackage(document, option.pkg.id, author)
+                          .catch((err: Error) => setError(err.message))
+                          .finally(() => setBusy(false));
+                      }}
+                    >
+                      {option.pkg.name} · {formatMoneyExact(option.totals.total)}
+                    </Button>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {document.chosenPackageId ? (
+              <p className="mb-4 rounded-2xl border border-line bg-surface-2 px-4 py-3 text-sm font-semibold text-muted">
+                Chose{" "}
+                <span className="font-bold text-ink">
+                  {document.packages.find((pkg) => pkg.id === document.chosenPackageId)?.name ?? "a package"}
+                </span>{" "}
+                of {document.packages.map((pkg) => pkg.name).join(" / ")}.
+              </p>
+            ) : null}
 
             {/* What the customer said, where the crew already look. An
                 approval that only existed as a status pill would lose the
@@ -1022,6 +1088,7 @@ export function DocumentScreen() {
                 unitPrice: item.unitPrice.toFixed(2),
                 taxable: true,
                 discountPct: "",
+                package: "",
               })),
             });
           }}
