@@ -11,7 +11,7 @@ export function OPTIONS(request: Request): Response {
 }
 
 /**
- * A crew member matching a Venmo payment by hand: "that $45 was Larry's 10/31
+ * A crew member matching a Venmo payment by hand: "that $45 was Pat's 10/31
  * cut". Or dismissing one that is not for any bill ("ignore").
  *
  * Goes through the server rather than writing from the phone so a hand match

@@ -762,7 +762,7 @@ describe("jobs", () => {
 describe("venmo payments", () => {
   test("the owner can read what came in; the rest of the crew cannot; nobody writes from a phone", async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), "venmoPayments/e1"), { orgId: "grime-busters", payerName: "Larry", amount: 45, status: "needs_match" });
+      await setDoc(doc(ctx.firestore(), "venmoPayments/e1"), { orgId: "grime-busters", payerName: "Pat", amount: 45, status: "needs_match" });
     });
     await assertSucceeds(getDoc(doc(admin, "venmoPayments/e1")));
     await assertFails(getDoc(doc(alice, "venmoPayments/e1")));
