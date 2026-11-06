@@ -416,7 +416,13 @@ service cloud.firestore {
         // The on-site checklist (lib/checklists.ts). Optional: jobs saved
         // before it existed have none. Capped as a runaway guard.
         && (!('checklist' in data)
-            || (data.checklist is list && data.checklist.size() <= 60));
+            || (data.checklist is list && data.checklist.size() <= 60))
+        // Why a rain day moved or skipped it (lib/rainDay.ts). Optional.
+        && (!('rainDelay' in data)
+            || (data.rainDelay is map
+                && data.rainDelay.rainedOn is string
+                && data.rainDelay.from is string
+                && data.rainDelay.action in ['moved', 'skipped']));
     }
 
     // Estimates and invoices share one shape and one collection, so one check
@@ -1078,6 +1084,32 @@ service cloud.firestore {
         && keepsOrg();
       allow delete: if isCrew() && belongsToMyOrg(resource.data)
         && (isAdmin() || resource.data.createdBy == request.auth.uid);
+    }
+
+    // Seasonal campaigns that were sent (lib/db/campaigns.ts). A record of
+    // marketing that went out: the owner sends, so the owner records it;
+    // the crew read it to follow up. Never edited — results are worked out
+    // from estimates and jobs, not stored here.
+    function validCampaign() {
+      let data = request.resource.data;
+      return data.templateId is string && data.templateId.size() <= 40
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 80
+        // `service` is a keyword in the rules language, hence the brackets.
+        && data['service'] is string && data['service'].size() <= 40
+        && data.message is string && data.message.size() > 0 && data.message.size() <= 1600
+        && data.recipients is list && data.recipients.size() <= 200
+        && data.excluded is int && data.excluded >= 0
+        && data.sentAt is timestamp;
+    }
+
+    match /campaigns/{campaignId} {
+      allow read: if isCrew() && belongsToMyOrg(resource.data);
+      allow create: if isCrew() && isAdmin()
+        && stampedByCaller('createdBy')
+        && validCampaign()
+        && createsInMyOrg(request.resource.data);
+      allow update: if false;
+      allow delete: if isCrew() && isAdmin() && belongsToMyOrg(resource.data);
     }
 
     match /payRuns/{runId} {

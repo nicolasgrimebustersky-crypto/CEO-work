@@ -74,6 +74,15 @@ export function sendBlast(customerIds: string[], body: string): Promise<BlastRes
 }
 
 /**
+ * A seasonal campaign: the same route as a blast, flagged as marketing so
+ * the server also requires a recorded consent per person, the owner's
+ * account, and daytime (lib/campaigns.ts).
+ */
+export function sendCampaign(customerIds: string[], body: string): Promise<BlastResult> {
+  return post("/api/sms/blast", { customerIds, body, marketing: true });
+}
+
+/**
  * Twilio self-test. `checkTexting` reads what the deployment has configured;
  * `sendTestText` sends one message to the signed-in user's own profile number,
  * which the server reads for itself — the number is never sent from here.

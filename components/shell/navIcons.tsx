@@ -350,3 +350,13 @@ export function WrenchIcon({ active }: NavIconProps) {
     </svg>
   );
 }
+
+/** A megaphone: a seasonal offer to your customers. */
+export function MegaphoneIcon({ active }: NavIconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className="size-6" aria-hidden="true">
+      <path d="M4 10v4h3l7 4V6L7 10H4Z" fill="none" stroke="currentColor" strokeWidth={w(active)} strokeLinejoin="round" />
+      <path d="M17.5 9.5a3.5 3.5 0 0 1 0 5M8 14l1.2 4.5" fill="none" stroke="currentColor" strokeWidth={w(active)} strokeLinecap="round" />
+    </svg>
+  );
+}

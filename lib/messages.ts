@@ -34,6 +34,22 @@ export function jobConfirmationText(service: string, start: Date): string {
   return `${BUSINESS_NAME}: your ${service.toLowerCase()} is scheduled for ${whenText(start)}. Reply here if you need to change it.${OPT_OUT}`;
 }
 
+/**
+ * Rain day: one text per customer, however many of their visits moved.
+ * A moved visit says when it now is; a skipped plan visit says the next
+ * regular one stands, so nobody waits in for a crew that isn't coming.
+ */
+export function rainDayText(
+  items: readonly ({ service: string; start: Date } | { service: string; nextVisit: Date })[],
+): string {
+  const parts = items.map((item) =>
+    "start" in item
+      ? `your ${item.service.toLowerCase()} is moved to ${whenText(item.start)}`
+      : `we're skipping your ${item.service.toLowerCase()} this time — see you ${format(item.nextVisit, "EEEE MMM d")} as usual`,
+  );
+  return `${BUSINESS_NAME}: rain has washed out the day, so ${parts.join(", and ")}. Reply here if that doesn't work.${OPT_OUT}`;
+}
+
 export function jobRescheduledText(service: string, start: Date): string {
   return `${BUSINESS_NAME}: your ${service.toLowerCase()} has been rescheduled to ${whenText(start)}. Reply here if that doesn't work.${OPT_OUT}`;
 }
