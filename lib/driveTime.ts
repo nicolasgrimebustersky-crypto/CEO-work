@@ -109,6 +109,58 @@ export function formatDriveMinutes(minutes: number): string {
   return rest === 0 ? `${hours} hr` : `${hours} hr ${rest} min`;
 }
 
+/** Google's Distance Matrix caps a request at 100 elements: 10 × 10. */
+const MAX_FULL_MATRIX_POINTS = 10;
+
+/**
+ * Drive minutes between every pair of points, for planning an order (see
+ * lib/dayRoute.ts). Road times from the Distance Matrix API when it answers
+ * for every pair; null otherwise — too many points, no key, the API not
+ * enabled, offline — and the planner falls back to straight-line estimates.
+ */
+export function useTravelMatrix(points: LatLng[]): { matrix: number[][] | null; source: DriveTimeSource } {
+  const routesLib = useMapsLibrary("routes");
+  const [matrix, setMatrix] = useState<number[][] | null>(null);
+  const key = useMemo(
+    () => points.map((p) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join("|"),
+    [points],
+  );
+
+  useEffect(() => {
+    setMatrix(null);
+    if (!routesLib || points.length < 2 || points.length > MAX_FULL_MATRIX_POINTS) return;
+    let cancelled = false;
+    new routesLib.DistanceMatrixService()
+      .getDistanceMatrix({
+        origins: points,
+        destinations: points,
+        travelMode: google.maps.TravelMode.DRIVING,
+        unitSystem: google.maps.UnitSystem.IMPERIAL,
+      })
+      .then((response) => {
+        if (cancelled) return;
+        const rows = response.rows.map((row, i) =>
+          row.elements.map((element, j) => {
+            if (i === j) return 0;
+            if (!element || element.status !== "OK" || !element.duration) return null;
+            return element.duration.value / 60;
+          }),
+        );
+        if (rows.some((row) => row.some((v) => v === null))) return;
+        setMatrix(rows as number[][]);
+      })
+      .catch(() => {
+        // Same fallbacks as useDriveTimes: the estimate covers it.
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routesLib, key]);
+
+  return { matrix, source: matrix ? "google" : "estimate" };
+}
+
 /**
  * Road miles between two places, from the Distance Matrix when it answers,
  * else the straight-line estimate (marked `estimated`). For logging a trip.
