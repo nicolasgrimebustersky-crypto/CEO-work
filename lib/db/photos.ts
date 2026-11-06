@@ -25,7 +25,7 @@ const JPEG_QUALITY = 0.82;
  * downscaled and re-encoded in the browser first. Falls back to the original
  * file if canvas encoding is unavailable.
  */
-async function downscale(file: File): Promise<Blob> {
+export async function downscale(file: File): Promise<Blob> {
   if (!file.type.startsWith("image/")) return file;
 
   try {

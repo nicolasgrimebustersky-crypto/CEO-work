@@ -172,6 +172,7 @@ export function serializeDocument(hit: DocumentSnapshot): SerialDocument | null 
     taxRatePct: num(data.taxRatePct, DEFAULT_TAX_RATE_PCT),
     subtotal: num(data.subtotal),
     taxAmount: num(data.taxAmount),
+    taxPermit: text(data.taxPermit) || null,
     total: num(data.total),
     amountPaid: num(data.amountPaid),
     balanceDue: num(data.balanceDue),

@@ -783,6 +783,175 @@ service cloud.firestore {
     // /api/venmo/match applies or dismisses them, each inside a transaction
     // that re-reads the bill. Crew read them to see what came in and what is
     // waiting to be matched; nobody writes them from a phone.
+    // Expenses: money the business spent, and what proves it.
+    //
+    // Per person: everyone on the crew can log what they spent, the owner
+    // sees all of it, and nobody else sees anybody else's.
+    //
+    // Strict on the money and the proof, loose on the words. The amount
+    // feeds the tax estimate, so it must be a real positive number; the date
+    // is a calendar day so a year's totals cannot drift with a phone's time
+    // zone; and "receipt on file" must actually carry a file, or the proof
+    // split on the Reports screen would claim paper that does not exist.
+    // The file lives under the uid of whoever the expense belongs to, which
+    // is what storage.rules uses to decide who may open it.
+    function validReceipt(r, ownerUid) {
+      return r is map
+        && r.url is string && r.url.size() > 0 && r.url.size() <= 2048
+        && r.path is string && r.path.matches('expenses/' + ownerUid + '/[^/]+/[^/]+')
+        && r.contentType is string;
+    }
+
+    function validExpense() {
+      let data = request.resource.data;
+      return data.date is string
+        && data.date.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && data.amount is number
+        && data.amount > 0
+        && data.amount < 1000000
+        && data.category in ['fuel', 'vehicle', 'equipment', 'equipment_repair', 'tools', 'supplies', 'dump_fees', 'labor', 'insurance', 'phone_software', 'advertising', 'licenses', 'meals', 'other', 'tax_payment']
+        && data.paymentMethod in ['card', 'cash', 'venmo', 'check', 'bank', 'other']
+        && data.proof in ['receipt', 'statement', 'in_person']
+        && data.vendor is string && data.vendor.size() <= 120
+        && data.forWhat is string && data.forWhat.size() <= 80
+        && data.notes is string && data.notes.size() <= 1000
+        && (data.receipt == null || validReceipt(data.receipt, data.createdBy))
+        && (data.proof != 'receipt' || validReceipt(data.receipt, data.createdBy));
+    }
+
+    // Whose expense this is: the owner sees and fixes everyone's; a crew
+    // member only their own, so nobody on the crew can read the business's
+    // spending or another person's.
+    function ownsExpense() {
+      return isAdmin() || resource.data.createdBy == request.auth.uid;
+    }
+
+    match /expenses/{expenseId} {
+      allow read: if isCrew() && belongsToMyOrg(resource.data) && ownsExpense();
+      allow create: if isCrew()
+        && stampedByCaller('createdBy')
+        && validExpense()
+        && createsInMyOrg(request.resource.data);
+      allow update: if isCrew()
+        && belongsToMyOrg(resource.data)
+        && ownsExpense()
+        && refreshesAuthorStamp()
+        && request.resource.data.createdBy == resource.data.createdBy
+        && validExpense()
+        && keepsOrg();
+      allow delete: if isCrew() && belongsToMyOrg(resource.data) && ownsExpense();
+    }
+
+    // Business-wide settings the owner sets (sales tax today). One document,
+    // settings/business. Every crew member may read it — writing an invoice
+    // needs the tax rate and permit number — but only the owner changes it,
+    // and nothing secret belongs in it.
+    // Each section is optional (they are saved separately, merged), but any
+    // section present must be whole and sane.
+    function validBusinessSettings() {
+      let data = request.resource.data;
+      return (!('salesTax' in data) || validSalesTaxSettings(data.salesTax))
+        && (!('mileage' in data) || validMileageSettings(data.mileage))
+        && stampedByCaller('updatedBy');
+    }
+
+    function validSalesTaxSettings(t) {
+      return t is map
+        && t.enabled is bool
+        && t.permitNumber is string && t.permitNumber.size() <= 40
+        && t.filingFrequency in ['monthly', 'quarterly', 'annual']
+        && t.defaultRatePct is number && t.defaultRatePct >= 0 && t.defaultRatePct <= 20;
+    }
+
+    function validMileageSettings(m) {
+      return m is map
+        && m.method in ['standard', 'actual']
+        && m.homeIsMainOffice is bool;
+    }
+
+    // Business trips, per person, like expenses: a crew member logs and sees
+    // their own; the owner sees and corrects everyone's.
+    function validPlace(p) {
+      return p is map
+        && p.lat is number && p.lng is number
+        && p.label is string && p.label.size() <= 120;
+    }
+
+    function validTrip() {
+      let data = request.resource.data;
+      return data.date is string
+        && data.date.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && data.miles is number && data.miles > 0 && data.miles < 2000
+        && data.reason is string && data.reason.size() > 0 && data.reason.size() <= 200
+        && data.source in ['job_to_job', 'gps_gap', 'home_to_job', 'manual']
+        && data.estimated is bool
+        && (data.from == null || validPlace(data.from))
+        && (data.to == null || validPlace(data.to))
+        && data.jobIds is list && data.jobIds.size() <= 2;
+    }
+
+    function ownsTrip() {
+      return isAdmin() || resource.data.createdBy == request.auth.uid;
+    }
+
+    match /mileage/{tripId} {
+      allow read: if isCrew() && belongsToMyOrg(resource.data) && ownsTrip();
+      allow create: if isCrew()
+        && stampedByCaller('createdBy')
+        && validTrip()
+        && createsInMyOrg(request.resource.data);
+      allow update: if isCrew()
+        && belongsToMyOrg(resource.data)
+        && ownsTrip()
+        && refreshesAuthorStamp()
+        && request.resource.data.createdBy == resource.data.createdBy
+        && validTrip()
+        && keepsOrg();
+      allow delete: if isCrew() && belongsToMyOrg(resource.data) && ownsTrip();
+    }
+
+    // Where each person lives, for mileage (a drive ending at home is not
+    // business). Private: the person and the owner, nobody else on the crew.
+    match /mileageHomes/{uid} {
+      allow read: if isCrew() && (request.auth.uid == uid || isAdmin());
+      allow write: if isCrew() && request.auth.uid == uid
+        && request.resource.data.lat is number
+        && request.resource.data.lng is number
+        && request.resource.data.label is string
+        && request.resource.data.label.size() <= 120;
+    }
+
+    // Settings only the owner may read, let alone write: labour rates are
+    // what people are paid, and profit is the business's. Crew get nothing.
+    function validProfitSettings() {
+      let data = request.resource.data;
+      return data.laborRatePerHour is number && data.laborRatePerHour >= 0 && data.laborRatePerHour <= 500
+        && data.costPerMile is number && data.costPerMile >= 0 && data.costPerMile <= 5
+        && data.targetMarginPct is number && data.targetMarginPct >= 0 && data.targetMarginPct <= 90
+        && data.ratesByUid is map
+        && stampedByCaller('updatedBy');
+    }
+
+    match /ownerSettings/{settingsId} {
+      allow read: if isCrew() && isAdmin();
+      allow write: if isCrew() && isAdmin()
+        && (settingsId != 'profit' || validProfitSettings());
+    }
+
+    match /settings/{settingsId} {
+      allow read: if isCrew() && (resource == null || belongsToMyOrg(resource.data));
+      allow create: if isCrew() && isAdmin()
+        && settingsId == 'business'
+        && validBusinessSettings()
+        && createsInMyOrg(request.resource.data);
+      allow update: if isCrew() && isAdmin()
+        && settingsId == 'business'
+        && belongsToMyOrg(resource.data)
+        && validBusinessSettings()
+        && keepsOrg();
+      allow delete: if false;
+    }
+
     match /venmoPayments/{paymentId} {
       allow read: if isCrew() && belongsToMyOrg(resource.data);
       allow write: if false;
