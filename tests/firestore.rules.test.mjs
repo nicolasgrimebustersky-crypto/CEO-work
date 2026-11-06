@@ -675,6 +675,14 @@ describe("an opt-out is the customer's own instruction", () => {
 });
 
 describe("jobs", () => {
+  test("a rain-day note must say when it rained and what happened", async () => {
+    const ok = { rainedOn: "2026-11-10", from: "2026-11-10", action: "moved" };
+    await assertSucceeds(addDoc(collection(alice, "jobs"), jobDoc("alice", { rainDelay: ok })));
+    await assertSucceeds(addDoc(collection(alice, "jobs"), jobDoc("alice", { rainDelay: { ...ok, action: "skipped" } })));
+    await assertFails(addDoc(collection(alice, "jobs"), jobDoc("alice", { rainDelay: { ...ok, action: "vanished" } })));
+    await assertFails(addDoc(collection(alice, "jobs"), jobDoc("alice", { rainDelay: "rained" })));
+  });
+
   test("a crew member can schedule, edit and delete a job", async () => {
     const ref = await assertSucceeds(
       addDoc(collection(alice, "jobs"), jobDoc("alice")),

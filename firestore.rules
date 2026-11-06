@@ -416,7 +416,13 @@ service cloud.firestore {
         // The on-site checklist (lib/checklists.ts). Optional: jobs saved
         // before it existed have none. Capped as a runaway guard.
         && (!('checklist' in data)
-            || (data.checklist is list && data.checklist.size() <= 60));
+            || (data.checklist is list && data.checklist.size() <= 60))
+        // Why a rain day moved or skipped it (lib/rainDay.ts). Optional.
+        && (!('rainDelay' in data)
+            || (data.rainDelay is map
+                && data.rainDelay.rainedOn is string
+                && data.rainDelay.from is string
+                && data.rainDelay.action in ['moved', 'skipped']));
     }
 
     // Estimates and invoices share one shape and one collection, so one check
