@@ -324,3 +324,14 @@ export function ChatIcon({ active }: NavIconProps) {
     </svg>
   );
 }
+
+/** A clock beside a dollar sign: hours worked, and what they paid. */
+export function PayIcon({ active }: NavIconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className="size-6" aria-hidden="true">
+      <circle cx="9" cy="12" r="6" fill="none" stroke="currentColor" strokeWidth={w(active)} />
+      <path d="M9 8.5V12l2.2 1.6" fill="none" stroke="currentColor" strokeWidth={w(active)} strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M19 7v10M21 9.2c-.4-.8-1.2-1.2-2.1-1.2-1.2 0-2.1.6-2.1 1.6 0 2.2 4.3 1.2 4.3 3.4 0 1-1 1.7-2.2 1.7-1 0-1.9-.5-2.3-1.3" fill="none" stroke="currentColor" strokeWidth={w(active)} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}

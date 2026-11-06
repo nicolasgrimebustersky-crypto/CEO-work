@@ -10,6 +10,7 @@ import { Chip } from "@/components/ui/Chips";
 import { Spinner } from "@/components/ui/Spinner";
 import { BUSINESS } from "@/lib/business";
 import { buildPacket, packetCsv, type PacketExpense } from "@/lib/cpaPacket";
+import { subscribePayRuns, type StoredPayRun } from "@/lib/db/crewPay";
 import { subscribeExpenses, type Expense } from "@/lib/db/expenses";
 import { fetchJobsBetween } from "@/lib/db/jobs";
 import { subscribeTrips, type Trip } from "@/lib/db/mileage";
@@ -40,6 +41,7 @@ export function CpaPacketScreen() {
   const [jobs, setJobs] = useState<Job[] | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
+  const [payRuns, setPayRuns] = useState<StoredPayRun[]>([]);
 
   useEffect(() => {
     setJobs(null);
@@ -51,9 +53,11 @@ export function CpaPacketScreen() {
     if (!uid || !isAdmin) return;
     const a = subscribeExpenses({ uid, isOwner: true }, setExpenses, () => setExpenses([]));
     const b = subscribeTrips({ uid, isOwner: true }, setTrips, () => setTrips([]));
+    const c = subscribePayRuns({ uid, isOwner: true }, setPayRuns, () => setPayRuns([]));
     return () => {
       a();
       b();
+      c();
     };
   }, [uid, isAdmin]);
 
@@ -88,8 +92,9 @@ export function CpaPacketScreen() {
       })),
       salesTax: { charged: tax?.charged ?? 0, collected: tax?.collected ?? 0 },
       mileageMethod: mileage.method,
+      payRuns: payRuns.map((r) => ({ name: r.name, gross: r.gross, classification: r.classification, paidOn: r.paidOn })),
     });
-  }, [jobs, documents, expenses, trips, year, mileage.method]);
+  }, [jobs, documents, expenses, trips, payRuns, year, mileage.method]);
 
   function downloadCsv() {
     if (!packet) return;
@@ -187,7 +192,10 @@ export function CpaPacketScreen() {
                   right={[1, 2]}
                 />
               )}
-              <p className="mt-1 text-gray-600">A W-9 is needed from anyone who will get a 1099.</p>
+              <p className="mt-1 text-gray-600">
+                Help logged as expenses and 1099 crew pay. A W-9 is needed from anyone who will get a 1099; W-2
+                wages are on line 26 and their W-2s come from the payroll service.
+              </p>
             </Section>
 
             <Section title="Estimated tax payments">

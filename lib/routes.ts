@@ -39,6 +39,7 @@ export const routes = {
   yearEndPacket: "/reports/packet",
   expenses: "/expenses",
   mileage: "/mileage",
+  crewPay: "/pay",
   search: "/search",
   account: "/account",
   privacy: "/privacy",

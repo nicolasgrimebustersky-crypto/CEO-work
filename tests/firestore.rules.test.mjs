@@ -983,6 +983,118 @@ describe("owner-only settings (labour rates)", () => {
 
 /* ------------------------------------------------------------------ quotes */
 
+describe("crew pay", () => {
+  const edit = (createdBy, over = {}) => ({
+    orgId: ORG_ID,
+    uid: createdBy,
+    date: "2026-11-03",
+    minutes: 45,
+    reason: "Forgot to tap Finish at the Miller job",
+    jobId: null,
+    approved: false,
+    approvedBy: null,
+    approvedByName: null,
+    createdAt: serverTimestamp(),
+    createdBy,
+    createdByName: createdBy,
+    ...over,
+  });
+  const run = (over = {}) => ({
+    orgId: ORG_ID,
+    uid: "alice",
+    name: "Alice",
+    periodStart: "2026-11-02",
+    periodEnd: "2026-11-09",
+    hours: 31.5,
+    jobs: 12,
+    basis: "hourly",
+    rate: 20,
+    gross: 630,
+    classification: "1099",
+    paidOn: "2026-11-10",
+    method: "venmo",
+    notes: "",
+    createdAt: serverTimestamp(),
+    createdBy: "nicolas",
+    createdByName: "Owner",
+    updatedAt: serverTimestamp(),
+    updatedBy: "nicolas",
+    updatedByName: "Owner",
+    ...over,
+  });
+
+  test("a crew member logs a correction for themselves, unapproved; only the owner approves it", async () => {
+    await assertSucceeds(setDoc(doc(alice, "timeEdits/e1"), edit("alice")));
+    await assertSucceeds(getDoc(doc(alice, "timeEdits/e1")));
+    await assertFails(getDoc(doc(bob, "timeEdits/e1")));
+    await assertSucceeds(getDoc(doc(admin, "timeEdits/e1")));
+    // Can't approve your own, or claim it approved when logging it.
+    await assertFails(updateDoc(doc(alice, "timeEdits/e1"), { approved: true, approvedBy: "alice", approvedByName: "alice", approvedAt: serverTimestamp() }));
+    await assertFails(setDoc(doc(alice, "timeEdits/e2"), edit("alice", { approved: true })));
+    await assertFails(setDoc(doc(alice, "timeEdits/e3"), edit("alice", { approvedBy: "alice" })));
+    // The owner approves; that is the only change anyone can make.
+    await assertFails(updateDoc(doc(admin, "timeEdits/e1"), { minutes: 600, approved: true, approvedBy: "nicolas", approvedByName: "Owner", approvedAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(doc(admin, "timeEdits/e1"), { approved: true, approvedBy: "nicolas", approvedByName: "Owner", approvedAt: serverTimestamp() }));
+    // Once approved, the crew member can no longer withdraw it.
+    await assertFails(deleteDoc(doc(alice, "timeEdits/e1")));
+    await assertSucceeds(deleteDoc(doc(admin, "timeEdits/e1")));
+  });
+
+  test("nobody on the crew logs hours for someone else; the owner can, approved", async () => {
+    await assertFails(setDoc(doc(alice, "timeEdits/x1"), edit("alice", { uid: "bob" })));
+    await assertSucceeds(setDoc(doc(admin, "timeEdits/x2"), edit("nicolas", { uid: "bob", approved: true, approvedBy: "nicolas", approvedByName: "Owner" })));
+    await assertSucceeds(getDoc(doc(bob, "timeEdits/x2")));
+    await assertFails(getDoc(doc(alice, "timeEdits/x2")));
+    await assertSucceeds(getDocs(query(collection(bob, "timeEdits"), where("uid", "==", "bob"))));
+    await assertFails(getDocs(collection(bob, "timeEdits")));
+    await assertFails(setDoc(doc(mallory, "timeEdits/x3"), edit("mallory")));
+  });
+
+  test("a correction is whole minutes, at most 16 hours, with a reason", async () => {
+    for (const bad of [{ minutes: 0 }, { minutes: 1.5 }, { minutes: 961 }, { minutes: -961 }, { reason: "" }, { date: "yesterday" }]) {
+      await assertFails(setDoc(doc(alice, "timeEdits/bad"), edit("alice", bad)));
+    }
+    await assertSucceeds(setDoc(doc(alice, "timeEdits/neg"), edit("alice", { minutes: -30 })));
+    await assertSucceeds(deleteDoc(doc(alice, "timeEdits/neg"))); // withdrawn while waiting
+  });
+
+  test("only the owner records pay; the person paid reads their own, nobody else does", async () => {
+    await assertFails(setDoc(doc(alice, "payRuns/alice_2026-11-02"), run({ createdBy: "alice", updatedBy: "alice" })));
+    await assertSucceeds(setDoc(doc(admin, "payRuns/alice_2026-11-02"), run()));
+    await assertSucceeds(getDoc(doc(alice, "payRuns/alice_2026-11-02")));
+    await assertFails(getDoc(doc(bob, "payRuns/alice_2026-11-02")));
+    await assertSucceeds(getDocs(query(collection(alice, "payRuns"), where("uid", "==", "alice"))));
+    await assertFails(getDocs(collection(alice, "payRuns")));
+    await assertFails(updateDoc(doc(alice, "payRuns/alice_2026-11-02"), { gross: 6300, updatedAt: serverTimestamp(), updatedBy: "alice" }));
+    await assertFails(deleteDoc(doc(alice, "payRuns/alice_2026-11-02")));
+    // The owner corrects it, but can't move it to another person.
+    await assertSucceeds(setDoc(doc(admin, "payRuns/alice_2026-11-02"), run({ gross: 640 })));
+    await assertFails(setDoc(doc(admin, "payRuns/alice_2026-11-02"), run({ uid: "bob" })));
+    await assertSucceeds(deleteDoc(doc(admin, "payRuns/alice_2026-11-02")));
+  });
+
+  test("a pay record must be sane", async () => {
+    for (const bad of [{ gross: -1 }, { gross: "630" }, { classification: "cash" }, { basis: "vibes" }, { periodEnd: "2026-11-01" }, { paidOn: "soon" }, { jobs: 1.5 }, { name: "" }]) {
+      await assertFails(setDoc(doc(admin, "payRuns/bad"), run(bad)));
+    }
+  });
+
+  test("pay rates are the owner's alone; the pay schedule is shared but the owner's to set", async () => {
+    const pay = (uid) => ({ orgId: ORG_ID, people: { alice: { classification: "1099", basis: "hourly", rate: 20, w9: null } }, updatedAt: serverTimestamp(), updatedBy: uid, updatedByName: uid });
+    await assertSucceeds(setDoc(doc(admin, "ownerSettings/pay"), pay("nicolas")));
+    await assertFails(getDoc(doc(alice, "ownerSettings/pay")));
+    await assertFails(setDoc(doc(alice, "ownerSettings/pay"), pay("alice")));
+    await assertFails(setDoc(doc(admin, "ownerSettings/pay"), { ...pay("nicolas"), people: [] }));
+
+    const schedule = (uid, paySchedule) => ({ orgId: ORG_ID, paySchedule, updatedAt: serverTimestamp(), updatedBy: uid, updatedByName: uid });
+    await assertFails(setDoc(doc(alice, "settings/business"), schedule("alice", { frequency: "weekly", startsOn: 1 })));
+    await assertSucceeds(setDoc(doc(admin, "settings/business"), schedule("nicolas", { frequency: "biweekly", startsOn: 1 })));
+    await assertSucceeds(getDoc(doc(alice, "settings/business")));
+    await assertFails(setDoc(doc(admin, "settings/business"), schedule("nicolas", { frequency: "daily", startsOn: 1 })));
+    await assertFails(setDoc(doc(admin, "settings/business"), schedule("nicolas", { frequency: "weekly", startsOn: 7 })));
+  });
+});
+
 describe("quotes", () => {
   test("a crew member can record a quote and change its status", async () => {
     const ref = await assertSucceeds(
