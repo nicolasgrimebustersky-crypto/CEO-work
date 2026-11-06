@@ -33,6 +33,7 @@ import type { Job } from "@/lib/types";
 import { DayView } from "./DayView";
 import { JobSheet } from "./JobSheet";
 import { MonthView } from "./MonthView";
+import { RainDaySheet } from "./RainDaySheet";
 import { WeekView } from "./WeekView";
 import { useJobDrag, type DropTarget } from "./useJobDrag";
 import { visitPhrase, visitTitle } from "@/lib/visitTypes";
@@ -70,6 +71,7 @@ function Schedule() {
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [slotStart, setSlotStart] = useState<Date | undefined>(undefined);
   const [toast, setToast] = useState<string | null>(null);
+  const [rainOpen, setRainOpen] = useState(false);
 
 
   const visibleJobs = useMemo(() => {
@@ -258,6 +260,14 @@ function Schedule() {
             My jobs
           </button>
 
+          <button
+            type="button"
+            onClick={() => setRainOpen(true)}
+            className="tap-target rounded-full border border-line bg-surface-2 px-3.5 text-sm font-bold text-ink"
+          >
+            Rain day
+          </button>
+
           <div className="ml-auto flex items-center gap-2">
             {users.map((user) => (
               <span key={user.uid} className="flex items-center gap-1.5">
@@ -273,6 +283,15 @@ function Schedule() {
           </div>
         </div>
       </ScreenHeader>
+
+      <RainDaySheet
+        open={rainOpen}
+        day={view === "day" ? anchor : new Date()}
+        jobs={jobs}
+        customersById={customersById}
+        onClose={() => setRainOpen(false)}
+        onDone={setToast}
+      />
 
       {error ? (
         <p

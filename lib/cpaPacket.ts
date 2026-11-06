@@ -6,7 +6,8 @@
  *   - Every expense, with its proof (receipt / statement / in person).
  *   - The mileage log.
  *   - Sales tax charged, collected and paid to the state.
- *   - Contractor payments, flagged at the 1099-NEC threshold.
+ *   - Contractor payments, flagged at the 1099-NEC threshold: help logged
+ *     as expenses and 1099 crew pay. W-2 crew pay is wages, line 26.
  *   - Estimated tax payments made.
  *
  * The line mapping is a starting point for the accountant, not a filing:
@@ -76,6 +77,16 @@ export interface PacketInput {
   trips: readonly PacketTrip[];
   salesTax: PacketSalesTax;
   mileageMethod: "standard" | "actual";
+  /** Crew pay recorded on the Crew pay screen (lib/crewPay.ts). */
+  payRuns?: readonly PacketPayRun[];
+}
+
+export interface PacketPayRun {
+  name: string;
+  gross: number;
+  classification: "w2" | "1099";
+  /** "YYYY-MM-DD" */
+  paidOn: string;
 }
 
 export interface ScheduleCLine {
@@ -155,10 +166,11 @@ const LINE_LABEL: Record<string, string> = {
   "22": "Supplies (includes small tools)",
   "23": "Taxes and licenses (includes sales tax paid to Kentucky)",
   "24b": "Deductible meals (50%)",
+  "26": "Wages (gross pay to W-2 employees; payroll taxes come from your payroll service)",
   "27a": "Other expenses (phone, software, dump fees, other)",
 };
 
-const LINE_ORDER = ["8", "9", "11", "13", "15", "21", "22", "23", "24b", "27a"];
+const LINE_ORDER = ["8", "9", "11", "13", "15", "21", "22", "23", "24b", "26", "27a"];
 
 export function buildPacket(input: PacketInput): Packet {
   const prefix = `${input.year}-`;
@@ -196,6 +208,12 @@ export function buildPacket(input: PacketInput): Packet {
   if (input.mileageMethod === "standard" && mileageValue > 0) add("9", mileageValue);
   if (remitted > 0) add("23", remitted);
 
+  // Crew pay: W-2 gross is wages, 1099 pay is contract labour.
+  const payRuns = (input.payRuns ?? []).filter(
+    (r) => r.paidOn.startsWith(prefix) && Number.isFinite(r.gross) && r.gross > 0,
+  );
+  for (const r of payRuns) add(r.classification === "w2" ? "26" : "11", r.gross);
+
   const lines: ScheduleCLine[] = [
     { line: "1", label: LINE_LABEL["1"], amount: round2(input.grossReceipts) },
     ...LINE_ORDER.filter((l) => (byLine.get(l) ?? 0) > 0).map((l) => ({
@@ -215,6 +233,15 @@ export function buildPacket(input: PacketInput): Packet {
     const key = name.toLowerCase();
     const entry = people.get(key) ?? { name, paid: 0, payments: 0 };
     entry.paid += e.amount;
+    entry.payments += 1;
+    people.set(key, entry);
+  }
+  for (const r of payRuns) {
+    if (r.classification !== "1099") continue;
+    const name = r.name.trim() || "(no name entered)";
+    const key = name.toLowerCase();
+    const entry = people.get(key) ?? { name, paid: 0, payments: 0 };
+    entry.paid += r.gross;
     entry.payments += 1;
     people.set(key, entry);
   }

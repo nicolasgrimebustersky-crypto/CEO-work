@@ -66,7 +66,7 @@ export const EXPENSE_CATEGORY_HINT: Record<ExpenseCategory, string> = {
   tools: "Hand tools, small power tools, safety gear",
   supplies: "Soap, degreaser, chemicals, squeegees, towels, bags",
   dump_fees: "Landfill, yard-waste and dump-site fees",
-  labor: "Paying someone to help, or a subcontractor",
+  labor: "A subcontractor or one-off help — your own crew's pay goes on the Crew pay screen",
   insurance: "Business liability, equipment or truck insurance",
   phone_software: "Phone bill, apps, website, this CRM",
   advertising: "Flyers, signs, ads, door hangers",

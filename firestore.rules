@@ -416,7 +416,13 @@ service cloud.firestore {
         // The on-site checklist (lib/checklists.ts). Optional: jobs saved
         // before it existed have none. Capped as a runaway guard.
         && (!('checklist' in data)
-            || (data.checklist is list && data.checklist.size() <= 60));
+            || (data.checklist is list && data.checklist.size() <= 60))
+        // Why a rain day moved or skipped it (lib/rainDay.ts). Optional.
+        && (!('rainDelay' in data)
+            || (data.rainDelay is map
+                && data.rainDelay.rainedOn is string
+                && data.rainDelay.from is string
+                && data.rainDelay.action in ['moved', 'skipped']));
     }
 
     // Estimates and invoices share one shape and one collection, so one check
@@ -852,7 +858,16 @@ service cloud.firestore {
       let data = request.resource.data;
       return (!('salesTax' in data) || validSalesTaxSettings(data.salesTax))
         && (!('mileage' in data) || validMileageSettings(data.mileage))
+        && (!('paySchedule' in data) || validPaySchedule(data.paySchedule))
         && stampedByCaller('updatedBy');
+    }
+
+    // How often the crew is paid. Shared so that everyone's "this pay
+    // period" is the same dates; it says nothing about how much.
+    function validPaySchedule(p) {
+      return p is map
+        && p.frequency in ['weekly', 'biweekly', 'semimonthly', 'monthly']
+        && p.startsOn is int && p.startsOn >= 0 && p.startsOn <= 6;
     }
 
     function validSalesTaxSettings(t) {
@@ -932,10 +947,185 @@ service cloud.firestore {
         && stampedByCaller('updatedBy');
     }
 
+    // Pay rates, W-2 or 1099, and where each W-9 is kept — per person, in
+    // one map. A W-9 must sit in the owner-only w9/ folder (storage.rules).
+    function validPaySettings() {
+      let data = request.resource.data;
+      return data.people is map
+        && data.people.size() <= 100
+        && stampedByCaller('updatedBy');
+    }
+
     match /ownerSettings/{settingsId} {
       allow read: if isCrew() && isAdmin();
       allow write: if isCrew() && isAdmin()
-        && (settingsId != 'profit' || validProfitSettings());
+        && (settingsId != 'profit' || validProfitSettings())
+        && (settingsId != 'pay' || validPaySettings());
+    }
+
+    // Corrections to someone's hours. Never an edit of the Start and Finish
+    // taps: each is its own entry with a reason, so the record of what was
+    // tapped and what was changed, by whom, stays whole.
+    //
+    // A crew member may log one for themselves only, and it waits for the
+    // owner: it cannot be created approved, and only the owner approves it.
+    // The person and the owner can read it; nobody else on the crew can.
+    function validTimeEdit() {
+      let data = request.resource.data;
+      return data.uid is string && data.uid.size() > 0 && data.uid.size() <= 128
+        && data.date is string && data.date.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && data.minutes is int && data.minutes != 0
+        && data.minutes >= -960 && data.minutes <= 960
+        && data.reason is string && data.reason.size() > 0 && data.reason.size() <= 200
+        && (data.jobId == null || (data.jobId is string && data.jobId.size() <= 128))
+        && data.approved is bool;
+    }
+
+    match /timeEdits/{editId} {
+      allow read: if isCrew() && belongsToMyOrg(resource.data)
+        && (isAdmin() || resource.data.uid == request.auth.uid);
+      allow create: if isCrew()
+        && stampedByCaller('createdBy')
+        && validTimeEdit()
+        && createsInMyOrg(request.resource.data)
+        && (isAdmin()
+            || (request.resource.data.uid == request.auth.uid
+                && request.resource.data.approved == false
+                && request.resource.data.get('approvedBy', null) == null));
+      // The one change allowed is the owner approving it.
+      allow update: if isCrew() && isAdmin()
+        && belongsToMyOrg(resource.data)
+        && keepsOrg()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['approved', 'approvedBy', 'approvedByName', 'approvedAt'])
+        && request.resource.data.approved == true
+        && stampedByCaller('approvedBy');
+      // The owner rejects or removes one; a crew member may withdraw their
+      // own while it is still waiting, never once it has been approved.
+      allow delete: if isCrew() && belongsToMyOrg(resource.data)
+        && (isAdmin()
+            || (resource.data.createdBy == request.auth.uid
+                && resource.data.uid == request.auth.uid
+                && resource.data.approved == false));
+    }
+
+    // What each person was paid for a pay period. Only the owner records
+    // pay; the person paid can read their own, nobody else on the crew can.
+    function validPayRun() {
+      let data = request.resource.data;
+      return data.uid is string && data.uid.size() > 0 && data.uid.size() <= 128
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 80
+        && data.periodStart is string && data.periodStart.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && data.periodEnd is string && data.periodEnd.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && data.periodEnd > data.periodStart
+        && data.paidOn is string && data.paidOn.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && data.hours is number && data.hours >= 0 && data.hours <= 2000
+        && data.jobs is int && data.jobs >= 0 && data.jobs <= 1000
+        && data.basis in ['hourly', 'per_job', 'share']
+        && data.rate is number && data.rate >= 0 && data.rate <= 5000
+        && data.gross is number && data.gross >= 0 && data.gross < 1000000
+        && data.classification in ['w2', '1099']
+        && data.method in ['cash', 'check', 'venmo', 'bank', 'payroll', 'other']
+        && data.notes is string && data.notes.size() <= 500;
+    }
+
+    // Equipment and its service tasks. Not money and not private: everyone
+    // on the crew sees what is due and can add or adjust equipment. The
+    // reminder bookkeeping (`notified`) belongs to the daily cron alone.
+    function validEquipment() {
+      let data = request.resource.data;
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 60
+        && data.meter in ['none', 'hours', 'miles']
+        && data.tasks is list && data.tasks.size() <= 20
+        && stampedByCaller('updatedBy');
+    }
+
+    match /equipment/{equipmentId} {
+      allow read: if isCrew() && belongsToMyOrg(resource.data);
+      allow create: if isCrew()
+        && stampedByCaller('createdBy')
+        && validEquipment()
+        && !('notified' in request.resource.data)
+        && createsInMyOrg(request.resource.data);
+      allow update: if isCrew()
+        && belongsToMyOrg(resource.data)
+        && validEquipment()
+        && request.resource.data.diff(resource.data).affectedKeys().hasAll(['updatedAt'])
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['notified', 'createdBy'])
+        && keepsOrg();
+      allow delete: if isCrew() && isAdmin() && belongsToMyOrg(resource.data);
+    }
+
+    // Service done and meter readings. Whoever did the work logs it; the
+    // person who logged an entry, or the owner, can correct or remove it.
+    function validMaintenanceEntry() {
+      let data = request.resource.data;
+      return data.equipmentId is string && data.equipmentId.size() > 0 && data.equipmentId.size() <= 128
+        && data.date is string && data.date.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && data.taskIds is list && data.taskIds.size() <= 20
+        && (data.reading == null || (data.reading is number && data.reading >= 0 && data.reading < 10000000))
+        && (data.taskIds.size() > 0 || data.reading != null)
+        && data.note is string && data.note.size() <= 200
+        && (data.expenseId == null || (data.expenseId is string && data.expenseId.size() <= 128));
+    }
+
+    match /maintenanceLog/{entryId} {
+      allow read: if isCrew() && belongsToMyOrg(resource.data);
+      allow create: if isCrew()
+        && stampedByCaller('createdBy')
+        && validMaintenanceEntry()
+        && createsInMyOrg(request.resource.data);
+      allow update: if isCrew()
+        && belongsToMyOrg(resource.data)
+        && (isAdmin() || resource.data.createdBy == request.auth.uid)
+        && (request.resource.data.createdBy == resource.data.createdBy
+            || (isAdmin() && stampedByCaller('createdBy')))
+        && validMaintenanceEntry()
+        && keepsOrg();
+      allow delete: if isCrew() && belongsToMyOrg(resource.data)
+        && (isAdmin() || resource.data.createdBy == request.auth.uid);
+    }
+
+    // Seasonal campaigns that were sent (lib/db/campaigns.ts). A record of
+    // marketing that went out: the owner sends, so the owner records it;
+    // the crew read it to follow up. Never edited — results are worked out
+    // from estimates and jobs, not stored here.
+    function validCampaign() {
+      let data = request.resource.data;
+      return data.templateId is string && data.templateId.size() <= 40
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 80
+        // `service` is a keyword in the rules language, hence the brackets.
+        && data['service'] is string && data['service'].size() <= 40
+        && data.message is string && data.message.size() > 0 && data.message.size() <= 1600
+        && data.recipients is list && data.recipients.size() <= 200
+        && data.excluded is int && data.excluded >= 0
+        && data.sentAt is timestamp;
+    }
+
+    match /campaigns/{campaignId} {
+      allow read: if isCrew() && belongsToMyOrg(resource.data);
+      allow create: if isCrew() && isAdmin()
+        && stampedByCaller('createdBy')
+        && validCampaign()
+        && createsInMyOrg(request.resource.data);
+      allow update: if false;
+      allow delete: if isCrew() && isAdmin() && belongsToMyOrg(resource.data);
+    }
+
+    match /payRuns/{runId} {
+      allow read: if isCrew() && belongsToMyOrg(resource.data)
+        && (isAdmin() || resource.data.uid == request.auth.uid);
+      allow create: if isCrew() && isAdmin()
+        && stampedByCaller('createdBy')
+        && validPayRun()
+        && createsInMyOrg(request.resource.data);
+      allow update: if isCrew() && isAdmin()
+        && belongsToMyOrg(resource.data)
+        && refreshesAuthorStamp()
+        && request.resource.data.uid == resource.data.uid
+        && validPayRun()
+        && keepsOrg();
+      allow delete: if isCrew() && isAdmin() && belongsToMyOrg(resource.data);
     }
 
     match /settings/{settingsId} {
