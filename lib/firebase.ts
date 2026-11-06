@@ -176,6 +176,8 @@ export const COLLECTIONS = {
   equipment: "equipment",
   /** Service done and meter readings, append-only. See lib/db/maintenance.ts. */
   maintenanceLog: "maintenanceLog",
+  /** Seasonal upsell campaigns that were sent. See lib/db/campaigns.ts. */
+  campaigns: "campaigns",
   /** Demo mode only — the real app keeps these as subcollections. */
   chatMessages: "chatMessages",
   chatReads: "chatReads",

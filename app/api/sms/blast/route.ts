@@ -1,3 +1,4 @@
+import { isAdmin } from "@/lib/auth/roles";
 import { audit } from "@/lib/server/audit";
 import { ApiError, errorResponse, requireCrew } from "@/lib/server/auth";
 import { preflight, withCors } from "@/lib/server/cors";
@@ -10,6 +11,7 @@ import {
 import { consumeRateLimit, SMS_BLAST_LIMIT } from "@/lib/server/rateLimit";
 import { isTwilioConfigured, sendSms } from "@/lib/server/twilio";
 import { DEFAULT_ORG_ID } from "@/lib/org";
+import { isQuietHour, quietHoursLabel } from "@/lib/notifications/quietHours";
 import { canSendTo } from "@/lib/smsConsent";
 
 export const runtime = "nodejs";
@@ -25,6 +27,12 @@ const SEND_INTERVAL_MS = 1100;
 interface BlastBody {
   customerIds?: unknown;
   body?: unknown;
+  /**
+   * A seasonal campaign (lib/campaigns.ts). Marketing gets two extra rules
+   * here, on the server, whatever the screen did: only people with a
+   * consent actually recorded, and never during quiet hours.
+   */
+  marketing?: unknown;
 }
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -48,6 +56,7 @@ export async function POST(request: Request): Promise<Response> {
       ? payload.customerIds.filter((id): id is string => typeof id === "string")
       : [];
     const body = typeof payload.body === "string" ? payload.body.trim() : "";
+    const marketing = payload.marketing === true;
 
     if (customerIds.length === 0) throw new ApiError(400, "No recipients selected.");
     if (!body) throw new ApiError(400, "Message body is required.");
@@ -59,6 +68,13 @@ export async function POST(request: Request): Promise<Response> {
         400,
         `That's ${customerIds.length} recipients, over the ${MAX_RECIPIENTS} limit. Narrow the filter first.`,
       );
+    }
+    // Marketing to the customer list is the owner's call.
+    if (marketing && !isAdmin(caller.email)) {
+      throw new ApiError(403, "Only the owner can send a campaign.");
+    }
+    if (marketing && isQuietHour(new Date())) {
+      throw new ApiError(409, `It's quiet hours (${quietHoursLabel()}). Send the campaign in the morning.`);
     }
     if (!isTwilioConfigured) {
       throw new ApiError(503, "Twilio is not configured on this deployment.");
@@ -130,6 +146,12 @@ export async function POST(request: Request): Promise<Response> {
         failed.push({ customerId, name, error: verdict.reason });
         continue;
       }
+      // Not having said STOP is enough for a job reminder; it is not
+      // consent to marketing.
+      if (marketing && customer.smsConsent?.granted !== true) {
+        failed.push({ customerId, name, error: "No consent to texts on file — not sent a marketing text." });
+        continue;
+      }
       if (customer.status === "do_not_knock") {
         failed.push({ customerId, name, error: "Marked do not knock — skipped." });
         continue;
@@ -162,7 +184,7 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     await audit({
-      action: "sms.blast",
+      action: marketing ? "sms.campaign" : "sms.blast",
       actorUid: caller.uid,
       actorName: caller.displayName,
       ok: true,

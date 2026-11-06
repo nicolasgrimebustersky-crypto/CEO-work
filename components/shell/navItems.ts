@@ -15,6 +15,7 @@ import {
   MileageIcon,
   PayIcon,
   WrenchIcon,
+  MegaphoneIcon,
   ReceiptIcon,
   ReportIcon,
   SearchIcon,
@@ -99,6 +100,12 @@ export const DRAWER_ONLY: NavItem[] = [
     label: "Messages",
     icon: MessageIcon,
     hint: "Texts to and from customers, and who is waiting",
+  },
+  {
+    href: routes.campaigns,
+    label: "Campaigns",
+    icon: MegaphoneIcon,
+    hint: "Seasonal offers to your own customers, and what came of them",
   },
   {
     href: routes.automations,
