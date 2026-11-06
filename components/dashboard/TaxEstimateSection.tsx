@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useTeam } from "@/components/providers/TeamProvider";
 import { Chip } from "@/components/ui/Chips";
+import { yearPayTotals } from "@/lib/crewPay";
+import { subscribePayRuns, type StoredPayRun } from "@/lib/db/crewPay";
 import { subscribeExpenses, type Expense } from "@/lib/db/expenses";
 import { subscribeTrips, type Trip } from "@/lib/db/mileage";
 import { useMileageSettings } from "@/lib/db/settings";
@@ -86,10 +88,16 @@ export function TaxEstimateSection({ year, grossSoFar }: { year: number; grossSo
   }
 
   const [trips, setTrips] = useState<Trip[]>([]);
+  const [payRuns, setPayRuns] = useState<StoredPayRun[]>([]);
   const mileage = useMileageSettings();
   useEffect(() => {
     if (!uid) return;
-    return subscribeTrips({ uid, isOwner: true }, setTrips, () => setTrips([]));
+    const a = subscribeTrips({ uid, isOwner: true }, setTrips, () => setTrips([]));
+    const b = subscribePayRuns({ uid, isOwner: true }, setPayRuns, () => setPayRuns([]));
+    return () => {
+      a();
+      b();
+    };
   }, [uid]);
 
   const totals = useMemo(() => expenseTotals(expenses ?? [], year), [expenses, year]);
@@ -103,7 +111,10 @@ export function TaxEstimateSection({ year, grossSoFar }: { year: number; grossSo
   const usesMileage = mileage.method === "standard";
   const vehicleDeduction = usesMileage ? miles.deduction : 0;
   const otherExpenses = usesMileage ? totals.deductible - truckCosts : totals.deductible;
-  const deductible = otherExpenses + vehicleDeduction;
+  // Crew pay is recorded on the Crew pay screen, not as expenses.
+  const pay = yearPayTotals(payRuns, year);
+  const crewPay = pay.wages + pay.contract;
+  const deductible = otherExpenses + vehicleDeduction + crewPay;
   const { exact } = taxYearFor(year);
   const options = { year, filing: settings.filing, localRate: settings.localPercent / 100 };
 
@@ -144,7 +155,7 @@ export function TaxEstimateSection({ year, grossSoFar }: { year: number; grossSo
       <ul className="mt-2 flex flex-col gap-1.5">
         <Line label="Money in" value={isCurrentYear ? grossAtPace : grossSoFar} />
         <Line
-          label={usesMileage ? `Less expenses and ${miles.miles} business miles` : "Less expenses"}
+          label={`Less expenses${crewPay > 0 ? ", crew pay" : ""}${usesMileage ? ` and ${miles.miles} business miles` : ""}`}
           value={-(isCurrentYear ? expensesAtPace : deductible)}
           link={routes.expenses}
         />

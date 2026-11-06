@@ -127,6 +127,59 @@ export interface LineItem {
    * read goes through `lineDiscountPct` rather than touching the field.
    */
   discountPct?: number;
+  /**
+   * The package this line belongs to on a Good / Better / Best estimate, by
+   * QuotePackage id. Absent means the line is in every package — the base
+   * work all three include. See lib/packages.ts.
+   */
+  package?: string;
+}
+
+/** One option on a Good / Better / Best estimate. */
+export interface QuotePackage {
+  id: string;
+  /** "Good", "Better", "Best" — or whatever the crew calls them. */
+  name: string;
+}
+
+/** A file attached to an estimate or invoice. Stored under documents/{id}/files/. */
+export interface DocumentAttachment {
+  id: string;
+  /** As the crew named it — "Scope of Work.pdf". */
+  name: string;
+  /** Storage path. Never a public URL: customers download through the server. */
+  path: string;
+  contentType: string;
+  size: number;
+  uploadedBy: string;
+  uploadedByName: string;
+  uploadedAt: Timestamp;
+}
+
+/** The kinds of file that can be attached. Must match storage.rules. */
+export const ATTACHMENT_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+] as const;
+export const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+
+/** "Scope of Work" from "Scope of Work.pdf", for the tile. */
+export function attachmentTitle(name: string): string {
+  const trimmed = name.trim();
+  const dot = trimmed.lastIndexOf(".");
+  return (dot > 0 ? trimmed.slice(0, dot) : trimmed) || "File";
+}
+
+/** "PDF", "JPG" — the badge on the tile. */
+export function attachmentBadge(contentType: string, name: string): string {
+  if (contentType === "application/pdf") return "PDF";
+  const ext = name.split(".").pop()?.toUpperCase() ?? "";
+  if (ext && ext.length <= 4 && ext !== name.toUpperCase()) return ext === "JPEG" ? "JPG" : ext;
+  return contentType.startsWith("image/") ? "IMG" : "FILE";
 }
 
 export interface Payment {
@@ -227,6 +280,25 @@ export interface BusinessDocument {
   payments: Payment[];
   amountPaid: number;
   balanceDue: number;
+
+  /**
+   * Files attached for the customer — a scope of work, a certificate of
+   * insurance, a site photo. Shown on the customer's copy as download tiles.
+   * Empty on everything saved before attachments existed.
+   */
+  attachments: DocumentAttachment[];
+  /**
+   * Good / Better / Best. Empty on an ordinary estimate. While the customer
+   * has not chosen, the stored totals are the first package's — the "from"
+   * price. Choosing rewrites the document to the chosen package's lines and
+   * totals (lib/packages.ts choosePackage), so every invoice, PDF and report
+   * after that sees an ordinary document.
+   */
+  packages: QuotePackage[];
+  /** Which package the customer approved. Null until they do. */
+  chosenPackageId: string | null;
+  /** Every line as it stood before the choice, for the record. Empty until then. */
+  offeredLines: LineItem[];
 
   notes: string;
   issuedAt: Timestamp;

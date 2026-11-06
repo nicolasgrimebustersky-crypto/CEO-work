@@ -1,12 +1,12 @@
 "use client";
 
 import { format } from "date-fns";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { useTeam } from "@/components/providers/TeamProvider";
+import { usePaySchedule, savePaySchedule } from "@/lib/db/settings";
 import { formatMoney } from "@/lib/format";
 import {
-  DEFAULT_SCHEDULE,
   FREQUENCIES,
   FREQUENCY_LABEL,
   WEEKDAY_LABEL,
@@ -22,27 +22,6 @@ import {
 } from "@/lib/payPeriods";
 
 type Audience = "everyone" | "sales" | "technicians";
-
-const STORAGE_KEY = "gb.paySchedule";
-
-/** The schedule is a viewing preference, so it lives on the device. */
-function readSchedule(): PaySchedule {
-  try {
-    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null") as Partial<PaySchedule> | null;
-    if (
-      raw &&
-      (FREQUENCIES as readonly string[]).includes(String(raw.frequency)) &&
-      Number.isInteger(raw.startsOn) &&
-      (raw.startsOn as number) >= 0 &&
-      (raw.startsOn as number) <= 6
-    ) {
-      return { frequency: raw.frequency as Frequency, startsOn: raw.startsOn as Weekday };
-    }
-  } catch {
-    // Private window or blocked storage: the default is fine.
-  }
-  return DEFAULT_SCHEDULE;
-}
 
 function scheduleLabel(schedule: PaySchedule): string {
   if (schedule.frequency === "weekly" || schedule.frequency === "biweekly") {
@@ -68,22 +47,17 @@ export function PayPeriodSection({
   jobs: readonly PayJob[];
   documents: readonly PayDocument[];
 }) {
-  const { users, colorFor } = useTeam();
-  const [schedule, setSchedule] = useState<PaySchedule>(DEFAULT_SCHEDULE);
+  const { users, colorFor, author, isAdmin } = useTeam();
+  const schedule = usePaySchedule();
   const [steps, setSteps] = useState(0);
   const [audience, setAudience] = useState<Audience>("everyone");
   const [editing, setEditing] = useState(false);
 
-  useEffect(() => setSchedule(readSchedule()), []);
-
+  // The schedule is shared (settings/business), so the crew's "this pay
+  // period" is the same dates as the owner's. Only the owner changes it.
   const update = (next: PaySchedule) => {
-    setSchedule(next);
     setSteps(0);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    } catch {
-      // Not saved; it still applies for this visit.
-    }
+    if (author && isAdmin) void savePaySchedule(next, author);
   };
 
   const period = useMemo(
@@ -127,7 +101,7 @@ export function PayPeriodSection({
         ))}
       </div>
 
-      {editing ? (
+      {editing && isAdmin ? (
         <div className="mt-3 grid grid-cols-3 gap-2">
           <label className="flex flex-col gap-1">
             <span className="text-xs font-bold text-muted">Frequency</span>

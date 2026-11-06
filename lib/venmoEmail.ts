@@ -2,7 +2,7 @@
  * Reading a Venmo "paid you" email.
  *
  * Venmo has no API or webhook for a personal account, but it emails the
- * account holder every time somebody pays them: "Larry Lupinski paid you
+ * account holder every time somebody pays them: "Pat Rivera paid you
  * $45.00", with the payer's note in the body. Forwarded from iCloud to the
  * CRM's private inbound address (app/api/inbound/venmo), that email is the
  * only machine-readable record of the payment there is.
@@ -23,7 +23,7 @@ export interface VenmoPayment {
   note: string;
 }
 
-/** "Larry Lupinski paid you $45.00", tolerant of commas and missing cents. */
+/** "Pat Rivera paid you $45.00", tolerant of commas and missing cents. */
 const SUBJECT = /^\s*(?:fwd?:\s*)*(.+?)\s+paid you\s+\$\s?([\d,]+(?:\.\d{1,2})?)\s*$/i;
 
 /** Subjects Venmo sends for money going the other way, or not moving at all. */
@@ -45,7 +45,7 @@ function toAmount(text: string): number | null {
  * whose note matches nothing still goes to the list to be matched by hand.
  */
 const BOILERPLATE =
-  /^(\$|venmo|transfer|money (credited|deposited|available)|see transaction|view (in|on)|payment id|transaction id|privacy|help|terms|©|copyright|this email|you received|sent from|download|like|comment|https?:\/\/)/i;
+  /^(\$|venmo|transfer|money (credited|deposited|available)|see transaction|transaction (details|id)|date$|sent to|view (in|on)|payment id|privacy|help|terms|©|copyright|this email|you received|sent from|download|like|comment|https?:\/\/)/i;
 
 export function noteFromBody(text: string, payerName: string): string {
   const lines = text

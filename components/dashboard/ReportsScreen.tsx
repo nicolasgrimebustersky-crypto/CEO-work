@@ -10,6 +10,7 @@ import { useTeam } from "@/components/providers/TeamProvider";
 import { ScreenHeader } from "@/components/shell/ScreenHeader";
 import { UserChip } from "@/components/ui/Chips";
 import { Spinner } from "@/components/ui/Spinner";
+import { PaymentsDashboard } from "./PaymentsDashboard";
 import { PayPeriodSection } from "./PayPeriodSection";
 import { ProfitSection } from "./ProfitSection";
 import { SalesTaxSection } from "./SalesTaxSection";
@@ -18,6 +19,7 @@ import { fetchJobsBetween } from "@/lib/db/jobs";
 import { quoteCloseRate, subscribeAllQuotes } from "@/lib/db/quotes";
 import { formatMoney } from "@/lib/format";
 import { grossFor } from "@/lib/money/summary";
+import { routes } from "@/lib/routes";
 import { zipFromAddress } from "@/lib/geocode";
 import { SERVICE_LABEL } from "@/lib/status";
 import { SERVICE_TYPES, type Job, type Quote, type ServiceType } from "@/lib/types";
@@ -27,7 +29,7 @@ const MONTHS_BACK = 12;
 export function ReportsScreen() {
   const { customers } = useCustomers();
   const { documents } = useDocuments();
-  const { users, colorFor, isAdmin } = useTeam();
+  const { users, colorFor, isAdmin, author } = useTeam();
 
   const [jobs, setJobs] = useState<Job[] | null>(null);
   const [quotes, setQuotes] = useState<Quote[]>([]);
@@ -125,6 +127,41 @@ export function ReportsScreen() {
     return { year, ...grossFor(year, jobs ?? [], documents) };
   }, [jobs, documents]);
   const maxMonth = Math.max(1, ...byMonth.map(([, value]) => value));
+
+  // Revenue, takings, tax and everyone's figures are the owner's. A crew
+  // member's Reports is their own work.
+  if (!isAdmin) {
+    const me = author?.uid ?? "";
+    const mine = completed.filter((job) => job.assignedTo.includes(me));
+    const thisYearMine = mine.filter(
+      (job) => (job.completedAt?.toDate() ?? job.scheduledStart.toDate()).getFullYear() === thisYear.year,
+    );
+    return (
+      <div className="flex h-full flex-col">
+        <ScreenHeader title="My work" subtitle={`Last ${MONTHS_BACK} months`} />
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+          {jobs === null ? (
+            <Spinner label="Crunching numbers…" />
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <Stat label={`Jobs finished in ${thisYear.year}`} value={String(thisYearMine.length)} />
+                <Stat label={`Last ${MONTHS_BACK} months`} value={String(mine.length)} />
+              </div>
+              <div className="py-6">
+                <Link
+                  href={routes.expenses}
+                  className="tap-target flex items-center justify-center rounded-xl border border-line bg-surface-2 px-4 py-3 text-base font-bold text-ink"
+                >
+                  My expenses
+                </Link>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
   const maxService = Math.max(1, ...byService.map(([, value]) => value));
 
   return (
@@ -145,6 +182,8 @@ export function ReportsScreen() {
           <Spinner label="Crunching numbers…" />
         ) : (
           <>
+            <PaymentsDashboard jobs={jobs} invoices={documents} />
+
             {/* Above the rest because it is the number somebody actually asks
                 for, and because the Revenue stat below means something
                 different — saying so here is what stops the two being
@@ -187,6 +226,15 @@ export function ReportsScreen() {
             {isAdmin ? <TaxEstimateSection year={thisYear.year} grossSoFar={thisYear.total} /> : null}
             {isAdmin ? <SalesTaxSection /> : null}
             {isAdmin ? <ProfitSection jobs={jobs} /> : null}
+            {isAdmin ? (
+              <Link
+                href={routes.yearEndPacket}
+                className="tap-target mt-6 flex items-center justify-between rounded-2xl border border-accent/60 bg-accent/10 px-4 py-3 text-base font-bold text-ink"
+              >
+                Year-end packet for your accountant
+                <span className="text-accent">PDF · CSV →</span>
+              </Link>
+            ) : null}
 
             <Section title="Revenue by month">
               <ul className="flex flex-col gap-1.5">

@@ -20,7 +20,7 @@ import {
   jobsOnDay,
 } from "@/lib/schedule";
 import type { Job, LatLng } from "@/lib/types";
-import { assigneeStripe } from "./JobBlock";
+import { appointmentLabel, assigneeStripe, blockTone } from "./JobBlock";
 import type { DropTarget } from "./useJobDrag";
 import { routes } from "@/lib/routes";
 import { isBillable, visitTitle } from "@/lib/visitTypes";
@@ -55,6 +55,9 @@ export function DayView({
 
   const dayJobs = jobsOnDay(jobs, day);
   const key = dayKey(day);
+  const tones = new Map(
+    dayJobs.map((job) => [job.id, blockTone(job, job.assignedTo.map((uid) => colorFor(uid)))]),
+  );
 
   /**
    * Route order is simply scheduled order — that is the order the crew will
@@ -129,17 +132,25 @@ export function DayView({
                     </div>
                   ) : null}
 
-                  <div className="flex items-start gap-2.5 rounded-xl border border-line bg-surface-2 p-2.5">
+                  <div
+                    className={`flex items-start gap-2.5 rounded-2xl p-2.5 ${tones.get(job.id)?.className ?? ""}`}
+                    style={tones.get(job.id)?.style}
+                  >
                     <span
                       aria-hidden="true"
                       className="mt-0.5 w-1.5 shrink-0 self-stretch rounded-full"
                       style={{
-                        background: assigneeStripe(
-                          job.assignedTo.map((uid) => colorFor(uid)),
-                        ),
+                        background: isBillable(job.visitType)
+                          ? assigneeStripe(job.assignedTo.map((uid) => colorFor(uid)))
+                          : "var(--color-appt)",
                       }}
                     />
                     <div className="min-w-0 flex-1">
+                      {isBillable(job.visitType) ? null : (
+                        <p className="text-[11px] font-extrabold tracking-wide text-appt">
+                          {appointmentLabel(job)}
+                        </p>
+                      )}
                       <div className="flex items-baseline justify-between gap-2">
                         <span className="truncate text-base font-bold text-ink">
                           {index + 1}. {customer ? customerName(customer) : "Unknown"}
@@ -260,16 +271,24 @@ export function DayView({
                 right: "0.75rem",
                 touchAction: "none",
                 opacity: draggingJobId === job.id ? 0.35 : job.status === "cancelled" ? 0.5 : 1,
+                ...tones.get(job.id)?.style,
               }}
-              className="flex flex-col overflow-hidden rounded-lg border border-line bg-surface-2 px-2 py-1 text-left"
+              className={`flex flex-col overflow-hidden rounded-xl px-2 py-1 text-left ${tones.get(job.id)?.className ?? ""}`}
             >
               <span
                 aria-hidden="true"
-                className="absolute inset-y-0 left-0 w-1.5"
+                className="absolute inset-y-0 left-0 w-1"
                 style={{
-                  background: assigneeStripe(job.assignedTo.map((uid) => colorFor(uid))),
+                  background: isBillable(job.visitType)
+                    ? assigneeStripe(job.assignedTo.map((uid) => colorFor(uid)))
+                    : "var(--color-appt)",
                 }}
               />
+              {isBillable(job.visitType) ? null : (
+                <span className="truncate pl-2 text-[10px] font-extrabold tracking-wide text-appt">
+                  {appointmentLabel(job)}
+                </span>
+              )}
               <span className="truncate pl-2 text-sm font-bold text-ink">
                 {customer ? customerName(customer) : "Unknown customer"}
               </span>

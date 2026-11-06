@@ -25,10 +25,25 @@ service firebase.storage {
         && request.auth.token.email.lower() == 'nicolas.grimebustersky@gmail.com';
     }
 
+    // Anyone the owner has approved in the app: their profile says role
+    // 'crew'. The same test as isApprovedCrew() in firestore.rules, read
+    // across services, so approving a hire on the Account screen is all it
+    // takes — no rules change per person. A pending sign-up, a removed crew
+    // member and a customer-portal account have no such profile and stay out.
+    //
+    // Cross-service reads need the Storage service agent to hold
+    // roles/firebaserules.firestoreServiceAgent on the project; without it this
+    // read fails closed and only the owner and the listed crew get in.
+    function isApprovedCrew() {
+      return request.auth != null
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'crew';
+    }
+
     function isCrew() {
       return request.auth != null
         && hasVerifiedSession()
-        && (isAdmin() || request.auth.uid in [
+        && (isAdmin() || isApprovedCrew() || request.auth.uid in [
              'Bzo7rclax4SdT7PaAua1monNxXG3',
              'QLMsTAHbbceHBAWBXPqtScGdGon2'
            ]);
@@ -61,6 +76,36 @@ service firebase.storage {
         && (request.resource.contentType.matches('image/.*')
             || request.resource.contentType == 'application/pdf');
       allow delete: if isCrew() && (isAdmin() || request.auth.uid == ownerUid);
+    }
+
+    // W-9s. A W-9 carries a Social Security or tax ID number, so only the
+    // owner can upload, open or delete one — not even the person it is for
+    // reads it back from here.
+    match /w9/{uid}/{fileName} {
+      allow read, delete: if isCrew() && isAdmin();
+      allow create, update: if isCrew() && isAdmin()
+        && request.resource.size < 15 * 1024 * 1024
+        && (request.resource.contentType.matches('image/.*')
+            || request.resource.contentType == 'application/pdf');
+    }
+
+    // Files attached to an estimate or invoice — a scope of work, a
+    // certificate of insurance, a site photo. Crew-only, like job photos.
+    // Customers never read these directly: their copy of the document asks the
+    // server, which checks the document's share token and hands back a link
+    // that expires in minutes (app/api/files/[token]/[fileId]).
+    //
+    // PDFs and ordinary photos only. HTML and SVG are refused outright: either
+    // one opened from the storage domain can run script.
+    match /documents/{documentId}/files/{fileName} {
+      allow read: if isCrew();
+
+      allow create, update: if isCrew()
+        && request.resource.size < 20 * 1024 * 1024
+        && (request.resource.contentType == 'application/pdf'
+            || request.resource.contentType.matches('image/(jpeg|png|webp|heic|heif)'));
+
+      allow delete: if isCrew();
     }
   }
 }

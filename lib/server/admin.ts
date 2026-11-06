@@ -3,6 +3,7 @@ import "server-only";
 import { cert, getApp, getApps, initializeApp, type App } from "firebase-admin/app";
 import { getAuth, type Auth } from "firebase-admin/auth";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 
 import {
   describeServiceAccountKey,
@@ -61,4 +62,15 @@ export function adminDb(): Firestore {
 
 export function adminAuth(): Auth {
   return getAuth(getAdminApp());
+}
+
+/**
+ * The project's storage bucket, for handing a customer a short-lived link to a
+ * file attached to their document. Named by the same variable the client uses,
+ * so the two can never point at different buckets.
+ */
+export function adminBucket() {
+  const name = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ?? "";
+  if (!name) throw new Error("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET is not set.");
+  return getStorage(getAdminApp()).bucket(name);
 }

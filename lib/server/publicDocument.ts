@@ -65,6 +65,7 @@ export type SerialDocument = Omit<
   | "firstViewedAt"
   | "lastViewedAt"
   | "viewCount"
+  | "attachments"
 > & {
   issuedAtMs: number | null;
   dueAtMs: number | null;
@@ -73,7 +74,21 @@ export type SerialDocument = Omit<
   createdAtMs: number | null;
   updatedAtMs: number | null;
   payments: SerialPayment[];
+  attachments: SerialAttachment[];
 };
+
+/**
+ * What the customer's page knows about an attached file: enough to draw the
+ * tile and ask for it. The storage path is left behind on purpose — the
+ * download goes through /api/files/[token]/[fileId], which looks the path up
+ * itself, so nothing on the page names a location in the bucket.
+ */
+export interface SerialAttachment {
+  id: string;
+  name: string;
+  contentType: string;
+  size: number;
+}
 
 /** Only the customer fields a document actually prints. */
 export interface SerialCustomer {
@@ -165,9 +180,20 @@ export function serializeDocument(hit: DocumentSnapshot): SerialDocument | null 
             unitPrice: num(item.unitPrice),
             discountPct: num(item.discountPct),
             taxable: item.taxable !== false,
+            ...(text(item.package) ? { package: text(item.package) } : {}),
           };
         })
       : [],
+    packages: Array.isArray(data.packages)
+      ? data.packages
+          .map((raw) => (raw ?? {}) as Record<string, unknown>)
+          .filter((pkg) => text(pkg.id))
+          .map((pkg) => ({ id: text(pkg.id), name: text(pkg.name) }))
+      : [],
+    chosenPackageId: text(data.chosenPackageId) || null,
+    // The full offer is kept on the crew's side only; the customer's page
+    // shows what they chose.
+    offeredLines: [],
     discount: num(data.discount),
     taxRatePct: num(data.taxRatePct, DEFAULT_TAX_RATE_PCT),
     subtotal: num(data.subtotal),
@@ -197,6 +223,17 @@ export function serializeDocument(hit: DocumentSnapshot): SerialDocument | null 
             recordedByName: text(payment.recordedByName),
           };
         })
+      : [],
+    attachments: Array.isArray(data.attachments)
+      ? data.attachments
+          .map((raw) => (raw ?? {}) as Record<string, unknown>)
+          .filter((file) => text(file.id) && text(file.path))
+          .map((file) => ({
+            id: text(file.id),
+            name: text(file.name) || "File",
+            contentType: text(file.contentType),
+            size: num(file.size),
+          }))
       : [],
     issuedAtMs: millis(data.issuedAt),
     dueAtMs: millis(data.dueAt),

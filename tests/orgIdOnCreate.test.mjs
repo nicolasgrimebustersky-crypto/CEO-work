@@ -213,12 +213,16 @@ const MUST_HAVE_ORG_ID = [
   "quotes.ts",
   "knockRoutes.ts",
   "territories.ts",
+  "tasks.ts",
   "services.ts",
   "automations.ts",
   "expenses.ts",
   "settings.ts",
   "mileage.ts",
   "ownerSettings.ts",
+  "crewPay.ts",
+  "maintenance.ts",
+  "campaigns.ts",
 ];
 
 /** Whole files exempt, with the reason. */

@@ -31,10 +31,14 @@ export function notificationLink(item: {
       return routes.schedule;
     case "pipeline":
       return routes.pipeline;
+    case "equipment":
+      return routes.equipment;
     case "chatThread":
       return routes.chatThread(target.id ?? "");
     case "chat":
       return routes.chat;
+    case "tasks":
+      return routes.tasks;
     case "customers":
     default:
       return routes.customers;

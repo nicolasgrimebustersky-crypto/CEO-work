@@ -90,6 +90,10 @@
      a destructive button. A fill and a text colour are different jobs. */
   --color-danger-fill: #c81e1e;
   --color-warn: #facc15;
+  /* Appointments on the calendar — estimate visits, walkthroughs, follow-ups.
+     Amber, so a trip that earns nothing never reads like paid work at a
+     glance. ~9:1 on the canvas as text. */
+  --color-appt: #f5a524;
   --color-ok: #22c55e;
 
   /* Rounder than the old 12px. Big radii are most of why the reference design

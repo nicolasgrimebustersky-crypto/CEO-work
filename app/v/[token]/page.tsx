@@ -9,6 +9,8 @@ import { QuoteActions } from "@/components/documents/QuoteActions";
 import { SharedDocument } from "@/components/documents/SharedDocument";
 import { BUSINESS, BUSINESS_TIMEZONE } from "@/lib/business";
 import { canTakeCardPayments, checkPayable } from "@/lib/payments";
+import { formatMoneyExact } from "@/lib/format";
+import { pricePackages } from "@/lib/packages";
 import { todayIn } from "@/lib/quoteResponse";
 import { crewForCustomer, findByShareToken } from "@/lib/server/publicDocument";
 import { stripeConfig } from "@/lib/server/stripe";
@@ -135,6 +137,20 @@ export default async function SharedDocumentPage({
           // refuse, a different set of days than the server will accept.
           today={todayIn(BUSINESS_TIMEZONE)}
           alreadyAnswered={answered}
+          packages={
+            document.packages.length > 0 && !document.chosenPackageId
+              ? pricePackages(
+                  document.lineItems,
+                  document.packages,
+                  document.discount,
+                  document.taxRatePct,
+                ).map((option) => ({
+                  id: option.pkg.id,
+                  name: option.pkg.name,
+                  total: formatMoneyExact(option.totals.total),
+                }))
+              : []
+          }
         />
       ) : null}
     </main>

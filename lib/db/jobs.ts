@@ -446,3 +446,34 @@ export async function deleteJob(jobId: string): Promise<void> {
 export function revenueForCustomer(jobs: Job[], customerId: string): number {
   return completedRevenue(jobs.filter((job) => job.customerId === customerId));
 }
+
+/**
+ * Rain day (lib/rainDay.ts): moves a job to a new start keeping its length,
+ * or skips a plan visit, and notes on the job that rain was why — so the
+ * schedule and the customer's timeline can say so.
+ */
+export async function rainDelayJob(
+  job: Job,
+  change: { newStart: Date } | { skip: true },
+  rainedOn: string,
+  author: Author,
+): Promise<void> {
+  const start = job.scheduledStart.toDate();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const from = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
+  const payload: Record<string, unknown> = {
+    updatedAt: serverTimestamp(),
+    updatedBy: author.uid,
+    updatedByName: author.displayName,
+  };
+  if ("newStart" in change) {
+    const duration = Math.max(0, job.scheduledEnd.toMillis() - job.scheduledStart.toMillis());
+    payload.scheduledStart = Timestamp.fromDate(change.newStart);
+    payload.scheduledEnd = Timestamp.fromDate(new Date(change.newStart.getTime() + duration));
+    payload.rainDelay = { rainedOn, from, action: "moved" };
+  } else {
+    payload.status = "cancelled" satisfies JobStatus;
+    payload.rainDelay = { rainedOn, from, action: "skipped" };
+  }
+  await writeJob(job.id, payload);
+}

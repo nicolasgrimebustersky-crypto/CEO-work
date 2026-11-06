@@ -428,6 +428,37 @@ export interface LatLng {
 }
 
 /** Whoever is signed in on this device. Every write is stamped with one. */
+/**
+ * A follow-up: something somebody has to do, by a day, usually about a client.
+ * The rules for due days and reminders are in lib/tasks.ts.
+ */
+export interface Task {
+  id: string;
+  /** Which business this record belongs to. See lib/org.ts. */
+  orgId: string;
+  title: string;
+  notes: string;
+  /** A day, stored at 9:00 local. Null is "no date": on the list, never nags. */
+  dueAt: Timestamp | null;
+  customerId: string | null;
+  /** Copied at save time so the list reads without loading every client. */
+  customerName: string | null;
+  /** The estimate or invoice it is about, if any. */
+  documentId: string | null;
+  /** Crew uid. Null means it is on the list of whoever wrote it. */
+  assignedTo: string | null;
+  doneAt: Timestamp | null;
+  doneBy: string | null;
+  /** Set by the morning reminder so each task buzzes once; cleared on reschedule. */
+  remindedAt: Timestamp | null;
+  createdAt: Timestamp;
+  createdBy: string;
+  createdByName: string;
+  updatedAt: Timestamp | null;
+  updatedBy: string | null;
+  updatedByName: string | null;
+}
+
 export interface Author {
   uid: string;
   displayName: string;

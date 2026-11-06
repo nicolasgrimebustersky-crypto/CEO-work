@@ -11,6 +11,7 @@ import { JobsProvider } from "@/components/providers/JobsProvider";
 import { ChatProvider } from "@/components/providers/ChatProvider";
 import { KnockRoutesProvider } from "@/components/providers/KnockRoutesProvider";
 import { TerritoriesProvider } from "@/components/providers/TerritoriesProvider";
+import { TasksProvider } from "@/components/providers/TasksProvider";
 import { LocationSharingProvider } from "@/components/providers/LocationSharingProvider";
 import { NotificationsProvider } from "@/components/providers/NotificationsProvider";
 import { ServicesProvider } from "@/components/providers/ServicesProvider";
@@ -91,6 +92,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                       <ChatProvider>
                       <KnockRoutesProvider>
                       <TerritoriesProvider>
+                      <TasksProvider>
                       <NotificationsProvider>
                         <ConnectionProvider>
                           <LocationSharingProvider>
@@ -98,6 +100,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                           </LocationSharingProvider>
                         </ConnectionProvider>
                       </NotificationsProvider>
+                      </TasksProvider>
                       </TerritoriesProvider>
                       </KnockRoutesProvider>
                       </ChatProvider>

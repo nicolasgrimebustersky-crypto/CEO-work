@@ -20,6 +20,7 @@ import {
   initializeTestEnvironment,
 } from "@firebase/rules-unit-testing";
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { doc, setDoc } from "firebase/firestore";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -40,11 +41,27 @@ before(async () => {
   const rules = rulesWithTestCrew(join(repoRoot, "storage.rules"));
 
   testEnv = await initializeTestEnvironment({
-    projectId: "gb-rules-test",
+    // The Storage emulator reads crew profiles for its cross-service rules
+    // from the Firestore emulator under the id `firebase emulators:exec`
+    // started with (handed over as GCLOUD_PROJECT), so this suite uses it.
+    projectId: process.env.GCLOUD_PROJECT || "gb-rules-test",
     storage: { rules, host: "127.0.0.1", port: 9199 },
+    firestore: {
+      rules: rulesWithTestCrew(join(repoRoot, "firestore.rules")),
+      host: "127.0.0.1",
+      port: 8080,
+    },
   });
 
   await testEnv.clearStorage();
+  await testEnv.clearFirestore();
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    // Approved on the Account screen: role 'crew', not on any list.
+    await setDoc(doc(db, "users/carol"), { displayName: "Carol", role: "crew" });
+    // Signed up, not yet approved — or approved once and since removed.
+    await setDoc(doc(db, "users/dave"), { displayName: "Dave", role: "pending" });
+  });
 
   alice = testEnv.authenticatedContext("alice", VERIFIED).storage();
   bob = testEnv.authenticatedContext("bob", VERIFIED).storage();
@@ -187,5 +204,101 @@ describe("expense receipts", () => {
     await assertFails(uploadBytes(ref(alice, "expenses/alice/x5/r.html"), IMAGE_BYTES, { contentType: "text/html" }));
     const tooBig = new Uint8Array(16 * 1024 * 1024);
     await assertFails(uploadBytes(ref(alice, "expenses/alice/x5/huge.jpg"), tooBig, IMAGE));
+  });
+});
+
+describe("W-9s", () => {
+  test("only the owner uploads, opens or deletes one — not even the person it is for", async () => {
+    const owner = testEnv
+      .authenticatedContext("nicolas", { email: "nicolas.grimebustersky@gmail.com", ...VERIFIED })
+      .storage();
+    const path = "w9/alice/w9-1.pdf";
+    await assertFails(uploadBytes(ref(alice, path), IMAGE_BYTES, { contentType: "application/pdf" }));
+    await assertSucceeds(uploadBytes(ref(owner, path), IMAGE_BYTES, { contentType: "application/pdf" }));
+    await assertSucceeds(getDownloadURL(ref(owner, path)));
+    await assertFails(getDownloadURL(ref(alice, path)));
+    await assertFails(getDownloadURL(ref(bob, path)));
+    await assertFails(getDownloadURL(ref(mallory, path)));
+    await assertFails(deleteObject(ref(alice, path)));
+    await assertFails(uploadBytes(ref(owner, "w9/alice/w9.html"), IMAGE_BYTES, { contentType: "text/html" }));
+    await assertSucceeds(deleteObject(ref(owner, path)));
+  });
+});
+
+describe("approved hires", () => {
+  test("anyone the owner approved can upload, read and delete job photos — no rules change per hire", async () => {
+    const carol = testEnv.authenticatedContext("carol", VERIFIED).storage();
+    await assertSucceeds(uploadBytes(ref(carol, "jobs/j4/before-1.jpg"), IMAGE_BYTES, IMAGE));
+    await assertSucceeds(getDownloadURL(ref(alice, "jobs/j4/before-1.jpg")));
+    await assertSucceeds(deleteObject(ref(carol, "jobs/j4/before-1.jpg")));
+  });
+
+  test("an approved hire files their own receipts, and cannot open anyone else's", async () => {
+    const carol = testEnv.authenticatedContext("carol", VERIFIED).storage();
+    await assertSucceeds(uploadBytes(ref(carol, "expenses/carol/x1/r.jpg"), IMAGE_BYTES, IMAGE));
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await uploadBytes(ref(ctx.storage(), "expenses/alice/x9/r.jpg"), IMAGE_BYTES, IMAGE);
+    });
+    await assertFails(getDownloadURL(ref(carol, "expenses/alice/x9/r.jpg")));
+  });
+
+  test("an approved hire still owes this sign-in's code", async () => {
+    const carolFresh = testEnv.authenticatedContext("carol", { auth_time: SIGNED_IN_AT + 5000 }).storage();
+    await assertFails(uploadBytes(ref(carolFresh, "jobs/j4/x.jpg"), IMAGE_BYTES, IMAGE));
+  });
+
+  test("a pending or removed account cannot upload or read", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await uploadBytes(ref(ctx.storage(), "jobs/j5/before-1.jpg"), IMAGE_BYTES, IMAGE);
+    });
+    const dave = testEnv.authenticatedContext("dave", VERIFIED).storage();
+    await assertFails(uploadBytes(ref(dave, "jobs/j5/x.jpg"), IMAGE_BYTES, IMAGE));
+    await assertFails(getDownloadURL(ref(dave, "jobs/j5/before-1.jpg")));
+  });
+});
+
+describe("files attached to estimates and invoices", () => {
+  const PDF = { contentType: "application/pdf" };
+  const PDF_BYTES = new TextEncoder().encode("%PDF-1.4 test");
+
+  test("a crew member can attach a PDF or a photo, read it back and remove it", async () => {
+    await assertSucceeds(uploadBytes(ref(alice, "documents/d1/files/scope.pdf"), PDF_BYTES, PDF));
+    await assertSucceeds(uploadBytes(ref(alice, "documents/d1/files/site.jpg"), IMAGE_BYTES, IMAGE));
+    await assertSucceeds(getDownloadURL(ref(bob, "documents/d1/files/scope.pdf")));
+    await assertSucceeds(deleteObject(ref(bob, "documents/d1/files/scope.pdf")));
+  });
+
+  test("anything that could run in a browser is refused", async () => {
+    for (const contentType of ["text/html", "image/svg+xml", "application/javascript", "application/zip"]) {
+      await assertFails(
+        uploadBytes(ref(alice, "documents/d1/files/x"), PDF_BYTES, { contentType }),
+        contentType,
+      );
+    }
+  });
+
+  test("files over 20 MB are refused", async () => {
+    const tooBig = new Uint8Array(21 * 1024 * 1024);
+    await assertFails(uploadBytes(ref(alice, "documents/d1/files/huge.pdf"), tooBig, PDF));
+  });
+
+  test("nobody but verified crew can attach or read — customers go through the server", async () => {
+    const path = "documents/d2/files/coi.pdf";
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await uploadBytes(ref(ctx.storage(), path), PDF_BYTES, PDF);
+    });
+    const aliceFresh = testEnv
+      .authenticatedContext("alice", { auth_time: SIGNED_IN_AT + 5000 })
+      .storage();
+    for (const ctx of [mallory, anon, aliceFresh]) {
+      await assertFails(getDownloadURL(ref(ctx, path)));
+      await assertFails(uploadBytes(ref(ctx, "documents/d2/files/new.pdf"), PDF_BYTES, PDF));
+      await assertFails(deleteObject(ref(ctx, path)));
+    }
+  });
+
+  test("only the files folder of a document is writable", async () => {
+    await assertFails(uploadBytes(ref(alice, "documents/d1/scope.pdf"), PDF_BYTES, PDF));
+    await assertFails(uploadBytes(ref(alice, "documents/d1/files/a/b.pdf"), PDF_BYTES, PDF));
   });
 });

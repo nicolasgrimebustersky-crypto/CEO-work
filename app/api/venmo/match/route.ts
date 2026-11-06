@@ -1,4 +1,4 @@
-import { errorResponse, requireCrew, ApiError } from "@/lib/server/auth";
+import { errorResponse, requireOwner, ApiError } from "@/lib/server/auth";
 import { preflight, withCors } from "@/lib/server/cors";
 import { adminDb } from "@/lib/server/admin";
 import { applyVenmoPayment, VENMO_COLLECTION } from "@/lib/server/venmo";
@@ -11,7 +11,7 @@ export function OPTIONS(request: Request): Response {
 }
 
 /**
- * A crew member matching a Venmo payment by hand: "that $45 was Larry's 10/31
+ * A crew member matching a Venmo payment by hand: "that $45 was Pat's 10/31
  * cut". Or dismissing one that is not for any bill ("ignore").
  *
  * Goes through the server rather than writing from the phone so a hand match
@@ -23,7 +23,8 @@ export function OPTIONS(request: Request): Response {
  */
 export async function POST(request: Request): Promise<Response> {
   try {
-    const caller = await requireCrew(request);
+    // Applying a payment to a bill is the owner's call, like the inbox itself.
+    const caller = await requireOwner(request);
     const body = (await request.json().catch(() => ({}))) as {
       paymentId?: unknown;
       kind?: unknown;

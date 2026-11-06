@@ -40,7 +40,7 @@ export interface MatchResult {
 
 const cents = (value: number) => Math.round(value * 100);
 
-/** "Larry  Lupinski" and "larry lupinski" are the same person; "L. Lupinski" is not. */
+/** "Pat  Rivera" and "pat rivera" are the same person; "P. Rivera" is not. */
 export function normalName(name: string): string {
   return name
     .normalize("NFKD")

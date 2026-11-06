@@ -99,6 +99,17 @@ async function isApprovedCrew(uid: string): Promise<boolean> {
   }
 }
 
+/**
+ * A crew session that is also the owner (isAdmin in lib/auth/roles.ts) — for
+ * routes that move or reveal the business's money. Same token checks as
+ * requireCrew, then a 403 for anyone else on the crew.
+ */
+export async function requireOwner(request: Request): Promise<CrewCaller> {
+  const caller = await requireCrew(request);
+  if (!isAdmin(caller.email)) throw new ApiError(403, "Only the owner can do that.");
+  return caller;
+}
+
 export async function requireCrew(
   request: Request,
   options: RequireCrewOptions = {},

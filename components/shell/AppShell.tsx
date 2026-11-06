@@ -35,12 +35,17 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <MenuContext.Provider value={openMenu}>
-      <div className="flex h-dvh flex-col">
-        <DemoBanner />
-        <InstallPrompt />
-        <ConnectionBanner />
-        <main className="min-h-0 flex-1">{children}</main>
-        <BottomNav onOpenMenu={openMenu} />
+      <div className="flex h-dvh flex-col print:block print:h-auto">
+        {/* Printing (the year-end packet) prints the page, not the app around it. */}
+        <div className="contents print:hidden">
+          <DemoBanner />
+          <InstallPrompt />
+          <ConnectionBanner />
+        </div>
+        <main className="min-h-0 flex-1 print:overflow-visible">{children}</main>
+        <div className="contents print:hidden">
+          <BottomNav onOpenMenu={openMenu} />
+        </div>
         <NavDrawer open={menuOpen} onClose={closeMenu} />
         {/* "X mi since your last job — business?" Asks at most once per app open. */}
         <GapFillPrompt />

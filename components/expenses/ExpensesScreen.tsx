@@ -13,6 +13,7 @@ import {
   PAYMENT_METHOD_LABEL,
   PROOF_BADGE,
   expenseTotals,
+  isTaxRemittance,
   knownAssets,
   type ProofKind,
 } from "@/lib/expenses";
@@ -65,7 +66,7 @@ export function ExpensesScreen() {
     const all = expenses ?? [];
     if (filter === "all") return all;
     if (filter === "no_receipt") {
-      return all.filter((e) => e.proof !== "receipt" && e.category !== "tax_payment");
+      return all.filter((e) => e.proof !== "receipt" && !isTaxRemittance(e.category));
     }
     return all.filter((e) => e.date.startsWith(`${year}-`));
   }, [expenses, filter, year]);
@@ -83,7 +84,7 @@ export function ExpensesScreen() {
   }, [shown]);
 
   const missingCount = (expenses ?? []).filter(
-    (e) => e.proof !== "receipt" && e.category !== "tax_payment",
+    (e) => e.proof !== "receipt" && !isTaxRemittance(e.category),
   ).length;
   const backed = totals.byProof.receipt + totals.byProof.statement;
 
@@ -251,7 +252,7 @@ export function ExpensesScreen() {
                             <span className="text-base font-extrabold text-ink tabular-nums">
                               {formatMoneyExact(expense.amount)}
                             </span>
-                            {expense.category === "tax_payment" ? (
+                            {isTaxRemittance(expense.category) ? (
                               <span className="rounded-full border border-line px-2 py-0.5 text-xs font-bold text-muted">
                                 Tax
                               </span>

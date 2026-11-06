@@ -136,6 +136,26 @@ describe("the sign-in code", () => {
   });
 });
 
+describe("POST /api/venmo/match is the owner's", () => {
+  const payload = { paymentId: "e1", kind: "invoice", billId: "inv-1" };
+
+  test("no token, no entry", async () => {
+    assert.equal((await post("/api/venmo/match", payload)).status, 401);
+  });
+
+  test("a crew member who is not the owner is refused before anything is read", async () => {
+    // nick@grimebusters.test is crew here but not the admin email, so this is
+    // exactly the hire who must not apply payments to bills.
+    const res = await post("/api/venmo/match", payload, crewToken);
+    assert.equal(res.status, 403);
+    assert.match(String(res.json.error ?? ""), /owner/i);
+  });
+
+  test("an outsider is refused", async () => {
+    assert.equal((await post("/api/venmo/match", payload, outsiderToken)).status, 403);
+  });
+});
+
 describe("POST /api/sms/send", () => {
   const payload = { customerId: "cust-oak", body: "test message" };
 

@@ -28,6 +28,7 @@ import { routes } from "@/lib/routes";
 import { CustomerPickerSheet } from "./CustomerPickerSheet";
 import { StatusPill } from "./StatusPill";
 import { VenmoInbox } from "./VenmoInbox";
+import { useTeam } from "@/components/providers/TeamProvider";
 
 /**
  * Estimates and invoices, one kind at a time, one period at a time.
@@ -82,6 +83,8 @@ function passesFilter(document: BusinessDocument, filter: Filter): boolean {
 
 export function InvoicesScreen() {
   const { documents, loading, error } = useDocuments();
+  // Period totals and the Venmo inbox are the business's takings: the owner's.
+  const { isAdmin } = useTeam();
   const router = useRouter();
   const openMenu = useOpenMenu();
 
@@ -236,7 +239,7 @@ export function InvoicesScreen() {
       {/* --------------------------------------------------------- scroll */}
       <div className="relative z-10 min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-3xl flex-col pb-32">
-          <VenmoInbox />
+          {isAdmin ? <VenmoInbox /> : null}
           {/* Period bar */}
           <button
             type="button"
@@ -252,7 +255,7 @@ export function InvoicesScreen() {
             </span>
           </button>
 
-          {expanded ? (
+          {expanded && isAdmin ? (
             <>
               <PeriodRow
                 cards={cards}

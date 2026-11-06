@@ -13,9 +13,13 @@ import {
   PipelineIcon,
   PriceBookIcon,
   MileageIcon,
+  PayIcon,
+  WrenchIcon,
+  MegaphoneIcon,
   ReceiptIcon,
   ReportIcon,
   SearchIcon,
+  TaskIcon,
   type NavIconProps,
 } from "./navIcons";
 
@@ -81,10 +85,16 @@ export const TABS: NavItem[] = [
 /** Everything else, reachable from the drawer. */
 export const DRAWER_ONLY: NavItem[] = [
   {
+    href: routes.tasks,
+    label: "Follow-ups",
+    icon: TaskIcon,
+    hint: "Who to call back and when — reminds you the morning it's due",
+  },
+  {
     href: routes.knockRoutes,
     label: "Routes",
     icon: RouteIcon,
-    hint: "Doors to knock, and who is walking them",
+    hint: "Today's jobs in the best driving order, and doors to knock",
   },
   {
     href: routes.chat,
@@ -97,6 +107,12 @@ export const DRAWER_ONLY: NavItem[] = [
     label: "Messages",
     icon: MessageIcon,
     hint: "Texts to and from customers, and who is waiting",
+  },
+  {
+    href: routes.campaigns,
+    label: "Campaigns",
+    icon: MegaphoneIcon,
+    hint: "Seasonal offers to your own customers, and what came of them",
   },
   {
     href: routes.automations,
@@ -127,6 +143,18 @@ export const DRAWER_ONLY: NavItem[] = [
     label: "Mileage",
     icon: MileageIcon,
     hint: "Business miles between jobs, at the IRS rate",
+  },
+  {
+    href: routes.equipment,
+    label: "Equipment",
+    icon: WrenchIcon,
+    hint: "Oil changes, blades and the truck's service — what's due",
+  },
+  {
+    href: routes.crewPay,
+    label: "Crew pay",
+    icon: PayIcon,
+    hint: "Hours, pay per pay period, W-9s and 1099s",
   },
   {
     href: routes.search,

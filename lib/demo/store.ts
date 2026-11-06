@@ -11,6 +11,7 @@ import {
   demoKnockRoutes,
   demoServices,
   demoTerritories,
+  demoTasks,
   demoConversations,
   demoChatMessages,
   demoQuotes,
@@ -70,6 +71,7 @@ function seed(): void {
   seedTable(COLLECTIONS.services, demoServices as unknown as DemoRow[]);
   seedTable(COLLECTIONS.knockRoutes, demoKnockRoutes as unknown as DemoRow[]);
   seedTable(COLLECTIONS.territories, demoTerritories as unknown as DemoRow[]);
+  seedTable(COLLECTIONS.tasks, demoTasks as unknown as DemoRow[]);
   seedTable(COLLECTIONS.conversations, demoConversations as unknown as DemoRow[]);
   seedTable(COLLECTIONS.chatMessages, demoChatMessages as unknown as DemoRow[]);
 }

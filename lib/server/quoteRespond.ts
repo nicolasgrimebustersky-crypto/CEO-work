@@ -24,6 +24,7 @@ import {
   type QuoteResponseInput,
 } from "@/lib/quoteResponse";
 import { servicesLabel } from "@/lib/serviceText";
+import { choosePackage } from "@/lib/packages";
 
 /**
  * A customer answering an estimate: approve (with a signature and a date) or
@@ -84,13 +85,45 @@ export async function respondToDocument(
   const { decision, signedName, signature, requestedDate, message, reason } = checked.value;
   const now = Timestamp.now();
   const service = servicesLabel(document);
-  const money = formatMoneyExact(document.total);
+
+  // Good / Better / Best: approving means choosing one. Only the id comes from
+  // the request; the lines and every price are the stored estimate's, priced
+  // again here. The estimate is rewritten to the chosen package so the
+  // invoice, the PDF and every report after this see an ordinary document.
+  const offering = document.packages.length > 0 && !document.chosenPackageId;
+  const chosen =
+    decision === "accepted" && offering
+      ? choosePackage(
+          document.lineItems,
+          document.packages,
+          (raw as { packageId?: unknown }).packageId,
+          document.discount,
+          document.taxRatePct,
+        )
+      : null;
+  if (decision === "accepted" && offering && !chosen) {
+    return bad(400, "Please choose one of the options before approving.");
+  }
+  const total = chosen ? chosen.totals.total : document.total;
+  const money = formatMoneyExact(total) + (chosen ? ` (${chosen.pkg.name})` : "");
 
   if (decision === "accepted") {
     await adminDb()
       .collection("documents")
       .doc(document.id)
       .update({
+        ...(chosen
+          ? {
+              chosenPackageId: chosen.pkg.id,
+              offeredLines: document.lineItems,
+              lineItems: chosen.lineItems,
+              discount: chosen.totals.discount,
+              subtotal: chosen.totals.subtotal,
+              taxAmount: chosen.totals.taxAmount,
+              total: chosen.totals.total,
+              balanceDue: Math.max(0, Number((chosen.totals.total - document.amountPaid).toFixed(2))),
+            }
+          : {}),
         status: "accepted",
         acceptance: {
           signedName,
