@@ -682,6 +682,22 @@ describe("jobs", () => {
     await assertSucceeds(deleteDoc(doc(alice, `jobs/${ref.id}`)));
   });
 
+  test("a checklist must be a list, and not a runaway one", async () => {
+    const step = (i) => ({ id: `s${i}`, text: `Step ${i}`, done: false, doneBy: null, doneAt: null });
+    await assertSucceeds(
+      addDoc(collection(alice, "jobs"), jobDoc("alice", { checklist: [step(1), step(2)] })),
+    );
+    await assertFails(
+      addDoc(collection(alice, "jobs"), jobDoc("alice", { checklist: "walk it, wash it" })),
+    );
+    await assertFails(
+      addDoc(
+        collection(alice, "jobs"),
+        jobDoc("alice", { checklist: Array.from({ length: 61 }, (_, i) => step(i)) }),
+      ),
+    );
+  });
+
   test("a job with no orgId at all is denied", async () => {
     // The bug behind "Missing or insufficient permissions." on the Schedule
     // the job sheet. createsInMyOrg asks that orgId `is string` before it
@@ -728,6 +744,18 @@ describe("jobs", () => {
     await assertFails(
       addDoc(collection(alice, "jobs"), jobDoc("alice", { price: "250" })),
     );
+  });
+});
+
+describe("venmo payments", () => {
+  test("crew can read what came in; nobody writes from a phone", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "venmoPayments/e1"), { orgId: "grime-busters", payerName: "Larry", amount: 45, status: "needs_match" });
+    });
+    await assertSucceeds(getDoc(doc(alice, "venmoPayments/e1")));
+    await assertFails(getDoc(doc(mallory, "venmoPayments/e1")));
+    await assertFails(updateDoc(doc(alice, "venmoPayments/e1"), { status: "applied" }));
+    await assertFails(setDoc(doc(alice, "venmoPayments/e2"), { orgId: "grime-busters", status: "applied" }));
   });
 });
 

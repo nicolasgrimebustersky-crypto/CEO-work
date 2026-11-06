@@ -412,7 +412,11 @@ service cloud.firestore {
         && data.price is number
         && data.price >= 0
         && data.customerId is string
-        && data.assignedTo is list;
+        && data.assignedTo is list
+        // The on-site checklist (lib/checklists.ts). Optional: jobs saved
+        // before it existed have none. Capped as a runaway guard.
+        && (!('checklist' in data)
+            || (data.checklist is list && data.checklist.size() <= 60));
     }
 
     // Estimates and invoices share one shape and one collection, so one check
@@ -775,6 +779,16 @@ service cloud.firestore {
         && data.token is string
         && data.token.size() > 0
         && data.token.size() < 1000;
+    }
+
+    // Venmo payments read from Venmo's emails (lib/server/venmo.ts). Written
+    // only by the server: the inbound webhook records them and
+    // /api/venmo/match applies or dismisses them, each inside a transaction
+    // that re-reads the bill. Crew read them to see what came in and what is
+    // waiting to be matched; nobody writes them from a phone.
+    match /venmoPayments/{paymentId} {
+      allow read: if isCrew() && belongsToMyOrg(resource.data);
+      allow write: if false;
     }
 
     match /pushTokens/{tokenId} {

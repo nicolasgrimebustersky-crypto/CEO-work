@@ -539,6 +539,7 @@ function job(
     beforePhotos: [],
     afterPhotos: [],
     jobNotes: "",
+    checklist: [],
     // A finished job in the demo has already been walked through the on-site
     // sequence; a scheduled one has not, so its buttons start clean.
     enRouteAt: status === "complete" ? start : null,

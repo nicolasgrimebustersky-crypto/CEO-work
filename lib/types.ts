@@ -1,6 +1,7 @@
 import type { Role } from "@/lib/auth/roles";
 import type { Timestamp } from "firebase/firestore";
 
+import type { ChecklistItem } from "./checklists";
 import type { PipelineStage } from "./pipeline";
 import type { SmsConsent, SmsOptOut } from "./smsConsent";
 import type { VisitType } from "./visitTypes";
@@ -275,6 +276,8 @@ export interface Job {
   beforePhotos: Photo[];
   afterPhotos: Photo[];
   jobNotes: string;
+  /** The steps the visit is not finished without. See lib/checklists.ts. */
+  checklist: ChecklistItem[];
   /**
    * The on-site sequence: pulling up, starting, finishing. Each is stamped only
    * once the customer's text has actually gone out, so a stamp is evidence the
