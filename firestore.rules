@@ -1086,6 +1086,32 @@ service cloud.firestore {
         && (isAdmin() || resource.data.createdBy == request.auth.uid);
     }
 
+    // Seasonal campaigns that were sent (lib/db/campaigns.ts). A record of
+    // marketing that went out: the owner sends, so the owner records it;
+    // the crew read it to follow up. Never edited — results are worked out
+    // from estimates and jobs, not stored here.
+    function validCampaign() {
+      let data = request.resource.data;
+      return data.templateId is string && data.templateId.size() <= 40
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 80
+        // `service` is a keyword in the rules language, hence the brackets.
+        && data['service'] is string && data['service'].size() <= 40
+        && data.message is string && data.message.size() > 0 && data.message.size() <= 1600
+        && data.recipients is list && data.recipients.size() <= 200
+        && data.excluded is int && data.excluded >= 0
+        && data.sentAt is timestamp;
+    }
+
+    match /campaigns/{campaignId} {
+      allow read: if isCrew() && belongsToMyOrg(resource.data);
+      allow create: if isCrew() && isAdmin()
+        && stampedByCaller('createdBy')
+        && validCampaign()
+        && createsInMyOrg(request.resource.data);
+      allow update: if false;
+      allow delete: if isCrew() && isAdmin() && belongsToMyOrg(resource.data);
+    }
+
     match /payRuns/{runId} {
       allow read: if isCrew() && belongsToMyOrg(resource.data)
         && (isAdmin() || resource.data.uid == request.auth.uid);

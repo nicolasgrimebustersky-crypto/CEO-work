@@ -1051,6 +1051,39 @@ describe("equipment maintenance", () => {
   });
 });
 
+describe("seasonal campaigns", () => {
+  const campaign = (uid, over = {}) => ({
+    orgId: ORG_ID,
+    templateId: "fall_aeration",
+    name: "Fall aeration & overseeding",
+    service: "aeration",
+    message: "Fall is the best time to aerate. Reply STOP to opt out.",
+    recipients: ["c1", "c2"],
+    excluded: 3,
+    sentAt: serverTimestamp(),
+    createdAt: serverTimestamp(),
+    createdBy: uid,
+    createdByName: uid,
+    ...over,
+  });
+
+  test("only the owner records a campaign; crew read it; nobody edits it", async () => {
+    await assertFails(setDoc(doc(alice, "campaigns/c1"), campaign("alice")));
+    await assertSucceeds(setDoc(doc(admin, "campaigns/c1"), campaign("nicolas")));
+    await assertSucceeds(getDoc(doc(alice, "campaigns/c1")));
+    await assertFails(getDoc(doc(mallory, "campaigns/c1")));
+    await assertFails(updateDoc(doc(admin, "campaigns/c1"), { recipients: ["c9"] }));
+    await assertFails(deleteDoc(doc(alice, "campaigns/c1")));
+    await assertSucceeds(deleteDoc(doc(admin, "campaigns/c1")));
+  });
+
+  test("a campaign record must be whole", async () => {
+    for (const bad of [{ message: "" }, { recipients: "c1" }, { excluded: -1 }, { sentAt: "today" }, { name: "" }]) {
+      await assertFails(setDoc(doc(admin, "campaigns/bad"), campaign("nicolas", bad)));
+    }
+  });
+});
+
 describe("crew pay", () => {
   const edit = (createdBy, over = {}) => ({
     orgId: ORG_ID,
