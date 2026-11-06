@@ -123,25 +123,24 @@ Each feature PR adds its own entries here. Highest risk first.
 
 ### 6a. Crew pay (built: `lib/crewPay.ts`, the `/pay` screen)
 
-- **Gap, no overtime.** [Certain] For a W-2 hourly employee, "Owed" is
-  hours × rate.
-  - It does **not** add overtime: 1.5× past 40 hours in a workweek
-    (FLSA; Kentucky KRS 337.285).
-  - It does not compute withholding or employer payroll taxes.
-  - The screen tells the owner to run W-2 pay through a payroll service.
-  - [Likely] If someone pays straight from the "Owed" figure, an hourly
-    employee who worked 45 hours is underpaid. That is a wage claim with
-    double damages.
-  - **Fix:** use a payroll service for W-2 workers, or add per-workweek
-    overtime to `periodPay` before anyone relies on it.
+- **Overtime: added.** [Certain] "Owed" for a W-2 employee includes time
+  and a half past 40 hours in a workweek (FLSA; KRS 337.285),
+  `overtimeFor` in `lib/crewPay.ts`.
+  - It goes by a fixed 7-day workweek, and the premium lands in the pay
+    period the workweek ends in.
+  - Pay by the job or revenue share uses the week's regular rate
+    (earnings ÷ hours, 29 CFR 778.111).
+  - **Still not covered:** withholding, employer payroll taxes, and W-2
+    forms. Keep running W-2 pay through a payroll service, and treat its
+    figure as the one that counts.
+  - [Guessing] Kentucky's daily rules weren't modelled: the seventh-day
+    rule (KRS 337.050) and the 1.5× pay for a seventh consecutive workday.
+    Check with the payroll service.
 - **Hour corrections:** [Certain] each is logged with a reason, and a crew
   member's own correction needs the owner's approval. [Likely] Keep these
   records 3 years (FLSA record-keeping).
 - **W-9 storage:** [Certain] owner-only Storage folder (`w9/{uid}/`). The
   breach-notification point above applies.
-- **Per-job and revenue-share pay for W-2 workers:** [Likely] still needs
-  an overtime "regular rate" calculation under the FLSA. That's another
-  reason to keep W-2 pay in a payroll service.
 
 ## 7. Customer data and privacy
 

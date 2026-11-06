@@ -14,6 +14,7 @@ import {
   contractorStatus,
   dateKey,
   editMinutes,
+  overtimeFor,
   maxRate,
   PAY_BASES,
   PAY_BASIS_LABEL,
@@ -23,6 +24,7 @@ import {
   periodPay,
   runFor,
   type Classification,
+  type DayHours,
   type PayBasis,
   type PersonPay,
 } from "@/lib/crewPay";
@@ -47,7 +49,7 @@ import {
 import { fetchJobsBetween } from "@/lib/db/jobs";
 import { usePaySchedule } from "@/lib/db/settings";
 import { formatMoneyExact } from "@/lib/format";
-import { periodContaining, periodSummary, shiftPeriod } from "@/lib/payPeriods";
+import { dailyWork, periodContaining, periodSummary, shiftPeriod } from "@/lib/payPeriods";
 import type { Job } from "@/lib/types";
 
 const money = (v: number) => formatMoneyExact(v);
@@ -119,6 +121,22 @@ export function CrewPayScreen() {
     [people, jobs, period],
   );
   const pending = edits.filter((e) => !e.approved);
+
+  // Overtime goes by the workweek, which can begin up to six days before the
+  // period does; the jobs fetched above reach back 14 days.
+  const weekStartsOn =
+    schedule.frequency === "weekly" || schedule.frequency === "biweekly" ? schedule.startsOn : 0;
+  const workWindow = useMemo(
+    () => ({ start: new Date(period.start.getTime() - 7 * 86_400_000), end: period.end }),
+    [period.start, period.end],
+  );
+  const daysFor = (personUid: string) => {
+    const days = dailyWork(personUid, people.map((p) => p.uid), jobs ?? [], workWindow);
+    for (const e of edits) {
+      if (e.uid === personUid && e.approved) days.push({ date: e.date, hours: e.minutes / 60, jobs: 0, revenue: 0 });
+    }
+    return days;
+  };
   const settings = usePaySettings(isAdmin);
   const nameOf = (id: string) => users.find((u) => u.uid === id)?.displayName ?? "Crew member";
 
@@ -196,6 +214,8 @@ export function CrewPayScreen() {
               endKey={endKey}
               isOwner={isAdmin}
               person={isAdmin ? payFor(settings, row.uid) : null}
+              days={isAdmin ? daysFor(row.uid) : []}
+              weekStartsOn={weekStartsOn}
               onNote={setNote}
             />
           ))}
@@ -213,7 +233,7 @@ export function CrewPayScreen() {
           corrections. A correction never changes the taps; it is logged with a reason, and one you add for yourself
           counts once the owner approves it.
           {isAdmin
-            ? " For a W-2 employee this tracks gross pay only: withholding, payroll taxes and the W-2 itself come from a payroll service. Contractors are flagged at the year's 1099-NEC threshold, by the date paid."
+            ? " For a W-2 employee, Owed includes overtime: time and a half for hours past 40 in a workweek, counted in the period the workweek ends. It is still gross pay only: withholding, payroll taxes and the W-2 itself come from a payroll service. Contractors are flagged at the year's 1099-NEC threshold, by the date paid."
             : ""}
         </p>
       </div>
@@ -231,6 +251,8 @@ function PersonCard({
   endKey,
   isOwner,
   person,
+  days,
+  weekStartsOn,
   onNote,
 }: {
   uid: string;
@@ -243,11 +265,15 @@ function PersonCard({
   isOwner: boolean;
   /** The owner's view only: the rate is never loaded on a crew member's phone. */
   person: PersonPay | null;
+  /** Day-by-day work around the period, for overtime (owner's view only). */
+  days: DayHours[];
+  weekStartsOn: number;
   onNote: (note: string) => void;
 }) {
   const { author } = useTeam();
   const minutes = editMinutes(edits, uid, startKey, endKey);
-  const pay = periodPay(person ?? { classification: "1099", basis: "hourly", rate: 0, w9: null }, work, minutes);
+  const overtime = person ? overtimeFor(person, days, startKey, endKey, weekStartsOn) : undefined;
+  const pay = periodPay(person ?? { classification: "1099", basis: "hourly", rate: 0, w9: null }, work, minutes, overtime);
   const run = runFor(runs, uid, startKey);
   const year = new Date().getFullYear();
   const paidYtd = paidInYear(runs, uid, year);
@@ -278,6 +304,12 @@ function PersonCard({
         {pay.correctionHours !== 0 ? `, ${pay.correctionHours > 0 ? "+" : "−"}${hrs(Math.abs(pay.correctionHours))} corrected` : ""}
         {pay.pendingHours !== 0 ? ` · ${signedHrs(pay.pendingHours * 60)} waiting for the owner` : ""}
       </p>
+      {isOwner && pay.overtimeHours > 0 ? (
+        <p className="mt-1 text-xs font-bold text-warn">
+          Includes overtime: {hrs(pay.overtimeHours)} past 40 in a workweek, +{money(pay.overtimePremium)} (half-time
+          premium on top of straight time)
+        </p>
+      ) : null}
 
       {run ? (
         <p className="mt-2 text-sm font-semibold text-money">
