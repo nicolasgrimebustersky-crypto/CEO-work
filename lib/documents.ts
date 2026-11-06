@@ -147,9 +147,10 @@ export interface Payment {
    * Which payment provider reported this, when one did. Absent on everything
    * the crew records by hand, which is most of it.
    */
-  provider?: "stripe";
+  provider?: "stripe" | "venmo";
   /**
-   * The provider's own id for the transaction — a Stripe Checkout Session id.
+   * The provider's own id for the transaction — a Stripe Checkout Session id,
+   * or for Venmo the id of the forwarded "paid you" email (lib/server/venmo.ts).
    *
    * This is what makes recording a card payment idempotent. Stripe retries a
    * webhook until it gets a 2xx, and it is entitled to: a delivery that times
@@ -208,6 +209,12 @@ export interface BusinessDocument {
   /** Flat amount off, not a percentage — that is how it was always quoted. */
   discount: number;
   taxRatePct: number;
+  /**
+   * The sales-tax permit number printed on this document, copied from the
+   * settings when it was created so a later change never rewrites an old
+   * invoice. Null when tax tracking was off or no permit was set.
+   */
+  taxPermit: string | null;
 
   /**
    * Totals are stored, not only computed. An invoice sent last March has to

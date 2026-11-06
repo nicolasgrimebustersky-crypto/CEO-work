@@ -747,6 +747,233 @@ describe("jobs", () => {
   });
 });
 
+describe("venmo payments", () => {
+  test("crew can read what came in; nobody writes from a phone", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "venmoPayments/e1"), { orgId: "grime-busters", payerName: "Larry", amount: 45, status: "needs_match" });
+    });
+    await assertSucceeds(getDoc(doc(alice, "venmoPayments/e1")));
+    await assertFails(getDoc(doc(mallory, "venmoPayments/e1")));
+    await assertFails(updateDoc(doc(alice, "venmoPayments/e1"), { status: "applied" }));
+    await assertFails(setDoc(doc(alice, "venmoPayments/e2"), { orgId: "grime-busters", status: "applied" }));
+  });
+});
+
+describe("expenses", () => {
+  const RECEIPT = { url: "https://example.test/r.jpg", path: "expenses/alice/x1/receipt-1.jpg", contentType: "image/jpeg" };
+  const expenseDoc = (uid, over = {}) => ({
+    orgId: ORG_ID,
+    date: "2026-05-04",
+    amount: 62.4,
+    category: "fuel",
+    vendor: "Shell",
+    forWhat: "Truck",
+    paymentMethod: "card",
+    proof: "in_person",
+    notes: "",
+    receipt: null,
+    createdAt: serverTimestamp(),
+    createdBy: uid,
+    createdByName: uid,
+    updatedAt: serverTimestamp(),
+    updatedBy: uid,
+    updatedByName: uid,
+    ...over,
+  });
+  const stamp = (uid) => ({ updatedAt: serverTimestamp(), updatedBy: uid, updatedByName: uid });
+
+  test("a crew member can log, read, edit and delete their own expense", async () => {
+    await assertSucceeds(setDoc(doc(alice, "expenses/x1"), expenseDoc("alice")));
+    await assertSucceeds(getDoc(doc(alice, "expenses/x1")));
+    await assertSucceeds(updateDoc(doc(alice, "expenses/x1"), { proof: "receipt", receipt: RECEIPT, ...stamp("alice") }));
+    await assertSucceeds(deleteDoc(doc(alice, "expenses/x1")));
+  });
+
+  test("another crew member cannot read, change or delete it", async () => {
+    await assertSucceeds(setDoc(doc(alice, "expenses/x1"), expenseDoc("alice")));
+    await assertFails(getDoc(doc(bob, "expenses/x1")));
+    await assertFails(updateDoc(doc(bob, "expenses/x1"), { amount: 1, ...stamp("bob") }));
+    await assertFails(deleteDoc(doc(bob, "expenses/x1")));
+  });
+
+  test("the owner sees and can correct everyone's expenses", async () => {
+    await assertSucceeds(setDoc(doc(alice, "expenses/x1"), expenseDoc("alice")));
+    await assertSucceeds(getDoc(doc(admin, "expenses/x1")));
+    await assertSucceeds(updateDoc(doc(admin, "expenses/x1"), { amount: 60, ...stamp("nicolas") }));
+    await assertSucceeds(getDocs(collection(admin, "expenses")));
+    await assertSucceeds(deleteDoc(doc(admin, "expenses/x1")));
+  });
+
+  test("a crew member's list must ask for their own — the whole collection is refused", async () => {
+    await assertSucceeds(setDoc(doc(alice, "expenses/x1"), expenseDoc("alice")));
+    await assertSucceeds(getDocs(query(collection(bob, "expenses"), where("createdBy", "==", "bob"))));
+    await assertFails(getDocs(collection(bob, "expenses")));
+    await assertFails(getDocs(query(collection(bob, "expenses"), where("createdBy", "==", "alice"))));
+  });
+
+  test("outsiders get nothing", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "expenses/x2"), { ...expenseDoc("alice"), createdAt: Timestamp.now(), updatedAt: Timestamp.now() });
+    });
+    await assertFails(getDoc(doc(mallory, "expenses/x2")));
+    await assertFails(setDoc(doc(mallory, "expenses/x3"), expenseDoc("mallory")));
+    await assertFails(deleteDoc(doc(mallory, "expenses/x2")));
+  });
+
+  test("the amount, date, kind and proof must be real", async () => {
+    for (const bad of [
+      { amount: 0 },
+      { amount: -5 },
+      { amount: "62.40" },
+      { amount: 1000000 },
+      { date: "May 4" },
+      { category: "vacation" },
+      { paymentMethod: "crypto" },
+      { proof: "pinky_swear" },
+    ]) {
+      await assertFails(setDoc(doc(alice, "expenses/bad"), expenseDoc("alice", bad)));
+    }
+  });
+
+  test("'receipt on file' must carry a receipt, filed under the expense's owner", async () => {
+    await assertFails(setDoc(doc(alice, "expenses/r1"), expenseDoc("alice", { proof: "receipt" })));
+    await assertFails(
+      setDoc(doc(alice, "expenses/r1"), expenseDoc("alice", { proof: "receipt", receipt: { ...RECEIPT, path: "jobs/j1/x.jpg" } })),
+    );
+    // Pointing at somebody else's receipt folder is refused too.
+    await assertFails(
+      setDoc(doc(alice, "expenses/r1"), expenseDoc("alice", { proof: "receipt", receipt: { ...RECEIPT, path: "expenses/bob/x9/r.jpg" } })),
+    );
+    await assertSucceeds(setDoc(doc(alice, "expenses/r1"), expenseDoc("alice", { proof: "receipt", receipt: RECEIPT })));
+  });
+
+  test("an expense cannot be logged under someone else's name, or re-attributed later", async () => {
+    await assertFails(setDoc(doc(alice, "expenses/n1"), expenseDoc("bob")));
+    await assertSucceeds(setDoc(doc(alice, "expenses/n1"), expenseDoc("alice")));
+    await assertFails(updateDoc(doc(alice, "expenses/n1"), { createdBy: "bob", ...stamp("alice") }));
+    await assertFails(updateDoc(doc(admin, "expenses/n1"), { createdBy: "nicolas", ...stamp("nicolas") }));
+  });
+});
+
+describe("business settings (sales tax)", () => {
+  const settings = (uid, over = {}) => ({
+    orgId: ORG_ID,
+    salesTax: { enabled: true, permitNumber: "123456", filingFrequency: "monthly", defaultRatePct: 6, ...over },
+    updatedAt: serverTimestamp(),
+    updatedBy: uid,
+    updatedByName: uid,
+  });
+
+  test("only the owner can save them", async () => {
+    await assertFails(setDoc(doc(alice, "settings/business"), settings("alice")));
+    await assertSucceeds(setDoc(doc(admin, "settings/business"), settings("nicolas")));
+    await assertFails(setDoc(doc(bob, "settings/business"), settings("bob", { enabled: false })));
+    await assertSucceeds(setDoc(doc(admin, "settings/business"), settings("nicolas", { filingFrequency: "quarterly" })));
+  });
+
+  test("every crew member can read them — a new invoice needs the rate and permit", async () => {
+    await assertSucceeds(getDoc(doc(alice, "settings/business")));
+    await assertSucceeds(setDoc(doc(admin, "settings/business"), settings("nicolas")));
+    await assertSucceeds(getDoc(doc(bob, "settings/business")));
+    await assertFails(getDoc(doc(mallory, "settings/business")));
+  });
+
+  test("bad values and other document ids are refused, and nobody deletes them", async () => {
+    for (const bad of [{ filingFrequency: "weekly" }, { defaultRatePct: 50 }, { defaultRatePct: "6" }, { enabled: "yes" }]) {
+      await assertFails(setDoc(doc(admin, "settings/business"), settings("nicolas", bad)));
+    }
+    await assertFails(setDoc(doc(admin, "settings/other"), settings("nicolas")));
+    await assertSucceeds(setDoc(doc(admin, "settings/business"), settings("nicolas")));
+    await assertFails(deleteDoc(doc(admin, "settings/business")));
+  });
+});
+
+describe("mileage", () => {
+  const trip = (uid, over = {}) => ({
+    orgId: ORG_ID,
+    date: "2026-05-04",
+    miles: 7.4,
+    reason: "Job: Smith → Jones",
+    source: "job_to_job",
+    estimated: false,
+    from: { lat: 38.4, lng: -85.4, label: "Smith" },
+    to: { lat: 38.41, lng: -85.4, label: "Jones" },
+    jobIds: ["j1", "j2"],
+    suggestionKey: "2026-05-04:j1:j2",
+    createdAt: serverTimestamp(),
+    createdBy: uid,
+    createdByName: uid,
+    updatedAt: serverTimestamp(),
+    updatedBy: uid,
+    updatedByName: uid,
+    ...over,
+  });
+
+  test("a crew member logs and reads their own trips; another crew member cannot; the owner can", async () => {
+    await assertSucceeds(setDoc(doc(alice, "mileage/t1"), trip("alice")));
+    await assertSucceeds(getDoc(doc(alice, "mileage/t1")));
+    await assertFails(getDoc(doc(bob, "mileage/t1")));
+    await assertFails(deleteDoc(doc(bob, "mileage/t1")));
+    await assertSucceeds(getDoc(doc(admin, "mileage/t1")));
+    await assertSucceeds(getDocs(query(collection(bob, "mileage"), where("createdBy", "==", "bob"))));
+    await assertFails(getDocs(collection(bob, "mileage")));
+    await assertSucceeds(deleteDoc(doc(alice, "mileage/t1")));
+  });
+
+  test("miles, date, reason and source must be real; nobody logs for someone else", async () => {
+    for (const bad of [{ miles: 0 }, { miles: 5000 }, { miles: "7" }, { date: "May 4" }, { reason: "" }, { source: "teleport" }, { estimated: "no" }]) {
+      await assertFails(setDoc(doc(alice, "mileage/bad"), trip("alice", bad)));
+    }
+    await assertFails(setDoc(doc(alice, "mileage/t2"), trip("bob")));
+    await assertFails(setDoc(doc(mallory, "mileage/t3"), trip("mallory")));
+  });
+
+  test("a home location is private to the person and the owner", async () => {
+    const home = { orgId: ORG_ID, lat: 38.39, lng: -85.41, label: "Home" };
+    await assertSucceeds(setDoc(doc(alice, "mileageHomes/alice"), home));
+    await assertSucceeds(getDoc(doc(alice, "mileageHomes/alice")));
+    await assertSucceeds(getDoc(doc(admin, "mileageHomes/alice")));
+    await assertFails(getDoc(doc(bob, "mileageHomes/alice")));
+    await assertFails(setDoc(doc(bob, "mileageHomes/alice"), home));
+  });
+
+  test("the mileage method is the owner's to set", async () => {
+    const settings = (uid, mileage) => ({ orgId: ORG_ID, mileage, updatedAt: serverTimestamp(), updatedBy: uid, updatedByName: uid });
+    await assertFails(setDoc(doc(alice, "settings/business"), settings("alice", { method: "standard", homeIsMainOffice: true })));
+    await assertSucceeds(setDoc(doc(admin, "settings/business"), settings("nicolas", { method: "actual", homeIsMainOffice: false })));
+    await assertFails(setDoc(doc(admin, "settings/business"), settings("nicolas", { method: "both", homeIsMainOffice: false })));
+  });
+});
+
+describe("owner-only settings (labour rates)", () => {
+  const profit = (uid, over = {}) => ({
+    orgId: ORG_ID,
+    laborRatePerHour: 25,
+    ratesByUid: { alice: 22 },
+    costPerMile: 0.25,
+    targetMarginPct: 30,
+    updatedAt: serverTimestamp(),
+    updatedBy: uid,
+    updatedByName: uid,
+    ...over,
+  });
+
+  test("the owner reads and writes them; crew cannot even read them", async () => {
+    await assertSucceeds(setDoc(doc(admin, "ownerSettings/profit"), profit("nicolas")));
+    await assertSucceeds(getDoc(doc(admin, "ownerSettings/profit")));
+    await assertFails(getDoc(doc(alice, "ownerSettings/profit")));
+    await assertFails(getDoc(doc(bob, "ownerSettings/profit")));
+    await assertFails(setDoc(doc(alice, "ownerSettings/profit"), profit("alice")));
+    await assertFails(getDoc(doc(mallory, "ownerSettings/profit")));
+  });
+
+  test("rates must be sane numbers", async () => {
+    for (const bad of [{ laborRatePerHour: -1 }, { laborRatePerHour: "25" }, { costPerMile: 10 }, { targetMarginPct: 95 }, { ratesByUid: [] }]) {
+      await assertFails(setDoc(doc(admin, "ownerSettings/profit"), profit("nicolas", bad)));
+    }
+  });
+});
+
 /* ------------------------------------------------------------------ quotes */
 
 describe("quotes", () => {

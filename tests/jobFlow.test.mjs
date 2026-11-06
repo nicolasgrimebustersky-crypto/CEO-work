@@ -76,7 +76,7 @@ describe("the job-finished text", () => {
   test("the handles are exact", () => {
     // A payment handle with a character wrong sends somebody's money to a
     // stranger, and no test failure anywhere else would catch it.
-    assert.equal(PAYMENT_HANDLES.venmo, "@NicolasTimmons");
+    assert.equal(PAYMENT_HANDLES.venmo, "@grimebustersky");
     assert.equal(PAYMENT_HANDLES.cashApp, "$GrimeBustersKYLLC");
   });
 

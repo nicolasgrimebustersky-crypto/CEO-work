@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { PayInvoiceButton } from "@/components/documents/PayInvoiceButton";
+import { VenmoPayButton } from "@/components/documents/VenmoPayButton";
+import { PAYMENT_HANDLES } from "@/lib/messages";
 import { RecordView } from "@/components/documents/RecordView";
 import { QuoteActions } from "@/components/documents/QuoteActions";
 import { SharedDocument } from "@/components/documents/SharedDocument";
@@ -99,6 +101,16 @@ export default async function SharedDocumentPage({
 
       <div className="px-3 pb-8">
         <SharedDocument document={document} customer={customer} />
+        {/* Venmo needs no card processor, only an open invoice with money
+            owed and a Venmo account on file for this business. */}
+        {checkPayable(document).payable && PAYMENT_HANDLES.venmo ? (
+          <VenmoPayButton
+            handle={PAYMENT_HANDLES.venmo}
+            balanceDue={document.balanceDue}
+            invoiceNumber={document.number}
+            businessName={BUSINESS.name}
+          />
+        ) : null}
         {canPay && document.shareToken ? (
           <PayInvoiceButton
             token={document.shareToken}

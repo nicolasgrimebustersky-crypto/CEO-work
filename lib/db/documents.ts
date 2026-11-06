@@ -93,7 +93,9 @@ function asPayments(value: unknown): Payment[] {
       // array from this read and write it back, so one crew member recording
       // a check (or deleting any payment) erased the session id from the
       // card entry beside it and re-armed the double credit.
-      ...(item.provider === "stripe" ? { provider: "stripe" as const } : {}),
+      ...(item.provider === "stripe" || item.provider === "venmo"
+        ? { provider: item.provider as "stripe" | "venmo" }
+        : {}),
       ...(typeof item.providerRef === "string" && item.providerRef
         ? { providerRef: item.providerRef }
         : {}),
@@ -153,6 +155,7 @@ export function toDocument(snap: QueryDocumentSnapshot<DocumentData>): BusinessD
     taxRatePct: typeof data.taxRatePct === "number" ? data.taxRatePct : DEFAULT_TAX_RATE_PCT,
     subtotal: typeof data.subtotal === "number" ? data.subtotal : 0,
     taxAmount: typeof data.taxAmount === "number" ? data.taxAmount : 0,
+    taxPermit: typeof data.taxPermit === "string" && data.taxPermit ? data.taxPermit : null,
     total: typeof data.total === "number" ? data.total : 0,
     payments: asPayments(data.payments),
     amountPaid: typeof data.amountPaid === "number" ? data.amountPaid : 0,
@@ -250,6 +253,8 @@ export interface NewDocumentInput {
   lineItems: LineItem[];
   discount?: number;
   taxRatePct?: number;
+  /** Sales-tax permit to print, from the settings at the time. */
+  taxPermit?: string | null;
   notes?: string;
   dueAt?: Date | null;
 }
@@ -274,6 +279,7 @@ export async function createDocument(
     lineItems: input.lineItems,
     discount: totals.discount,
     taxRatePct,
+    taxPermit: input.taxPermit?.trim() ? input.taxPermit.trim() : null,
     subtotal: totals.subtotal,
     taxAmount: totals.taxAmount,
     total: totals.total,
@@ -478,6 +484,7 @@ export async function convertToInvoice(
     lineItems: estimate.lineItems,
     discount: estimate.discount,
     taxRatePct: estimate.taxRatePct,
+    taxPermit: estimate.taxPermit,
     subtotal: estimate.subtotal,
     taxAmount: estimate.taxAmount,
     total: estimate.total,

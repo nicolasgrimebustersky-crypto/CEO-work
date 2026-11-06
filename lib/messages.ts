@@ -91,7 +91,8 @@ const OWNER_PHONE = "502-599-6855";
  * handle that differs between the text and the invoice is a support call.
  */
 export const PAYMENT_HANDLES = {
-  venmo: "@NicolasTimmons",
+  // venmo.com/u/grimebustersky, per Nicolas (Nov 2026).
+  venmo: "@grimebustersky",
   cashApp: "$GrimeBustersKYLLC",
 } as const;
 
