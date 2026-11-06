@@ -14,7 +14,9 @@ import { test, describe } from "node:test";
 
 const { grossFor, outstanding } = await import("../lib/money/summary.ts");
 
-const at = (iso) => ({ toMillis: () => new Date(iso).getTime() });
+// Local noon, not UTC midnight: "2026-01-01" alone is 7pm on Dec 31 in
+// Kentucky, which made these fail on any machine not set to UTC.
+const at = (iso) => ({ toMillis: () => new Date(`${iso}T12:00:00`).getTime() });
 const job = (id, price, paidAt) => ({ id, price, paidAt: paidAt ? at(paidAt) : null });
 const invoice = (id, payments, jobId = null) => ({
   id,

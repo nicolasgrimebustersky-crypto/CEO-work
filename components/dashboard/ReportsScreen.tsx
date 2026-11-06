@@ -10,6 +10,7 @@ import { useTeam } from "@/components/providers/TeamProvider";
 import { ScreenHeader } from "@/components/shell/ScreenHeader";
 import { UserChip } from "@/components/ui/Chips";
 import { Spinner } from "@/components/ui/Spinner";
+import { PaymentsDashboard } from "./PaymentsDashboard";
 import { PayPeriodSection } from "./PayPeriodSection";
 import { ProfitSection } from "./ProfitSection";
 import { SalesTaxSection } from "./SalesTaxSection";
@@ -181,6 +182,8 @@ export function ReportsScreen() {
           <Spinner label="Crunching numbers…" />
         ) : (
           <>
+            <PaymentsDashboard jobs={jobs} invoices={documents} />
+
             {/* Above the rest because it is the number somebody actually asks
                 for, and because the Revenue stat below means something
                 different — saying so here is what stops the two being
