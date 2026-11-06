@@ -13,6 +13,7 @@ import {
 } from "@/lib/server/automationStore";
 import { errorResponse, requireCronSecret } from "@/lib/server/auth";
 import { notifyCrew } from "@/lib/server/notify";
+import { runTaskReminders } from "@/lib/server/taskReminders";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -78,6 +79,18 @@ export async function GET(request: Request): Promise<Response> {
   try {
     requireCronSecret(request);
 
+    // Follow-up reminders ride on this cron (see lib/server/taskReminders.ts)
+    // and run before the money switch below: turning off invoice reminders on
+    // the Automations screen must not also silence the follow-ups somebody
+    // set for themselves. Caught here so a failure cannot stop the invoices.
+    let followUps: { people: number; tasks: number } | { error: string };
+    try {
+      followUps = await runTaskReminders();
+    } catch (error) {
+      console.error("Follow-up reminders failed", error);
+      followUps = { error: "follow-up reminders failed; see the function log" };
+    }
+
     // Switchable from the Automations screen, like the quote follow-up. This
     // one only ever notifies the crew — it does not text a customer — so the
     // cost of it being on is a phone buzzing rather than a number getting
@@ -89,6 +102,7 @@ export async function GET(request: Request): Promise<Response> {
       return Response.json({
         ok: true,
         skipped: "money_reminders is switched off or paused on the Automations screen",
+        followUps,
       });
     }
 
@@ -184,6 +198,7 @@ export async function GET(request: Request): Promise<Response> {
       openInvoices: open.length,
       newlyOverdue: newlyOverdue.length,
       summarised,
+      followUps,
     });
   } catch (error) {
     return errorResponse(error);

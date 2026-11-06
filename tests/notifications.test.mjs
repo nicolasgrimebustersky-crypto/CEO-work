@@ -82,6 +82,7 @@ describe("where a notification lands", () => {
     "chat",
     "chatThread",
     "equipment",
+    "tasks",
   ]);
 
   test("every event resolves to a screen the app has", () => {
@@ -182,6 +183,8 @@ describe("the shape the demo and the server both rely on", () => {
       "chat",
       // maintenance_due: /equipment is app/equipment/page.tsx.
       "equipment",
+      // The follow-up list, app/tasks/page.tsx.
+      "tasks",
     ]);
     for (const type of NOTIFICATION_TYPES) {
       assert.ok(

@@ -1239,6 +1239,49 @@ service cloud.firestore {
       allow delete: if isCrew() && belongsToMyOrg(resource.data);
     }
 
+    // Follow-ups. Crew-wide like the rest of the CRM: either person can see,
+    // write, hand over and tick off anybody's — a two-person crew covers for
+    // each other, and a task only one of them could see is one that is lost
+    // the day they are off sick.
+    //
+    // What is checked is shape, and the two fields that are not the client's:
+    // the author on create, and `remindedAt`, which belongs to the morning
+    // reminder (app/api/cron/money-reminders). A client may only ever clear it
+    // — that is what a reschedule does so the task buzzes again on its new
+    // day — never stamp it, or a follow-up could be silenced without being
+    // done.
+    function validTask() {
+      let data = request.resource.data;
+      return data.title is string
+        && data.title.size() > 0
+        && data.title.size() <= 300
+        && data.notes is string
+        && data.notes.size() <= 2000
+        && (data.dueAt == null || data.dueAt is timestamp)
+        && (data.doneAt == null || data.doneAt is timestamp)
+        && (data.customerId == null || data.customerId is string)
+        && (data.assignedTo == null || data.assignedTo is string);
+    }
+
+    match /tasks/{taskId} {
+      allow read: if isCrew() && belongsToMyOrg(resource.data);
+      allow create: if isCrew()
+        && stampedByCaller('createdBy')
+        && stampedByCaller('updatedBy')
+        && validTask()
+        && request.resource.data.get('remindedAt', null) == null
+        && createsInMyOrg(request.resource.data);
+      allow update: if isCrew()
+        && belongsToMyOrg(resource.data)
+        && refreshesAuthorStamp()
+        && validTask()
+        && request.resource.data.createdBy == resource.data.createdBy
+        && (request.resource.data.get('remindedAt', null) == null
+          || request.resource.data.get('remindedAt', null) == resource.data.get('remindedAt', null))
+        && keepsOrg();
+      allow delete: if isCrew() && belongsToMyOrg(resource.data);
+    }
+
     // Team chat.
     //
     // Membership is the entire access model: you can read and write a

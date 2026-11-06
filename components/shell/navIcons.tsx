@@ -46,6 +46,23 @@ export function AutomationIcon({ active }: NavIconProps) {
   );
 }
 
+/** A ticked box beside two lines: a list of things to do, one already done. */
+export function TaskIcon({ active }: NavIconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className="size-6" aria-hidden="true">
+      <g
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={w(active)}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="m4 7 2 2 3.5-3.5M13 7.5h7M4.5 15.5h4v4h-4zM13 17.5h7" />
+      </g>
+    </svg>
+  );
+}
+
 /** A magnifier. The one glyph nobody needs a label to read. */
 export function SearchIcon({ active }: NavIconProps) {
   return (

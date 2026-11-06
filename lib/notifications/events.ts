@@ -60,7 +60,9 @@ type Destination =
   | "schedule"
   | "pipeline"
   | "chat"
-  | "equipment";
+  | "equipment"
+  /** The follow-up list. */
+  | "tasks";
 
 interface EventDefinition {
   category: NotificationCategory;
@@ -178,6 +180,18 @@ export const NOTIFICATION_EVENTS = {
     destination: "knockRoutes",
   },
 
+  /* ------------------------------------------------------------ follow-ups */
+  // Filed under customers rather than a category of its own: a follow-up is
+  // almost always about a client, and a new category would be one an admin
+  // who has narrowed somebody's notifications never granted — so the person
+  // the task is assigned to would silently never hear about it.
+  task_due: { category: "customers", title: "Follow-up due", destination: "tasks" },
+  task_assigned: {
+    category: "customers",
+    title: "Follow-up for you",
+    destination: "tasks",
+  },
+
   /* ---------------------------------------------------------------- leads */
   lead_new: { category: "leads", title: "New lead", destination: "customer" },
 } as const satisfies Record<string, EventDefinition>;
@@ -226,7 +240,8 @@ export interface ResolvedDestination {
     | "pipeline"
     | "chat"
     | "chatThread"
-    | "equipment";
+    | "equipment"
+    | "tasks";
   /** The record to open, when there is one. */
   id?: string;
 }
@@ -257,7 +272,9 @@ export function destinationFor(item: {
     case "pipeline":
       return { screen: "pipeline" };
     case "equipment":
-      return { screen: "equipment" };
+      return { screen: "equipment" }
+    case "tasks":
+      return { screen: "tasks" };
     case "messages":
       // Straight to the record when we know whose it is — that is the fuller
       // context. Only a text we could not match falls through to the inbox.

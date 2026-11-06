@@ -287,6 +287,21 @@ beforeEach(async () => {
       createdByName: "Alice",
       updatedBy: "alice",
     });
+    await setDoc(doc(db, "tasks/k1"), {
+      title: "Call Marta back",
+      notes: "",
+      dueAt: Timestamp.fromDate(new Date("2026-11-04T14:00:00Z")),
+      customerId: "c1",
+      customerName: "Marta Oakley",
+      documentId: null,
+      assignedTo: "bob",
+      doneAt: null,
+      doneBy: null,
+      remindedAt: Timestamp.fromDate(new Date("2026-11-04T13:00:00Z")),
+      createdBy: "alice",
+      createdByName: "Alice",
+      updatedBy: "alice",
+    });
     await setDoc(doc(db, "pushTokens/t-alice"), {
       uid: "alice",
       token: "alice-device-token",
@@ -1753,6 +1768,85 @@ describe("territories", () => {
   });
 });
 
+
+/* ------------------------------------------------------------------ tasks */
+
+describe("tasks", () => {
+  const taskDoc = (by, over = {}) => ({
+    orgId: ORG_ID,
+    title: "Follow up on the gutter quote",
+    notes: "",
+    dueAt: Timestamp.fromDate(new Date("2026-11-05T14:00:00Z")),
+    customerId: "c1",
+    customerName: "Marta Oakley",
+    documentId: null,
+    assignedTo: null,
+    doneAt: null,
+    doneBy: null,
+    remindedAt: null,
+    createdAt: serverTimestamp(),
+    createdBy: by,
+    createdByName: by,
+    updatedAt: serverTimestamp(),
+    updatedBy: by,
+    updatedByName: by,
+    ...over,
+  });
+  const edit = (by, over = {}) => ({ updatedBy: by, updatedAt: serverTimestamp(), ...over });
+
+  test("crew can write one, hand it over and tick it off", async () => {
+    await assertSucceeds(addDoc(collection(alice, "tasks"), taskDoc("alice")));
+    await assertSucceeds(getDoc(doc(bob, "tasks/k1")));
+    await assertSucceeds(updateDoc(doc(bob, "tasks/k1"), edit("bob", { assignedTo: "alice" })));
+    await assertSucceeds(
+      updateDoc(doc(bob, "tasks/k1"), edit("bob", { doneAt: serverTimestamp(), doneBy: "bob" })),
+    );
+    await assertSucceeds(deleteDoc(doc(alice, "tasks/k1")));
+  });
+
+  test("it cannot be written in somebody else's name", async () => {
+    await assertFails(addDoc(collection(alice, "tasks"), taskDoc("bob")));
+    await assertFails(updateDoc(doc(bob, "tasks/k1"), { title: "Renamed", updatedBy: "alice", updatedAt: serverTimestamp() }));
+    await assertFails(updateDoc(doc(bob, "tasks/k1"), edit("bob", { createdBy: "bob" })));
+  });
+
+  test("an edit has to say who made it", async () => {
+    await assertFails(updateDoc(doc(bob, "tasks/k1"), { title: "Renamed" }));
+  });
+
+  test("a blank, huge or mistyped task is refused", async () => {
+    await assertFails(addDoc(collection(alice, "tasks"), taskDoc("alice", { title: "" })));
+    await assertFails(addDoc(collection(alice, "tasks"), taskDoc("alice", { title: "x".repeat(301) })));
+    await assertFails(addDoc(collection(alice, "tasks"), taskDoc("alice", { notes: "x".repeat(2001) })));
+    await assertFails(addDoc(collection(alice, "tasks"), taskDoc("alice", { dueAt: "Thursday" })));
+    await assertFails(addDoc(collection(alice, "tasks"), taskDoc("alice", { assignedTo: ["bob"] })));
+  });
+
+  test("the reminder stamp can be cleared by a reschedule, never set by a client", async () => {
+    await assertFails(
+      addDoc(collection(alice, "tasks"), taskDoc("alice", { remindedAt: serverTimestamp() })),
+    );
+    await assertFails(
+      updateDoc(doc(bob, "tasks/k1"), edit("bob", { remindedAt: serverTimestamp() })),
+    );
+    await assertSucceeds(
+      updateDoc(
+        doc(bob, "tasks/k1"),
+        edit("bob", {
+          dueAt: Timestamp.fromDate(new Date("2026-11-06T14:00:00Z")),
+          remindedAt: null,
+        }),
+      ),
+    );
+  });
+
+  test("a pending account or a stranger gets nothing", async () => {
+    await assertFails(getDoc(doc(mallory, "tasks/k1")));
+    await assertFails(addDoc(collection(mallory, "tasks"), taskDoc("mallory")));
+    await assertFails(getDocs(collection(anon, "tasks")));
+    await assertFails(addDoc(collection(anon, "tasks"), taskDoc("alice")));
+  });
+});
 
 /* ------------------------------------------------------- open registration */
 

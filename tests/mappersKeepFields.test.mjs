@@ -130,6 +130,14 @@ const MAPPERS = [
       id: "taken from the snapshot id, not the document body",
     },
   },
+  {
+    label: "asTask -> Task",
+    mapperFile: "lib/db/tasks.ts",
+    mapper: "asTask",
+    typeFile: "lib/types.ts",
+    type: "Task",
+    exempt: {},
+  },
 ];
 
 describe("every mapper carries every field of the type it builds", () => {
