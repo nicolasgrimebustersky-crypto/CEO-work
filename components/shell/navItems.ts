@@ -14,6 +14,7 @@ import {
   PriceBookIcon,
   MileageIcon,
   PayIcon,
+  WrenchIcon,
   ReceiptIcon,
   ReportIcon,
   SearchIcon,
@@ -128,6 +129,12 @@ export const DRAWER_ONLY: NavItem[] = [
     label: "Mileage",
     icon: MileageIcon,
     hint: "Business miles between jobs, at the IRS rate",
+  },
+  {
+    href: routes.equipment,
+    label: "Equipment",
+    icon: WrenchIcon,
+    hint: "Oil changes, blades and the truck's service — what's due",
   },
   {
     href: routes.crewPay,

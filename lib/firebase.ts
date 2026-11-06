@@ -172,6 +172,10 @@ export const COLLECTIONS = {
   timeEdits: "timeEdits",
   /** What each person was paid for a pay period. See lib/db/crewPay.ts. */
   payRuns: "payRuns",
+  /** Mowers, the truck, trimmers — and their service tasks. See lib/db/maintenance.ts. */
+  equipment: "equipment",
+  /** Service done and meter readings, append-only. See lib/db/maintenance.ts. */
+  maintenanceLog: "maintenanceLog",
   /** Demo mode only — the real app keeps these as subcollections. */
   chatMessages: "chatMessages",
   chatReads: "chatReads",

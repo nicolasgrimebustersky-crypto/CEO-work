@@ -335,3 +335,18 @@ export function PayIcon({ active }: NavIconProps) {
     </svg>
   );
 }
+
+/** A wrench: equipment service. */
+export function WrenchIcon({ active }: NavIconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className="size-6" aria-hidden="true">
+      <path
+        d="M14.7 6.3a4 4 0 0 0-5.4 5l-5.6 5.6a1.8 1.8 0 0 0 2.5 2.5l5.6-5.6a4 4 0 0 0 5-5.4l-2.5 2.5-2.1-.4-.4-2.1 2.5-2.5Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={w(active)}
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}

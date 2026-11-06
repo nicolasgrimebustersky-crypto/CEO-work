@@ -40,6 +40,7 @@ export const routes = {
   expenses: "/expenses",
   mileage: "/mileage",
   crewPay: "/pay",
+  equipment: "/equipment",
   search: "/search",
   account: "/account",
   privacy: "/privacy",

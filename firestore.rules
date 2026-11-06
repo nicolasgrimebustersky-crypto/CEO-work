@@ -1023,6 +1023,63 @@ service cloud.firestore {
         && data.notes is string && data.notes.size() <= 500;
     }
 
+    // Equipment and its service tasks. Not money and not private: everyone
+    // on the crew sees what is due and can add or adjust equipment. The
+    // reminder bookkeeping (`notified`) belongs to the daily cron alone.
+    function validEquipment() {
+      let data = request.resource.data;
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 60
+        && data.meter in ['none', 'hours', 'miles']
+        && data.tasks is list && data.tasks.size() <= 20
+        && stampedByCaller('updatedBy');
+    }
+
+    match /equipment/{equipmentId} {
+      allow read: if isCrew() && belongsToMyOrg(resource.data);
+      allow create: if isCrew()
+        && stampedByCaller('createdBy')
+        && validEquipment()
+        && !('notified' in request.resource.data)
+        && createsInMyOrg(request.resource.data);
+      allow update: if isCrew()
+        && belongsToMyOrg(resource.data)
+        && validEquipment()
+        && request.resource.data.diff(resource.data).affectedKeys().hasAll(['updatedAt'])
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['notified', 'createdBy'])
+        && keepsOrg();
+      allow delete: if isCrew() && isAdmin() && belongsToMyOrg(resource.data);
+    }
+
+    // Service done and meter readings. Whoever did the work logs it; the
+    // person who logged an entry, or the owner, can correct or remove it.
+    function validMaintenanceEntry() {
+      let data = request.resource.data;
+      return data.equipmentId is string && data.equipmentId.size() > 0 && data.equipmentId.size() <= 128
+        && data.date is string && data.date.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && data.taskIds is list && data.taskIds.size() <= 20
+        && (data.reading == null || (data.reading is number && data.reading >= 0 && data.reading < 10000000))
+        && (data.taskIds.size() > 0 || data.reading != null)
+        && data.note is string && data.note.size() <= 200
+        && (data.expenseId == null || (data.expenseId is string && data.expenseId.size() <= 128));
+    }
+
+    match /maintenanceLog/{entryId} {
+      allow read: if isCrew() && belongsToMyOrg(resource.data);
+      allow create: if isCrew()
+        && stampedByCaller('createdBy')
+        && validMaintenanceEntry()
+        && createsInMyOrg(request.resource.data);
+      allow update: if isCrew()
+        && belongsToMyOrg(resource.data)
+        && (isAdmin() || resource.data.createdBy == request.auth.uid)
+        && (request.resource.data.createdBy == resource.data.createdBy
+            || (isAdmin() && stampedByCaller('createdBy')))
+        && validMaintenanceEntry()
+        && keepsOrg();
+      allow delete: if isCrew() && belongsToMyOrg(resource.data)
+        && (isAdmin() || resource.data.createdBy == request.auth.uid);
+    }
+
     match /payRuns/{runId} {
       allow read: if isCrew() && belongsToMyOrg(resource.data)
         && (isAdmin() || resource.data.uid == request.auth.uid);
