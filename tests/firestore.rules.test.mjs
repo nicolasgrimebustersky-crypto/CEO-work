@@ -966,6 +966,15 @@ describe("mileage", () => {
     await assertFails(setDoc(doc(mallory, "mileage/t3"), trip("mallory")));
   });
 
+  test("an automatic trip from \"En route\" logs, and a second tap rewrites the same trip", async () => {
+    const auto = (over = {}) =>
+      trip("alice", { source: "en_route", reason: "After Smith → Job: Jones", jobIds: ["j1", "j2"], suggestionKey: "auto:j2", ...over });
+    await assertSucceeds(setDoc(doc(alice, "mileage/alice_auto_j2"), auto()));
+    await assertSucceeds(setDoc(doc(alice, "mileage/alice_auto_j2"), auto({ miles: 8.1 })));
+    // Not someone else's trip, though.
+    await assertFails(setDoc(doc(bob, "mileage/alice_auto_j2"), trip("bob", { source: "en_route" })));
+  });
+
   test("a home location is private to the person and the owner", async () => {
     const home = { orgId: ORG_ID, lat: 38.39, lng: -85.41, label: "Home" };
     await assertSucceeds(setDoc(doc(alice, "mileageHomes/alice"), home));

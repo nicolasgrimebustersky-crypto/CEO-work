@@ -1,14 +1,16 @@
 /**
- * Business mileage: the trips, the IRS rate, and when to ask about a drive.
+ * Business mileage: the trips, the IRS rate, and which drives log themselves.
  *
- * Three ways a trip gets logged, and none of them is silent:
- *   - Job to job: the day's jobs in the order they were worked suggest a trip
- *     between each pair, road miles from Google, reason filled in
- *     ("Job: Smith → Jones"). One tap logs it.
- *   - GPS gap: when the app opens and the person's last saved location was at
- *     a job, the drive from there to here is offered — "X mi since your last
- *     job — business?" — and logged only on Yes.
- *   - By hand.
+ * Trips log themselves from the job taps (driveToJob below):
+ *   - "En route": the phone's location at that moment is where the drive
+ *     starts, the job is where it ends, and the trip is logged right then —
+ *     road miles from Google, reason filled in.
+ *   - "Start" with no "En route" first: the drive is taken from the person's
+ *     previous job that day, so a skipped tap doesn't lose the miles.
+ *   - By hand, for the drive the taps missed.
+ * A phone can't follow GPS in the background from a web app, and doesn't
+ * need to: the IRS wants each business trip's date, miles and purpose, which
+ * one location per tap gives.
  *
  * Home to the first job is commuting, which the IRS does not allow, unless
  * home is the business's main office; the owner says which.
@@ -55,7 +57,7 @@ export const MILEAGE_METHOD_LABEL: Record<MileageMethod, string> = {
   actual: "Actual truck costs (gas, repairs…)",
 };
 
-export const TRIP_SOURCES = ["job_to_job", "gps_gap", "home_to_job", "manual"] as const;
+export const TRIP_SOURCES = ["job_to_job", "gps_gap", "home_to_job", "manual", "en_route"] as const;
 export type TripSource = (typeof TRIP_SOURCES)[number];
 
 export interface TripLike {
@@ -105,111 +107,87 @@ export function estimateRoadMiles(a: Place, b: Place): number {
   return round2((metersBetween(a, b) * 1.35) / 1609.34);
 }
 
-/* ------------------------------------------------------- job-to-job trips */
-
-export interface WorkedJob extends Place {
-  id: string;
-  /** The client's name, for the reason line. */
-  label: string;
-  /** When the work started, epoch ms — the order the day was driven in. */
-  startedAt: number;
-}
-
-export interface SuggestedTrip {
-  /** Stable, so a logged suggestion is recognised and not offered again. */
-  key: string;
-  date: string;
-  from: Place & { label: string };
-  to: Place & { label: string };
-  reason: string;
-  source: TripSource;
-  jobIds: string[];
-}
-
-/**
- * The trips a person's day implies: home to the first job (only if home is
- * the main office), then each job to the next, in the order they started.
- * Jobs with no map location are skipped rather than guessed.
- */
-export function suggestTrips(
-  date: string,
-  jobs: readonly WorkedJob[],
-  home: (Place & { label?: string }) | null,
-  homeIsMainOffice: boolean,
-): SuggestedTrip[] {
-  const worked = jobs.filter(hasFix).slice().sort((a, b) => a.startedAt - b.startedAt);
-  const out: SuggestedTrip[] = [];
-  if (homeIsMainOffice && hasFix(home) && worked.length > 0) {
-    const first = worked[0];
-    out.push({
-      key: `${date}:home:${first.id}`,
-      date,
-      from: { lat: home.lat, lng: home.lng, label: home.label || "Home office" },
-      to: { lat: first.lat, lng: first.lng, label: first.label },
-      reason: `Office → Job: ${first.label}`,
-      source: "home_to_job",
-      jobIds: [first.id],
-    });
-  }
-  for (let i = 1; i < worked.length; i += 1) {
-    const a = worked[i - 1];
-    const b = worked[i];
-    out.push({
-      key: `${date}:${a.id}:${b.id}`,
-      date,
-      from: { lat: a.lat, lng: a.lng, label: a.label },
-      to: { lat: b.lat, lng: b.lng, label: b.label },
-      reason: `Job: ${a.label} → ${b.label}`,
-      source: "job_to_job",
-      jobIds: [a.id, b.id],
-    });
-  }
-  return out;
-}
-
-/* ------------------------------------------------------------- GPS gap */
-
-export const GAP_MAX_MS = 4 * 60 * 60 * 1000;
-/** Close enough to a job's pin to count as having been at it. */
+/** Close enough to a job's pin to count as still being at it. */
 export const AT_JOB_METERS = 200;
-/** Close enough to home to count as having driven home. */
-export const NEAR_HOME_METERS = 300;
 /** Shorter than this is moving the truck, not a trip. */
 export const MIN_TRIP_METERS = 500;
 
-export type GapDecision =
-  | { kind: "ask"; fromJob: WorkedJob; straightMeters: number }
-  | { kind: "skip"; reason: "no_last" | "too_long" | "not_at_job" | "near_home" | "too_short" };
+/* ------------------------------------------------------- automatic trips */
+
+export type DriveDecision =
+  | {
+      kind: "log";
+      from: Place & { label: string };
+      source: "en_route" | "job_to_job" | "home_to_job";
+      reason: string;
+      /** The previous job, when the drive came from one. */
+      fromJobId: string | null;
+    }
+  | { kind: "skip"; reason: "no_destination" | "commute" | "no_origin" | "too_short" };
 
 /**
- * Whether to ask "X mi since your last job — business?" on opening the app.
- * Asks only when the last saved position was at one of the jobs, under four
- * hours ago, the drive was more than a few hundred metres, and it did not end
- * at home (a drive home is commuting). Everything else is skipped; the person
- * can still log it by hand.
+ * Whether the drive to a job is a business trip, and where it started.
+ *
+ *   - It has to end at the job's pin.
+ *   - The day's first drive is commuting unless home is the business's main
+ *     office (IRS: home to a work site is personal when there is no regular
+ *     office elsewhere and home isn't the principal place of business) —
+ *     wherever the person set off from. That is the safe reading; an
+ *     accountant can add a drive the rule leaves out, but not unpick one it
+ *     should not have claimed.
+ *   - Later drives start at the phone's location when there is one: the job
+ *     before if they are still at it, or wherever they are (the supply yard,
+ *     the dump) — that detour is part of the business day. Without a
+ *     location, or with one already at this job (the tap came late), the
+ *     previous job's pin.
+ *   - A drive that ends where it starts is moving the truck, not a trip.
  */
-export function gapDecision(input: {
-  last: (Place & { at: number }) | null;
-  now: Place & { at: number };
-  jobs: readonly WorkedJob[];
+export function driveToJob(input: {
+  to: Place & { label: string };
+  /** Where the phone was when "En route" was tapped, if it could tell. */
+  gps: Place | null;
+  /** This person's last job today before this one, if any. */
+  previousJob: (Place & { id: string; label: string }) | null;
   home: Place | null;
-}): GapDecision {
-  const { last, now, jobs, home } = input;
-  if (!last || !hasFix(last)) return { kind: "skip", reason: "no_last" };
-  if (now.at - last.at > GAP_MAX_MS || now.at < last.at) return { kind: "skip", reason: "too_long" };
-  let nearest: WorkedJob | null = null;
-  let best = Infinity;
-  for (const job of jobs) {
-    if (!hasFix(job)) continue;
-    const d = metersBetween(last, job);
-    if (d < best) {
-      best = d;
-      nearest = job;
-    }
+  homeIsMainOffice: boolean;
+}): DriveDecision {
+  const { to, gps, previousJob, home, homeIsMainOffice } = input;
+  if (!hasFix(to)) return { kind: "skip", reason: "no_destination" };
+
+  let decision: DriveDecision;
+  if (!previousJob || !hasFix(previousJob)) {
+    if (!homeIsMainOffice) return { kind: "skip", reason: "commute" };
+    const start = hasFix(gps) ? gps : hasFix(home) ? home : null;
+    if (!start) return { kind: "skip", reason: "no_origin" };
+    decision = {
+      kind: "log",
+      from: { lat: start.lat, lng: start.lng, label: "Office" },
+      source: "home_to_job",
+      reason: `Office → Job: ${to.label}`,
+      fromJobId: null,
+    };
+  } else if (hasFix(gps) && metersBetween(gps, previousJob) > AT_JOB_METERS && metersBetween(gps, to) > AT_JOB_METERS) {
+    decision = {
+      kind: "log",
+      from: { lat: gps.lat, lng: gps.lng, label: "On the way" },
+      source: "en_route",
+      reason: `After ${previousJob.label} → Job: ${to.label}`,
+      fromJobId: previousJob.id,
+    };
+  } else {
+    decision = {
+      kind: "log",
+      from: { lat: previousJob.lat, lng: previousJob.lng, label: previousJob.label },
+      source: "job_to_job",
+      reason: `Job: ${previousJob.label} → ${to.label}`,
+      fromJobId: previousJob.id,
+    };
   }
-  if (!nearest || best > AT_JOB_METERS) return { kind: "skip", reason: "not_at_job" };
-  if (hasFix(home) && metersBetween(now, home) <= NEAR_HOME_METERS) return { kind: "skip", reason: "near_home" };
-  const straight = metersBetween(last, now);
-  if (straight < MIN_TRIP_METERS) return { kind: "skip", reason: "too_short" };
-  return { kind: "ask", fromJob: nearest, straightMeters: straight };
+  if (metersBetween(decision.from, to) < MIN_TRIP_METERS) return { kind: "skip", reason: "too_short" };
+  return decision;
+}
+
+/** The key an automatic trip is logged under: one per person per job, so a second tap corrects it. */
+export function autoTripKey(jobId: string): string {
+  return `auto:${jobId}`;
 }

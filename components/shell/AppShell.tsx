@@ -5,7 +5,6 @@ import { useCallback, useState, type ReactNode } from "react";
 
 import { isPublicRoute } from "@/lib/publicRoutes";
 import { BottomNav } from "./BottomNav";
-import { GapFillPrompt } from "@/components/mileage/GapFillPrompt";
 import { ConnectionBanner } from "./ConnectionBanner";
 import { DemoBanner } from "./DemoBanner";
 import { InstallPrompt } from "./InstallPrompt";
@@ -48,7 +47,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
         <NavDrawer open={menuOpen} onClose={closeMenu} />
         {/* "X mi since your last job — business?" Asks at most once per app open. */}
-        <GapFillPrompt />
       </div>
     </MenuContext.Provider>
   );

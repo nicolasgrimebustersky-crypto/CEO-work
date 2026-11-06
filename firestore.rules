@@ -903,7 +903,7 @@ service cloud.firestore {
         && data.date.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
         && data.miles is number && data.miles > 0 && data.miles < 2000
         && data.reason is string && data.reason.size() > 0 && data.reason.size() <= 200
-        && data.source in ['job_to_job', 'gps_gap', 'home_to_job', 'manual']
+        && data.source in ['job_to_job', 'gps_gap', 'home_to_job', 'manual', 'en_route']
         && data.estimated is bool
         && (data.from == null || validPlace(data.from))
         && (data.to == null || validPlace(data.to))

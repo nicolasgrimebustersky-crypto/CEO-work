@@ -1,10 +1,7 @@
 "use client";
 
-import { APIProvider } from "@vis.gl/react-google-maps";
 import { useEffect, useMemo, useState } from "react";
 
-import { useCustomers } from "@/components/providers/CustomersProvider";
-import { useJobs } from "@/components/providers/JobsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { ScreenHeader } from "@/components/shell/ScreenHeader";
 import { Button } from "@/components/ui/Button";
@@ -21,49 +18,37 @@ import {
   type Trip,
 } from "@/lib/db/mileage";
 import { saveMileageSettings, useMileageSettings } from "@/lib/db/settings";
-import { useRoadMiles } from "@/lib/driveTime";
 import { localDate, parseAmount } from "@/lib/expenses";
-import { customerName, formatMoney } from "@/lib/format";
+import { formatMoney } from "@/lib/format";
 import {
   MILEAGE_METHODS,
   MILEAGE_METHOD_LABEL,
   mileageTotals,
   rateFor,
-  suggestTrips,
-  type SuggestedTrip,
-  type WorkedJob,
 } from "@/lib/mileage";
 
 export function MileageScreen() {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
-  if (!apiKey) return <Mileage />;
-  return (
-    <APIProvider apiKey={apiKey} libraries={["routes"]}>
-      <Mileage />
-    </APIProvider>
-  );
+  return <Mileage />;
 }
 
 const dayLabel = (date: string) =>
   new Date(`${date}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
 /**
- * Business miles: what the day's jobs suggest, what has been logged, and
- * (owner) how mileage is claimed. A crew member sees their own trips; the
+ * Business miles: what the job taps logged today and this year, what that is
+ * worth at the IRS rate, and (owner) how mileage is claimed. Trips arrive
+ * from "En route" and "Start" on each job (lib/autoMileage.ts); a drive the
+ * taps missed can be added by hand. A crew member sees their own trips; the
  * owner sees everyone's — the same split firestore.rules enforces.
  */
 function Mileage() {
   const { author, isAdmin } = useTeam();
-  const { jobs } = useJobs();
-  const { byId: customersById } = useCustomers();
   const settings = useMileageSettings();
-  const measure = useRoadMiles();
   const uid = author?.uid ?? "";
 
   const [trips, setTrips] = useState<Trip[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [home, setHome] = useState<MileageHome | null>(null);
-  const [busyKey, setBusyKey] = useState<string | null>(null);
   const [manualMiles, setManualMiles] = useState("");
   const [manualReason, setManualReason] = useState("");
   const [manualDate, setManualDate] = useState(localDate());
@@ -81,47 +66,11 @@ function Mileage() {
   const mine = useMemo(() => (trips ?? []).filter((t) => t.createdBy === uid), [trips, uid]);
   const totals = useMemo(() => mileageTotals(trips ?? [], year), [trips, year]);
   const myTotals = useMemo(() => mileageTotals(mine, year), [mine, year]);
-
-  /** Today's and yesterday's trips implied by the jobs this person worked, not yet logged. */
-  const suggestions = useMemo(() => {
-    const logged = new Set(mine.map((t) => t.suggestionKey).filter(Boolean));
-    const out: SuggestedTrip[] = [];
-    for (const back of [0, 1]) {
-      const day = new Date();
-      day.setDate(day.getDate() - back);
-      const date = localDate(day);
-      const worked: WorkedJob[] = jobs
-        .filter((job) => job.assignedTo.includes(uid) && job.startedAt && localDate(job.startedAt.toDate()) === date)
-        .map((job) => {
-          const c = customersById.get(job.customerId);
-          return {
-            id: job.id,
-            label: c ? customerName(c) : "Job",
-            lat: c?.lat ?? 0,
-            lng: c?.lng ?? 0,
-            startedAt: job.startedAt!.toMillis(),
-          };
-        });
-      out.push(...suggestTrips(date, worked, home, settings.homeIsMainOffice));
-    }
-    return out.filter((s) => !logged.has(s.key));
-  }, [jobs, customersById, uid, home, settings.homeIsMainOffice, mine]);
-
-  async function logSuggestion(s: SuggestedTrip) {
-    if (!author) return;
-    setBusyKey(s.key);
-    try {
-      const { miles, estimated } = await measure(s.from, s.to);
-      await logTrip(
-        { date: s.date, miles, reason: s.reason, source: s.source, estimated, from: s.from, to: s.to, jobIds: s.jobIds, suggestionKey: s.key },
-        author,
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not log the trip.");
-    } finally {
-      setBusyKey(null);
-    }
-  }
+  const todayKey = localDate();
+  const today = useMemo(() => {
+    const list = (isAdmin ? trips ?? [] : mine).filter((t) => t.date === todayKey);
+    return { ...mileageTotals(list, Number(todayKey.slice(0, 4))), trips: list };
+  }, [trips, mine, isAdmin, todayKey]);
 
   async function logManual() {
     if (!author) return;
@@ -170,31 +119,25 @@ function Mileage() {
               )}
             </div>
 
-            <section className="mt-5">
-              <h2 className="mb-2 text-lg font-bold text-ink">From your jobs</h2>
-              {suggestions.length === 0 ? (
-                <p className="rounded-xl border border-line bg-surface-2 px-3 py-3 text-base font-semibold text-muted">
-                  Start two jobs in a day and the drive between them shows up here to log in one tap.
-                </p>
-              ) : (
-                <ul className="flex flex-col gap-2">
-                  {suggestions.map((s) => (
-                    <li key={s.key} className="flex items-center gap-3 rounded-xl border border-line bg-surface-2 px-3 py-2.5">
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-base font-bold text-ink">{s.reason}</span>
-                        <span className="block text-sm font-semibold text-muted">{dayLabel(s.date)}</span>
-                      </span>
-                      <Button onClick={() => void logSuggestion(s)} disabled={busyKey === s.key}>
-                        {busyKey === s.key ? "…" : "Log"}
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              )}
+            <section className="mt-5 rounded-2xl border border-line bg-surface-2 p-3">
+              <h2 className="text-base font-bold text-ink">{isAdmin ? "Today, everyone" : "Today"}</h2>
+              <p className="mt-1 text-2xl font-extrabold text-ink tabular-nums">
+                {today.miles} mi
+                {isAdmin && settings.method === "standard" ? (
+                  <span className="ml-2 text-base font-bold text-money">{formatMoney(today.deduction)} write-off</span>
+                ) : null}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-muted">
+                {today.count === 0
+                  ? "Tap “En route” on a job and the drive there is logged here by itself."
+                  : `${today.count} drive${today.count === 1 ? "" : "s"}, logged from the job taps.`}{" "}
+                The drive from home to the first job is commuting and isn&apos;t counted
+                {settings.homeIsMainOffice ? ", except that home is set as the main office" : ""}.
+              </p>
             </section>
 
             <section className="mt-5 rounded-2xl border border-line bg-surface-2 p-3">
-              <h2 className="text-base font-bold text-ink">Add a drive</h2>
+              <h2 className="text-base font-bold text-ink">Add a drive the taps missed</h2>
               <div className="mt-2 grid grid-cols-2 gap-2">
                 <TextField label="Miles" inputMode="decimal" value={manualMiles} onChange={(e) => setManualMiles(e.target.value)} />
                 <TextField label="Date" type="date" value={manualDate} onChange={(e) => setManualDate(e.target.value)} />
@@ -213,8 +156,9 @@ function Mileage() {
             <section className="mt-5 rounded-2xl border border-line bg-surface-2 p-3">
               <h2 className="text-base font-bold text-ink">Home</h2>
               <p className="mt-1 text-sm font-semibold text-muted">
-                {home ? "Set." : "Not set."} The app won&apos;t ask about a drive that ends at home, because that is
-                commuting. Only you and the owner can see it.
+                {home ? "Set." : "Not set."} Used only when home is the business&apos;s main office: it&apos;s where
+                the first drive of the day starts if the phone can&apos;t give a location. Only you and the owner can
+                see it.
               </p>
               <div className="mt-2">
                 <Button variant="secondary" onClick={setHomeHere}>
@@ -289,7 +233,7 @@ function OwnerMileageSettings() {
         </Chip>
       </div>
       <p className="mt-2 text-sm font-semibold text-muted">
-        On: home to the first job counts as business. Off: it&apos;s commuting, and isn&apos;t suggested.
+        On: home to the first job counts as business. Off: it&apos;s commuting, and isn&apos;t logged.
       </p>
     </section>
   );

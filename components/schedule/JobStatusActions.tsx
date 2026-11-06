@@ -3,11 +3,16 @@
 import { format } from "date-fns";
 import { useState } from "react";
 
+import { useCustomers } from "@/components/providers/CustomersProvider";
+import { useJobs } from "@/components/providers/JobsProvider";
 import { useNotify } from "@/components/providers/NotificationsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { OWNER_UID } from "@/lib/auth/roles";
+import { logDriveToJob } from "@/lib/autoMileage";
 import { advancePipeline } from "@/lib/db/customers";
 import { completeVisit, markReviewRequested, signOffJob, stampJobStep } from "@/lib/db/jobs";
+import { useMileageSettings } from "@/lib/db/settings";
+import { useRoadMiles } from "@/lib/driveTime";
 import { DEMO_NICK } from "@/lib/demo/fixtures";
 import { isDemoMode } from "@/lib/demo/enabled";
 import { customerName, formatMoney } from "@/lib/format";
@@ -58,12 +63,17 @@ export function JobStatusActions({
 }) {
   const { author } = useTeam();
   const notify = useNotify();
+  const { jobs } = useJobs();
+  const { byId: customersById } = useCustomers();
+  const mileage = useMileageSettings();
+  const measure = useRoadMiles();
 
   const [busy, setBusy] = useState<JobStep | "complete" | null>(null);
   const [asking, setAsking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
+  const [drive, setDrive] = useState<string | null>(null);
 
   // In the demo there is no real Firebase account behind the owner's uid, so
   // the sign-off is addressed to the demo's own first crew member. Without this
@@ -92,10 +102,35 @@ export function JobStatusActions({
       }
       await stampJobStep(job.id, step, author);
       setSent(step);
+      if (step === "en_route" || step === "started") void logDrive(step);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update this job.");
     } finally {
       setBusy(null);
+    }
+  }
+
+  /**
+   * The drive to this job goes in the mileage log by itself. Not awaited and
+   * never an error on the job: the customer was texted and the job stamped,
+   * and a missing trip can be added by hand on the Mileage tab.
+   */
+  async function logDrive(step: "en_route" | "started") {
+    if (!author) return;
+    setDrive(null);
+    try {
+      const trip = await logDriveToJob({
+        step,
+        job,
+        jobs,
+        customersById,
+        author,
+        homeIsMainOffice: mileage.homeIsMainOffice,
+        measure,
+      });
+      if (trip) setDrive(`${trip.miles} mi${trip.estimated ? " (estimated)" : ""} logged to Mileage.`);
+    } catch {
+      // See above.
     }
   }
 
@@ -375,7 +410,7 @@ export function JobStatusActions({
 
       {sent && !warning ? (
         <p role="status" className="text-sm font-semibold text-money">
-          Customer texted.
+          Customer texted.{drive ? ` ${drive}` : ""}
         </p>
       ) : null}
 
