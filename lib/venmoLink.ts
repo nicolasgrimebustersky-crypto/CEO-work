@@ -13,7 +13,7 @@
  * Free of imports so it is tested by calling it.
  */
 
-/** "@Radams1015", "Radams1015" or "venmo.com/u/Radams1015" → "Radams1015". */
+/** "@SomeHandle", "SomeHandle" or "venmo.com/u/SomeHandle" → "SomeHandle". */
 export function venmoUsername(handle: string | null | undefined): string | null {
   const name = String(handle ?? "")
     .trim()

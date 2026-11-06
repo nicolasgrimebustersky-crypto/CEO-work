@@ -189,3 +189,36 @@ describe("overtime (W-2 only, by the workweek)", async () => {
     assert.deepEqual(days, [{ date: "2026-11-03", hours: 6, jobs: 1, revenue: 100 }]);
   });
 });
+
+describe("Kentucky's seventh-day rule (KRS 337.050)", async () => {
+  const { overtimeFor } = await import("../lib/crewPay.ts");
+  const w2 = { classification: "w2", basis: "hourly", rate: 20, w9: null };
+  // Workweek Mon Nov 2 – Sun Nov 8 (starts Monday = 1).
+  const days = (hours) => hours.map((h, i) => ({ date: `2026-11-0${2 + i}`, hours: h, jobs: 1, revenue: 0 }));
+
+  test("all seven days and over 40 hours: the seventh day's hours, when that beats the hours past 40", () => {
+    // 6 × 6 h + 8 h on Sunday = 44 h: 4 h past 40, but 8 h on the seventh day.
+    const o = overtimeFor(w2, days([6, 6, 6, 6, 6, 6, 8]), "2026-11-02", "2026-11-09", 1);
+    assert.equal(o.weeks[0].rule, "seventh_day");
+    assert.equal(o.hours, 8);
+    assert.equal(o.premium, 80);
+  });
+
+  test("never both: the 40-hour overtime counts toward it", () => {
+    // 7 × 8 h = 56 h: 16 h past 40 beats 8 h on the seventh day.
+    const o = overtimeFor(w2, days([8, 8, 8, 8, 8, 8, 8]), "2026-11-02", "2026-11-09", 1);
+    assert.equal(o.weeks[0].rule, "weekly");
+    assert.equal(o.hours, 16);
+  });
+
+  test("seven days at 40 hours or less owes nothing extra", () => {
+    const o = overtimeFor(w2, days([5, 5, 5, 5, 5, 5, 5]), "2026-11-02", "2026-11-09", 1);
+    assert.equal(o.hours, 0);
+  });
+
+  test("six days does not trigger it", () => {
+    const o = overtimeFor(w2, days([7, 7, 7, 7, 7, 7, 0]), "2026-11-02", "2026-11-09", 1);
+    assert.equal(o.weeks[0].rule, "weekly");
+    assert.equal(o.hours, 2);
+  });
+});

@@ -87,6 +87,7 @@ export function JobSheet({
   const [price, setPrice] = useState("");
   const [assignedTo, setAssignedTo] = useState<string[]>([]);
   const [jobNotes, setJobNotes] = useState("");
+  const [fixedTime, setFixedTime] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
@@ -106,6 +107,7 @@ export function JobSheet({
       setPrice(String(job.price));
       setAssignedTo(job.assignedTo);
       setJobNotes(job.jobNotes);
+      setFixedTime(job.fixedTime);
       return;
     }
 
@@ -118,6 +120,7 @@ export function JobSheet({
     setPrice("");
     setAssignedTo(author ? [author.uid] : []);
     setJobNotes("");
+    setFixedTime(false);
   }, [open, job, customerId, defaultStart, author]);
 
   // Keep the end time after the start when the start moves.
@@ -182,6 +185,7 @@ export function JobSheet({
             price: priceValue,
             assignedTo,
             jobNotes,
+            fixedTime,
           },
           author,
         );
@@ -213,6 +217,7 @@ export function JobSheet({
             price: priceValue,
             assignedTo,
             jobNotes,
+            fixedTime,
           },
           author,
         );
@@ -438,6 +443,22 @@ export function JobSheet({
             ))}
           </div>
         </div>
+
+        <label className="flex items-start gap-3 rounded-xl border border-line bg-surface-2 p-3">
+          <input
+            type="checkbox"
+            className="mt-1 size-5"
+            checked={fixedTime}
+            onChange={(e) => setFixedTime(e.target.checked)}
+          />
+          <span className="text-sm font-semibold text-ink">
+            Promised time
+            <span className="block text-xs text-muted">
+              The customer was told this time. Optimize Route won&apos;t move it, and warns if the day would run late
+              for it.
+            </span>
+          </span>
+        </label>
 
         <TextAreaField
           label="Job notes"

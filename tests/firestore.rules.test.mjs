@@ -691,6 +691,11 @@ describe("an opt-out is the customer's own instruction", () => {
 });
 
 describe("jobs", () => {
+  test("a promised time is a true/false flag", async () => {
+    await assertSucceeds(addDoc(collection(alice, "jobs"), jobDoc("alice", { fixedTime: true })));
+    await assertFails(addDoc(collection(alice, "jobs"), jobDoc("alice", { fixedTime: "9am" })));
+  });
+
   test("a rain-day note must say when it rained and what happened", async () => {
     const ok = { rainedOn: "2026-11-10", from: "2026-11-10", action: "moved" };
     await assertSucceeds(addDoc(collection(alice, "jobs"), jobDoc("alice", { rainDelay: ok })));

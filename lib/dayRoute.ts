@@ -20,6 +20,13 @@
  * The route is open: it starts at the start and ends at the last job, with no
  * drive home counted, because where the day ends is not a job.
  *
+ * Promised times. A stop marked `fixed` was booked for a time the customer
+ * was told, so the planner never reorders those among themselves: they keep
+ * the schedule's order, and only the other stops move, fitted in around them
+ * wherever they cost least (Jobber does the same with "anytime" visits).
+ * retime() leaves a fixed visit's time alone and says when the route would
+ * arrive late for it.
+ *
  * Costs are minutes, from a matrix the caller fills — Google's road times when
  * the Distance Matrix API answers, a straight-line estimate when it does not.
  * Index 0 of the matrix is the start; 1..n are the stops in input order.
@@ -34,6 +41,8 @@ export interface RoutePoint {
 
 export interface RouteStop extends RoutePoint {
   id: string;
+  /** Booked for a time the customer was promised: never reordered among the fixed ones. */
+  fixed?: boolean;
 }
 
 /** A pin at 0,0 was never geocoded (see lib/types.ts): it has no place to route to. */
@@ -105,14 +114,17 @@ function nearestNeighbour(n: number, matrix: readonly (readonly number[])[]): nu
 const EPS = 1e-9;
 
 /** Reverse order[i..k] whenever that shortens the route. Handles asymmetric costs. */
-function twoOpt(order: number[], matrix: readonly (readonly number[])[]): boolean {
+type Feasible = (order: readonly number[]) => boolean;
+const ANY: Feasible = () => true;
+
+function twoOpt(order: number[], matrix: readonly (readonly number[])[], ok: Feasible = ANY): boolean {
   let improved = false;
   let current = routeMinutes(order, matrix);
   for (let i = 0; i < order.length - 1; i += 1) {
     for (let k = i + 1; k < order.length; k += 1) {
       const candidate = [...order.slice(0, i), ...order.slice(i, k + 1).reverse(), ...order.slice(k + 1)];
       const cost = routeMinutes(candidate, matrix);
-      if (cost < current - EPS) {
+      if (cost < current - EPS && ok(candidate)) {
         order.splice(0, order.length, ...candidate);
         current = cost;
         improved = true;
@@ -123,7 +135,7 @@ function twoOpt(order: number[], matrix: readonly (readonly number[])[]): boolea
 }
 
 /** Move one job to wherever it costs least. */
-function orOpt(order: number[], matrix: readonly (readonly number[])[]): boolean {
+function orOpt(order: number[], matrix: readonly (readonly number[])[], ok: Feasible = ANY): boolean {
   let improved = false;
   let current = routeMinutes(order, matrix);
   for (let i = 0; i < order.length; i += 1) {
@@ -133,7 +145,7 @@ function orOpt(order: number[], matrix: readonly (readonly number[])[]): boolean
       if (j === i) continue;
       const candidate = [...without.slice(0, j), job, ...without.slice(j)];
       const cost = routeMinutes(candidate, matrix);
-      if (cost < current - EPS) {
+      if (cost < current - EPS && ok(candidate)) {
         order.splice(0, order.length, ...candidate);
         current = cost;
         improved = true;
@@ -180,10 +192,42 @@ export function planRoute(
     return { order: [...placed.map((s) => s.id), ...unplaced], unplaced, minutes: givenMinutes, givenMinutes };
   }
 
-  let order = nearestNeighbour(n, costs);
+  // Matrix indices of the fixed stops, in the schedule's order.
+  const fixedIdx = placed.map((s, i) => (s.fixed ? i + 1 : 0)).filter((i) => i > 0);
+  const keepsFixedOrder: Feasible = (o) => {
+    let next = 0;
+    for (const i of o) {
+      if (fixedIdx[next] === i) next += 1;
+      else if (fixedIdx.includes(i)) return false;
+    }
+    return true;
+  };
+
+  let order: number[];
+  if (fixedIdx.length === 0) {
+    order = nearestNeighbour(n, costs);
+  } else {
+    // The fixed stops in their order, then each other stop fitted in where it
+    // adds the least driving.
+    order = [...fixedIdx];
+    for (let i = 1; i <= n; i += 1) {
+      if (fixedIdx.includes(i)) continue;
+      let best = 0;
+      let bestCost = Infinity;
+      for (let at = 0; at <= order.length; at += 1) {
+        const cost = routeMinutes([...order.slice(0, at), i, ...order.slice(at)], costs);
+        if (cost < bestCost - EPS) {
+          bestCost = cost;
+          best = at;
+        }
+      }
+      order.splice(best, 0, i);
+    }
+  }
+  const ok = fixedIdx.length > 1 ? keepsFixedOrder : ANY;
   for (let pass = 0; pass < 50; pass += 1) {
-    const a = twoOpt(order, costs);
-    const b = orOpt(order, costs);
+    const a = twoOpt(order, costs, ok);
+    const b = orOpt(order, costs, ok);
     if (!a && !b) break;
   }
   // Never hand back something worse than what the schedule already had.
@@ -201,6 +245,18 @@ export interface TimedVisit {
   id: string;
   /** How long the visit is booked for, in minutes. */
   durationMinutes: number;
+  /** A promised time: the visit keeps it, and the route waits for it. */
+  fixedStart?: Date | null;
+}
+
+export interface RetimedVisit {
+  id: string;
+  start: Date;
+  end: Date;
+  /** Kept its promised time. */
+  fixed: boolean;
+  /** Minutes the route would arrive after the promised time (0 when on time). */
+  lateMinutes: number;
 }
 
 /**
@@ -208,21 +264,31 @@ export interface TimedVisit {
  * at `firstStart`, each later one when the last finishes plus the drive to
  * it, rounded up to the next 5 minutes so the times read like a schedule.
  * `legMinutes[i]` is the drive INTO visit i (the first one's is ignored).
+ *
+ * A visit with a promised time keeps it: if the route gets there early it
+ * waits, and if it would get there late the visit still keeps its time and
+ * `lateMinutes` says by how much, for the screen to warn about.
  */
 export function retime(
   visits: readonly TimedVisit[],
   legMinutes: readonly number[],
   firstStart: Date,
-): { id: string; start: Date; end: Date }[] {
+): RetimedVisit[] {
   const FIVE = 5 * 60_000;
-  const out: { id: string; start: Date; end: Date }[] = [];
+  const out: RetimedVisit[] = [];
   let cursor = firstStart.getTime();
   visits.forEach((visit, i) => {
     if (i > 0) cursor = Math.ceil((cursor + (legMinutes[i] ?? 0) * 60_000) / FIVE) * FIVE;
-    const start = new Date(cursor);
-    const end = new Date(cursor + Math.max(0, visit.durationMinutes) * 60_000);
-    out.push({ id: visit.id, start, end });
-    cursor = end.getTime();
+    const duration = Math.max(0, visit.durationMinutes) * 60_000;
+    if (visit.fixedStart) {
+      const promised = visit.fixedStart.getTime();
+      const lateMinutes = Math.max(0, Math.round((cursor - promised) / 60_000));
+      out.push({ id: visit.id, start: new Date(promised), end: new Date(promised + duration), fixed: true, lateMinutes });
+      cursor = Math.max(cursor, promised) + duration;
+      return;
+    }
+    out.push({ id: visit.id, start: new Date(cursor), end: new Date(cursor + duration), fixed: false, lateMinutes: 0 });
+    cursor += duration;
   });
   return out;
 }

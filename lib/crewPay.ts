@@ -242,7 +242,12 @@ export interface OvertimeWeek {
   /** "YYYY-MM-DD", first day of the workweek. */
   start: string;
   hours: number;
+  /** Hours the premium is paid on: past 40, or the seventh day's if that is more. */
   overtimeHours: number;
+  /** Which rule set the premium hours. */
+  rule: "weekly" | "seventh_day";
+  /** Hours worked on the seventh day, when all seven days were worked. */
+  seventhDayHours: number;
   /** What the hours were paid at straight time, divided by the hours: the "regular rate". */
   regularRate: number;
   premium: number;
@@ -272,6 +277,13 @@ function keyOf(day: number): string {
  * periods is still one week. Every hour is already paid at straight time in
  * the period it was worked (periodPay); what this adds is the half-time
  * premium on the hours past 40, in the period the workweek ends.
+ *
+ * Kentucky adds a seventh-day rule (KRS 337.050): an employee who works all
+ * seven days of a workweek is owed time and a half for the hours on the
+ * seventh — unless they were not allowed over 40 hours that week, read here
+ * as: it applies when the week's hours pass 40. Overtime paid under the
+ * 40-hour rule counts toward it (the statute credits one against the other),
+ * so the week's premium hours are whichever is larger, never both.
  *
  * The premium is half the week's regular rate per overtime hour. For an
  * hourly rate that is half the rate; for pay by the job or a revenue share
@@ -310,14 +322,20 @@ export function overtimeFor(
     let hours = 0;
     let jobs = 0;
     let revenue = 0;
+    let daysWorked = 0;
     for (let d = end - 6; d <= end; d += 1) {
       const w = byDay.get(d);
       if (!w) continue;
       hours += Math.max(0, w.hours);
       jobs += Math.max(0, w.jobs);
       revenue += Math.max(0, w.revenue);
+      if (w.hours > 0) daysWorked += 1;
     }
-    const overtimeHours = Math.max(0, hours - OVERTIME_AFTER_HOURS);
+    const weeklyHours = Math.max(0, hours - OVERTIME_AFTER_HOURS);
+    // KRS 337.050: all seven days worked and over 40 hours → the seventh day's hours.
+    const seventhDayHours =
+      daysWorked === 7 && hours > OVERTIME_AFTER_HOURS ? Math.max(0, byDay.get(end)?.hours ?? 0) : 0;
+    const overtimeHours = Math.max(weeklyHours, seventhDayHours);
     if (overtimeHours <= 0) continue;
     const straight =
       person.basis === "hourly" ? hours * person.rate : person.basis === "per_job" ? jobs * person.rate : (revenue * person.rate) / 100;
@@ -326,6 +344,8 @@ export function overtimeFor(
       start: keyOf(end - 6),
       hours: Math.round(hours * 100) / 100,
       overtimeHours: Math.round(overtimeHours * 100) / 100,
+      rule: seventhDayHours > weeklyHours ? "seventh_day" : "weekly",
+      seventhDayHours: Math.round(seventhDayHours * 100) / 100,
       regularRate: round2(regularRate),
       premium: round2(overtimeHours * regularRate * 0.5),
     });

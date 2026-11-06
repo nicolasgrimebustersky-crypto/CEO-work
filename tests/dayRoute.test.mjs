@@ -129,3 +129,56 @@ describe("the Google Maps link", () => {
     assert.equal(url.searchParams.get("waypoints").split("|").length, 9);
   });
 });
+
+describe("promised times", () => {
+  test("fixed stops keep their order; the others are fitted in around them", () => {
+    // Schedule order: e (promised, far end) first, then a (promised, near), then b, c, d.
+    // Unconstrained, the street would be driven a,b,c,d,e. With e and a promised in that
+    // order, e must still come before a.
+    const stops = [
+      { ...stop("e", 5), fixed: true },
+      { ...stop("a", 1), fixed: true },
+      stop("b", 2),
+      stop("c", 3),
+      stop("d", 4),
+    ];
+    const plan = planRoute(at(0), stops);
+    assert.ok(plan.order.indexOf("e") < plan.order.indexOf("a"), plan.order.join(","));
+    assert.equal(plan.order.length, 5);
+  });
+
+  test("a single fixed stop does not stop the rest being optimised", () => {
+    const stops = [stop("c", 3), { ...stop("a", 1), fixed: true }, stop("e", 5), stop("b", 2), stop("d", 4)];
+    assert.deepEqual(planRoute(at(0), stops).order, ["a", "b", "c", "d", "e"]);
+  });
+
+  test("a promised visit keeps its time; the route waits for it, or says how late it would be", () => {
+    const first = new Date(2026, 10, 6, 8, 0);
+    const promised = new Date(2026, 10, 6, 10, 0);
+    const times = retime(
+      [
+        { id: "a", durationMinutes: 60 },
+        { id: "b", durationMinutes: 30, fixedStart: promised },
+        { id: "c", durationMinutes: 30 },
+      ],
+      [0, 10, 10],
+      first,
+    );
+    assert.equal(times[1].start.getTime(), promised.getTime());
+    assert.equal(times[1].fixed, true);
+    assert.equal(times[1].lateMinutes, 0);
+    // c follows b's promised slot: 10:30 + 10 min drive = 10:40.
+    assert.equal(times[2].start.getTime(), new Date(2026, 10, 6, 10, 40).getTime());
+
+    const late = retime(
+      [
+        { id: "a", durationMinutes: 150 },
+        { id: "b", durationMinutes: 30, fixedStart: promised },
+      ],
+      [0, 10],
+      first,
+    );
+    assert.equal(late[1].start.getTime(), promised.getTime());
+    assert.equal(late[1].lateMinutes, 40); // 8:00 + 150 min + 10 min drive = 10:40
+  });
+});

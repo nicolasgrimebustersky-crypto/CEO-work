@@ -68,6 +68,7 @@ export function toJob(snap: QueryDocumentSnapshot<DocumentData>): Job {
     beforePhotos: asPhotos(data.beforePhotos),
     afterPhotos: asPhotos(data.afterPhotos),
     jobNotes: typeof data.jobNotes === "string" ? data.jobNotes : "",
+    fixedTime: data.fixedTime === true,
     checklist: asChecklist(data.checklist),
     enRouteAt: data.enRouteAt instanceof Timestamp ? data.enRouteAt : null,
     enRouteBy: typeof data.enRouteBy === "string" ? data.enRouteBy : null,
@@ -197,6 +198,7 @@ export interface NewJobInput {
   price: number;
   assignedTo: string[];
   jobNotes: string;
+  fixedTime?: boolean;
 }
 
 export async function createJob(input: NewJobInput, author: Author): Promise<string> {
@@ -214,6 +216,7 @@ export async function createJob(input: NewJobInput, author: Author): Promise<str
     beforePhotos: [],
     afterPhotos: [],
     jobNotes: input.jobNotes,
+    fixedTime: input.fixedTime === true,
     // Every new job starts with the usual steps for what it is; the crew can
     // add, remove or tick from there.
     checklist: fromSteps(templateSteps(input)),
@@ -269,6 +272,7 @@ export type JobPatch = Partial<{
   assignedTo: string[];
   jobNotes: string;
   status: JobStatus;
+  fixedTime: boolean;
 }>;
 
 export async function updateJob(
