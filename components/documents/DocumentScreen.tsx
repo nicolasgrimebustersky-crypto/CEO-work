@@ -43,6 +43,7 @@ import { documentText } from "@/lib/messages";
 import { shareUrl } from "@/lib/shareLinks";
 import { downloadPdf } from "@/lib/pdf/share";
 import { routes } from "@/lib/routes";
+import { DocumentFiles } from "./DocumentFiles";
 import { CustomerPickerSheet } from "./CustomerPickerSheet";
 import { DocumentPreview } from "./DocumentPreview";
 import { ScheduleJobSheet } from "./ScheduleJobSheet";
@@ -716,6 +717,8 @@ export function DocumentScreen() {
                 </p>
               </section>
             ) : null}
+
+            <DocumentFiles document={document} />
 
             {document.kind === "invoice" ? (
               <section>

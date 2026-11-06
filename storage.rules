@@ -88,5 +88,24 @@ service firebase.storage {
         && (request.resource.contentType.matches('image/.*')
             || request.resource.contentType == 'application/pdf');
     }
+
+    // Files attached to an estimate or invoice — a scope of work, a
+    // certificate of insurance, a site photo. Crew-only, like job photos.
+    // Customers never read these directly: their copy of the document asks the
+    // server, which checks the document's share token and hands back a link
+    // that expires in minutes (app/api/files/[token]/[fileId]).
+    //
+    // PDFs and ordinary photos only. HTML and SVG are refused outright: either
+    // one opened from the storage domain can run script.
+    match /documents/{documentId}/files/{fileName} {
+      allow read: if isCrew();
+
+      allow create, update: if isCrew()
+        && request.resource.size < 20 * 1024 * 1024
+        && (request.resource.contentType == 'application/pdf'
+            || request.resource.contentType.matches('image/(jpeg|png|webp|heic|heif)'));
+
+      allow delete: if isCrew();
+    }
   }
 }

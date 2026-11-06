@@ -1248,6 +1248,15 @@ describe("estimates and invoices", () => {
     await assertSucceeds(deleteDoc(doc(alice, `documents/${ref.id}`)));
   });
 
+  test("attached files are a list, when there are any", async () => {
+    await assertSucceeds(
+      updateDoc(doc(bob, "documents/d1"), stampedUpdate("bob", { attachments: [] })),
+    );
+    await assertFails(
+      updateDoc(doc(bob, "documents/d1"), stampedUpdate("bob", { attachments: "scope.pdf" })),
+    );
+  });
+
   test("a document cannot be created under someone else's name", async () => {
     await assertFails(addDoc(collection(alice, "documents"), businessDoc("bob")));
   });
