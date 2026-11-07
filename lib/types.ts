@@ -129,6 +129,11 @@ export interface AppUser {
    * interruption is. See lib/notifications/quietHours.ts.
    */
   quietHours: boolean;
+  /**
+   * Screens this person switched off in their menu, by path. Hiding a screen
+   * is a tidier menu, not a permission. See lib/menuVisibility.ts.
+   */
+  hiddenMenu: string[];
 }
 
 /**

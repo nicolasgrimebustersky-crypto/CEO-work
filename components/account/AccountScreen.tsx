@@ -13,6 +13,7 @@ import { updateUserProfile } from "@/lib/db/users";
 import { formatPhone, formatRelative } from "@/lib/format";
 import { routes } from "@/lib/routes";
 import { DeleteAccountSheet } from "./DeleteAccountSheet";
+import { MenuSettings } from "./MenuSettings";
 import { NotificationSettings } from "./NotificationSettings";
 import { PendingAccounts } from "./PendingAccounts";
 import { ApiKeys } from "./ApiKeys";
@@ -156,6 +157,8 @@ export function AccountScreen() {
         <PendingAccounts />
 
         <NotificationSettings />
+
+        <MenuSettings />
 
         <TrustedDevices />
 

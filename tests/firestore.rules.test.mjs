@@ -1580,6 +1580,11 @@ describe("user profiles", () => {
     await assertFails(updateDoc(doc(alice, "users/bob"), { currentLat: 0 }));
   });
 
+  test("menu switches are your own: you hide screens in your menu, not someone else's", async () => {
+    await assertSucceeds(updateDoc(doc(alice, "users/alice"), { hiddenMenu: ["/mileage", "/campaigns"] }));
+    await assertFails(updateDoc(doc(alice, "users/bob"), { hiddenMenu: ["/invoices"] }));
+  });
+
   test("an account may delete its own profile but not the other's", async () => {
     // In-app account deletion (App Store Guideline 5.1.1v) needs the owner to
     // be able to remove their own profile — but one crew member must never be
