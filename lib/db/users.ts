@@ -14,6 +14,7 @@ import {
 
 import { apiUrl } from "@/lib/apiBase";
 import { isBootstrapCrew, SIGNUP_ROLE, type Role } from "@/lib/auth/roles";
+import { asHiddenMenu } from "@/lib/menuVisibility";
 import { isDemoMode } from "@/lib/demo/enabled";
 import * as demo from "@/lib/demo/store";
 import { COLLECTIONS, getDb, getFirebaseAuth } from "@/lib/firebase";
@@ -49,6 +50,7 @@ function toAppUser(snap: QueryDocumentSnapshot<DocumentData>): AppUser {
     // Absent means this profile predates the setting. On by default: somebody
     // who has never been asked would rather not be woken at 3am.
     quietHours: data.quietHours !== false,
+    hiddenMenu: asHiddenMenu(data.hiddenMenu),
   };
 }
 
@@ -171,6 +173,11 @@ export async function setQuietHours(uid: string, on: boolean): Promise<void> {
  * write their own, so one person can honour the other's preference without
  * being able to change it.
  */
+/** Screens this person switched off in their own menu. Their own profile only. */
+export async function setHiddenMenu(uid: string, hidden: string[]): Promise<void> {
+  await writeUser(uid, { hiddenMenu: asHiddenMenu(hidden) });
+}
+
 export async function setMutedNotifications(
   uid: string,
   muted: NotificationCategory[],

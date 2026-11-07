@@ -13,6 +13,7 @@ import { Logo } from "@/components/ui/Logo";
 import { BUSINESS } from "@/lib/business";
 import { formatMoney, initialsFor } from "@/lib/format";
 import { routes } from "@/lib/routes";
+import { isShown } from "@/lib/menuVisibility";
 import { buildThreads, needsReplyCount } from "@/lib/threads";
 import { PlusIcon } from "./navIcons";
 import { ALL_DESTINATIONS, isActive } from "./navItems";
@@ -27,7 +28,7 @@ import { ALL_DESTINATIONS, isActive } from "./navItems";
 export function NavDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { author, colorFor } = useTeam();
+  const { author, me, colorFor } = useTeam();
   const { outstanding } = useDocuments();
   const { customers } = useCustomers();
   const unanswered = needsReplyCount(buildThreads(customers));
@@ -111,7 +112,7 @@ export function NavDrawer({ open, onClose }: { open: boolean; onClose: () => voi
             </Link>
 
             <nav aria-label="All screens" className="flex flex-col gap-1 pb-4">
-              {ALL_DESTINATIONS.map(({ href, label, icon: Icon, hint }) => {
+              {ALL_DESTINATIONS.filter((item) => isShown(item.href, me?.hiddenMenu)).map(({ href, label, icon: Icon, hint }) => {
                 const active = isActive(pathname, href);
                 // The one destination with a clock on it: somebody texted and
                 // nobody has answered.

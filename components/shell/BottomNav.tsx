@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { useTeam } from "@/components/providers/TeamProvider";
+import { isShown } from "@/lib/menuVisibility";
 import { MenuIcon } from "./navIcons";
 import { isActive, TABS } from "./navItems";
 
@@ -16,13 +18,16 @@ import { isActive, TABS } from "./navItems";
  */
 export function BottomNav({ onOpenMenu }: { onOpenMenu: () => void }) {
   const pathname = usePathname();
+  // A tab switched off on the Account screen leaves the bar as well as the
+  // drawer; the rest spread out to fill it.
+  const { me } = useTeam();
 
   return (
     <nav
       aria-label="Main"
       className="pb-safe z-30 flex shrink-0 items-stretch justify-around gap-1 border-t border-line bg-surface px-2 pt-2"
     >
-      {TABS.map(({ href, label, icon: Icon }) => {
+      {TABS.filter((tab) => isShown(tab.href, me?.hiddenMenu)).map(({ href, label, icon: Icon }) => {
         const active = isActive(pathname, href);
         return (
           <Link

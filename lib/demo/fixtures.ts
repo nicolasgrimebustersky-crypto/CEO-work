@@ -81,6 +81,7 @@ export const demoUsers: AppUser[] = ([
     color: null,
     mutedNotifications: [],
     quietHours: true,
+    hiddenMenu: [],
   },
   {
     uid: DEMO_DANA,
@@ -94,6 +95,7 @@ export const demoUsers: AppUser[] = ([
     color: null,
     mutedNotifications: [],
     quietHours: true,
+    hiddenMenu: [],
   },
 ] as AppUser[]).map((item) => ({ ...item, orgId: DEFAULT_ORG_ID }));
 
