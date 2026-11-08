@@ -8,12 +8,16 @@
  *              the campaign's "from" services. Either way, nobody who had
  *              the offered service done, booked or quoted recently. Door
  *              leads who never became clients are not in either.
- *   Consent    a marketing text goes only to someone with a recorded
- *              consent to be texted, not merely to someone who hasn't said
- *              STOP. That is stricter than the job texts (a reminder about
- *              a booked visit is not marketing), on purpose: unsolicited
- *              marketing texts are what the TCPA's statutory damages are
- *              for. /api/sms/blast enforces the same rule on the server.
+ *   Consent    two modes, the owner's choice per send:
+ *              "recorded"      only someone with a consent to texts on file.
+ *              "relationship"  (the default) also a client with a finished
+ *                              job in the last RELATIONSHIP_DAYS (18 months)
+ *                              who has never said STOP — the window the FTC
+ *                              Do-Not-Call rules give an "established
+ *                              business relationship". Older clients still
+ *                              need a recorded yes.
+ *              Nobody who replied STOP, on any record with their number,
+ *              ever; /api/sms/blast enforces both modes on the server.
  *   Results    nobody has to tick anything. A recipient who then gets an
  *              estimate, accepts one, or has a job booked for the offered
  *              service within RESULT_WINDOW_DAYS of the send counts, worked
@@ -143,6 +147,33 @@ export interface CampaignDocument {
 
 export type Exclusion = "no_consent" | "cannot_text" | "has_it" | "do_not_knock";
 
+export type ConsentMode = "recorded" | "relationship";
+
+/** 18 months: the FTC's established-business-relationship window after a purchase. */
+export const RELATIONSHIP_DAYS = 548;
+
+/**
+ * Customers with a finished job in the relationship window, from jobs as the
+ * campaign sees them. The server runs the same function on its own read of
+ * the jobs, so the screen and the send agree on who counts.
+ */
+export function recentCustomers(jobs: readonly Pick<CampaignJob, "customerId" | "status" | "at">[], now: number): Set<string> {
+  const since = now - RELATIONSHIP_DAYS * DAY_MS;
+  const out = new Set<string>();
+  for (const j of jobs) if (j.status === "complete" && j.at >= since && j.at <= now) out.add(j.customerId);
+  return out;
+}
+
+/** May this client get a marketing text under this mode? */
+export function marketingAllowed(
+  consentGranted: boolean,
+  mode: ConsentMode,
+  recent: ReadonlySet<string>,
+  customerId: string,
+): boolean {
+  return consentGranted || (mode === "relationship" && recent.has(customerId));
+}
+
 export type AudienceScope = "all_clients" | "past_service";
 
 export interface Audience<T> {
@@ -173,8 +204,10 @@ export function campaignAudience<T extends CampaignCustomer>(
   now: number,
   canSend: (c: T) => { allowed: boolean; reason: string },
   scope: AudienceScope = "past_service",
+  mode: ConsentMode = "recorded",
 ): Audience<T> {
   const out: Audience<T> = { eligible: [], excluded: [], outOfScope: 0 };
+  const recentBuyers = recentCustomers(jobs, now);
   const recent = now - RECENT_DAYS * DAY_MS;
 
   const byCustomer = new Map<string, CampaignJob[]>();
@@ -224,11 +257,14 @@ export function campaignAudience<T extends CampaignCustomer>(
       out.excluded.push({ customer: c, why: "cannot_text", detail: verdict.reason });
       continue;
     }
-    if (c.smsConsent?.granted !== true) {
+    if (!marketingAllowed(c.smsConsent?.granted === true, mode, recentBuyers, c.id)) {
       out.excluded.push({
         customer: c,
         why: "no_consent",
-        detail: "No consent to texts on file. Ask them (and record it) before sending marketing.",
+        detail:
+          mode === "relationship"
+            ? "No consent on file and no finished job in the last 18 months."
+            : "No consent to texts on file. Ask them (and record it) before sending marketing.",
       });
       continue;
     }

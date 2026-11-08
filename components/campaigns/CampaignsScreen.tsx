@@ -22,6 +22,8 @@ import {
   type CampaignTemplate,
   type Outcome,
   type AudienceScope,
+  type ConsentMode,
+  RELATIONSHIP_DAYS,
 } from "@/lib/campaigns";
 import { recordCampaign, subscribeCampaigns, type SentCampaign } from "@/lib/db/campaigns";
 import { fetchJobsBetween } from "@/lib/db/jobs";
@@ -70,9 +72,9 @@ export function CampaignsScreen() {
   const month = new Date().getMonth() + 1;
 
   useEffect(() => {
-    // A year and a bit back (who is a customer, who already had it) and a
-    // few months ahead (who already has it booked).
-    fetchJobsBetween(new Date(now - 420 * DAY_MS), new Date(now + 150 * DAY_MS))
+    // Back past the 18-month relationship window (who is a recent customer,
+    // who already had it) and a few months ahead (who already has it booked).
+    fetchJobsBetween(new Date(now - (RELATIONSHIP_DAYS + 14) * DAY_MS), new Date(now + 150 * DAY_MS))
       .then(setJobs)
       .catch(() => setJobs([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -188,8 +190,9 @@ export function CampaignsScreen() {
         </section>
 
         <p className="mt-6 text-xs font-semibold text-muted">
-          Campaigns go only to existing customers with a consent to texts on file — not just anyone who hasn&apos;t
-          replied STOP — and never during quiet hours. A reply comes to Messages like any other text. Results count
+          Campaigns go to your clients — those who said yes to texts, and (unless you choose &ldquo;Only clients who
+          said yes&rdquo;) anyone who&apos;s had a job finished in the last 18 months. Never to a number that replied
+          STOP, and never during quiet hours. Every text ends with &ldquo;Reply STOP to opt out.&rdquo; A reply comes to Messages like any other text. Results count
           estimates and jobs for the offered service within 60 days of sending.
         </p>
       </div>
@@ -261,11 +264,14 @@ function CampaignComposer({
   // Every client by default; narrowing to past buyers of the "from"
   // services is the owner's choice, not a silent filter.
   const [scope, setScope] = useState<AudienceScope>("all_clients");
+  // Recent clients without a recorded yes are in by default (the owner's
+  // call); "only said yes" is the stricter setting.
+  const [mode, setMode] = useState<ConsentMode>("relationship");
   const quiet = isQuietHour(new Date());
 
   const audience = useMemo(
-    () => campaignAudience(template, customers, jobs, documents, now, canSendTo, scope),
-    [template, customers, jobs, documents, now, scope],
+    () => campaignAudience(template, customers, jobs, documents, now, canSendTo, scope, mode),
+    [template, customers, jobs, documents, now, scope, mode],
   );
   const fromLabel = template.from.map((s) => SERVICE_LABEL[s as keyof typeof SERVICE_LABEL] ?? s).join(", ");
   const text = automationSmsText(message, { business: "Grime Busters" } as Parameters<typeof automationSmsText>[1]);
@@ -280,7 +286,7 @@ function CampaignComposer({
     setError(null);
     try {
       const ids = audience.eligible.map((c) => c.id);
-      const result = await sendCampaign(ids, text);
+      const result = await sendCampaign(ids, text, mode);
       const failedIds = new Set(result.failed.map((f) => f.customerId));
       setFailed(result.failed.map((f) => ({ name: f.name, error: f.error })));
       const recipients = ids.filter((id) => !failedIds.has(id));
@@ -314,6 +320,14 @@ function CampaignComposer({
               Past {fromLabel} clients
             </Chip>
           </div>
+          <div className="mb-2 flex flex-wrap gap-2">
+            <Chip active={mode === "relationship"} onClick={() => setMode("relationship")}>
+              Said yes, or a job in the last 18 months
+            </Chip>
+            <Chip active={mode === "recorded"} onClick={() => setMode("recorded")}>
+              Only clients who said yes
+            </Chip>
+          </div>
           <p className="font-bold text-ink">
             Goes to {audience.eligible.length} customer{audience.eligible.length === 1 ? "" : "s"}
           </p>
@@ -334,8 +348,9 @@ function CampaignComposer({
               {why === "no_consent" ? (
                 <>
                   <p className="mt-1 text-xs font-semibold text-warn">
-                    Ask each one if they&apos;d like texts from you, then record their yes (spoken or written) on
-                    their record — tap a name. They&apos;re included from then on.
+                    {mode === "relationship"
+                      ? "No yes on file and no job finished in the last 18 months. Ask them, then record their yes (spoken or written) on their record — tap a name."
+                      : "Ask each one if they'd like texts from you, then record their yes (spoken or written) on their record — tap a name. They're included from then on."}
                   </p>
                   <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
                     {list.map((c) => (

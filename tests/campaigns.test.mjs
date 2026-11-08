@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { test, describe } from "node:test";
 
-const { campaignAudience, outcomeFor, campaignResults, inSeason, CAMPAIGN_TEMPLATES, RESULT_WINDOW_DAYS } = await import(
+const { campaignAudience, outcomeFor, campaignResults, inSeason, CAMPAIGN_TEMPLATES, RESULT_WINDOW_DAYS, recentCustomers, marketingAllowed, RELATIONSHIP_DAYS } = await import(
   "../lib/campaigns.ts"
 );
 
@@ -15,6 +15,49 @@ const consent = { granted: true };
 const cust = (id, over = {}) => ({ id, phone: "5025550100", status: "customer", smsConsent: consent, smsOptOut: null, ...over });
 const job = (customerId, services, over = {}) => ({ customerId, services, status: "complete", at: now - 30 * DAY, createdAt: now - 40 * DAY, ...over });
 const allow = () => ({ allowed: true, reason: "" });
+
+describe("no yes on file: clients from the last 18 months", () => {
+  test("a finished job inside 18 months counts; older, unfinished, or in the future doesn't", () => {
+    assert.equal(RELATIONSHIP_DAYS, 548);
+    const r = recentCustomers(
+      [
+        { customerId: "recent", status: "complete", at: now - 500 * DAY },
+        { customerId: "old", status: "complete", at: now - 600 * DAY },
+        { customerId: "booked", status: "scheduled", at: now - 10 * DAY },
+        { customerId: "later", status: "complete", at: now + 5 * DAY },
+      ],
+      now,
+    );
+    assert.deepEqual([...r], ["recent"]);
+  });
+
+  test("a recorded yes is always enough; a recent job only in the relationship mode", () => {
+    const recent = new Set(["a"]);
+    assert.equal(marketingAllowed(true, "recorded", new Set(), "x"), true);
+    assert.equal(marketingAllowed(false, "recorded", recent, "a"), false);
+    assert.equal(marketingAllowed(false, "relationship", recent, "a"), true);
+    assert.equal(marketingAllowed(false, "relationship", recent, "b"), false);
+  });
+
+  test("the audience: recent clients without a yes are in, old ones and STOPs are out", () => {
+    const people = [
+      cust("recent", { smsConsent: null }),
+      cust("old", { smsConsent: null }),
+      cust("stopped", { smsConsent: null }),
+    ];
+    const jobs = [
+      job("recent", ["pressure_washing"], { at: now - 100 * DAY }),
+      job("old", ["pressure_washing"], { at: now - 700 * DAY }),
+      job("stopped", ["pressure_washing"], { at: now - 100 * DAY }),
+    ];
+    const canSend = (c) => (c.id === "stopped" ? { allowed: false, reason: "replied STOP" } : { allowed: true, reason: "" });
+    const a = campaignAudience(aeration, people, jobs, [], now, canSend, "all_clients", "relationship");
+    assert.deepEqual(a.eligible.map((c) => c.id), ["recent"]);
+    assert.deepEqual(a.excluded.map((e) => [e.customer.id, e.why]).sort(), [["old", "no_consent"], ["stopped", "cannot_text"]]);
+    // The stricter mode leaves the recent one out too.
+    assert.equal(campaignAudience(aeration, people, jobs, [], now, canSend, "all_clients", "recorded").eligible.length, 0);
+  });
+});
 
 describe("who gets it", () => {
   test("existing mowing customers with consent, who haven't had it", () => {
