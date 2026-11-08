@@ -78,8 +78,12 @@ export function sendBlast(customerIds: string[], body: string): Promise<BlastRes
  * the server also requires a recorded consent per person, the owner's
  * account, and daytime (lib/campaigns.ts).
  */
-export function sendCampaign(customerIds: string[], body: string): Promise<BlastResult> {
-  return post("/api/sms/blast", { customerIds, body, marketing: true });
+export function sendCampaign(
+  customerIds: string[],
+  body: string,
+  consentMode: "recorded" | "relationship" = "recorded",
+): Promise<BlastResult> {
+  return post("/api/sms/blast", { customerIds, body, marketing: true, consentMode });
 }
 
 /**

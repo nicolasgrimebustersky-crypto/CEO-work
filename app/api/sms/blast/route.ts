@@ -13,6 +13,8 @@ import { isTwilioConfigured, sendSms } from "@/lib/server/twilio";
 import { DEFAULT_ORG_ID } from "@/lib/org";
 import { isQuietHour, quietHoursLabel } from "@/lib/notifications/quietHours";
 import { canSendTo } from "@/lib/smsConsent";
+import { marketingAllowed, recentCustomers, type ConsentMode } from "@/lib/campaigns";
+import { adminDb } from "@/lib/server/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,6 +35,12 @@ interface BlastBody {
    * consent actually recorded, and never during quiet hours.
    */
   marketing?: unknown;
+  /**
+   * "relationship": a client with a finished job in the last 18 months may
+   * get the campaign without a recorded yes. Checked here against the jobs
+   * on the server, not taken from the screen. Anything else: "recorded".
+   */
+  consentMode?: unknown;
 }
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -57,6 +65,7 @@ export async function POST(request: Request): Promise<Response> {
       : [];
     const body = typeof payload.body === "string" ? payload.body.trim() : "";
     const marketing = payload.marketing === true;
+    const consentMode: ConsentMode = payload.consentMode === "relationship" ? "relationship" : "recorded";
 
     if (customerIds.length === 0) throw new ApiError(400, "No recipients selected.");
     if (!body) throw new ApiError(400, "Message body is required.");
@@ -103,6 +112,24 @@ export async function POST(request: Request): Promise<Response> {
      */
     const stopped = await optOutsByPhone(DEFAULT_ORG_ID);
 
+    // Who has bought in the last 18 months, read once, from the server's own
+    // copy of the jobs: the screen's say-so is not enough to text someone.
+    let recent = new Set<string>();
+    if (marketing && consentMode === "relationship") {
+      const snap = await adminDb().collection("jobs").where("status", "==", "complete").get();
+      recent = recentCustomers(
+        snap.docs.map((d) => {
+          const j = d.data();
+          return {
+            customerId: typeof j.customerId === "string" ? j.customerId : "",
+            status: "complete",
+            at: typeof j.scheduledStart?.toMillis === "function" ? j.scheduledStart.toMillis() : 0,
+          };
+        }),
+        Date.now(),
+      );
+    }
+
     /**
      * One handset, one message.
      *
@@ -146,10 +173,18 @@ export async function POST(request: Request): Promise<Response> {
         failed.push({ customerId, name, error: verdict.reason });
         continue;
       }
-      // Not having said STOP is enough for a job reminder; it is not
-      // consent to marketing.
-      if (marketing && customer.smsConsent?.granted !== true) {
-        failed.push({ customerId, name, error: "No consent to texts on file — not sent a marketing text." });
+      // Not having said STOP is enough for a job reminder. For marketing it
+      // takes a recorded yes, or — when the owner chose it — a finished job
+      // in the last 18 months.
+      if (marketing && !marketingAllowed(customer.smsConsent?.granted === true, consentMode, recent, customerId)) {
+        failed.push({
+          customerId,
+          name,
+          error:
+            consentMode === "relationship"
+              ? "No consent on file and no finished job in the last 18 months — not sent a marketing text."
+              : "No consent to texts on file — not sent a marketing text.",
+        });
         continue;
       }
       if (customer.status === "do_not_knock") {
