@@ -24,6 +24,7 @@ import {
   type AudienceScope,
   type ConsentMode,
   RELATIONSHIP_DAYS,
+  inBatches,
 } from "@/lib/campaigns";
 import { recordCampaign, subscribeCampaigns, type SentCampaign } from "@/lib/db/campaigns";
 import { fetchJobsBetween } from "@/lib/db/jobs";
@@ -50,6 +51,8 @@ const WHY_LABEL = {
   cannot_text: "Can't be texted",
   has_it: "Already has it",
   do_not_knock: "Do not contact",
+  no_phone: "No phone number",
+  same_number: "Same number as another record",
 } as const;
 
 /**
@@ -190,9 +193,9 @@ export function CampaignsScreen() {
         </section>
 
         <p className="mt-6 text-xs font-semibold text-muted">
-          Campaigns go to your clients — those who said yes to texts, and (unless you choose &ldquo;Only clients who
-          said yes&rdquo;) anyone who&apos;s had a job finished in the last 18 months. Never to a number that replied
-          STOP, and never during quiet hours. Every text ends with &ldquo;Reply STOP to opt out.&rdquo; A reply comes to Messages like any other text. Results count
+          Campaigns go to your clients with a number on file — everyone who hasn&apos;t replied STOP, unless you
+          choose a stricter setting. Never to a number that replied STOP, never to anyone marked do not contact, and
+          never during quiet hours. Every text ends with &ldquo;Reply STOP to opt out.&rdquo; A reply comes to Messages like any other text. Results count
           estimates and jobs for the offered service within 60 days of sending.
         </p>
       </div>
@@ -261,12 +264,13 @@ function CampaignComposer({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [failed, setFailed] = useState<{ name: string; error: string }[]>([]);
+  const [progress, setProgress] = useState<string | null>(null);
   // Every client by default; narrowing to past buyers of the "from"
   // services is the owner's choice, not a silent filter.
   const [scope, setScope] = useState<AudienceScope>("all_clients");
-  // Recent clients without a recorded yes are in by default (the owner's
-  // call); "only said yes" is the stricter setting.
-  const [mode, setMode] = useState<ConsentMode>("relationship");
+  // Every client who hasn't said STOP, by default — the owner's decision.
+  // The two stricter settings are a tap away.
+  const [mode, setMode] = useState<ConsentMode>("everyone");
   const quiet = isQuietHour(new Date());
 
   const audience = useMemo(
@@ -284,19 +288,43 @@ function CampaignComposer({
   async function send() {
     setBusy(true);
     setError(null);
-    try {
-      const ids = audience.eligible.map((c) => c.id);
-      const result = await sendCampaign(ids, text, mode);
-      const failedIds = new Set(result.failed.map((f) => f.customerId));
-      setFailed(result.failed.map((f) => ({ name: f.name, error: f.error })));
-      const recipients = ids.filter((id) => !failedIds.has(id));
-      if (recipients.length > 0) await onSent(recipients, audience.excluded.length + failedIds.size, text);
-      else setError("Nobody was texted.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "The campaign didn't send.");
-    } finally {
-      setBusy(false);
+    setProgress(null);
+    const ids = audience.eligible.map((c) => c.id);
+    const texted: string[] = [];
+    const problems: { name: string; error: string }[] = [];
+    let stoppedEarly: string | null = null;
+    // In batches, one after another: each request must finish inside the
+    // server's 60 s, and a batch that fails stops the rest rather than
+    // leaving the owner unsure who got what.
+    for (const batch of inBatches(ids)) {
+      setProgress(`Sending… ${texted.length + problems.length} of ${ids.length}`);
+      try {
+        const result = await sendCampaign(batch, text, mode);
+        const failedIds = new Set(result.failed.map((f) => f.customerId));
+        problems.push(...result.failed.map((f) => ({ name: f.name, error: f.error })));
+        texted.push(...batch.filter((id) => !failedIds.has(id)));
+      } catch (err) {
+        stoppedEarly = err instanceof Error ? err.message : "The campaign stopped.";
+        break;
+      }
     }
+    setFailed(problems);
+    setProgress(null);
+    try {
+      // Recorded even when it stopped part-way, so the Sent list shows who
+      // did get it and nobody is texted twice by sending again blind.
+      if (texted.length > 0) await onSent(texted, audience.excluded.length + problems.length, text);
+    } catch {
+      // The texts went; only the record of them didn't.
+    }
+    if (stoppedEarly) {
+      setError(
+        `${stoppedEarly} ${texted.length} of ${ids.length} were texted before it stopped — they're in Sent below.`,
+      );
+    } else if (texted.length === 0) {
+      setError("Nobody was texted.");
+    }
+    setBusy(false);
   }
 
   return (
@@ -321,6 +349,9 @@ function CampaignComposer({
             </Chip>
           </div>
           <div className="mb-2 flex flex-wrap gap-2">
+            <Chip active={mode === "everyone"} onClick={() => setMode("everyone")}>
+              Everyone who hasn&apos;t said STOP
+            </Chip>
             <Chip active={mode === "relationship"} onClick={() => setMode("relationship")}>
               Said yes, or a job in the last 18 months
             </Chip>
@@ -392,7 +423,7 @@ function CampaignComposer({
           onClick={() => void send()}
           disabled={busy || loading || !canSend || quiet || audience.eligible.length === 0 || !message.trim()}
         >
-          {busy ? "Sending…" : `Send to ${audience.eligible.length}`}
+          {busy ? (progress ?? "Sending…") : `Send to ${audience.eligible.length}`}
         </Button>
       </div>
     </section>

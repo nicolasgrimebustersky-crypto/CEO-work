@@ -35,6 +35,17 @@ export const SMS_SEND_LIMIT: RateLimitRule = {
   label: "one-off texts",
 };
 
+/**
+ * A campaign goes out in batches of 40 (lib/campaigns.ts CAMPAIGN_BATCH) so
+ * each request finishes inside the function's 60 s; a few hundred clients
+ * is several requests. Owner-only, quiet hours aside.
+ */
+export const SMS_CAMPAIGN_LIMIT: RateLimitRule = {
+  max: 15,
+  windowMs: 60 * 60 * 1000,
+  label: "campaign batches",
+};
+
 /** Each blast can be up to 200 messages, so the ceiling is much lower. */
 export const SMS_BLAST_LIMIT: RateLimitRule = {
   max: 4,

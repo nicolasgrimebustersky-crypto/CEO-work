@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { test, describe } from "node:test";
 
-const { campaignAudience, outcomeFor, campaignResults, inSeason, CAMPAIGN_TEMPLATES, RESULT_WINDOW_DAYS, recentCustomers, marketingAllowed, RELATIONSHIP_DAYS } = await import(
+const { campaignAudience, outcomeFor, campaignResults, inSeason, CAMPAIGN_TEMPLATES, RESULT_WINDOW_DAYS, recentCustomers, marketingAllowed, RELATIONSHIP_DAYS, asConsentMode, inBatches, CAMPAIGN_BATCH } = await import(
   "../lib/campaigns.ts"
 );
 
@@ -12,7 +12,9 @@ const DAY = 86_400_000;
 const now = Date.UTC(2026, 8, 15); // mid September
 const aeration = CAMPAIGN_TEMPLATES.find((t) => t.id === "fall_aeration");
 const consent = { granted: true };
-const cust = (id, over = {}) => ({ id, phone: "5025550100", status: "customer", smsConsent: consent, smsOptOut: null, ...over });
+// Each fake client gets their own number: one text per number is a rule.
+let nextPhone = 100;
+const cust = (id, over = {}) => ({ id, phone: `502555${String(nextPhone++).padStart(4, "0")}`, status: "customer", smsConsent: consent, smsOptOut: null, ...over });
 const job = (customerId, services, over = {}) => ({ customerId, services, status: "complete", at: now - 30 * DAY, createdAt: now - 40 * DAY, ...over });
 const allow = () => ({ allowed: true, reason: "" });
 
@@ -29,6 +31,14 @@ describe("no yes on file: clients from the last 18 months", () => {
       now,
     );
     assert.deepEqual([...r], ["recent"]);
+  });
+
+  test("everyone mode needs no yes and no job; an unknown mode from a request is the strict one", () => {
+    assert.equal(marketingAllowed(false, "everyone", new Set(), "x"), true);
+    assert.equal(asConsentMode("everyone"), "everyone");
+    assert.equal(asConsentMode("relationship"), "relationship");
+    assert.equal(asConsentMode("anything"), "recorded");
+    assert.equal(asConsentMode(undefined), "recorded");
   });
 
   test("a recorded yes is always enough; a recent job only in the relationship mode", () => {
@@ -54,6 +64,10 @@ describe("no yes on file: clients from the last 18 months", () => {
     const a = campaignAudience(aeration, people, jobs, [], now, canSend, "all_clients", "relationship");
     assert.deepEqual(a.eligible.map((c) => c.id), ["recent"]);
     assert.deepEqual(a.excluded.map((e) => [e.customer.id, e.why]).sort(), [["old", "no_consent"], ["stopped", "cannot_text"]]);
+    // "everyone": the old client is in too; STOP still wins.
+    const all = campaignAudience(aeration, people, jobs, [], now, canSend, "all_clients", "everyone");
+    assert.deepEqual(all.eligible.map((c) => c.id).sort(), ["old", "recent"]);
+    assert.deepEqual(all.excluded.map((e) => [e.customer.id, e.why]), [["stopped", "cannot_text"]]);
     // The stricter mode leaves the recent one out too.
     assert.equal(campaignAudience(aeration, people, jobs, [], now, canSend, "all_clients", "recorded").eligible.length, 0);
   });
@@ -67,17 +81,36 @@ describe("who gets it", () => {
     assert.equal(a.outOfScope, 1); // …but is counted, so the screen can say why
   });
 
-  test("all clients: everyone who is a client, whatever they bought; door leads never", () => {
+  test("all clients: every record with a number, whatever its status or what it bought", () => {
     const people = [
       cust("wash"), // pressure washing only
       cust("marked"), // marked a customer, no jobs in the app yet
-      cust("lead", { status: "interested" }), // a door lead
-      cust("stopped", { status: "interested" }),
+      cust("lead", { status: "interested" }), // a lead with a number
+      cust("quoted", { status: "quoted" }),
+      cust("nophone", { status: "lead", phone: "" }),
+      cust("dnc", { status: "do_not_knock" }),
     ];
-    const jobs = [job("wash", ["pressure_washing"]), job("stopped", ["mowing"], { status: "scheduled" })];
-    const a = campaignAudience(aeration, people, jobs, [], now, allow, "all_clients");
-    assert.deepEqual(a.eligible.map((c) => c.id).sort(), ["marked", "wash"]);
+    const jobs = [job("wash", ["pressure_washing"])];
+    const a = campaignAudience(aeration, people, jobs, [], now, allow, "all_clients", "everyone");
+    assert.deepEqual(a.eligible.map((c) => c.id).sort(), ["lead", "marked", "quoted", "wash"]);
+    assert.deepEqual(a.excluded.map((e) => [e.customer.id, e.why]).sort(), [["dnc", "do_not_knock"], ["nophone", "no_phone"]]);
     assert.equal(a.outOfScope, 0);
+  });
+
+  test("two records with one number get one text", () => {
+    const people = [cust("a", { phone: "(502) 555-0100" }), cust("b", { phone: "+1 502 555 0100" }), cust("c", { phone: "502-555-0199" })];
+    const a = campaignAudience(aeration, people, [], [], now, allow, "all_clients", "everyone");
+    assert.deepEqual(a.eligible.map((c) => c.id), ["a", "c"]);
+    assert.deepEqual(a.excluded.map((e) => [e.customer.id, e.why]), [["b", "same_number"]]);
+  });
+
+  test("a big list goes out in batches small enough to finish inside the server's 60 s", () => {
+    const ids = Array.from({ length: 111 }, (_, i) => String(i));
+    const batches = inBatches(ids);
+    assert.equal(CAMPAIGN_BATCH, 40);
+    assert.deepEqual(batches.map((b) => b.length), [40, 40, 31]);
+    assert.deepEqual(batches.flat(), ids);
+    assert.ok(CAMPAIGN_BATCH * 1.1 < 55, "40 texts spaced 1.1 s apart must fit in the 60 s limit with room to spare");
   });
 
   test("all clients still needs consent, and still skips anyone who already has it", () => {
