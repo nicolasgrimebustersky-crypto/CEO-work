@@ -81,7 +81,7 @@ export function sendBlast(customerIds: string[], body: string): Promise<BlastRes
 export function sendCampaign(
   customerIds: string[],
   body: string,
-  consentMode: "recorded" | "relationship" = "recorded",
+  consentMode: "recorded" | "relationship" | "everyone" = "recorded",
 ): Promise<BlastResult> {
   return post("/api/sms/blast", { customerIds, body, marketing: true, consentMode });
 }

@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { test, describe } from "node:test";
 
-const { campaignAudience, outcomeFor, campaignResults, inSeason, CAMPAIGN_TEMPLATES, RESULT_WINDOW_DAYS, recentCustomers, marketingAllowed, RELATIONSHIP_DAYS } = await import(
+const { campaignAudience, outcomeFor, campaignResults, inSeason, CAMPAIGN_TEMPLATES, RESULT_WINDOW_DAYS, recentCustomers, marketingAllowed, RELATIONSHIP_DAYS, asConsentMode } = await import(
   "../lib/campaigns.ts"
 );
 
@@ -31,6 +31,14 @@ describe("no yes on file: clients from the last 18 months", () => {
     assert.deepEqual([...r], ["recent"]);
   });
 
+  test("everyone mode needs no yes and no job; an unknown mode from a request is the strict one", () => {
+    assert.equal(marketingAllowed(false, "everyone", new Set(), "x"), true);
+    assert.equal(asConsentMode("everyone"), "everyone");
+    assert.equal(asConsentMode("relationship"), "relationship");
+    assert.equal(asConsentMode("anything"), "recorded");
+    assert.equal(asConsentMode(undefined), "recorded");
+  });
+
   test("a recorded yes is always enough; a recent job only in the relationship mode", () => {
     const recent = new Set(["a"]);
     assert.equal(marketingAllowed(true, "recorded", new Set(), "x"), true);
@@ -54,6 +62,10 @@ describe("no yes on file: clients from the last 18 months", () => {
     const a = campaignAudience(aeration, people, jobs, [], now, canSend, "all_clients", "relationship");
     assert.deepEqual(a.eligible.map((c) => c.id), ["recent"]);
     assert.deepEqual(a.excluded.map((e) => [e.customer.id, e.why]).sort(), [["old", "no_consent"], ["stopped", "cannot_text"]]);
+    // "everyone": the old client is in too; STOP still wins.
+    const all = campaignAudience(aeration, people, jobs, [], now, canSend, "all_clients", "everyone");
+    assert.deepEqual(all.eligible.map((c) => c.id).sort(), ["old", "recent"]);
+    assert.deepEqual(all.excluded.map((e) => [e.customer.id, e.why]), [["stopped", "cannot_text"]]);
     // The stricter mode leaves the recent one out too.
     assert.equal(campaignAudience(aeration, people, jobs, [], now, canSend, "all_clients", "recorded").eligible.length, 0);
   });

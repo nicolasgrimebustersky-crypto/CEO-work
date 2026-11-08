@@ -13,7 +13,7 @@ import { isTwilioConfigured, sendSms } from "@/lib/server/twilio";
 import { DEFAULT_ORG_ID } from "@/lib/org";
 import { isQuietHour, quietHoursLabel } from "@/lib/notifications/quietHours";
 import { canSendTo } from "@/lib/smsConsent";
-import { marketingAllowed, recentCustomers, type ConsentMode } from "@/lib/campaigns";
+import { asConsentMode, marketingAllowed, recentCustomers, type ConsentMode } from "@/lib/campaigns";
 import { adminDb } from "@/lib/server/admin";
 
 export const runtime = "nodejs";
@@ -36,9 +36,10 @@ interface BlastBody {
    */
   marketing?: unknown;
   /**
-   * "relationship": a client with a finished job in the last 18 months may
-   * get the campaign without a recorded yes. Checked here against the jobs
-   * on the server, not taken from the screen. Anything else: "recorded".
+   * "everyone": any client who hasn't said STOP (the owner's decision).
+   * "relationship": a recorded yes, or a finished job in the last 18 months,
+   * checked here against the server's own read of the jobs.
+   * Anything else: "recorded", a yes on file.
    */
   consentMode?: unknown;
 }
@@ -65,7 +66,7 @@ export async function POST(request: Request): Promise<Response> {
       : [];
     const body = typeof payload.body === "string" ? payload.body.trim() : "";
     const marketing = payload.marketing === true;
-    const consentMode: ConsentMode = payload.consentMode === "relationship" ? "relationship" : "recorded";
+    const consentMode: ConsentMode = asConsentMode(payload.consentMode);
 
     if (customerIds.length === 0) throw new ApiError(400, "No recipients selected.");
     if (!body) throw new ApiError(400, "Message body is required.");
