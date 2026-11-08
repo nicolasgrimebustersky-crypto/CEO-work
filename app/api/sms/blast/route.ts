@@ -8,7 +8,7 @@ import {
   optOutsByPhone,
   phoneSuppressionKey,
 } from "@/lib/server/customerNotes";
-import { consumeRateLimit, SMS_BLAST_LIMIT } from "@/lib/server/rateLimit";
+import { consumeRateLimit, SMS_BLAST_LIMIT, SMS_CAMPAIGN_LIMIT } from "@/lib/server/rateLimit";
 import { isTwilioConfigured, sendSms } from "@/lib/server/twilio";
 import { DEFAULT_ORG_ID } from "@/lib/org";
 import { isQuietHour, quietHoursLabel } from "@/lib/notifications/quietHours";
@@ -92,7 +92,10 @@ export async function POST(request: Request): Promise<Response> {
 
     // A blast is up to 200 messages, so it gets a much tighter hourly ceiling
     // than one-off texts do.
-    await consumeRateLimit(caller.uid, "sms_blast", SMS_BLAST_LIMIT);
+    // A campaign arrives in batches of 40, so it has its own ceiling
+    // (owner-only, checked above); other group texts keep the tight one.
+    if (marketing) await consumeRateLimit(caller.uid, "sms_campaign", SMS_CAMPAIGN_LIMIT);
+    else await consumeRateLimit(caller.uid, "sms_blast", SMS_BLAST_LIMIT);
 
     const failed: { customerId: string; name: string; error: string }[] = [];
     let sent = 0;

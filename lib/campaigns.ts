@@ -2,12 +2,13 @@
  * Seasonal upsell campaigns: the right extra service, to customers who
  * already buy from you, at the time of year it's done.
  *
- *   Who        "all_clients" (the default on screen): every client — marked
- *              a customer, or with any finished job — whatever they buy.
+ *   Who        "all_clients" (the default on screen): every record in the
+ *              client list with a phone number, whatever its status — the
+ *              owner's call.
  *              "past_service": only clients with a finished job in one of
  *              the campaign's "from" services. Either way, nobody who had
- *              the offered service done, booked or quoted recently. Door
- *              leads who never became clients are not in either.
+ *              the offered service done, booked or quoted recently, nobody
+ *              marked do not contact, and one text per phone number.
  *   Consent    three modes, the owner's choice per send:
  *              "everyone"      (the default, the owner's decision) every
  *                              client with a number who hasn't said STOP.
@@ -145,7 +146,26 @@ export interface CampaignDocument {
   createdAt: number;
 }
 
-export type Exclusion = "no_consent" | "cannot_text" | "has_it" | "do_not_knock";
+export type Exclusion = "no_consent" | "cannot_text" | "has_it" | "do_not_knock" | "no_phone" | "same_number";
+
+/**
+ * Recipients per request to /api/sms/blast. The server spaces texts ~1.1 s
+ * apart and stops at 60 s, so a 100-client campaign sent in one request
+ * would be cut off about halfway; 40 a request stays well inside it.
+ */
+export const CAMPAIGN_BATCH = 40;
+
+export function inBatches<T>(items: readonly T[], size = CAMPAIGN_BATCH): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/** Digits only, US country code dropped: two records with one handset match. */
+export function phoneKey(phone: string | null | undefined): string {
+  const digits = (phone ?? "").replace(/\D/g, "");
+  return digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+}
 
 export type ConsentMode = "recorded" | "relationship" | "everyone";
 
@@ -235,10 +255,9 @@ export function campaignAudience<T extends CampaignCustomer>(
       .map((d) => d.customerId),
   );
 
+  const numbers = new Map<string, T>();
   for (const c of customers) {
     const theirs = byCustomer.get(c.id) ?? [];
-    const isClient = c.status === "customer" || theirs.some((j) => j.status === "complete");
-    if (!isClient) continue; // a door lead, not a client: never in a campaign
     const hadFrom = theirs.some((j) => j.status === "complete" && j.services.some((s) => template.from.includes(s)));
     if (scope === "past_service" && !hadFrom) {
       out.outOfScope += 1;
@@ -258,6 +277,10 @@ export function campaignAudience<T extends CampaignCustomer>(
       out.excluded.push({ customer: c, why: "do_not_knock", detail: "Marked do not contact." });
       continue;
     }
+    if (!phoneKey(c.phone)) {
+      out.excluded.push({ customer: c, why: "no_phone", detail: "No phone number on file." });
+      continue;
+    }
     const verdict = canSend(c);
     if (!verdict.allowed) {
       out.excluded.push({ customer: c, why: "cannot_text", detail: verdict.reason });
@@ -274,6 +297,14 @@ export function campaignAudience<T extends CampaignCustomer>(
       });
       continue;
     }
+    // One handset, one text: a second record with the same number.
+    const key = phoneKey(c.phone);
+    const first = numbers.get(key);
+    if (first) {
+      out.excluded.push({ customer: c, why: "same_number", detail: "Same number as another record; texted once." });
+      continue;
+    }
+    numbers.set(key, c);
     out.eligible.push(c);
   }
   return out;
