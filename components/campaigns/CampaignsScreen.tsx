@@ -9,6 +9,7 @@ import { useDocuments } from "@/components/providers/DocumentsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
 import { ScreenHeader } from "@/components/shell/ScreenHeader";
 import { Button } from "@/components/ui/Button";
+import { Chip } from "@/components/ui/Chips";
 import { TextAreaField } from "@/components/ui/Field";
 import {
   CAMPAIGN_TEMPLATES,
@@ -20,6 +21,7 @@ import {
   type CampaignJob,
   type CampaignTemplate,
   type Outcome,
+  type AudienceScope,
 } from "@/lib/campaigns";
 import { recordCampaign, subscribeCampaigns, type SentCampaign } from "@/lib/db/campaigns";
 import { fetchJobsBetween } from "@/lib/db/jobs";
@@ -220,8 +222,8 @@ function TemplateList({
             >
               <p className="text-base font-bold text-ink">{t.name}</p>
               <p className="text-sm font-semibold text-muted">
-                Offer: {SERVICE_LABEL[t.service as keyof typeof SERVICE_LABEL] ?? t.service} · to customers who&apos;ve had{" "}
-                {t.from.map((s) => SERVICE_LABEL[s as keyof typeof SERVICE_LABEL] ?? s).join(" or ")}
+                Offer: {SERVICE_LABEL[t.service as keyof typeof SERVICE_LABEL] ?? t.service} · to all your clients, or
+                only those who&apos;ve had {t.from.map((s) => SERVICE_LABEL[s as keyof typeof SERVICE_LABEL] ?? s).join(" or ")}
               </p>
             </button>
           </li>
@@ -256,12 +258,16 @@ function CampaignComposer({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [failed, setFailed] = useState<{ name: string; error: string }[]>([]);
+  // Every client by default; narrowing to past buyers of the "from"
+  // services is the owner's choice, not a silent filter.
+  const [scope, setScope] = useState<AudienceScope>("all_clients");
   const quiet = isQuietHour(new Date());
 
   const audience = useMemo(
-    () => campaignAudience(template, customers, jobs, documents, now, canSendTo),
-    [template, customers, jobs, documents, now],
+    () => campaignAudience(template, customers, jobs, documents, now, canSendTo, scope),
+    [template, customers, jobs, documents, now, scope],
   );
+  const fromLabel = template.from.map((s) => SERVICE_LABEL[s as keyof typeof SERVICE_LABEL] ?? s).join(", ");
   const text = automationSmsText(message, { business: "Grime Busters" } as Parameters<typeof automationSmsText>[1]);
   const grouped = useMemo(() => {
     const g = new Map<string, Customer[]>();
@@ -300,9 +306,23 @@ function CampaignComposer({
         <p className="text-sm font-semibold text-muted">Working out who it goes to…</p>
       ) : (
         <div className="text-sm">
+          <div className="mb-2 flex flex-wrap gap-2">
+            <Chip active={scope === "all_clients"} onClick={() => setScope("all_clients")}>
+              All clients
+            </Chip>
+            <Chip active={scope === "past_service"} onClick={() => setScope("past_service")}>
+              Past {fromLabel} clients
+            </Chip>
+          </div>
           <p className="font-bold text-ink">
             Goes to {audience.eligible.length} customer{audience.eligible.length === 1 ? "" : "s"}
           </p>
+          {scope === "past_service" && audience.outOfScope > 0 ? (
+            <p className="mt-1 font-semibold text-muted">
+              {audience.outOfScope} other client{audience.outOfScope === 1 ? " hasn't" : "s haven't"} had {fromLabel}.
+              Choose &ldquo;All clients&rdquo; to include them.
+            </p>
+          ) : null}
           {audience.eligible.length > 0 ? (
             <p className="text-muted">{audience.eligible.slice(0, 12).map(customerName).join(", ")}{audience.eligible.length > 12 ? "…" : ""}</p>
           ) : null}
@@ -311,12 +331,25 @@ function CampaignComposer({
               <summary className="cursor-pointer font-bold text-muted">
                 Left out — {WHY_LABEL[why as keyof typeof WHY_LABEL]} ({list.length})
               </summary>
-              <p className="mt-1 text-muted">{list.map(customerName).join(", ")}</p>
               {why === "no_consent" ? (
-                <p className="mt-1 text-xs font-semibold text-warn">
-                  Ask these customers if they&apos;d like texts and record it on their record; they&apos;re included next time.
-                </p>
-              ) : null}
+                <>
+                  <p className="mt-1 text-xs font-semibold text-warn">
+                    Ask each one if they&apos;d like texts from you, then record their yes (spoken or written) on
+                    their record — tap a name. They&apos;re included from then on.
+                  </p>
+                  <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                    {list.map((c) => (
+                      <li key={c.id}>
+                        <Link href={routes.customer(c.id)} className="font-semibold text-accent underline underline-offset-2">
+                          {customerName(c)}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <p className="mt-1 text-muted">{list.map(customerName).join(", ")}</p>
+              )}
             </details>
           ))}
         </div>
