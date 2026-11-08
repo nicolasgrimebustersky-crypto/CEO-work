@@ -190,9 +190,9 @@ export function CampaignsScreen() {
         </section>
 
         <p className="mt-6 text-xs font-semibold text-muted">
-          Campaigns go to your clients — those who said yes to texts, and (unless you choose &ldquo;Only clients who
-          said yes&rdquo;) anyone who&apos;s had a job finished in the last 18 months. Never to a number that replied
-          STOP, and never during quiet hours. Every text ends with &ldquo;Reply STOP to opt out.&rdquo; A reply comes to Messages like any other text. Results count
+          Campaigns go to your clients with a number on file — everyone who hasn&apos;t replied STOP, unless you
+          choose a stricter setting. Never to a number that replied STOP, never to anyone marked do not contact, and
+          never during quiet hours. Every text ends with &ldquo;Reply STOP to opt out.&rdquo; A reply comes to Messages like any other text. Results count
           estimates and jobs for the offered service within 60 days of sending.
         </p>
       </div>
@@ -264,9 +264,9 @@ function CampaignComposer({
   // Every client by default; narrowing to past buyers of the "from"
   // services is the owner's choice, not a silent filter.
   const [scope, setScope] = useState<AudienceScope>("all_clients");
-  // Recent clients without a recorded yes are in by default (the owner's
-  // call); "only said yes" is the stricter setting.
-  const [mode, setMode] = useState<ConsentMode>("relationship");
+  // Every client who hasn't said STOP, by default — the owner's decision.
+  // The two stricter settings are a tap away.
+  const [mode, setMode] = useState<ConsentMode>("everyone");
   const quiet = isQuietHour(new Date());
 
   const audience = useMemo(
@@ -321,6 +321,9 @@ function CampaignComposer({
             </Chip>
           </div>
           <div className="mb-2 flex flex-wrap gap-2">
+            <Chip active={mode === "everyone"} onClick={() => setMode("everyone")}>
+              Everyone who hasn&apos;t said STOP
+            </Chip>
             <Chip active={mode === "relationship"} onClick={() => setMode("relationship")}>
               Said yes, or a job in the last 18 months
             </Chip>

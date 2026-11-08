@@ -8,14 +8,14 @@
  *              the campaign's "from" services. Either way, nobody who had
  *              the offered service done, booked or quoted recently. Door
  *              leads who never became clients are not in either.
- *   Consent    two modes, the owner's choice per send:
+ *   Consent    three modes, the owner's choice per send:
+ *              "everyone"      (the default, the owner's decision) every
+ *                              client with a number who hasn't said STOP.
+ *              "relationship"  a recorded yes, or a finished job in the last
+ *                              RELATIONSHIP_DAYS (18 months) — the window the
+ *                              FTC Do-Not-Call rules give an "established
+ *                              business relationship".
  *              "recorded"      only someone with a consent to texts on file.
- *              "relationship"  (the default) also a client with a finished
- *                              job in the last RELATIONSHIP_DAYS (18 months)
- *                              who has never said STOP — the window the FTC
- *                              Do-Not-Call rules give an "established
- *                              business relationship". Older clients still
- *                              need a recorded yes.
  *              Nobody who replied STOP, on any record with their number,
  *              ever; /api/sms/blast enforces both modes on the server.
  *   Results    nobody has to tick anything. A recipient who then gets an
@@ -147,7 +147,13 @@ export interface CampaignDocument {
 
 export type Exclusion = "no_consent" | "cannot_text" | "has_it" | "do_not_knock";
 
-export type ConsentMode = "recorded" | "relationship";
+export type ConsentMode = "recorded" | "relationship" | "everyone";
+
+export const CONSENT_MODES: readonly ConsentMode[] = ["everyone", "relationship", "recorded"];
+
+export function asConsentMode(v: unknown): ConsentMode {
+  return CONSENT_MODES.includes(v as ConsentMode) ? (v as ConsentMode) : "recorded";
+}
 
 /** 18 months: the FTC's established-business-relationship window after a purchase. */
 export const RELATIONSHIP_DAYS = 548;
@@ -171,7 +177,7 @@ export function marketingAllowed(
   recent: ReadonlySet<string>,
   customerId: string,
 ): boolean {
-  return consentGranted || (mode === "relationship" && recent.has(customerId));
+  return mode === "everyone" || consentGranted || (mode === "relationship" && recent.has(customerId));
 }
 
 export type AudienceScope = "all_clients" | "past_service";
