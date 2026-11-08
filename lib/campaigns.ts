@@ -2,9 +2,12 @@
  * Seasonal upsell campaigns: the right extra service, to customers who
  * already buy from you, at the time of year it's done.
  *
- *   Who        existing customers: at least one finished job in one of the
- *              campaign's "from" services, and nothing of the offered
- *              service done, booked or quoted recently.
+ *   Who        "all_clients" (the default on screen): every client — marked
+ *              a customer, or with any finished job — whatever they buy.
+ *              "past_service": only clients with a finished job in one of
+ *              the campaign's "from" services. Either way, nobody who had
+ *              the offered service done, booked or quoted recently. Door
+ *              leads who never became clients are not in either.
  *   Consent    a marketing text goes only to someone with a recorded
  *              consent to be texted, not merely to someone who hasn't said
  *              STOP. That is stricter than the job texts (a reminder about
@@ -140,9 +143,17 @@ export interface CampaignDocument {
 
 export type Exclusion = "no_consent" | "cannot_text" | "has_it" | "do_not_knock";
 
+export type AudienceScope = "all_clients" | "past_service";
+
 export interface Audience<T> {
   eligible: T[];
   excluded: { customer: T; why: Exclusion; detail: string }[];
+  /**
+   * Clients left out only because of the scope — with "past_service", the
+   * ones who never had a "from" service. Counted so the screen can say so
+   * instead of showing a bare 0.
+   */
+  outOfScope: number;
 }
 
 export function inSeason(template: CampaignTemplate, month: number): boolean {
@@ -161,8 +172,9 @@ export function campaignAudience<T extends CampaignCustomer>(
   documents: readonly CampaignDocument[],
   now: number,
   canSend: (c: T) => { allowed: boolean; reason: string },
+  scope: AudienceScope = "past_service",
 ): Audience<T> {
-  const out: Audience<T> = { eligible: [], excluded: [] };
+  const out: Audience<T> = { eligible: [], excluded: [], outOfScope: 0 };
   const recent = now - RECENT_DAYS * DAY_MS;
 
   const byCustomer = new Map<string, CampaignJob[]>();
@@ -186,8 +198,13 @@ export function campaignAudience<T extends CampaignCustomer>(
 
   for (const c of customers) {
     const theirs = byCustomer.get(c.id) ?? [];
-    const isCustomer = theirs.some((j) => j.status === "complete" && j.services.some((s) => template.from.includes(s)));
-    if (!isCustomer) continue; // not the audience at all; not worth listing
+    const isClient = c.status === "customer" || theirs.some((j) => j.status === "complete");
+    if (!isClient) continue; // a door lead, not a client: never in a campaign
+    const hadFrom = theirs.some((j) => j.status === "complete" && j.services.some((s) => template.from.includes(s)));
+    if (scope === "past_service" && !hadFrom) {
+      out.outOfScope += 1;
+      continue;
+    }
 
     const hasIt =
       quoted.has(c.id) ||

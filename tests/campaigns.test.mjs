@@ -21,6 +21,34 @@ describe("who gets it", () => {
     const a = campaignAudience(aeration, [cust("a"), cust("b")], [job("a", ["mowing"]), job("b", ["pressure_washing"])], [], now, allow);
     assert.deepEqual(a.eligible.map((c) => c.id), ["a"]);
     assert.equal(a.excluded.length, 0); // b isn't in the audience at all
+    assert.equal(a.outOfScope, 1); // …but is counted, so the screen can say why
+  });
+
+  test("all clients: everyone who is a client, whatever they bought; door leads never", () => {
+    const people = [
+      cust("wash"), // pressure washing only
+      cust("marked"), // marked a customer, no jobs in the app yet
+      cust("lead", { status: "interested" }), // a door lead
+      cust("stopped", { status: "interested" }),
+    ];
+    const jobs = [job("wash", ["pressure_washing"]), job("stopped", ["mowing"], { status: "scheduled" })];
+    const a = campaignAudience(aeration, people, jobs, [], now, allow, "all_clients");
+    assert.deepEqual(a.eligible.map((c) => c.id).sort(), ["marked", "wash"]);
+    assert.equal(a.outOfScope, 0);
+  });
+
+  test("all clients still needs consent, and still skips anyone who already has it", () => {
+    const a = campaignAudience(
+      aeration,
+      [cust("a", { smsConsent: null }), cust("b")],
+      [job("a", ["pressure_washing"]), job("b", ["aeration"], { at: now - 20 * DAY })],
+      [],
+      now,
+      allow,
+      "all_clients",
+    );
+    assert.equal(a.eligible.length, 0);
+    assert.deepEqual(a.excluded.map((e) => [e.customer.id, e.why]).sort(), [["a", "no_consent"], ["b", "has_it"]]);
   });
 
   test("a marketing text needs consent on file, not just no STOP", () => {
