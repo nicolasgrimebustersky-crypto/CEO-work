@@ -146,6 +146,16 @@ export function DayView({
                       }}
                     />
                     <div className="min-w-0 flex-1">
+                      {/* The whole stop opens the job — the texts, the
+                          start/finish buttons, sign-off — the same sheet a block
+                          on the hour grid opens. It has to: a job before 6am
+                          or after 9pm has no block on the grid to tap. */}
+                      <button
+                        type="button"
+                        onClick={() => onOpenJob(job)}
+                        className="block w-full text-left"
+                        aria-label={`Open job: ${customer ? customerName(customer) : "Unknown"}`}
+                      >
                       {isBillable(job.visitType) ? null : (
                         <p className="text-[11px] font-extrabold tracking-wide text-appt">
                           {appointmentLabel(job)}
@@ -172,7 +182,15 @@ export function DayView({
                           {customer.address}
                         </p>
                       ) : null}
+                      </button>
                       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => onOpenJob(job)}
+                          className="rounded-full bg-accent px-2.5 py-1 text-sm font-bold text-accent-ink"
+                        >
+                          Manage
+                        </button>
                         {job.assignedTo.map((uid) => (
                           <UserChip key={uid} name={nameFor(uid)} color={colorFor(uid)} />
                         ))}
