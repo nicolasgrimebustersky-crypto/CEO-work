@@ -39,6 +39,26 @@ async function fakeSend<T>(path: string, payload: unknown): Promise<T> {
   return { ok: true, sid: "DEMO", to: "demo" } as T;
 }
 
+/** A failed request to the SMS routes, with the HTTP status kept. */
+export class SmsRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "SmsRequestError";
+  }
+}
+
+/**
+ * 503 from the SMS routes: this deployment has no Twilio account connected.
+ * Different from a text that failed — nothing was tried, and nothing can be
+ * until texting is set up.
+ */
+export function isTextingNotSetUp(error: unknown): boolean {
+  return error instanceof SmsRequestError && error.status === 503;
+}
+
 async function post<T>(path: string, payload: unknown): Promise<T> {
   if (isDemoMode) return fakeSend<T>(path, payload);
 
@@ -50,7 +70,7 @@ async function post<T>(path: string, payload: unknown): Promise<T> {
     body: JSON.stringify(payload),
   });
   const data = (await response.json().catch(() => ({}))) as T & { error?: string };
-  if (!response.ok) throw new Error(data.error ?? `Request failed (${response.status})`);
+  if (!response.ok) throw new SmsRequestError(data.error ?? `Request failed (${response.status})`, response.status);
   return data;
 }
 
@@ -124,7 +144,7 @@ export async function checkTexting(): Promise<TwilioStatus> {
   const data = (await response.json().catch(() => ({}))) as TwilioStatus & {
     error?: string;
   };
-  if (!response.ok) throw new Error(data.error ?? `Request failed (${response.status})`);
+  if (!response.ok) throw new SmsRequestError(data.error ?? `Request failed (${response.status})`, response.status);
   return data;
 }
 
@@ -181,6 +201,26 @@ export function importOldReplies(): Promise<ReplyImportResult> {
  * run, and a Twilio outage must not make it look like the save failed. Errors
  * come back as a string for the caller to surface as a warning.
  */
+/**
+ * trySendSms, plus whether the reason nothing went out is that texting isn't
+ * set up on this deployment at all (see isTextingNotSetUp).
+ */
+export async function trySendSmsDetailed(
+  customerId: string,
+  body: string,
+  reason: string,
+): Promise<{ problem: string | null; textingOff: boolean }> {
+  try {
+    await sendSms(customerId, body, reason);
+    return { problem: null, textingOff: false };
+  } catch (error) {
+    return {
+      problem: error instanceof Error ? error.message : "Text could not be sent.",
+      textingOff: isTextingNotSetUp(error),
+    };
+  }
+}
+
 export async function trySendSms(
   customerId: string,
   body: string,

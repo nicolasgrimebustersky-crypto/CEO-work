@@ -31,7 +31,7 @@ import {
   visitFinishedText,
 } from "@/lib/messages";
 import { normalizeReviewUrl, shouldAskForReview } from "@/lib/reviewRequest";
-import { trySendSms } from "@/lib/smsClient";
+import { trySendSms, trySendSmsDetailed } from "@/lib/smsClient";
 import type { Customer, Job } from "@/lib/types";
 import { isBillable, visitTitle } from "@/lib/visitTypes";
 import { BriefcaseCheckIcon, CheckIcon, PlayIcon, VanIcon } from "./jobFlowIcons";
@@ -94,14 +94,24 @@ export function JobStatusActions({
     setWarning(null);
     setSent(null);
     try {
-      const smsProblem = await trySendSms(job.customerId, body, STEP_SMS_REASON[step]);
-      if (smsProblem) {
+      const { problem: smsProblem, textingOff } = await trySendSmsDetailed(
+        job.customerId,
+        body,
+        STEP_SMS_REASON[step],
+      );
+      if (smsProblem && !textingOff) {
         // Deliberately not stamped. See the note above the component.
         setWarning(`The customer was not texted: ${smsProblem}`);
         return;
       }
+      // Texting not connected to this business at all (no Twilio account
+      // yet): the step is still recorded, so hours, mileage and the job's
+      // progress don't wait on a phone registration, and the screen says
+      // plainly that nobody was texted. A text that was tried and failed
+      // above is different, and stays unstamped.
       await stampJobStep(job.id, step, author);
       setSent(step);
+      if (textingOff) setWarning("Saved. The customer wasn't texted: texting isn't set up for this business yet.");
       if (step === "en_route" || step === "started") void logDrive(step);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update this job.");

@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 
 import { PayInvoiceButton } from "@/components/documents/PayInvoiceButton";
 import { VenmoPayButton } from "@/components/documents/VenmoPayButton";
-import { PAYMENT_HANDLES } from "@/lib/messages";
+import { OtherWaysToPay } from "@/components/documents/OtherWaysToPay";
+import { CHECKS_PAYABLE_TO, PAYMENT_HANDLES } from "@/lib/messages";
 import { RecordView } from "@/components/documents/RecordView";
 import { QuoteActions } from "@/components/documents/QuoteActions";
 import { SharedDocument } from "@/components/documents/SharedDocument";
@@ -119,6 +120,18 @@ export default async function SharedDocumentPage({
             balanceDue={document.balanceDue}
             invoiceLabel={`Invoice ${document.number}`}
             crew={crew}
+          />
+        ) : null}
+        {/* Zelle, check or cash: the customer picks one and is told exactly
+            what to do. Offered on any invoice with money owed. */}
+        {isInvoice && checkPayable(document).payable ? (
+          <OtherWaysToPay
+            balanceDue={document.balanceDue}
+            invoiceNumber={document.number}
+            payableTo={CHECKS_PAYABLE_TO}
+            zelle={PAYMENT_HANDLES.zelle}
+            phone={BUSINESS.phone}
+            address={BUSINESS.address}
           />
         ) : null}
       </div>
