@@ -110,7 +110,17 @@ export const PAYMENT_HANDLES = {
   // venmo.com/u/grimebustersky, per Nicolas (Nov 2026).
   venmo: "@grimebustersky",
   cashApp: "$GrimeBustersKYLLC",
-} as const;
+  /**
+   * The email or phone number the business's Zelle is registered to, set per
+   * deployment (NEXT_PUBLIC_ZELLE). Zelle has no pay link a customer can tap,
+   * so the invoice shows who to send it to; until this is set, Zelle is not
+   * offered anywhere.
+   */
+  zelle: ((process.env.NEXT_PUBLIC_ZELLE ?? "").trim() || null) as string | null,
+};
+
+/** The legal name checks are made out to. */
+export const CHECKS_PAYABLE_TO = LEGAL_NAME;
 
 /**
  * "Hi Marta" where we know the name, "Hi there" where we do not.
@@ -132,7 +142,7 @@ export function jobStartedText(technicianFirstName: string): string {
 }
 
 export function jobFinishedText(technicianFirstName: string): string {
-  return `Hey! This is ${technicianFirstName} from ${LEGAL_NAME}. We just finished and are ready awaiting payment. We accept checks made out to ${LEGAL_NAME}, cash, Venmo ${PAYMENT_HANDLES.venmo}, Cash App ${PAYMENT_HANDLES.cashApp}. If you have none of these please reach out to ${OWNER_NAME} at ${OWNER_PHONE}.${OPT_OUT}`;
+  return `Hey! This is ${technicianFirstName} from ${LEGAL_NAME}. We just finished and are ready awaiting payment. We accept checks made out to ${LEGAL_NAME}, cash, Venmo ${PAYMENT_HANDLES.venmo}, Cash App ${PAYMENT_HANDLES.cashApp}${PAYMENT_HANDLES.zelle ? `, Zelle ${PAYMENT_HANDLES.zelle}` : ""}. If you have none of these please reach out to ${OWNER_NAME} at ${OWNER_PHONE}.${OPT_OUT}`;
 }
 
 /**

@@ -35,6 +35,10 @@ import {
   visitTitle,
   type VisitType,
 } from "@/lib/visitTypes";
+import { SendTextSheet } from "@/components/customers/SendTextSheet";
+import { TextConsentRow } from "@/components/customers/TextConsentRow";
+import { routes } from "@/lib/routes";
+import Link from "next/link";
 import { JobChecklist } from "./JobChecklist";
 import { JobPhotos } from "./JobPhotos";
 import { JobNextSteps } from "./JobNextSteps";
@@ -91,6 +95,7 @@ export function JobSheet({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  const [texting, setTexting] = useState(false);
 
 
   useEffect(() => {
@@ -324,6 +329,7 @@ export function JobSheet({
   }
 
   return (
+    <>
     <Sheet
       open={open}
       title={job ? "Edit job" : "New job"}
@@ -355,10 +361,24 @@ export function JobSheet({
           </SelectField>
         )}
 
+        {/* The same client controls the client page has — text them, and
+            whether they've agreed to texts — so the crew don't have to leave
+            the job to reach them. */}
         {job && customer ? (
-          <p className="rounded-xl border border-line bg-surface-2 px-3 py-2.5 text-base font-bold text-ink">
-            {customerName(customer)}
-          </p>
+          <div className="rounded-xl border border-line bg-surface-2">
+            <div className="flex items-center justify-between gap-2 px-3 py-2.5">
+              <Link
+                href={routes.customer(customer.id)}
+                className="min-w-0 truncate text-base font-bold text-ink underline-offset-4 hover:underline"
+              >
+                {customerName(customer)}
+              </Link>
+              <Button variant="secondary" onClick={() => setTexting(true)} disabled={!customer.phone}>
+                Text
+              </Button>
+            </div>
+            <TextConsentRow customer={customer} />
+          </div>
         ) : null}
 
         {/* Above the scheduling fields on purpose. Somebody opening a saved job
@@ -521,5 +541,9 @@ export function JobSheet({
         ) : null}
       </div>
     </Sheet>
+    {customer ? (
+      <SendTextSheet customer={customer} open={texting} onClose={() => setTexting(false)} />
+    ) : null}
+    </>
   );
 }
