@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Sheet } from "@/components/ui/Sheet";
 import { splitAudience } from "@/lib/blastAudience";
 import { customerName, formatPhone } from "@/lib/format";
+import { inBatches } from "@/lib/campaigns";
 import { sendBlast, type BlastResult } from "@/lib/smsClient";
 import { canSendTo } from "@/lib/smsConsent";
 import type { Customer } from "@/lib/types";
@@ -90,10 +91,27 @@ export function BlastSheet({
     if (!body.trim() || sendable.length === 0) return;
     setSending(true);
     setError(null);
+    // In batches of 40, one after another: the server spaces texts ~1.1 s
+    // apart and stops at 60 s, so one request for a big group was cut off
+    // about halfway with no record of who got it. A failed batch stops the
+    // rest, and what already went out is still shown.
+    const total: BlastResult = { ok: true, attempted: 0, sent: 0, failed: [] };
     try {
-      setResult(await sendBlast(sendable.map((c) => c.id), body.trim()));
+      for (const batch of inBatches(sendable.map((c) => c.id))) {
+        const part = await sendBlast(batch, body.trim());
+        total.attempted += part.attempted;
+        total.sent += part.sent;
+        total.failed.push(...part.failed);
+      }
+      setResult(total);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Blast failed.");
+      const message = err instanceof Error ? err.message : "Blast failed.";
+      if (total.attempted > 0) {
+        setResult(total);
+        setError(`${message} ${total.sent} were texted before it stopped.`);
+      } else {
+        setError(message);
+      }
     } finally {
       setSending(false);
     }
