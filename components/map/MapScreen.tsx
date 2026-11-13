@@ -243,7 +243,7 @@ function MapCanvas({ mapId }: { mapId: string }) {
               type="button"
               onClick={openMenu}
               aria-label="Open menu"
-              className="tap-target flex size-11 items-center justify-center rounded-full border border-line bg-canvas/85 text-ink backdrop-blur-sm"
+              className="tap-target flex size-11 items-center justify-center rounded-full border border-line bg-canvas/85 text-ink backdrop-blur-sm lg:hidden"
             >
               <MenuIcon />
             </button>

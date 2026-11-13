@@ -73,7 +73,7 @@ export function AccountScreen() {
               type="button"
               onClick={openMenu}
               aria-label="Open menu"
-              className="tap-target -ml-2 flex shrink-0 items-center justify-center rounded-2xl px-2 text-muted hover:bg-surface-2 hover:text-ink"
+              className="tap-target -ml-2 flex shrink-0 items-center justify-center rounded-2xl px-2 text-muted hover:bg-surface-2 hover:text-ink lg:hidden"
             >
               <MenuIcon />
             </button>

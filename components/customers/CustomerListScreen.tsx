@@ -153,9 +153,9 @@ export function CustomerListScreen() {
               >
                 {selecting ? "Done" : "Select"}
               </button>
-              <NotificationBell />
+              <NotificationBell className="lg:hidden" />
               {openMenu ? (
-                <RoundButton label="Open menu" onClick={openMenu}>
+                <RoundButton label="Open menu" onClick={openMenu} className="lg:hidden">
                   <MenuIcon />
                 </RoundButton>
               ) : null}
@@ -484,11 +484,13 @@ function RoundButton({
   pressed,
   onClick,
   children,
+  className = "",
 }: {
   label: string;
   pressed?: boolean;
   onClick: () => void;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
     <button
@@ -500,7 +502,7 @@ function RoundButton({
         pressed
           ? "border-accent/60 bg-accent/15 text-accent"
           : "border-line bg-surface-2/80 text-ink backdrop-blur hover:bg-surface-3"
-      }`}
+      } ${className}`}
     >
       {children}
     </button>

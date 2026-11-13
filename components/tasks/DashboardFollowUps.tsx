@@ -38,7 +38,7 @@ export function DashboardFollowUps() {
   const shown = due.slice(0, 5);
 
   return (
-    <section className="rounded-3xl border border-line bg-surface">
+    <section className="rounded-3xl border border-line bg-surface lg:glass">
       <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-2">
         <h2 className="text-lg font-extrabold text-ink">
           Follow-ups{due.length > 0 ? ` · ${due.length}` : ""}
