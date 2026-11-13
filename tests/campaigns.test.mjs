@@ -141,13 +141,14 @@ describe("who gets it", () => {
   });
 
   test("not offered what they already had, have booked, or were quoted", () => {
-    const had = campaignAudience(aeration, [cust("a")], [job("a", ["mowing"]), job("a", ["aeration"], { at: now - 200 * DAY })], [], now, allow);
+    const had = campaignAudience(aeration, [cust("a")], [job("a", ["mowing"]), job("a", ["aeration"], { at: now - 30 * DAY })], [], now, allow);
     assert.equal(had.excluded[0].why, "has_it");
     const booked = campaignAudience(aeration, [cust("a")], [job("a", ["mowing"]), job("a", ["aeration"], { status: "scheduled", at: now + 5 * DAY })], [], now, allow);
     assert.equal(booked.excluded[0].why, "has_it");
     const quoted = campaignAudience(aeration, [cust("a")], [job("a", ["mowing"])], [{ customerId: "a", kind: "estimate", status: "sent", services: ["aeration"], createdAt: now - 10 * DAY }], now, allow);
     assert.equal(quoted.excluded[0].why, "has_it");
-    const longAgo = campaignAudience(aeration, [cust("a")], [job("a", ["mowing"]), job("a", ["aeration"], { at: now - 400 * DAY })], [], now, allow);
+    const longAgo = campaignAudience(aeration, [cust("a")], [job("a", ["mowing"]), job("a", ["aeration"], { at: now - 200 * DAY })], [], now, allow);
+    // Last season's visit doesn't keep them off this season's offer.
     assert.equal(longAgo.eligible.length, 1);
   });
 

@@ -113,8 +113,13 @@ export const CAMPAIGN_TEMPLATES: readonly CampaignTemplate[] = [
 
 /** How long after a send an estimate or booking counts as the campaign's. */
 export const RESULT_WINDOW_DAYS = 60;
-/** Someone who had the offered service this recently isn't offered it again. */
-export const RECENT_DAYS = 300;
+/**
+ * Someone who had the offered service done or quoted this recently — or has
+ * it booked — isn't offered it again. Two months: these are seasonal
+ * services, so a spring cleanup in April is no reason to skip the client for
+ * the fall one (300 days used to leave most of a list out).
+ */
+export const RECENT_DAYS = 60;
 
 const DAY_MS = 86_400_000;
 

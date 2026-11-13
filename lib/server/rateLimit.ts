@@ -48,7 +48,10 @@ export const SMS_CAMPAIGN_LIMIT: RateLimitRule = {
 
 /** Each blast can be up to 200 messages, so the ceiling is much lower. */
 export const SMS_BLAST_LIMIT: RateLimitRule = {
-  max: 4,
+  // Per request, and a group text now goes in requests of 40
+  // (lib/campaigns.ts CAMPAIGN_BATCH): 8 an hour is 320 texts, still well
+  // under the 4 × 200 = 800 this allowed when one request carried them all.
+  max: 8,
   windowMs: 60 * 60 * 1000,
   label: "group texts",
 };

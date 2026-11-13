@@ -221,18 +221,19 @@ describe("POST /api/sms/blast", () => {
 
   test("stops a runaway caller at the hourly ceiling", async () => {
     // A session that passes requireCrew() has proved who it is, not how much it
-    // may spend. Four blasts an hour is the ceiling; the fifth must be refused
-    // even though it is perfectly authenticated.
+    // may spend. Eight blast requests an hour is the ceiling (a big group goes
+    // in batches of 40); the ninth must be refused even though it is perfectly
+    // authenticated.
     const payload = { customerIds: ["cust-oak"], body: "rate limit probe" };
     const statuses = [];
-    for (let i = 0; i < 5; i += 1) {
+    for (let i = 0; i < 9; i += 1) {
       statuses.push((await post("/api/sms/blast", payload, crewToken)).status);
     }
 
     const refused = statuses.filter((s) => s === 429);
     assert.ok(
       refused.length >= 1,
-      `expected at least one 429 within 5 blasts, saw ${statuses.join(",")}`,
+      `expected at least one 429 within 9 blasts, saw ${statuses.join(",")}`,
     );
     // And it must be the tail, not the head — the first calls have to work.
     assert.notEqual(statuses[0], 429, "the first blast should not be rate limited");
@@ -558,7 +559,7 @@ describe("a blast never texts a number that replied STOP", () => {
   /**
    * Hands the blast budget back before each case.
    *
-   * SMS_BLAST_LIMIT is 4 an hour and an earlier test in this file spends it
+   * SMS_BLAST_LIMIT is 8 an hour and an earlier test in this file spends it
    * deliberately, so without this these cases 429 and prove nothing about
    * consent. Cleared explicitly rather than by depending on test order, which
    * would make this suite fragile in the direction of passing for free.
