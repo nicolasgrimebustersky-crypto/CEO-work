@@ -25,7 +25,7 @@ export function BottomNav({ onOpenMenu }: { onOpenMenu: () => void }) {
   return (
     <nav
       aria-label="Main"
-      className="pb-safe z-30 flex shrink-0 items-stretch justify-around gap-1 border-t border-line bg-surface px-2 pt-2"
+      className="pb-safe z-30 flex shrink-0 lg:hidden items-stretch justify-around gap-1 border-t border-line bg-surface px-2 pt-2"
     >
       {TABS.filter((tab) => isShown(tab.href, me?.hiddenMenu)).map(({ href, label, icon: Icon }) => {
         const active = isActive(pathname, href);

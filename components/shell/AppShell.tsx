@@ -7,6 +7,8 @@ import { isPublicRoute } from "@/lib/publicRoutes";
 import { BottomNav } from "./BottomNav";
 import { ConnectionBanner } from "./ConnectionBanner";
 import { DemoBanner } from "./DemoBanner";
+import { DesktopSidebar } from "./DesktopSidebar";
+import { DesktopTopBar } from "./DesktopTopBar";
 import { InstallPrompt } from "./InstallPrompt";
 import { MenuContext } from "./menu";
 import { NavDrawer } from "./NavDrawer";
@@ -34,14 +36,32 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <MenuContext.Provider value={openMenu}>
-      <div className="flex h-dvh flex-col print:block print:h-auto">
-        {/* Printing (the year-end packet) prints the page, not the app around it. */}
-        <div className="contents print:hidden">
-          <DemoBanner />
-          <InstallPrompt />
-          <ConnectionBanner />
+      {/* On a phone this is one column: banners, the screen, the tab bar. On
+          a computer (lg and up) it becomes a row — the sidebar, then a column
+          of top bar and screen — over the green backdrop. The wrapper around
+          that column is `contents` below lg, so on a phone it doesn't exist as
+          far as layout goes and the phone's column is exactly what it was. */}
+      <div className="lg:gb-desktop-backdrop flex h-dvh flex-col lg:flex-row print:block print:h-auto print:bg-none">
+        <div className="hidden lg:flex print:hidden">
+          <DesktopSidebar />
         </div>
-        <main className="min-h-0 flex-1 print:overflow-visible">{children}</main>
+        <div className="contents lg:flex lg:min-w-0 lg:flex-1 lg:flex-col print:block">
+          <div className="hidden lg:contents print:hidden">
+            <DesktopTopBar />
+          </div>
+          {/* Printing (the year-end packet) prints the page, not the app around it. */}
+          {/* On a computer the banners sit in their own rounded strip under
+              the top bar instead of running edge to edge; with none showing,
+              the strip is empty and takes no space. */}
+          <div className="contents lg:mx-4 lg:mt-4 lg:flex lg:flex-col lg:overflow-hidden lg:rounded-2xl lg:empty:hidden print:hidden">
+            <DemoBanner />
+            <InstallPrompt />
+            <ConnectionBanner />
+          </div>
+          <main className="min-h-0 flex-1 lg:m-4 lg:overflow-hidden lg:rounded-3xl lg:border lg:border-white/10 lg:shadow-[0_24px_60px_-30px_rgb(0_0_0/0.8)] print:m-0 print:overflow-visible print:rounded-none print:border-0">
+            {children}
+          </main>
+        </div>
         <div className="contents print:hidden">
           <BottomNav onOpenMenu={openMenu} />
         </div>

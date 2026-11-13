@@ -21,7 +21,11 @@ import { CATEGORY_LABEL, categoryOf } from "@/lib/notifications/events";
  * that interrupts, and it only fires on a device that asked for it. See
  * lib/push/client.ts.
  */
-export function NotificationBell() {
+/**
+ * `className` is added to the button — the screens pass `lg:hidden`, because on
+ * a computer the bell lives in the top bar instead.
+ */
+export function NotificationBell({ className = "" }: { className?: string } = {}) {
   const { items, unreadCount, markEverythingRead, markOneRead, error } =
     useNotifications();
   const { colorFor } = useTeam();
@@ -35,7 +39,7 @@ export function NotificationBell() {
         aria-label={
           unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"
         }
-        className="tap-target relative flex size-12 items-center justify-center rounded-xl border border-line bg-surface-2 text-ink"
+        className={`tap-target relative flex size-12 items-center justify-center rounded-xl border border-line bg-surface-2 text-ink ${className}`}
       >
         <svg viewBox="0 0 24 24" className="size-6" aria-hidden="true">
           <path
