@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 interface SheetProps {
   open: boolean;
@@ -28,7 +29,12 @@ export function Sheet({ open, title, onClose, children, footer }: SheetProps) {
 
   if (!open) return null;
 
-  return (
+  // Rendered into <body>, not where it is used. A `position: fixed` element is
+  // only fixed to the screen if no ancestor has a backdrop-filter, transform or
+  // filter; the computer layout's glass panels have a backdrop blur, so a sheet
+  // opened from inside one (the top bar's bell, the dashboard's follow-ups)
+  // was trapped inside that panel instead of covering the screen.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex flex-col justify-end">
       {/* Backdrop. Hidden from assistive tech: Escape and the × already offer
           a reachable way out, and a full-screen button called "Close" just
@@ -67,6 +73,7 @@ export function Sheet({ open, title, onClose, children, footer }: SheetProps) {
           <div className="pb-safe border-t border-line px-4 pt-3">{footer}</div>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
