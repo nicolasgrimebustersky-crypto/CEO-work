@@ -1,6 +1,7 @@
 import "server-only";
 
 import { canSendTo } from "@/lib/smsConsent";
+import { DEFAULT_ORG_ID } from "@/lib/org";
 import { getCustomer, optOutForPhone, type AdminCustomer } from "./customerNotes";
 import { sendSms, type SendResult } from "./twilio";
 
@@ -57,6 +58,20 @@ export async function sendSmsToCustomer(
       error: verdict.reason,
       refused: true,
       // Refused here, so Twilio was never called and nothing was sent.
+      delivery: "rejected" as const,
+    };
+  }
+
+  // A STOP is written to the one record the reply matched, but the same
+  // number can sit on several records. Asking the number, not just this
+  // record, keeps a duplicate from being texted after they said stop.
+  const optOut = await optOutForPhone(customer.phone, DEFAULT_ORG_ID);
+  if (optOut) {
+    return {
+      ok: false,
+      to: customer.phone,
+      error: `This number replied ${optOut.keyword || "STOP"} and has not opted back in. Call instead.`,
+      refused: true,
       delivery: "rejected" as const,
     };
   }

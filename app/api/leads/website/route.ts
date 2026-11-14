@@ -123,16 +123,16 @@ async function fileLead(lead: WebsiteLead): Promise<"created" | "updated"> {
       updatedBy: SYSTEM.uid,
       updatedByName: SYSTEM.name,
     };
-    // Fill gaps, never overwrite what the crew entered.
-    if (!existing.get("email") && lead.email) patch.email = lead.email;
+    // Fill the address gap only. Email and phone are what the customer portal
+    // signs people in with (lib/server/portalAuth.ts), and this form is
+    // anonymous: anyone who knows a customer's phone could otherwise attach
+    // their own email to that record and open the customer's portal. Both are
+    // in the note above, so the crew can add them after checking.
     if (!existing.get("address") && lead.address) patch.address = lead.address;
-    if (!existing.get("phone") && lead.phone) {
-      patch.phone = lead.phone;
-      patch.phoneE164 = phoneKey(lead.phone) ?? "";
-    }
-    // Their latest answer on the form is their current wish — but a STOP they
-    // texted outranks any box ticked on a website, so it is never cleared here.
-    if (consent && !existing.get("smsOptOut")) patch.smsConsent = consent;
+    // An anonymous form can record "don't text me", never a yes on somebody
+    // else's existing record — the person typing may not own the number. A
+    // STOP they texted outranks the form either way.
+    if (consent && !consent.granted && !existing.get("smsOptOut")) patch.smsConsent = consent;
     await existing.ref.update(patch);
 
     await notifyCrew({
