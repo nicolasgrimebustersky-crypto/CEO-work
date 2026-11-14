@@ -1,4 +1,5 @@
-import { appendNote, getCustomer } from "@/lib/server/customerNotes";
+import { appendNote, getCustomer, optOutForPhone } from "@/lib/server/customerNotes";
+import { DEFAULT_ORG_ID } from "@/lib/org";
 import { audit } from "@/lib/server/audit";
 import { errorResponse, requireCrew, ApiError } from "@/lib/server/auth";
 import { preflight, withCors } from "@/lib/server/cors";
@@ -56,6 +57,15 @@ export async function POST(request: Request): Promise<Response> {
     // instruction is what stands in the way.
     const verdict = canSendTo(customer);
     if (!verdict.allowed) throw new ApiError(409, verdict.reason);
+    // The same number on another record may carry the STOP (see
+    // lib/server/customerSms.ts).
+    const optOut = await optOutForPhone(customer.phone, DEFAULT_ORG_ID);
+    if (optOut) {
+      throw new ApiError(
+        409,
+        `This number replied ${optOut.keyword || "STOP"} on another record and has not opted back in. Call instead.`,
+      );
+    }
 
     // Charged only once the request is known-good, so a typo doesn't eat the
     // caller's budget — but before Twilio is touched, which is the point.

@@ -138,3 +138,26 @@ describe("the timeline note", () => {
     assert.doesNotMatch(note, /Texts:/);
   });
 });
+
+/*
+ * The form is anonymous, so it must never hand a stranger a key to somebody
+ * else's record. Email and phone are what the customer portal signs people in
+ * with; a form that fills them in on an existing customer lets anyone who knows
+ * that customer's phone attach their own email and read their invoices.
+ * Read from the route's source because the write path needs the Admin SDK.
+ */
+describe("an anonymous form and an existing customer", async () => {
+  const { readFileSync } = await import("node:fs");
+  const route = readFileSync(new URL("../app/api/leads/website/route.ts", import.meta.url), "utf8");
+  const existingBranch = route.slice(route.indexOf("if (existing) {"), route.indexOf("return \"updated\""));
+
+  test("never adds an email or phone to a record that is already on file", () => {
+    assert.ok(existingBranch.length > 0, "found the existing-customer branch");
+    assert.doesNotMatch(existingBranch, /patch\.email\s*=/);
+    assert.doesNotMatch(existingBranch, /patch\.phone(E164)?\s*=/);
+  });
+
+  test("can record a no to texts there, never a yes", () => {
+    assert.match(existingBranch, /if \(consent && !consent\.granted && !existing\.get\("smsOptOut"\)\) patch\.smsConsent = consent;/);
+  });
+});

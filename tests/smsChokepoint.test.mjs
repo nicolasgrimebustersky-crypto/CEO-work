@@ -857,3 +857,27 @@ describe("a hold that could not be released needs a person, and says so", () => 
     );
   });
 });
+
+/*
+ * A STOP lands on the one record the reply matched. The same number can sit on
+ * several records, so every send to a customer asks the number as well.
+ */
+describe("a STOP on any record with the number stops the text", async () => {
+  const { readFileSync } = await import("node:fs");
+  const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
+
+  test("sendSmsToCustomer checks the number before Twilio", () => {
+    const src = read("lib/server/customerSms.ts");
+    const fn = src.slice(src.indexOf("export async function sendSmsToCustomer("), src.indexOf("export async function sendSmsToCustomerId("));
+    const check = fn.indexOf("optOutForPhone(customer.phone, DEFAULT_ORG_ID)");
+    assert.ok(check > 0, "asks the number");
+    assert.ok(check < fn.indexOf("sendSms(customer.phone"), "before sending");
+  });
+
+  test("a one-off text from the app checks the number before Twilio", () => {
+    const src = read("app/api/sms/send/route.ts");
+    const check = src.indexOf("optOutForPhone(customer.phone, DEFAULT_ORG_ID)");
+    assert.ok(check > 0, "asks the number");
+    assert.ok(check < src.indexOf("await sendSms(customer.phone"), "before sending");
+  });
+});
