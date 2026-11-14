@@ -185,22 +185,6 @@ export function subscribeCustomers(
   );
 }
 
-export function subscribeCustomer(
-  id: string,
-  onChange: (customer: Customer | null) => void,
-  onError?: (error: Error) => void,
-): () => void {
-  if (isDemoMode) return demo.subscribeDoc<Customer>(COLLECTIONS.customers, id, onChange);
-  return onSnapshot(
-    doc(getDb(), COLLECTIONS.customers, id),
-    (snap) =>
-      onChange(
-        snap.exists() ? toCustomer(snap as QueryDocumentSnapshot<DocumentData>) : null,
-      ),
-    (error) => onError?.(error),
-  );
-}
-
 function makeNote(text: string, kind: NoteKind, author: Author): Note {
   return {
     id:

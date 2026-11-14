@@ -1,17 +1,4 @@
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  query,
-  serverTimestamp,
-  Timestamp,
-  updateDoc,
-  where,
-  type DocumentData,
-  type QueryDocumentSnapshot,
-} from "firebase/firestore";
+import { addDoc, collection, doc, onSnapshot, query, serverTimestamp, Timestamp, updateDoc, where, type DocumentData, type QueryDocumentSnapshot } from "firebase/firestore";
 
 import { isDemoMode } from "@/lib/demo/enabled";
 import * as demo from "@/lib/demo/store";
@@ -124,14 +111,6 @@ export async function setQuoteStatus(
     return;
   }
   await updateDoc(doc(getDb(), COLLECTIONS.quotes, quoteId), { status });
-}
-
-export async function deleteQuote(quoteId: string): Promise<void> {
-  if (isDemoMode) {
-    demo.remove(COLLECTIONS.quotes, quoteId);
-    return;
-  }
-  await deleteDoc(doc(getDb(), COLLECTIONS.quotes, quoteId));
 }
 
 /** Quote-to-close rate for the reporting screen. */

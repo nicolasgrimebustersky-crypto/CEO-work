@@ -1,19 +1,8 @@
 import "server-only";
 
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 
-import {
-  KEY_BYTES,
-  KEY_PREFIX,
-  bearerFrom,
-  cleanScopes,
-  keyHint,
-  looksLikeKey,
-  normalizeKey,
-  scopeProblem,
-  type Scope,
-  type StoredKey,
-} from "@/lib/apiKeys";
+import { KEY_PREFIX, bearerFrom, cleanScopes, looksLikeKey, normalizeKey, scopeProblem, type Scope, type StoredKey } from "@/lib/apiKeys";
 import { adminDb } from "./admin";
 import { audit } from "./audit";
 import { ApiError } from "./auth";
@@ -35,12 +24,6 @@ const COLLECTION = "apiKeys";
 
 export function hashKey(key: string): string {
   return createHash("sha256").update(normalizeKey(key)).digest("hex");
-}
-
-/** A fresh key. The plaintext is returned once and never stored. */
-export function mintKey(): { key: string; hash: string; hint: string } {
-  const key = `${KEY_PREFIX}${randomBytes(KEY_BYTES).toString("base64url")}`;
-  return { key, hash: hashKey(key), hint: keyHint(key) };
 }
 
 /**

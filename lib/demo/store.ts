@@ -123,14 +123,6 @@ export function subscribe<T>(name: string, onChange: (items: T[]) => void): () =
   };
 }
 
-export function subscribeDoc<T>(
-  name: string,
-  id: string,
-  onChange: (item: T | null) => void,
-): () => void {
-  return subscribe<unknown>(name, () => onChange(get<T>(name, id)));
-}
-
 export function add(name: string, data: Record<string, unknown>): string {
   const id = `demo-${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 8)}`;
   tableFor(name).set(id, { ...resolve(data), id });

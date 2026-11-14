@@ -6,14 +6,14 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useNotify } from "@/components/providers/NotificationsProvider";
 import { useTeam } from "@/components/providers/TeamProvider";
-import { SelectField, TextAreaField, TextField } from "@/components/ui/Field";
+import { TextAreaField, TextField } from "@/components/ui/Field";
 import { Sheet } from "@/components/ui/Sheet";
 import { createCustomer } from "@/lib/db/customers";
 import { formatCoords } from "@/lib/geo";
 import { reverseGeocode } from "@/lib/geocode";
 import { routes } from "@/lib/routes";
 import { SERVICE_SHORT_LABEL, STATUS_LABEL } from "@/lib/status";
-import { CUSTOMER_STATUSES, SERVICE_TYPES } from "@/lib/types";
+import { SERVICE_TYPES } from "@/lib/types";
 import type { CustomerStatus, LatLng, PropertyType, ServiceType } from "@/lib/types";
 import { PropertyTypePicker } from "@/components/customers/PropertyTypePicker";
 import { StatusPicker } from "@/components/customers/StatusPicker";
@@ -292,27 +292,5 @@ export function QuickEntrySheet({ position, onClose, onCreated }: QuickEntryShee
         ) : null}
       </div>
     </Sheet>
-  );
-}
-
-export function SelectStatusField({
-  value,
-  onChange,
-}: {
-  value: CustomerStatus;
-  onChange: (status: CustomerStatus) => void;
-}) {
-  return (
-    <SelectField
-      label="Status"
-      value={value}
-      onChange={(e) => onChange(e.target.value as CustomerStatus)}
-    >
-      {CUSTOMER_STATUSES.map((status) => (
-        <option key={status} value={status}>
-          {STATUS_LABEL[status]}
-        </option>
-      ))}
-    </SelectField>
   );
 }

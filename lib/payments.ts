@@ -273,8 +273,6 @@ export function cardPaymentMethod(last4: string): string {
 export const TIP_PRESETS = [10, 15, 20] as const;
 export const MAX_TIP_CENTS = 50_000;
 
-export type TipChoice = { percent: number } | { cents: number } | null | undefined;
-
 /** The tip in cents for a balance in cents. */
 export function tipCentsFor(balanceCents: number, choice: unknown): number {
   if (!Number.isInteger(balanceCents) || balanceCents <= 0) return 0;

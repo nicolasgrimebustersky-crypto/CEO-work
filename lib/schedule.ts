@@ -15,7 +15,6 @@ import type { Job } from "./types";
 export const DAY_START_HOUR = 6;
 export const DAY_END_HOUR = 21;
 export const SLOT_MINUTES = 30;
-export const SLOTS_PER_DAY = ((DAY_END_HOUR - DAY_START_HOUR) * 60) / SLOT_MINUTES;
 
 /** Default visit length when creating a job, in minutes. */
 export const DEFAULT_JOB_MINUTES = 90;
@@ -64,11 +63,6 @@ export function monthGridDays(anchor: Date): Date[] {
 
 export function isInMonth(day: Date, anchor: Date): boolean {
   return day >= startOfMonth(anchor) && day <= endOfMonth(anchor);
-}
-
-export function jobDurationMinutes(job: Job): number {
-  const ms = job.scheduledEnd.toMillis() - job.scheduledStart.toMillis();
-  return Math.max(Math.round(ms / 60000), SLOT_MINUTES);
 }
 
 /** ISO date key (local, not UTC) used to tag calendar drop targets. */

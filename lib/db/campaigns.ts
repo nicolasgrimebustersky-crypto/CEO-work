@@ -1,6 +1,6 @@
 "use client";
 
-import { collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, setDoc, Timestamp, type DocumentData } from "firebase/firestore";
+import { collection, doc, onSnapshot, query, serverTimestamp, setDoc, Timestamp, type DocumentData } from "firebase/firestore";
 
 import { isDemoMode } from "@/lib/demo/enabled";
 import * as demo from "@/lib/demo/store";
@@ -78,12 +78,4 @@ export async function recordCampaign(
     return;
   }
   await setDoc(doc(collection(getDb(), COLLECTION)), payload);
-}
-
-export async function deleteCampaign(id: string): Promise<void> {
-  if (isDemoMode) {
-    demo.remove(COLLECTION, id);
-    return;
-  }
-  await deleteDoc(doc(getDb(), COLLECTION, id));
 }
