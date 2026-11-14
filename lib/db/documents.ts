@@ -11,7 +11,6 @@ import {
   serverTimestamp,
   Timestamp,
   updateDoc,
-  where,
   writeBatch,
   type DocumentData,
   type QueryDocumentSnapshot,
@@ -238,23 +237,6 @@ export function subscribeDocuments(
   return onSnapshot(
     query(collection(getDb(), COLLECTION), orderBy("issuedAt", "desc")),
     (snap) => onChange(snap.docs.map(toDocument)),
-    (error) => onError?.(error),
-  );
-}
-
-export function subscribeDocumentsForCustomer(
-  customerId: string,
-  onChange: (docs: BusinessDocument[]) => void,
-  onError?: (error: Error) => void,
-): () => void {
-  if (isDemoMode) {
-    return demo.subscribe<BusinessDocument>(COLLECTION, (items) =>
-      onChange(items.filter((d) => d.customerId === customerId).sort(byNewest)),
-    );
-  }
-  return onSnapshot(
-    query(collection(getDb(), COLLECTION), where("customerId", "==", customerId)),
-    (snap) => onChange(snap.docs.map(toDocument).sort(byNewest)),
     (error) => onError?.(error),
   );
 }
@@ -736,32 +718,6 @@ export async function deleteDocuments(ids: readonly string[]): Promise<void> {
     for (const id of chunk) batch.delete(doc(db, COLLECTION, id));
     await batch.commit();
   }
-}
-
-/** What the customer still owes across every open invoice. */
-export function outstandingFor(docs: BusinessDocument[], customerId: string): number {
-  return Number(
-    docs
-      .filter(
-        (d) =>
-          d.customerId === customerId &&
-          d.kind === "invoice" &&
-          d.status !== "void" &&
-          d.balanceDue > 0,
-      )
-      .reduce((sum, d) => sum + d.balanceDue, 0)
-      .toFixed(2),
-  );
-}
-
-/** Money actually collected, which is what lifetime value should reflect. */
-export function collectedFor(docs: BusinessDocument[], customerId: string): number {
-  return Number(
-    docs
-      .filter((d) => d.customerId === customerId && d.kind === "invoice" && d.status !== "void")
-      .reduce((sum, d) => sum + d.amountPaid, 0)
-      .toFixed(2),
-  );
 }
 
 /**

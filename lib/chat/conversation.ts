@@ -1,18 +1,4 @@
-/**
- * Team chat: the parts that are decisions rather than plumbing.
- *
- * This is the crew talking to each other, not the customer SMS thread. Keeping
- * them separate matters — a message here costs nothing and never leaves the
- * app, and confusing the two would eventually put an internal remark in front
- * of a customer.
- *
- * Free of imports so it can be tested by running it.
- */
 
-export interface Member {
-  uid: string;
-  displayName: string;
-}
 
 /** Nobody needs a hundred people in a group in a two-to-five person crew. */
 export const MAX_MEMBERS = 20;

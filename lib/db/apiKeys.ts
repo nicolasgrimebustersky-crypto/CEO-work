@@ -1,19 +1,6 @@
 "use client";
 
-import {
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  orderBy,
-  query,
-  serverTimestamp,
-  setDoc,
-  Timestamp,
-  updateDoc,
-  type DocumentData,
-  type QueryDocumentSnapshot,
-} from "firebase/firestore";
+import { collection, doc, onSnapshot, orderBy, query, serverTimestamp, setDoc, Timestamp, updateDoc, type DocumentData, type QueryDocumentSnapshot } from "firebase/firestore";
 
 import { KEY_BYTES, KEY_PREFIX, cleanScopes, keyHint, type Scope } from "@/lib/apiKeys";
 import { isDemoMode } from "@/lib/demo/enabled";
@@ -120,15 +107,6 @@ export async function revokeApiKey(id: string): Promise<void> {
     return;
   }
   await updateDoc(doc(getDb(), COLLECTION, id), { revokedAt: serverTimestamp() });
-}
-
-/** For clearing out a key that was revoked long ago. */
-export async function deleteApiKey(id: string): Promise<void> {
-  if (isDemoMode) {
-    demo.remove(COLLECTION, id);
-    return;
-  }
-  await deleteDoc(doc(getDb(), COLLECTION, id));
 }
 
 /**

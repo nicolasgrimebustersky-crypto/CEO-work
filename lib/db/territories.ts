@@ -150,30 +150,3 @@ export async function deleteTerritory(id: string): Promise<void> {
 export function pinsIn(territory: Territory, customers: Customer[]): Customer[] {
   return within(customers, territory.boundary);
 }
-
-/**
- * Which territory a point falls in.
- *
- * Territories are not stopped from overlapping — drawing two shapes that share
- * a street corner is easy to do by accident and not worth blocking — so the
- * first match wins and the list order decides. Retired ground is skipped
- * entirely: it is kept for the record, not for assigning work.
- */
-export function territoryAt(
-  point: LatLng,
-  territories: Territory[],
-): Territory | null {
-  return (
-    territories
-      .filter((territory) => territory.active)
-      .find((territory) => within([point], territory.boundary).length === 1) ?? null
-  );
-}
-
-/** Territories this person owns, plus unclaimed ground. */
-export function territoriesFor(territories: Territory[], uid: string | null): Territory[] {
-  if (!uid) return territories;
-  return territories.filter(
-    (territory) => territory.assignedTo.length === 0 || territory.assignedTo.includes(uid),
-  );
-}

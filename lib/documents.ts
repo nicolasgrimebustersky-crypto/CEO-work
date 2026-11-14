@@ -523,7 +523,6 @@ export function statusAfterPayment(
 }
 
 export const OPEN_INVOICE_STATUSES: DocumentStatus[] = ["sent", "partial"];
-export const OPEN_ESTIMATE_STATUSES: DocumentStatus[] = ["draft", "sent"];
 
 export function isOutstanding(doc: BusinessDocument): boolean {
   return doc.kind === "invoice" && OPEN_INVOICE_STATUSES.includes(doc.status) && doc.balanceDue > 0;
@@ -546,18 +545,6 @@ export function nextNumber(existing: string[]): string {
   }, NUMBER_SEQUENCE_START - 1);
 
   return String(highest + 1);
-}
-
-export function blankLineItem(id: string): LineItem {
-  return {
-    id,
-    name: "",
-    description: "",
-    quantity: 1,
-    unitPrice: 0,
-    taxable: true,
-    discountPct: 0,
-  };
 }
 
 /** What the line is called, falling back to its detail if it was never named. */

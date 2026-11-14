@@ -30,15 +30,6 @@ export function Card({
   );
 }
 
-/** Section title above a card, matching the reference's quiet all-caps labels. */
-export function CardLabel({ children }: { children: ReactNode }) {
-  return (
-    <p className="mb-2 px-1 text-xs font-bold tracking-wider text-muted uppercase">
-      {children}
-    </p>
-  );
-}
-
 const TONES = {
   accent: "bg-accent/15 text-accent",
   money: "bg-money/15 text-money",

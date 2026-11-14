@@ -16,7 +16,6 @@ import Image from "next/image";
 /** Intrinsic size of public/logo.png, so Next can reserve the right box. */
 export const LOGO_WIDTH = 420;
 export const LOGO_HEIGHT = 310;
-export const LOGO_ASPECT = LOGO_WIDTH / LOGO_HEIGHT;
 
 export function Logo({
   className = "",

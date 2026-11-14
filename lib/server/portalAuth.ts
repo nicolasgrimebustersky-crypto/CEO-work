@@ -49,10 +49,6 @@ export interface PortalCaller {
   customers: SerialCustomer[];
 }
 
-export function normalizeEmail(value: unknown): string {
-  return typeof value === "string" ? value.trim().toLowerCase() : "";
-}
-
 /**
  * Who is signed in, without requiring that we already know them.
  *

@@ -5,14 +5,7 @@ import { useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Sheet } from "@/components/ui/Sheet";
 import { TextAreaField, TextField } from "@/components/ui/Field";
-import {
-  MAX_DESCRIPTION,
-  MAX_PHOTOS,
-  draftProblem,
-  itemsTotal,
-  subtotalForTotal,
-  type PricedItem,
-} from "@/lib/estimateDraft";
+import { MAX_DESCRIPTION, MAX_PHOTOS, draftProblem, subtotalForTotal, type PricedItem } from "@/lib/estimateDraft";
 import {
   draftLineItems,
   preparePhotos,
@@ -219,9 +212,4 @@ export function DraftEstimateSheet({
       </div>
     </Sheet>
   );
-}
-
-/** Exported for the tests that walk the built app. */
-export function draftedTotal(items: PricedItem[]): number {
-  return itemsTotal(items);
 }

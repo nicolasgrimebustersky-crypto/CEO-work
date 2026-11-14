@@ -12,15 +12,7 @@
  */
 const configured = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/+$/, "");
 
-export const apiBaseUrl = configured;
-
 export function apiUrl(path: string): string {
   const normalised = path.startsWith("/") ? path : `/${path}`;
   return `${configured}${normalised}`;
 }
-
-/**
- * True when the app is talking to a backend on another origin — which is the
- * case in the native build, and the reason the API routes need CORS.
- */
-export const isCrossOriginApi = configured.length > 0;

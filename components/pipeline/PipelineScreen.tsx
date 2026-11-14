@@ -1,7 +1,6 @@
 "use client";
 
 import { differenceInDays } from "date-fns";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
@@ -242,17 +241,5 @@ function LeadCard({
         </span>
       </div>
     </button>
-  );
-}
-
-/** Small helper used by the empty state elsewhere. */
-export function PipelineEmptyHint() {
-  return (
-    <Link
-      href={routes.pipeline}
-      className="tap-target inline-flex items-center rounded-xl bg-accent px-4 text-base font-bold text-accent-ink"
-    >
-      Open pipeline
-    </Link>
   );
 }

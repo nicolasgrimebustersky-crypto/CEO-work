@@ -28,8 +28,6 @@ export const PAUSE_CHOICES = [
   { key: "forever", label: "Forever", ms: null },
 ] as const;
 
-export type PauseChoice = (typeof PAUSE_CHOICES)[number]["key"];
-
 export interface PauseState {
   /** Epoch milliseconds the pause ends at, or null for no timed pause. */
   pausedUntilMs: number | null;

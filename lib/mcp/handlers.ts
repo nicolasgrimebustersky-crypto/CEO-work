@@ -533,11 +533,3 @@ export async function runTool(
   }
   return handler(args, key);
 }
-
-/**
- * Every tool in the catalogue has an implementation, and vice versa.
- *
- * Exported so a test can assert it rather than somebody discovering a tool that
- * lists fine and 404s when called.
- */
-export const IMPLEMENTED_TOOLS: readonly string[] = Object.keys(HANDLERS);

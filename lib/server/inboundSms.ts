@@ -1,6 +1,6 @@
 import "server-only";
 
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { Timestamp } from "firebase-admin/firestore";
 
 import { adminDb } from "./admin";
 import { DEFAULT_ORG_ID } from "@/lib/org";
@@ -27,24 +27,6 @@ import { DEFAULT_ORG_ID } from "@/lib/org";
  */
 
 const COLLECTION = "inboundSms";
-
-/**
- * How long an unmatched message is kept.
- *
- * These are unsolicited texts from unknown numbers, which is also a fair
- * description of spam. Keeping them forever would turn the inbox into an
- * archive nobody can face, so old handled ones are dropped by the same sweep
- * that runs everything else. Ninety days is long enough that a slow-moving lead
- * is still there next season.
- */
-export const UNMATCHED_RETENTION_DAYS = 90;
-
-export interface UnmatchedRecord {
-  id: string;
-  from: string;
-  body: string;
-  handled: boolean;
-}
 
 /**
  * Files an inbound text that matched no customer.
@@ -121,28 +103,4 @@ export async function importUnmatchedInbound(input: {
     if ((error as { code?: unknown })?.code === 6) return false;
     throw error;
   }
-}
-
-/**
- * Marks an unmatched message dealt with.
- *
- * `customerId` is set when the number became a customer, and left null when
- * somebody simply dismissed it as spam or a wrong number. Both are handled;
- * only one is worth following a link to.
- */
-export async function markUnmatchedHandled(
-  id: string,
-  by: { uid: string; name: string },
-  customerId: string | null = null,
-): Promise<void> {
-  await adminDb()
-    .collection(COLLECTION)
-    .doc(id)
-    .update({
-      handled: true,
-      handledBy: by.uid,
-      handledByName: by.name,
-      handledAt: FieldValue.serverTimestamp(),
-      customerId,
-    });
 }

@@ -310,17 +310,6 @@ export async function rescheduleJob(
   return { start: newStart, end };
 }
 
-export async function completeJob(jobId: string, author: Author): Promise<void> {
-  await writeJob(jobId, {
-    status: "complete" satisfies JobStatus,
-    completedAt: serverTimestamp(),
-    completedBy: author.uid,
-    updatedAt: serverTimestamp(),
-    updatedBy: author.uid,
-    updatedByName: author.displayName,
-  });
-}
-
 /**
  * Records that the customer has been told the crew is on the way, has started,
  * or has finished.
@@ -431,24 +420,12 @@ export async function markJobUnpaid(jobId: string, author: Author): Promise<void
   });
 }
 
-/** Completed work that has not been settled — the money still owed to you. */
-export function unpaidValue(jobs: Job[]): number {
-  return jobs
-    .filter((job) => job.status === "complete" && job.paidAt === null)
-    .reduce((total, job) => total + job.price, 0);
-}
-
 export async function deleteJob(jobId: string): Promise<void> {
   if (isDemoMode) {
     demo.remove(COLLECTIONS.jobs, jobId);
     return;
   }
   await deleteDoc(doc(getDb(), COLLECTIONS.jobs, jobId));
-}
-
-/** Completed jobs only — a scheduled job is not revenue yet. */
-export function revenueForCustomer(jobs: Job[], customerId: string): number {
-  return completedRevenue(jobs.filter((job) => job.customerId === customerId));
 }
 
 /**
