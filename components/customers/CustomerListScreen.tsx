@@ -153,9 +153,9 @@ export function CustomerListScreen() {
               >
                 {selecting ? "Done" : "Select"}
               </button>
-              <NotificationBell className="lg:hidden" />
+              <NotificationBell className="desktop:hidden" />
               {openMenu ? (
-                <RoundButton label="Open menu" onClick={openMenu} className="lg:hidden">
+                <RoundButton label="Open menu" onClick={openMenu} className="desktop:hidden">
                   <MenuIcon />
                 </RoundButton>
               ) : null}

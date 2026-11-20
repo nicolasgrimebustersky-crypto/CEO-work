@@ -22,7 +22,7 @@ import { CATEGORY_LABEL, categoryOf } from "@/lib/notifications/events";
  * lib/push/client.ts.
  */
 /**
- * `className` is added to the button — the screens pass `lg:hidden`, because on
+ * `className` is added to the button — the screens pass `desktop:hidden`, because on
  * a computer the bell lives in the top bar instead.
  */
 export function NotificationBell({ className = "" }: { className?: string } = {}) {

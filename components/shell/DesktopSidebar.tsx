@@ -20,7 +20,7 @@ import { ALL_DESTINATIONS, isActive } from "./navItems";
 /**
  * The computer's navigation: every screen at once, grouped, always on screen.
  *
- * Only rendered on a wide screen (the caller hides it below `lg`), so nothing
+ * Only rendered on a wide screen (the caller shows it only through `desktop:`), so nothing
  * here touches the phone. It reads the same switches as the phone's menu — a
  * screen switched off on the Account page is gone from here too.
  */

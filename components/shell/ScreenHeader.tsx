@@ -31,7 +31,7 @@ export function ScreenHeader({
               type="button"
               onClick={openMenu}
               aria-label="Open menu"
-              className="tap-target -ml-2 flex shrink-0 items-center justify-center rounded-2xl px-2 text-muted hover:bg-surface-2 hover:text-ink lg:hidden"
+              className="tap-target -ml-2 flex shrink-0 items-center justify-center rounded-2xl px-2 text-muted hover:bg-surface-2 hover:text-ink desktop:hidden"
             >
               <MenuIcon />
             </button>
@@ -43,7 +43,7 @@ export function ScreenHeader({
             ) : null}
           </div>
         </div>
-        <NotificationBell className="lg:hidden" />
+        <NotificationBell className="desktop:hidden" />
       </div>
       {children}
     </header>
