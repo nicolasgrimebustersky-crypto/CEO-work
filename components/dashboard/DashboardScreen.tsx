@@ -123,15 +123,15 @@ export function DashboardScreen() {
   const loading = jobsLoading || documentsLoading;
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden bg-canvas lg:bg-transparent">
+    <div className="relative flex h-full flex-col overflow-hidden bg-canvas desktop:bg-transparent">
       <div
         aria-hidden
         className="gb-money-glow-money pointer-events-none absolute inset-x-0 top-0 h-[36vh]"
       />
 
       {/* ------------------------------------------------------------ top */}
-      <header className="pt-safe relative z-10 shrink-0 px-4 pb-2 lg:px-8 lg:pt-7 lg:pb-3">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 xl:max-w-7xl">
+      <header className="pt-safe relative z-10 shrink-0 px-4 pb-2 desktop:px-8 desktop:pt-7 desktop:pb-3">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 desktop-wide:max-w-7xl">
           <div className="min-w-0">
             <p className="text-sm font-bold tracking-wide text-muted uppercase">
               {format(now, "EEEE, MMMM d")}
@@ -146,23 +146,23 @@ export function DashboardScreen() {
                 sidebar; these two take their place. */}
             <Link
               href={routes.reports}
-              className="glass hidden h-11 items-center rounded-2xl border px-4 text-sm font-bold text-ink transition hover:bg-white/10 lg:inline-flex"
+              className="glass hidden h-11 items-center rounded-2xl border px-4 text-sm font-bold text-ink transition hover:bg-white/10 desktop:inline-flex"
             >
               Reports
             </Link>
             <Link
               href={routes.schedule}
-              className="hidden h-11 items-center rounded-2xl bg-ink px-4 text-sm font-bold text-canvas transition hover:brightness-95 lg:inline-flex"
+              className="hidden h-11 items-center rounded-2xl bg-ink px-4 text-sm font-bold text-canvas transition hover:brightness-95 desktop:inline-flex"
             >
               Open calendar
             </Link>
-            <NotificationBell className="lg:hidden" />
+            <NotificationBell className="desktop:hidden" />
             {openMenu ? (
               <button
                 type="button"
                 onClick={openMenu}
                 aria-label="Open menu"
-                className="tap-target flex size-12 items-center justify-center rounded-full border border-line bg-surface-2/80 text-ink backdrop-blur hover:bg-surface-3 lg:hidden"
+                className="tap-target flex size-12 items-center justify-center rounded-full border border-line bg-surface-2/80 text-ink backdrop-blur hover:bg-surface-3 desktop:hidden"
               >
                 <MenuIcon />
               </button>
@@ -172,13 +172,13 @@ export function DashboardScreen() {
       </header>
 
       {/* --------------------------------------------------------- scroll */}
-      <div className="relative z-10 min-h-0 flex-1 overflow-y-auto px-4 lg:px-8">
+      <div className="relative z-10 min-h-0 flex-1 overflow-y-auto px-4 desktop:px-8">
         {/* A phone stacks the cards; a computer lays them on a three-column
             grid — the month and the crew side by side, the four figures in a
             row, then the day and its follow-ups. */}
-        <div className="mx-auto flex max-w-3xl flex-col gap-4 pt-2 pb-8 xl:grid xl:max-w-7xl xl:grid-cols-3 xl:gap-5">
+        <div className="mx-auto flex max-w-3xl flex-col gap-4 pt-2 pb-8 desktop-wide:grid desktop-wide:max-w-7xl desktop-wide:grid-cols-3 desktop-wide:gap-5">
           {loading ? (
-            <div className="flex justify-center py-10 xl:col-span-3">
+            <div className="flex justify-center py-10 desktop-wide:col-span-3">
               <Spinner label="Loading…" />
             </div>
           ) : (
@@ -188,14 +188,14 @@ export function DashboardScreen() {
               {isAdmin ? (
               <Link
                 href={routes.invoices}
-                className="block rounded-3xl border border-line bg-surface p-5 transition active:bg-surface-2 lg:glass xl:col-span-2 xl:row-start-1 lg:p-7"
+                className="block rounded-3xl border border-line bg-surface p-5 transition active:bg-surface-2 desktop:glass desktop-wide:col-span-2 desktop-wide:row-start-1 desktop:p-7"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-muted">
                       Invoiced in {format(now, "MMMM")}
                     </p>
-                    <p className="mt-1 text-[2.4rem] leading-none font-extrabold tracking-tight text-money tabular-nums lg:text-5xl">
+                    <p className="mt-1 text-[2.4rem] leading-none font-extrabold tracking-tight text-money tabular-nums desktop:text-5xl">
                       {formatMoney(monthCard?.total ?? 0)}
                     </p>
                     <p className="mt-2 text-sm font-semibold text-muted">
@@ -234,7 +234,7 @@ export function DashboardScreen() {
                 </div>
               </Link>
               ) : (
-                <div className="rounded-3xl border border-line bg-surface p-5 lg:glass xl:col-span-2 xl:row-start-1 lg:p-7">
+                <div className="rounded-3xl border border-line bg-surface p-5 desktop:glass desktop-wide:col-span-2 desktop-wide:row-start-1 desktop:p-7">
                   <p className="text-sm font-bold text-muted">Your jobs today</p>
                   <p className="mt-1 text-[2.4rem] leading-none font-extrabold tracking-tight text-ink tabular-nums">
                     {todayJobs.filter((job) => job.assignedTo.includes(author?.uid ?? "")).length}
@@ -247,7 +247,7 @@ export function DashboardScreen() {
               )}
 
               {/* Four tiles */}
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:col-span-3 xl:row-start-2 xl:gap-5">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 desktop-wide:col-span-3 desktop-wide:row-start-2 desktop-wide:gap-5">
                 <Tile
                   href={routes.schedule}
                   label="Jobs today"
@@ -303,7 +303,7 @@ export function DashboardScreen() {
               </div>
 
               {/* Today's schedule */}
-              <section className="rounded-3xl border border-line bg-surface lg:glass xl:col-span-2 xl:row-start-3 xl:self-start">
+              <section className="rounded-3xl border border-line bg-surface desktop:glass desktop-wide:col-span-2 desktop-wide:row-start-3 desktop-wide:self-start">
                 <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-2">
                   <h2 className="text-lg font-extrabold text-ink">Today&apos;s schedule</h2>
                   <Link
@@ -390,14 +390,14 @@ export function DashboardScreen() {
 
               {/* `contents` on a phone, so the wrapper adds no gap when the
                   card hides itself; a grid cell on a computer. */}
-              <div className="contents xl:col-start-3 xl:row-start-3 xl:block">
+              <div className="contents desktop-wide:col-start-3 desktop-wide:row-start-3 desktop-wide:block">
                 <DashboardFollowUps />
               </div>
 
               {/* Crew */}
-              <section className="lg:glass xl:col-start-3 xl:row-start-1 lg:rounded-3xl lg:border lg:p-5">
-                <h2 className="mb-2 px-1 text-lg font-extrabold text-ink lg:px-0">Crew today</h2>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <section className="desktop:glass desktop-wide:col-start-3 desktop-wide:row-start-1 desktop:rounded-3xl desktop:border desktop:p-5">
+                <h2 className="mb-2 px-1 text-lg font-extrabold text-ink desktop:px-0">Crew today</h2>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 desktop-wide:grid-cols-1">
                   {users.map((user) => {
                     const mine = todayJobs.filter((job) => job.assignedTo.includes(user.uid));
                     const revenue = mine.reduce((sum, job) => sum + job.price, 0);
@@ -405,7 +405,7 @@ export function DashboardScreen() {
                     return (
                       <div
                         key={user.uid}
-                        className="flex items-center gap-3.5 rounded-3xl border border-line bg-surface p-4 lg:rounded-2xl lg:border-white/5 lg:bg-white/5 lg:p-3"
+                        className="flex items-center gap-3.5 rounded-3xl border border-line bg-surface p-4 desktop:rounded-2xl desktop:border-white/5 desktop:bg-white/5 desktop:p-3"
                       >
                         <span
                           aria-hidden
@@ -439,7 +439,7 @@ export function DashboardScreen() {
               </section>
 
               {/* Shortcuts */}
-              <section className="grid grid-cols-4 gap-2 lg:hidden">
+              <section className="grid grid-cols-4 gap-2 desktop:hidden">
                 <Shortcut href={routes.map} label="Map" icon={<MapGlyph />} />
                 <Shortcut href={routes.pipeline} label="Leads" icon={<LeadsGlyph />} />
                 <Shortcut href={routes.messages} label="Texts" icon={<TextsGlyph />} />
@@ -479,7 +479,7 @@ function Tile({
   return (
     <Link
       href={href}
-      className="flex flex-col rounded-3xl border border-line bg-surface p-4 transition active:bg-surface-2 lg:glass lg:p-5 lg:hover:-translate-y-0.5 lg:hover:bg-white/5"
+      className="flex flex-col rounded-3xl border border-line bg-surface p-4 transition active:bg-surface-2 desktop:glass desktop:p-5 desktop:hover:-translate-y-0.5 desktop:hover:bg-white/5"
     >
       <span className={`flex size-10 items-center justify-center rounded-full ${TONE[tone]}`}>
         {icon}
@@ -506,7 +506,7 @@ function Sparkline({ months }: { months: ReturnType<typeof periodCards> }) {
       aria-label={`Invoiced by month: ${months
         .map((m) => `${m.period.label} ${compactMoney(m.total)}`)
         .join(", ")}`}
-      className="flex h-16 shrink-0 items-end gap-1.5 lg:hidden"
+      className="flex h-16 shrink-0 items-end gap-1.5 desktop:hidden"
     >
       {months.map((m, index) => {
         const current = index === months.length - 1;
@@ -533,7 +533,7 @@ function MonthBars({ months }: { months: ReturnType<typeof periodCards> }) {
   return (
     <div
       aria-hidden
-      className="mt-6 hidden h-44 items-end gap-3 border-t border-white/10 pt-5 lg:flex"
+      className="mt-6 hidden h-44 items-end gap-3 border-t border-white/10 pt-5 desktop:flex"
     >
       {months.map((m, index) => {
         const current = index === months.length - 1;

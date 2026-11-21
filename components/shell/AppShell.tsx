@@ -37,28 +37,28 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <MenuContext.Provider value={openMenu}>
       {/* On a phone this is one column: banners, the screen, the tab bar. On
-          a computer (lg and up) it becomes a row — the sidebar, then a column
+          a computer (`desktop:`, a mouse or trackpad) it becomes a row — the sidebar, then a column
           of top bar and screen — over the green backdrop. The wrapper around
-          that column is `contents` below lg, so on a phone it doesn't exist as
+          that column is `contents` otherwise, so on a phone it doesn't exist as
           far as layout goes and the phone's column is exactly what it was. */}
-      <div className="lg:gb-desktop-backdrop flex h-dvh flex-col lg:flex-row print:block print:h-auto print:bg-none">
-        <div className="hidden lg:flex print:hidden">
+      <div className="desktop:gb-desktop-backdrop flex h-dvh flex-col desktop:flex-row print:block print:h-auto print:bg-none">
+        <div className="hidden desktop:flex print:hidden">
           <DesktopSidebar />
         </div>
-        <div className="contents lg:flex lg:min-w-0 lg:flex-1 lg:flex-col print:block">
-          <div className="hidden lg:contents print:hidden">
+        <div className="contents desktop:flex desktop:min-w-0 desktop:flex-1 desktop:flex-col print:block">
+          <div className="hidden desktop:contents print:hidden">
             <DesktopTopBar />
           </div>
           {/* Printing (the year-end packet) prints the page, not the app around it. */}
           {/* On a computer the banners sit in their own rounded strip under
               the top bar instead of running edge to edge; with none showing,
               the strip is empty and takes no space. */}
-          <div className="contents lg:mx-4 lg:mt-4 lg:flex lg:flex-col lg:overflow-hidden lg:rounded-2xl lg:empty:hidden print:hidden">
+          <div className="contents desktop:mx-4 desktop:mt-4 desktop:flex desktop:flex-col desktop:overflow-hidden desktop:rounded-2xl desktop:empty:hidden print:hidden">
             <DemoBanner />
             <InstallPrompt />
             <ConnectionBanner />
           </div>
-          <main className="min-h-0 flex-1 lg:m-4 lg:overflow-hidden lg:rounded-3xl lg:border lg:border-white/10 lg:shadow-[0_24px_60px_-30px_rgb(0_0_0/0.8)] print:m-0 print:overflow-visible print:rounded-none print:border-0">
+          <main className="min-h-0 flex-1 desktop:m-4 desktop:overflow-hidden desktop:rounded-3xl desktop:border desktop:border-white/10 desktop:shadow-[0_24px_60px_-30px_rgb(0_0_0/0.8)] print:m-0 print:overflow-visible print:rounded-none print:border-0">
             {children}
           </main>
         </div>

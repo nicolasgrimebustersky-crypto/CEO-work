@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* Which layout a device gets is decided by the device, not only the window.
+   `desktop:` is a computer: a mouse or trackpad (hover plus a fine pointer)
+   and at least 48rem of width, so a Mac in a half-width window still gets the
+   computer layout. A phone has a coarse pointer and never matches, however
+   wide it is turned. `desktop-wide:` is the same computer with room for the
+   three-column dashboard. Defined in this order so the wide one wins. */
+@custom-variant desktop (@media (hover: hover) and (pointer: fine) and (min-width: 48rem));
+@custom-variant desktop-wide (@media (hover: hover) and (pointer: fine) and (min-width: 80rem));
+
 /* ---------------------------------------------------------------------------
    Grime Busters CRM design tokens.
 
@@ -159,9 +168,9 @@ button {
 }
 
 /* ------------------------------------------------------------ computer
-   The layout a computer gets (64rem and up: a laptop, not a phone or a
-   tablet held upright). The phone is unchanged; everything here is applied
-   only through `lg:` classes or inside elements that only render on a wide
+   The layout a computer gets (a mouse or trackpad and 48rem of width; see
+   the `desktop` variant at the top). The phone is unchanged; everything here
+   is applied only through `desktop:` classes or inside elements that only render on a wide
    screen.
 
    The backdrop is the brand green, lit from the top-left corner and faintly
