@@ -545,7 +545,7 @@ function PeriodRow({
                     : "text-muted"
                   : up
                     ? active
-                      ? "text-[#0a7a35]"
+                      ? "text-[#42631d]"
                       : "text-money"
                     : active
                       ? "text-[#b81e1e]"

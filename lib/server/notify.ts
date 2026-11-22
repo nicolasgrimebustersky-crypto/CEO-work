@@ -33,7 +33,7 @@ interface ServerNotifyPayload {
   body: string;
   customerId?: string | null;
   documentId?: string | null;
-  /** Who or what caused it — "Customer", "Facebook", "Grime Busters". */
+  /** Who or what caused it — "Customer", "Facebook", "Solid Acre". */
   actorName: string;
   /**
    * Narrows the crew to these uids — a follow-up reminder is for the person

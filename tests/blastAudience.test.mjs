@@ -25,7 +25,7 @@ const split = (group, body, removed = new Set()) =>
   splitAudience(group, body, removed, canSendTo);
 const block = (customer) => blockFor(customer, canSendTo);
 
-const FALL = `Grime Busters KY LLC: Hey with fall temperatures comes fall mess and we would love to make sure your grass stays uncluttered going into these cold temperatures! BOOK NOW and get 20% off leaf removal!
+const FALL = `Solid Acre Exteriors LLC: Hey with fall temperatures comes fall mess and we would love to make sure your grass stays uncluttered going into these cold temperatures! BOOK NOW and get 20% off leaf removal!
 
 Call us today at 502-599-6855 or sign up online at grimebusterskyllc.com!`;
 

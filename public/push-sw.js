@@ -18,7 +18,7 @@
  */
 
 const FALLBACK = {
-  title: "Grime Busters",
+  title: "Solid Acre",
   body: "Something happened in the app.",
   url: "/dashboard",
 };

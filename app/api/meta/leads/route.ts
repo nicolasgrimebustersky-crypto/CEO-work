@@ -209,7 +209,7 @@ async function acknowledge(
 ): Promise<void> {
   const greeting = parsed.firstName ? `Hi ${parsed.firstName}, ` : "Hi, ";
   const message =
-    `${greeting}thanks for your enquiry with Grime Busters. ` +
+    `${greeting}thanks for your enquiry with Solid Acre Exterior & Grounds. ` +
     `We've got your details and one of us will call you shortly to talk it through. ` +
     `Reply STOP to opt out.`;
 

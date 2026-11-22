@@ -7,7 +7,7 @@ import { renderTemplate, type TemplateVars } from "@/lib/automations";
  * nightly follow-up cron.
  */
 
-const BUSINESS_NAME = "Grime Busters";
+const BUSINESS_NAME = "Solid Acre";
 
 /**
  * The opt-out line, on every outbound template.
@@ -95,7 +95,7 @@ export function documentText(
  * cheque needs the name their bank will accept, and somebody deciding whether
  * an unknown number is a scam needs the name on the invoice they were sent.
  */
-const LEGAL_NAME = "Grime Busters KY LLC";
+const LEGAL_NAME = "Solid Acre Exteriors LLC";
 
 /** Who a customer is pointed at when the person on site cannot help. */
 const OWNER_NAME = "Nicolas";

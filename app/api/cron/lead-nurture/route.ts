@@ -640,8 +640,8 @@ export async function GET(request: Request): Promise<Response> {
       // runs on the Admin SDK, which bypasses the org checks in
       // firestore.rules entirely, so the filter the rest of the app gets for
       // free has to be written here — and without it a consented lead
-      // belonging to someone else would receive Grime Busters marketing from
-      // Grime Busters' own Twilio number.
+      // belonging to someone else would receive Solid Acre marketing from
+      // Solid Acre's own Twilio number.
       //
       // Skipped outright rather than kept as context: their replies and marks
       // are not this org's to act on, and ours are not theirs.

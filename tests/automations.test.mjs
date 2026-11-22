@@ -357,9 +357,9 @@ describe("the message", () => {
     assert.equal(
       renderTemplate("Hi {first_name}, {business} here", {
         first_name: "Marta",
-        business: "Grime Busters",
+        business: "Solid Acre",
       }),
-      "Hi Marta, Grime Busters here",
+      "Hi Marta, Solid Acre here",
     );
   });
 

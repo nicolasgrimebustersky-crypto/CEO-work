@@ -436,7 +436,7 @@ export function defaultConditions(): AutomationConditions {
  */
 export const TEMPLATE_FIELDS = [
   { token: "first_name", label: "Their first name", example: "Dana" },
-  { token: "business", label: "Your business name", example: "Grime Busters" },
+  { token: "business", label: "Your business name", example: "Solid Acre" },
   { token: "amount", label: "The amount on the estimate or invoice", example: "$450" },
   { token: "owner_phone", label: "Your phone number", example: "502-599-6855" },
 ] as const;

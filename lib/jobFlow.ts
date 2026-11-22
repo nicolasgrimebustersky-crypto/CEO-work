@@ -53,7 +53,7 @@ export const STEP_SMS_REASON: Record<JobStep, string> = {
  *
  * First word only: "Noah Perkins" signs as "Noah", because that is how somebody
  * introduces themselves on a doorstep. Falls back to the business rather than
- * to an empty string — a text that opens "This is  from Grime Busters" reads
+ * to an empty string — a text that opens "This is  from Solid Acre" reads
  * like a scam, which is the one thing an unknown number cannot afford to do.
  */
 export function firstNameOf(fullName: string | null | undefined): string {

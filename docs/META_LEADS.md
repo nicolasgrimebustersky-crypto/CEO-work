@@ -128,7 +128,7 @@ address on the customer record and it appears on the map.
 
 Each new lead with a phone number gets:
 
-> Hi [name], thanks for your enquiry with Grime Busters. We've got your details
+> Hi [name], thanks for your enquiry with Solid Acre. We've got your details
 > and one of us will call you shortly to talk it through. Reply STOP to opt out.
 
 Sent through the same Twilio number as everything else and logged to the lead's

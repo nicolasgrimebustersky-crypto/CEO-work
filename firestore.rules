@@ -1,7 +1,7 @@
 rules_version = '2';
 
 // ---------------------------------------------------------------------------
-// Grime Busters CRM — Firestore security rules.
+// Solid Acre CRM — Firestore security rules.
 //
 // Anybody can register. Almost nobody can read anything.
 //

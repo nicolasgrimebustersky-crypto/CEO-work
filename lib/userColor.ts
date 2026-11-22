@@ -5,7 +5,7 @@ import type { AppUser } from "./types";
  * "logged by" chips, note attribution, and calendar blocks.
  */
 export const USER_COLORS = ["#2f80ff", "#ff4fd8"] as const;
-export const FALLBACK_USER_COLOR = "#00d9ff";
+export const FALLBACK_USER_COLOR = "#35b3f2";
 
 /**
  * Assignment is by uid sort order rather than login order, so both phones show
@@ -29,7 +29,7 @@ export function colorForUser(
   return colorMap[uid] ?? FALLBACK_USER_COLOR;
 }
 
-export const INK_ON_LIGHT = "#050607";
+export const INK_ON_LIGHT = "#071120";
 export const INK_ON_DARK = "#ffffff";
 
 /**

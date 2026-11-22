@@ -118,10 +118,10 @@ export function PinMark({
   draft?: boolean;
   className?: string;
 }) {
-  const fill = status === "draft" ? "#00d9ff" : STATUS_COLOR[status];
-  const ink = status === "draft" ? "#00181f" : STATUS_INK[status];
+  const fill = status === "draft" ? "#35b3f2" : STATUS_COLOR[status];
+  const ink = status === "draft" ? "#021626" : STATUS_INK[status];
   // Black on black needs a visible edge even when nothing is selected.
-  const ring = selected ? "#00d9ff" : status === "do_not_knock" ? "#9ba7b4" : "#ffffff";
+  const ring = selected ? "#35b3f2" : status === "do_not_knock" ? "#9fb0c4" : "#ffffff";
 
   return (
     <svg
@@ -130,7 +130,7 @@ export function PinMark({
       aria-hidden="true"
       style={{ filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.55))" }}
     >
-      {selected ? <circle cx="20" cy="20" r="19.5" fill="#00d9ff" opacity={0.35} /> : null}
+      {selected ? <circle cx="20" cy="20" r="19.5" fill="#35b3f2" opacity={0.35} /> : null}
       <circle
         cx="20"
         cy="20"

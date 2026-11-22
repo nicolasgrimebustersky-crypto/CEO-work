@@ -42,7 +42,7 @@ describe("readableInkOn", () => {
   test("it picks whichever of black and white is actually better", () => {
     for (const color of [...USER_COLORS, FALLBACK_USER_COLOR, "#7c3aed", "#facc15", "#0d0d0d"]) {
       const chosen = readableInkOn(color);
-      const other = chosen === "#ffffff" ? "#050607" : "#ffffff";
+      const other = chosen === "#ffffff" ? "#071120" : "#ffffff";
       assert.ok(
         contrast(color, chosen) >= contrast(color, other),
         `${color}: picked ${chosen} (${contrast(color, chosen).toFixed(2)}:1) over ${other} (${contrast(color, other).toFixed(2)}:1)`,
@@ -51,8 +51,8 @@ describe("readableInkOn", () => {
   });
 
   test("the pink crew colour takes black, not white", () => {
-    // The specific regression: 2.85:1 white vs 7.4:1 black.
-    assert.equal(readableInkOn("#ff4fd8"), "#050607");
+    // The specific regression: 2.85:1 white vs 6.6:1 navy.
+    assert.equal(readableInkOn("#ff4fd8"), "#071120");
   });
 
   test("a malformed colour still returns something renderable", () => {

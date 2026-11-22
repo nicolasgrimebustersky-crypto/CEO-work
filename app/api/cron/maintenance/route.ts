@@ -54,7 +54,7 @@ export async function GET(request: Request): Promise<Response> {
         if (notified[status.task.id] === key) continue;
         await notifyCrew({
           type: "maintenance_due",
-          actorName: "Grime Busters",
+          actorName: "Solid Acre",
           body: `${item.name} · ${status.task.what} · ${dueText(status, item.meter)}`,
         });
         sent += 1;

@@ -64,7 +64,7 @@ export const PIPELINE_COLOR: Record<PipelineStage, string> = {
   new_lead: "#f97316",
   estimate_sent: "#38bdf8",
   estimate_accepted: "#818cf8",
-  job_scheduled: "#00d9ff",
+  job_scheduled: "#35b3f2",
   awaiting_payment: "#facc15",
   paid: "#22c55e",
   lost: "#6b7785",

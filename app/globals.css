@@ -10,72 +10,68 @@
 @custom-variant desktop-wide (@media (hover: hover) and (pointer: fine) and (min-width: 80rem));
 
 /* ---------------------------------------------------------------------------
-   Grime Busters CRM design tokens.
+   Solid Acre CRM design tokens.
 
    Constraints this palette is built around: the app is used one-handed, in
    portrait, outdoors, in direct sun. So every foreground colour is checked for
    contrast against the surface it sits on, and there is no thin grey body text
    anywhere — `--color-muted` is the lightest text tone allowed and it is still
-   ~7:1 on the canvas.
+   8.5:1 on the canvas.
 
-   Brand colours are black, green and cyan, and each of the two hues means one
-   thing consistently:
+   The colours are the Solid Acre logo's own: its navy shield, the blue of the
+   water jet and the green of the lawn. Each of the two hues means one thing
+   consistently:
 
-     cyan  — what you TAP. Buttons, links, the active nav tab, focus rings.
+     blue  — what you TAP. Buttons, links, the active nav tab, focus rings.
      green — what you EARN. Revenue, collected, paid, a sale at the door.
 
-   The green is the logo's own, sampled from the artwork. Cyan is not in the
-   lockup; it is there because it is the one hue that stays legible in direct
-   sun without competing with the green, and because a button and a dollar
-   figure must never be the same colour.
+   Both are lifted from the artwork and brightened just enough to read on
+   navy: the logo's lawn green is printed on paper as it is (BRAND.money in
+   lib/business.ts) but is too dark for text on a dark screen.
 
    Keeping them separate is what stops the UI turning into confetti: if every
    number were accent-coloured, none of them would stand out. Money is the
    thing this business opens the app to see, so money gets its own hue.
 
-   The canvas is near-black rather than the old blue-grey. On an OLED phone in
-   sunlight, true black gives the cards their edge without needing heavy
-   borders, which is why the surfaces below sit so close together in value —
-   depth comes from the hairline in `--color-line`, not from fill.
+   The canvas is the logo's navy taken nearly to black. In sunlight a very dark
+   field still gives the cards their edge without heavy borders, which is why
+   the surfaces below sit so close together in value — depth comes from the
+   hairline in `--color-line`, not from fill.
 --------------------------------------------------------------------------- */
 
 @theme {
-  --color-canvas: #050607;
-  --color-surface: #0c0e11;
-  --color-surface-2: #14171c;
-  --color-surface-3: #1e232a;
+  --color-canvas: #071120;
+  --color-surface: #0c1a2d;
+  --color-surface-2: #12233a;
+  --color-surface-3: #1a2d47;
   /* A hairline, not a border: barely there until it separates two cards. */
-  --color-line: #262b33;
+  --color-line: #253b5c;
 
-  --color-ink: #f7fafc;
-  --color-muted: #9ba7b4;
+  --color-ink: #f5f8fc;
+  --color-muted: #9fb0c4;
 
-  --color-accent: #00d9ff;
-  --color-accent-ink: #00181f;
+  --color-accent: #35b3f2;
+  --color-accent-ink: #021626;
 
-  /* Money, and the brand green — sampled from the logo artwork rather than
-     picked, so a figure on screen is the same green as the sign on the truck.
-     6:1 on the canvas, which clears AA for the figures it renders. */
-  --color-money: #06a143;
-  /* What sits ON the green. The logo's cream reads beautifully at sign size
-     and fails at button size — 2.68:1, found by sweeping a rendered page. The
-     near-black clears 5.97:1 and is the contrast the artwork itself uses
-     between the green letters and their field. */
-  --color-money-ink: #050607;
+  /* Money, and the brand green — the logo's lawn green, brightened to read on
+     navy. 7.8:1 on the canvas, which clears AA for the figures it renders. */
+  --color-money: #74b83c;
+  /* What sits ON the green: the canvas navy, 7.8:1. */
+  --color-money-ink: #071120;
 
-  /* The logo's banner text and its outline. Used sparingly, where the UI
-     touches the lockup — the drawer header, the document band. */
-  --color-cream: #f1e3cd;
+  /* The lockup's lettering on navy, and a warm accent kept for the tax
+     notice. Used sparingly. */
+  --color-cream: #eef3f8;
   --color-gold: #a37d39;
 
-  /* The login screen's own accent: the brand green, on black. Its own token
-     rather than a reuse of --color-money so the cyan/green rule inside the app
+  /* The login screen's own accent: the brand green, on navy. Its own token
+     rather than a reuse of --color-money so the blue/green rule inside the app
      stays intact — that rule is about what a colour MEANS, and the login is
      the one screen with nothing to mean yet. Same value as --color-money, on
-     purpose: the button is the green on the truck. The near-black on it is
-     the contrast the logo itself uses, 5.97:1 (see --color-money-ink). */
-  --color-login-accent: #06a143;
-  --color-login-accent-ink: #050607;
+     purpose: the button is the green on the truck. The navy on it clears 7.8:1
+     (see --color-money-ink). */
+  --color-login-accent: #74b83c;
+  --color-login-accent-ink: #071120;
 
   /* Customer pin colours — fixed by the status model, do not repurpose. */
   --color-status-lead: #f97316;
@@ -155,7 +151,7 @@ button {
 }
 
 /* The active nav tab and the active drawer row. A tinted wash plus a rim,
-   which reads as "lit from within" against a true-black canvas where a solid
+   which reads as "lit from within" against the dark navy canvas where a solid
    fill would just look like a grey lozenge. */
 @utility nav-active {
   background:
@@ -174,8 +170,8 @@ button {
    screen.
 
    The backdrop is the brand green, lit from the top-left corner and faintly
-   from the bottom-right, on the same near-black canvas — so the glass panels
-   above it pick up a green tint instead of sitting on flat black. */
+   from the bottom-right, on the same navy canvas — so the glass panels
+   above it pick up a green tint instead of sitting on flat navy. */
 @utility gb-desktop-backdrop {
   background:
     radial-gradient(70% 60% at 0% 0%, color-mix(in srgb, var(--color-money) 30%, transparent) 0%, transparent 70%),
@@ -254,7 +250,7 @@ button {
 }
 
 /* ---------------------------------------------------------------- login
-   The backdrop is three blurred bands of green on black, drifting slowly.
+   The backdrop is three blurred bands of green on navy, drifting slowly.
    Painted in CSS rather than shipped as an image so it renders at any size
    with nothing to download, and so the colour is the theme's own green. The
    drift uses the `translate` property, which composes with the rotation set
@@ -272,11 +268,11 @@ button {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    #06200f 18%,
+    #0d1f08 18%,
     var(--color-money) 42%,
-    #5ef08a 50%,
+    #b5e07f 50%,
     var(--color-money) 58%,
-    #06200f 82%,
+    #0d1f08 82%,
     transparent 100%
   );
   will-change: translate;
@@ -303,7 +299,7 @@ button {
   height: 0.45vmax;
   opacity: 0.55;
   filter: blur(1.5px);
-  background: linear-gradient(90deg, transparent 20%, #c6ffd9 50%, transparent 80%);
+  background: linear-gradient(90deg, transparent 20%, #e2f3c9 50%, transparent 80%);
   transform: translate(-50%, -50%) rotate(-27deg) translateY(-19vmax);
   animation: gb-ribbon-drift 28s ease-in-out infinite alternate;
 }
@@ -318,7 +314,7 @@ button {
 
 /* ------------------------------------------------------------- money
    The wash of colour at the top of the Money screen, and its one big
-   button. Cyan for invoices and green for estimates — the same two hues the
+   button. Blue for invoices and green for estimates — the same two hues the
    rest of the app uses, so switching kind visibly changes the screen without
    introducing a third colour. The wash fades to nothing by the middle of the
    screen so the list below sits on the plain canvas. */
@@ -339,11 +335,11 @@ button {
   );
 }
 .gb-cta-accent {
-  background: linear-gradient(100deg, #00b8e0 0%, var(--color-accent) 55%, #7deeff 100%);
+  background: linear-gradient(100deg, #1a96d7 0%, var(--color-accent) 55%, #8fd6fa 100%);
   box-shadow: 0 12px 32px -10px color-mix(in srgb, var(--color-accent) 70%, transparent);
 }
 .gb-cta-money {
-  background: linear-gradient(100deg, #078a3a 0%, var(--color-money) 55%, #4fd97f 100%);
+  background: linear-gradient(100deg, #42631d 0%, var(--color-money) 55%, #a3d374 100%);
   box-shadow: 0 12px 32px -10px color-mix(in srgb, var(--color-money) 70%, transparent);
 }
 
@@ -373,7 +369,7 @@ button {
 .gb-glass-input:-webkit-autofill,
 .gb-glass-input:-webkit-autofill:focus {
   -webkit-text-fill-color: var(--color-ink);
-  box-shadow: 0 0 0 1000px #0a150e inset;
+  box-shadow: 0 0 0 1000px #0c1a2d inset;
   caret-color: var(--color-ink);
 }
 

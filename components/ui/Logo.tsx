@@ -1,21 +1,21 @@
 import Image from "next/image";
 
 /**
- * The Grime Busters lockup.
+ * The Solid Acre lockup.
  *
  * public/logo.png, written by scripts/generate-icons.mjs from the artwork in
- * assets/. The source is a 1.1MB print-resolution render and has no business
- * being fetched by a phone to fill a drawer header.
+ * assets/. The source is a print-resolution render and has no business being
+ * fetched by a phone to fill a drawer header.
  *
- * This copy has the black field keyed out to alpha, so the mark belongs to
- * whatever surface it lands on rather than sitting in a black rectangle a few
- * shades off the panel behind it. The opaque JPEG next to it is the PDF's —
- * that one goes on a black band, and PDF can carry JPEG bytes verbatim.
+ * This is the reversed colourway — white where the printed logo is navy — on
+ * a transparent field, because every surface it lands on in the app is navy.
+ * The opaque JPEG next to it is the PDF's: that one goes on the navy header
+ * band, and PDF can carry JPEG bytes verbatim.
  */
 
 /** Intrinsic size of public/logo.png, so Next can reserve the right box. */
 export const LOGO_WIDTH = 420;
-export const LOGO_HEIGHT = 310;
+export const LOGO_HEIGHT = 336;
 
 export function Logo({
   className = "",
@@ -30,7 +30,7 @@ export function Logo({
   return (
     <Image
       src="/logo.png"
-      alt="Grime Busters KY — pressure washing"
+      alt="Solid Acre Exterior & Grounds"
       width={LOGO_WIDTH}
       height={LOGO_HEIGHT}
       priority={priority}

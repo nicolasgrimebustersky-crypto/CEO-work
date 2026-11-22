@@ -47,7 +47,7 @@ export async function runTaskReminders(now = Date.now()): Promise<{ people: numb
   for (const [uid, list] of due) {
     await notifyCrew({
       type: "task_due",
-      actorName: "Grime Busters",
+      actorName: "Solid Acre",
       body: reminderBody(list),
       toUids: [uid],
     });

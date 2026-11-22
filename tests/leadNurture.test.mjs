@@ -358,7 +358,7 @@ describe("what the customer actually reads", () => {
 
   test("all three name the business", () => {
     for (const kind of kinds) {
-      assert.match(leadNurtureText(kind, "Marta", PRICE), /Grime Busters/, kind);
+      assert.match(leadNurtureText(kind, "Marta", PRICE), /Solid Acre/, kind);
     }
   });
 

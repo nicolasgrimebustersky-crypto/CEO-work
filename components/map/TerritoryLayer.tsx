@@ -98,7 +98,7 @@ export function DraftTerritory({ boundary }: { boundary: LatLng[] }) {
 
     const common = {
       map,
-      strokeColor: "#00d9ff",
+      strokeColor: "#35b3f2",
       strokeOpacity: 1,
       strokeWeight: 3,
       clickable: false,
@@ -110,7 +110,7 @@ export function DraftTerritory({ boundary }: { boundary: LatLng[] }) {
         ? new google.maps.Polygon({
             ...common,
             paths: boundary,
-            fillColor: "#00d9ff",
+            fillColor: "#35b3f2",
             fillOpacity: 0.18,
           })
         : new google.maps.Polyline({ ...common, path: boundary });
@@ -128,14 +128,14 @@ export function DraftTerritory({ boundary }: { boundary: LatLng[] }) {
           zIndex: 4,
           label: {
             text: String(index + 1),
-            color: "#00181f",
+            color: "#021626",
             fontSize: "11px",
             fontWeight: "700",
           },
           icon: {
             path: google.maps.SymbolPath.CIRCLE,
             scale: 9,
-            fillColor: "#00d9ff",
+            fillColor: "#35b3f2",
             fillOpacity: 1,
             strokeColor: "#ffffff",
             strokeWeight: 2,

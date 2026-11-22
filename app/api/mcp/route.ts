@@ -112,7 +112,7 @@ export async function POST(request: Request): Promise<Response> {
           serverInfo: { name: "grime-busters-crm", version: "1.0.0" },
           // Says what this key can do, so the agent's operator can see at a
           // glance whether it was issued the scopes they meant.
-          instructions: `Grime Busters CRM. This key is allowed: ${key.scopes.join(", ") || "nothing"}. Money figures count payments when they arrived, not when work was completed.`,
+          instructions: `Solid Acre CRM. This key is allowed: ${key.scopes.join(", ") || "nothing"}. Money figures count payments when they arrived, not when work was completed.`,
         });
 
       case "notifications/initialized":

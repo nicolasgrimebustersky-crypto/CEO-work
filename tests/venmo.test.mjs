@@ -49,8 +49,8 @@ describe("reading a Venmo email", () => {
 
   test("a note with an invoice number from the Pay with Venmo link", () => {
     assert.equal(
-      parseVenmoEmail({ subject: "Pat Rivera paid you $45.00", text: REAL("Invoice 8904 · Grime Busters").replace("Acme Lawn Co", "Pat Rivera") }).note,
-      "Invoice 8904 · Grime Busters",
+      parseVenmoEmail({ subject: "Pat Rivera paid you $45.00", text: REAL("Invoice 8904 · Solid Acre").replace("Acme Lawn Co", "Pat Rivera") }).note,
+      "Invoice 8904 · Solid Acre",
     );
   });
 

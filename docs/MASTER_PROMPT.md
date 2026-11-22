@@ -1,4 +1,4 @@
-# Grime Busters CRM — master prompt
+# Solid Acre CRM — master prompt
 
 Everything an AI needs to pick this project up cold: what it is, what was asked
 for, what exists, what does not, and the rules that must not be broken while
@@ -22,8 +22,8 @@ confidently describe a version of the app that no longer exists.
 ## The prompt
 
 ```text
-You are working on Grime Busters CRM — a door-to-door service CRM built for
-Grime Busters KY LLC, a two-person pressure washing, landscaping and snow
+You are working on Solid Acre CRM — a door-to-door service CRM built for
+Solid Acre Exteriors LLC, a two-person pressure washing, landscaping and snow
 removal business in Oldham County, Kentucky (Louisville metro).
 
 # Who uses it
@@ -57,12 +57,19 @@ the same moment without any of them refetching.
 
 # Brand
 
-- Canvas `#050607` (near-black), surfaces a few shades above it, hairline
-  borders rather than heavy ones.
-- **Cyan `#00d9ff` is what you TAP** — buttons, links, active tab, focus rings.
-- **Green `#06a143` is what you EARN** — revenue, collected, paid, balance due.
-  Sampled from the logo artwork, not chosen.
-- Cream `#f1e3cd` and gold `#a37d39` where the UI touches the lockup.
+- The business trades as **Solid Acre Exterior & Grounds** (logo, website,
+  texts); the legal name on invoices and cheques is **Solid Acre Exteriors
+  LLC**. Formerly Grime Busters KY LLC.
+- Colours come from the Solid Acre logo: its navy shield, the water jet's
+  blue, the lawn's green.
+- Canvas `#071120` (navy, nearly black), surfaces a few shades above it,
+  hairline borders rather than heavy ones.
+- **Blue `#35b3f2` is what you TAP** — buttons, links, active tab, focus rings.
+- **Green `#74b83c` is what you EARN** — revenue, collected, paid, balance due.
+  The logo's lawn green, brightened to read on navy. Paper uses the logo's own
+  darker green `#42631d` (`BRAND` in lib/business.ts).
+- Psalm 90:17 sits under the sign-in card and at the foot of every estimate
+  and invoice (`BUSINESS_VERSE` in lib/business.ts).
 - These two hues each mean exactly one thing and are never swapped. A button and
   a dollar figure must never be the same colour, or neither stands out.
 - Poppins, loaded in app/layout.tsx.
@@ -240,9 +247,9 @@ Every request made across the project, and where it stands.
 | Service **description** saved and reused | `lib/db/services.ts` — the price book |
 | No print dialog: view, download, or send | `components/documents/DocumentPreview.tsx`, `lib/pdf/share.ts` |
 | UI to match the reference screenshots | The reskin — `app/globals.css`, `components/shell/` |
-| The app's real colours | Cyan/green/black, green sampled from the logo |
+| The app's real colours | Navy/blue/green, taken from the Solid Acre logo |
 | A modern, sleek logo, used everywhere | `scripts/generate-icons.mjs` from `assets/` |
-| The real Grime Busters logo as the app icon | Same, driven from the supplied artwork |
+| The real Solid Acre logo as the app icon | Same, driven from the supplied artwork |
 | The logo in the drawer, not a black box | Black field keyed out to alpha |
 | **Notifications for everything** | `lib/notifications/events.ts` + push |
 | **Estimate → invoice without making one by hand** | `convertToInvoice`, one-time, dated |

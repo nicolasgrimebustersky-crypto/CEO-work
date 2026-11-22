@@ -565,7 +565,7 @@ describe("one business cannot nurture another's leads", () => {
    * The cron runs on the Admin SDK, which bypasses firestore.rules entirely —
    * so the org scoping the rest of the app gets for free has to be written
    * into this route by hand. Without it, a consented lead belonging to another
-   * business would receive Grime Busters marketing from Grime Busters' own
+   * business would receive Solid Acre marketing from Solid Acre's own
    * Twilio number, and one company's replies and do-not-knock marks would
    * suppress another company's sequence.
    *

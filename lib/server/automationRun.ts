@@ -468,7 +468,7 @@ export async function evaluateAutomation(
 
     const vars = {
       first_name: row.firstName,
-      business: "Grime Busters",
+      business: "Solid Acre",
       amount: moneyLabel(subject.amount),
       owner_phone: "502-599-6855",
     };

@@ -3,7 +3,7 @@
  *
  * The wording is the part worth pinning: these messages go to real customers
  * from an unknown number, and the failure modes are not crashes. A greeting
- * that reads "Hi ," or a signature that reads "This is  from Grime Busters"
+ * that reads "Hi ," or a signature that reads "This is  from Solid Acre"
  * looks like spam, and the customer's response to spam is to block the number
  * the business texts everybody from.
  */
@@ -43,8 +43,8 @@ describe("the en-route text", () => {
   });
 
   test("it says who is coming, in full", () => {
-    // "Grime Busters" alone is not what is on the invoice or the truck.
-    assert.match(enRouteText("Marta"), /Grime Busters KY LLC/);
+    // "Solid Acre" alone is not what is on the invoice or the truck.
+    assert.match(enRouteText("Marta"), /Solid Acre Exteriors LLC/);
     assert.match(enRouteText("Marta"), /en route to your scheduled appointment/);
   });
 });
@@ -53,7 +53,7 @@ describe("the starting-job text", () => {
   const text = jobStartedText("Noah");
 
   test("is signed by the person who tapped it", () => {
-    assert.match(text, /This is Noah from Grime Busters KY LLC/);
+    assert.match(text, /This is Noah from Solid Acre Exteriors LLC/);
   });
 
   test("gives the customer a number that is not the technician's", () => {
@@ -67,7 +67,7 @@ describe("the job-finished text", () => {
   const text = jobFinishedText("Noah");
 
   test("names every way the customer can pay", () => {
-    assert.match(text, /checks made out to Grime Busters KY LLC/);
+    assert.match(text, /checks made out to Solid Acre Exteriors LLC/);
     assert.match(text, /cash/);
     assert.match(text, new RegExp(`Venmo ${PAYMENT_HANDLES.venmo.replace("@", "@")}`));
     assert.match(text, /Cash App \$GrimeBustersKYLLC/);
@@ -105,7 +105,7 @@ describe("who the text is signed by", () => {
   });
 
   test("a missing name never produces an empty signature", () => {
-    // "This is  from Grime Busters KY LLC" reads as a broken scam text.
+    // "This is  from Solid Acre Exteriors LLC" reads as a broken scam text.
     for (const missing of ["", "   ", null, undefined]) {
       assert.equal(firstNameOf(missing), "your technician");
       assert.doesNotMatch(jobStartedText(firstNameOf(missing)), /This is\s+from/);

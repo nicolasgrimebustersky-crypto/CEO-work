@@ -136,7 +136,7 @@ export async function GET(request: Request): Promise<Response> {
       const late = daysLate(invoice.dueAt as Timestamp, now);
       await notifyCrew({
         type: "invoice_overdue",
-        actorName: "Grime Busters",
+        actorName: "Solid Acre",
         body: `${invoice.customerName} · ${formatMoneyExact(invoice.balanceDue)} · #${invoice.number} · ${
           late <= 0 ? "due today" : `${late} day${late === 1 ? "" : "s"} late`
         }`,
@@ -170,7 +170,7 @@ export async function GET(request: Request): Promise<Response> {
 
       await notifyCrew({
         type: "money_summary",
-        actorName: "Grime Busters",
+        actorName: "Solid Acre",
         body:
           `${formatMoneyExact(total)} across ${open.length} invoice${open.length === 1 ? "" : "s"}` +
           (overdue.length > 0

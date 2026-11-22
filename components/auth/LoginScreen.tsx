@@ -4,6 +4,8 @@ import { FirebaseError } from "firebase/app";
 import { useState, type FormEvent, type InputHTMLAttributes, type ReactNode } from "react";
 
 import { useAuth } from "@/components/providers/AuthProvider";
+import { Logo } from "@/components/ui/Logo";
+import { BUSINESS_VERSE } from "@/lib/business";
 import { isDemoMode } from "@/lib/demo/enabled";
 import { MIN_PASSWORD, registerProblem, resetProblem, signInProblem } from "@/lib/loginForm";
 import { LoginBackdrop } from "./LoginBackdrop";
@@ -173,7 +175,7 @@ export function LoginScreen() {
   const { signIn, signUp, resetPassword } = useAuth();
   const [registering, setRegistering] = useState(false);
   const [name, setName] = useState("");
-  const [email, setEmail] = useState(isDemoMode ? "nick@grimebusters.demo" : "");
+  const [email, setEmail] = useState(isDemoMode ? "nick@solidacre.demo" : "");
   const [password, setPassword] = useState(isDemoMode ? "demo" : "");
   const [confirm, setConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -243,9 +245,11 @@ export function LoginScreen() {
     <main className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden px-4 py-10">
       <LoginBackdrop />
 
+      <Logo width={150} priority className="relative mb-6" />
+
       <section
         aria-labelledby="login-heading"
-        className="relative w-full max-w-md rounded-3xl border border-white/10 bg-black/55 p-6 shadow-[0_40px_90px_-30px_rgba(0,0,0,0.9)] backdrop-blur-2xl sm:p-9"
+        className="relative w-full max-w-md rounded-3xl border border-white/10 bg-canvas/70 p-6 shadow-[0_40px_90px_-30px_rgba(0,0,0,0.9)] backdrop-blur-2xl sm:p-9"
       >
         {/* The bracket corners from the reference: two L-shapes just outside
             the card, catching the light. Decorative — hidden from readers. */}
@@ -261,7 +265,7 @@ export function LoginScreen() {
         <header className="mb-6">
           <p className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/50">
             <span className="h-1 w-6 rounded-full bg-login-accent" />
-            Grime Busters · Crew
+            Solid Acre · Crew
           </p>
           <h1 id="login-heading" className="text-3xl font-bold tracking-tight text-ink">
             {registering ? (
@@ -421,6 +425,11 @@ export function LoginScreen() {
           </button>
         </p>
       </section>
+
+      <p className="relative mt-6 max-w-md px-6 text-center text-sm italic leading-relaxed text-ink/60">
+        {BUSINESS_VERSE.text}
+        <span className="mt-1 block text-xs not-italic tracking-wide text-ink/45">{BUSINESS_VERSE.reference}</span>
+      </p>
     </main>
   );
 }

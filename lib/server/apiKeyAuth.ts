@@ -63,7 +63,7 @@ export async function requireApiKey(request: Request): Promise<AuthorisedKey> {
   if (!looksLikeKey(presented)) {
     throw new ApiError(
       401,
-      `That does not look like a Grime Busters API key — they start with "${KEY_PREFIX}". Generate one on the Account screen.`,
+      `That does not look like a Solid Acre API key — they start with "${KEY_PREFIX}". Generate one on the Account screen.`,
     );
   }
 

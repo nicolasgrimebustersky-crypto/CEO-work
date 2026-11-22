@@ -15,19 +15,25 @@
  * The app reads its colours from CSS custom properties, but the PDF writer
  * cannot — it draws into a file, with no stylesheet anywhere near it. These
  * are the same values as the `@theme` block in app/globals.css, and the green
- * is sampled from the logo artwork rather than chosen. Change both together.
+ * is sampled from the Solid Acre logo rather than chosen. Change both together.
  */
 export const BRAND = {
-  /** Near-black. The header band, the app's canvas, and the logo's own field. */
-  ink: "#050607",
-  /** Cyan — what you tap in the app, the accent rule on paper. */
-  accent: "#00d9ff",
-  /** The logo's green, sampled from the artwork. Money, everywhere. */
-  money: "#06a143",
+  /** The logo's navy. The header band on paper, behind the white lockup. */
+  ink: "#0b2341",
+  /** The logo's water blue — the accent rule on paper. */
+  accent: "#35b3f2",
+  /**
+   * The logo's green, sampled from the artwork. On paper this is the darker
+   * shade the logo itself uses (6.9:1 on white); the app's screens use a
+   * lighter grass green that reads on navy (--color-money in globals.css).
+   */
+  money: "#42631d",
   /** A pale green for the total box, so it reads on white paper. */
-  moneyWash: "#eaf7ef",
-  /** The banner text in the lockup. */
-  cream: "#f1e3cd",
+  moneyWash: "#eef4e6",
+  /** What sits on the green: white, 6.9:1. */
+  onMoney: "#ffffff",
+  /** The lockup's lettering on the navy band. */
+  cream: "#f5f8fc",
 } as const;
 
 /**
@@ -37,10 +43,20 @@ export const BRAND = {
  * 01:00 UTC it is still yesterday evening in Louisville, and a customer tapping
  * today's date in that hour must not be told it is in the past.
  */
+/**
+ * Psalm 90:17, the line under the Solid Acre logo. Printed at the foot of
+ * every estimate and invoice and under the sign-in card, the three places the
+ * owner asked for it.
+ */
+export const BUSINESS_VERSE = {
+  text: "May the favor of the Lord our God rest on us; establish the work of our hands.",
+  reference: "Psalm 90:17",
+} as const;
+
 export const BUSINESS_TIMEZONE = "America/New_York";
 
 export const BUSINESS = {
-  name: process.env.NEXT_PUBLIC_BUSINESS_NAME || "Grime Busters KY LLC",
+  name: process.env.NEXT_PUBLIC_BUSINESS_NAME || "Solid Acre Exteriors LLC",
   tagline:
     process.env.NEXT_PUBLIC_BUSINESS_TAGLINE ||
     "Pressure washing · Landscaping · Snow removal",

@@ -278,7 +278,7 @@ function CampaignComposer({
     [template, customers, jobs, documents, now, scope, mode],
   );
   const fromLabel = template.from.map((s) => SERVICE_LABEL[s as keyof typeof SERVICE_LABEL] ?? s).join(", ");
-  const text = automationSmsText(message, { business: "Grime Busters" } as Parameters<typeof automationSmsText>[1]);
+  const text = automationSmsText(message, { business: "Solid Acre" } as Parameters<typeof automationSmsText>[1]);
   const grouped = useMemo(() => {
     const g = new Map<string, Customer[]>();
     for (const e of audience.excluded) g.set(e.why, [...(g.get(e.why) ?? []), e.customer]);

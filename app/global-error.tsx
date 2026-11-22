@@ -30,7 +30,7 @@ export default function GlobalError({
       >
         <div style={{ maxWidth: "24rem", width: "100%" }}>
           <h1 style={{ fontSize: "1.5rem", fontWeight: 900, margin: "0 0 0.5rem" }}>
-            Grime Busters could not start
+            Solid Acre could not start
           </h1>
           <p style={{ margin: "0 0 1rem", color: "#9aa7b4", fontWeight: 600 }}>
             Your data is safe. This is the app failing to load, not a lost record.

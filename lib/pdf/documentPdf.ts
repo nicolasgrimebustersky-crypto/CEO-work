@@ -1,4 +1,4 @@
-import { BRAND, BUSINESS } from "@/lib/business";
+import { BRAND, BUSINESS, BUSINESS_VERSE } from "@/lib/business";
 import {
   documentLineDiscounts,
   documentSaved,
@@ -41,8 +41,8 @@ const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
 const INK = hexToRgb(BRAND.ink);
 const ACCENT = hexToRgb(BRAND.accent);
 const MONEY = hexToRgb(BRAND.money);
-/** Near-black, for text sitting on the money-green band. */
-const INK_ON_MONEY = hexToRgb("#04120a");
+/** White, for text sitting on the money-green band. */
+const INK_ON_MONEY = hexToRgb(BRAND.onMoney);
 const MONEY_WASH = hexToRgb(BRAND.moneyWash);
 const WHITE = { r: 1, g: 1, b: 1 };
 const BODY = hexToRgb("#111111");
@@ -76,8 +76,8 @@ export function buildDocumentPdf(
   const bandHeight = logo ? 104 : 92;
   pdf.rect(MARGIN, MARGIN, CONTENT_WIDTH, bandHeight, INK);
 
-  // The lockup already reads as the business name, so when it is present the
-  // name is not set again beside it — that would be the same words twice.
+  // The lockup reads "Solid Acre Exterior & Grounds", but the name a cheque is
+  // made out to is the LLC's, so the legal name is set beside it either way.
   let textLeft = MARGIN + 18;
   if (logo) {
     const logoHeight = 64;
@@ -89,7 +89,12 @@ export function buildDocumentPdf(
       logoHeight,
     );
     textLeft = MARGIN + 14 + (logoHeight * logo.width) / logo.height + 16;
-    pdf.text(BUSINESS.tagline, textLeft, MARGIN + 36, { size: 9, color: ACCENT });
+    pdf.text(BUSINESS.name, textLeft, MARGIN + 24, {
+      size: 12,
+      font: "Helvetica-Bold",
+      color: WHITE,
+    });
+    pdf.text(BUSINESS.tagline, textLeft, MARGIN + 44, { size: 9, color: ACCENT });
   } else {
     pdf.text(BUSINESS.name, textLeft, MARGIN + 18, {
       size: 17,
@@ -107,7 +112,7 @@ export function buildDocumentPdf(
   ]
     .filter(Boolean)
     .join("  ·  ");
-  pdf.text(contact, textLeft, logo ? MARGIN + 54 : MARGIN + 62, { size: 9, color: FAINT });
+  pdf.text(contact, textLeft, logo ? MARGIN + 60 : MARGIN + 62, { size: 9, color: FAINT });
 
   const right = MARGIN + CONTENT_WIDTH - 18;
   pdf.text(isInvoice ? "INVOICE" : "ESTIMATE", right, MARGIN + 17, {
@@ -346,15 +351,22 @@ export function buildDocumentPdf(
 
   /* --------------------------------------------------------------- footer */
 
-  const footerY = Math.max(y + 26, 10.1 * PT_PER_INCH);
+  // Raised from 10.1in to keep the verse inside the 0.6in bottom margin, under the footer text.
+  const footerY = Math.max(y + 26, 9.7 * PT_PER_INCH);
   pdf.line(MARGIN, footerY, CONTENT_WIDTH, HAIRLINE, 0.6);
   const footerText = document.taxPermit
     ? `Kentucky sales tax permit #${document.taxPermit}. ${BUSINESS.footer}`
     : BUSINESS.footer;
-  pdf.paragraph(footerText, MARGIN, footerY + 10, CONTENT_WIDTH, {
+  const afterFooter = pdf.paragraph(footerText, MARGIN, footerY + 10, CONTENT_WIDTH, {
     size: 9,
     color: MUTED,
   });
+  pdf.text(
+    `${BUSINESS_VERSE.text} ${BUSINESS_VERSE.reference}`,
+    MARGIN + CONTENT_WIDTH / 2,
+    afterFooter + 6,
+    { size: 8.5, color: MUTED, align: "center" },
+  );
 
   return pdf.build();
 }

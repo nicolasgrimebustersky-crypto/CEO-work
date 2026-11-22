@@ -1,6 +1,6 @@
-# Grime Busters CRM
+# Solid Acre CRM
 
-Door-to-door CRM for **Grime Busters KY LLC** — pressure washing, landscaping and
+Door-to-door CRM for **Solid Acre Exteriors LLC** — pressure washing, landscaping and
 snow removal in Oldham County, KY. Built for a two-person crew working a
 neighbourhood on foot: the map is the home screen, both phones see each other
 live, and every note, text and job carries the name of whoever did it.
@@ -78,7 +78,7 @@ live, and every note, text and job carries the name of whoever did it.
 
 - Mobile-first portrait. Primary controls sit in the bottom third, in thumb reach.
 - Minimum 44px tap targets everywhere.
-- Dark UI, one bright accent (`#00d9ff`), high contrast throughout — no thin
+- Dark UI, one bright accent (the logo's water blue, `#35b3f2`), high contrast throughout — no thin
   grey text, because none of it is readable on a phone in direct sun.
 - Each crew member gets one colour used identically for their map dot, calendar
   blocks, and attribution chips. Colours are assigned by uid sort order so both

@@ -106,9 +106,9 @@ describe("whether it can send at all", () => {
     const config = readEmailConfig({
       RESEND_API_KEY: "re_test",
       NOTIFY_EMAIL_TO: "a@b.com",
-      NOTIFY_EMAIL_FROM: "Grime Busters <quotes@grimebusterskyllc.com>",
+      NOTIFY_EMAIL_FROM: "Solid Acre <quotes@grimebusterskyllc.com>",
     });
-    assert.equal(config.from, "Grime Busters <quotes@grimebusterskyllc.com>");
+    assert.equal(config.from, "Solid Acre <quotes@grimebusterskyllc.com>");
   });
 });
 
@@ -222,7 +222,7 @@ describe("what the notice actually says", () => {
 describe("the sign-in code email", () => {
   test("the code is in the subject, where a lock screen shows it", () => {
     const email = codeEmail({ code: "204815", minutes: 10 });
-    assert.equal(email.subject, "204815 is your Grime Busters sign-in code");
+    assert.equal(email.subject, "204815 is your Solid Acre sign-in code");
   });
 
   test("the code is split for reading, in both parts", () => {
@@ -265,7 +265,7 @@ describe("the customer's own receipt", () => {
     service: "Pressure washing",
     total: "$420.00",
     requestedDate: "2026-09-12",
-    businessName: "Grime Busters KY LLC",
+    businessName: "Solid Acre Exteriors LLC",
     businessPhone: "(502) 555-0100",
     businessEmail: "hello@grimebusterskyllc.com",
   };
@@ -323,7 +323,7 @@ describe("the customer's own receipt", () => {
     const email = customerApprovalEmail({
       ...RECEIPT,
       customerName: `<script>alert(1)</script>`,
-      businessName: `Grime Busters" onmouseover="alert(1)`,
+      businessName: `Solid Acre" onmouseover="alert(1)`,
     });
     assert.ok(!email.html.includes("<script>"));
     assert.ok(!email.html.includes(`onmouseover="alert(1)"`));

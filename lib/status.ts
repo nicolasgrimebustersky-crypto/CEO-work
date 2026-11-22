@@ -53,12 +53,12 @@ export const STATUS_HINT: Record<CustomerStatus, string> = {
 
 /** Text colour to sit on top of the status colour and stay legible in sun. */
 export const STATUS_INK: Record<CustomerStatus, string> = {
-  lead: "#050607",
+  lead: "#071120",
   not_home: "#ffffff",
-  callback: "#050607",
+  callback: "#071120",
   interested: "#ffffff",
-  quoted: "#050607",
-  customer: "#050607",
+  quoted: "#071120",
+  customer: "#071120",
   not_interested: "#ffffff",
   do_not_knock: "#ffffff",
 };

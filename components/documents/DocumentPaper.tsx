@@ -3,7 +3,7 @@
 import { Fragment } from "react";
 
 import { Logo } from "@/components/ui/Logo";
-import { BRAND, BUSINESS } from "@/lib/business";
+import { BRAND, BUSINESS, BUSINESS_VERSE } from "@/lib/business";
 import {
   documentLineDiscounts,
   documentSaved,
@@ -257,6 +257,11 @@ export function DocumentPaper({
             <div style={{ minWidth: 0 }}>
               <Logo width={150} />
               <div style={{ minWidth: 0, marginTop: "6px" }}>
+                {/* The legal name: what a cheque is made out to. The lockup
+                    above carries the trade name, which is not the same. */}
+                <p style={{ fontSize: "12px", fontWeight: 700, margin: "0 0 3px", color: "#fff" }}>
+                  {BUSINESS.name}
+                </p>
                 <p style={{ fontSize: "10px", margin: 0, color: BRAND.accent }}>
                   {BUSINESS.tagline}
                 </p>
@@ -420,7 +425,7 @@ export function DocumentPaper({
                     marginTop: "7px",
                     borderRadius: "8px",
                     background: BRAND.money,
-                    color: "#04120a",
+                    color: BRAND.onMoney,
                     padding: "8px 11px",
                     fontSize: "13px",
                     fontWeight: 800,
@@ -476,6 +481,9 @@ export function DocumentPaper({
               ? `Kentucky sales tax permit #${businessDocument.taxPermit}. `
               : ""}
             {BUSINESS.footer}
+          </p>
+          <p style={{ marginTop: "6px", fontSize: "10px", color: "#6b7280", textAlign: "center", fontStyle: "italic" }}>
+            {BUSINESS_VERSE.text} {BUSINESS_VERSE.reference}
           </p>
 
           {/* Contains the spacer float, so its height counts towards the page

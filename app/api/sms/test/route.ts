@@ -106,7 +106,7 @@ export async function POST(request: Request): Promise<Response> {
 
     const result = await sendSms(
       phone,
-      "Grime Busters CRM: texting is working. Nothing was sent to a customer.",
+      "Solid Acre CRM: texting is working. Nothing was sent to a customer.",
     );
 
     // Deliberately not thrown. A failed send is the answer to the question the

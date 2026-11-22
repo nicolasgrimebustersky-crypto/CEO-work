@@ -36,14 +36,14 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: "Grime Busters CRM",
+  title: "Solid Acre CRM",
   description:
     "Door-to-door CRM for pressure washing, landscaping and snow removal in Oldham County, KY.",
-  applicationName: "Grime Busters CRM",
+  applicationName: "Solid Acre CRM",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    title: "Grime Busters",
+    title: "Solid Acre",
     statusBarStyle: "black-translucent",
     // Safari shows a white screen while an installed web app boots unless it
     // finds a launch image matching the exact device resolution. Without these
@@ -66,7 +66,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#050607",
+  themeColor: "#071120",
   colorScheme: "dark",
   width: "device-width",
   initialScale: 1,

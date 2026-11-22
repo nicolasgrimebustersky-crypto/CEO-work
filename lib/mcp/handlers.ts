@@ -482,7 +482,7 @@ async function scheduleJobTool(args: Args, key: AuthorisedKey) {
     });
     const result = await sendSmsToCustomer(
       customer,
-      `Grime Busters: your ${serviceType.replace(/_/g, " ")} is scheduled for ${when}. Reply here if you need to change it.`,
+      `Solid Acre: your ${serviceType.replace(/_/g, " ")} is scheduled for ${when}. Reply here if you need to change it.`,
     );
     texted = result.ok;
     textProblem = result.ok ? null : (result.error ?? "Twilio refused the message.");

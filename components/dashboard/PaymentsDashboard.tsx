@@ -46,7 +46,7 @@ function rangeFor(key: PeriodKey, now: Date): Range {
 }
 
 /** Shades of the brand green, then greys — the order slices are drawn in. */
-const SLICE_COLORS = ["#06a143", "#2fbf6a", "#7fd9a3", "#9ba7b4", "#5f6b78", "#3a434d", "#262b33"];
+const SLICE_COLORS = ["#74b83c", "#a3d374", "#cfe8b4", "#9fb0c4", "#5f7390", "#344a68", "#253b5c"];
 
 /**
  * Payments at a glance: four figures, money by day, and how it was paid.
@@ -255,20 +255,20 @@ function AreaChart({ buckets }: { buckets: Bucket[] }) {
     <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} className="mt-2 w-full" role="img" aria-label="Payments over time">
       <defs>
         <linearGradient id="pay-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#06a143" stopOpacity="0.35" />
-          <stop offset="100%" stopColor="#06a143" stopOpacity="0" />
+          <stop offset="0%" stopColor="#74b83c" stopOpacity="0.35" />
+          <stop offset="100%" stopColor="#74b83c" stopOpacity="0" />
         </linearGradient>
       </defs>
       {ticks.map((tick) => (
         <g key={tick.y}>
-          <line x1={PAD_LEFT} x2={CHART_W} y1={tick.y} y2={tick.y} stroke="#262b33" strokeWidth="1" />
-          <text x={PAD_LEFT - 4} y={tick.y + 3} textAnchor="end" fontSize="8" fill="#9ba7b4">
+          <line x1={PAD_LEFT} x2={CHART_W} y1={tick.y} y2={tick.y} stroke="#253b5c" strokeWidth="1" />
+          <text x={PAD_LEFT - 4} y={tick.y + 3} textAnchor="end" fontSize="8" fill="#9fb0c4">
             {tick.label}
           </text>
         </g>
       ))}
       {area ? <path d={area} fill="url(#pay-fill)" /> : null}
-      {line ? <path d={line} fill="none" stroke="#06a143" strokeWidth="2" strokeLinejoin="round" /> : null}
+      {line ? <path d={line} fill="none" stroke="#74b83c" strokeWidth="2" strokeLinejoin="round" /> : null}
       {buckets.map((bucket, index) =>
         index % labelEvery === 0 ? (
           <text
@@ -277,7 +277,7 @@ function AreaChart({ buckets }: { buckets: Bucket[] }) {
             y={CHART_H - 4}
             textAnchor="middle"
             fontSize="8"
-            fill="#9ba7b4"
+            fill="#9fb0c4"
           >
             {format(bucket.startMs, buckets.length > 40 ? "MMM d" : "d")}
           </text>
@@ -318,10 +318,10 @@ function Donut({ slices, total }: { slices: MethodShare[]; total: number }) {
         offset += length;
         return node;
       })}
-      <text x="70" y="64" textAnchor="middle" fontSize="9" fontWeight="700" fill="#9ba7b4" letterSpacing="1">
+      <text x="70" y="64" textAnchor="middle" fontSize="9" fontWeight="700" fill="#9fb0c4" letterSpacing="1">
         TOTAL
       </text>
-      <text x="70" y="80" textAnchor="middle" fontSize="13" fontWeight="800" fill="#f7fafc">
+      <text x="70" y="80" textAnchor="middle" fontSize="13" fontWeight="800" fill="#f5f8fc">
         {formatMoneyExact(total)}
       </text>
     </svg>

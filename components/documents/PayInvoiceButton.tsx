@@ -10,7 +10,7 @@ import { MAX_TIP_CENTS, TIP_PRESETS } from "@/lib/payments";
 type Tip = { kind: "none" } | { kind: "percent"; percent: number } | { kind: "other"; dollars: string };
 
 /** Avatar fills for the crew, in the brand's order. */
-const AVATAR_COLORS = ["#06a143", "#00d9ff", "#f5a524", "#ff4fd8"];
+const AVATAR_COLORS = ["#74b83c", "#35b3f2", "#f5a524", "#ff4fd8"];
 
 function names(list: string[]): string {
   if (list.length <= 1) return list[0] ?? "";

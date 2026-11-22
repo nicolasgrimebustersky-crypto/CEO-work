@@ -45,7 +45,7 @@ const CALLS = {
   leadNurtureText: ["nudge", "Marta", 450],
   automationSmsText: [
     "Hi {first_name}, {business} here — want the gutters cleared before the leaves drop?",
-    { first_name: "Marta", business: "Grime Busters" },
+    { first_name: "Marta", business: "Solid Acre" },
   ],
 };
 
@@ -142,8 +142,8 @@ describe("who the message says it is from", () => {
     for (const [name, args] of Object.entries(CALLS)) {
       if (NOT_A_MESSAGE.has(name)) continue;
       const text = messages[name](...args);
-      assert.match(text, /Grime Busters/, name);
+      assert.match(text, /Solid Acre/, name);
     }
-    assert.match(messages.documentText("estimate", "Landscaping", 100, 100), /Grime Busters/);
+    assert.match(messages.documentText("estimate", "Landscaping", 100, 100), /Solid Acre/);
   });
 });

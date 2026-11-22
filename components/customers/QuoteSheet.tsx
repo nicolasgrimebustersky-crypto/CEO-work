@@ -76,7 +76,7 @@ export function QuoteSheet({
       if (alsoText && customer.phone) {
         smsProblem = await trySendSms(
           customer.id,
-          `Grime Busters: your quote for ${SERVICE_LABEL[serviceType].toLowerCase()} is ${formatMoney(value)}. Reply here to book it in.`,
+          `Solid Acre: your quote for ${SERVICE_LABEL[serviceType].toLowerCase()} is ${formatMoney(value)}. Reply here to book it in.`,
           "quote",
         );
       }

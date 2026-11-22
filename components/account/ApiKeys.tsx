@@ -151,7 +151,7 @@ export function ApiKeys() {
           label="What is it for?"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
-          placeholder="Grime Busters Ops Agent"
+          placeholder="Solid Acre Ops Agent"
         />
 
         <p className="mt-3 mb-1.5 text-sm font-semibold text-muted">What it can do</p>

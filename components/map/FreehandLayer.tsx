@@ -118,7 +118,7 @@ export function FreehandLayer({
     context.fillStyle = "rgba(0, 217, 255, 0.16)";
     context.fill();
 
-    context.strokeStyle = "#00d9ff";
+    context.strokeStyle = "#35b3f2";
     context.lineWidth = 3;
     context.lineJoin = "round";
     context.lineCap = "round";

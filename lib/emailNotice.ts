@@ -34,7 +34,7 @@ export interface EmailEnv {
  * never delivered. That send needs NOTIFY_EMAIL_FROM pointed at a domain
  * verified with Resend before it reaches anyone.
  */
-export const DEFAULT_FROM = "Grime Busters CRM <onboarding@resend.dev>";
+export const DEFAULT_FROM = "Solid Acre CRM <onboarding@resend.dev>";
 
 export interface EmailConfig {
   canSend: boolean;
@@ -409,14 +409,14 @@ export interface CodeNotice {
 export function codeEmail(notice: CodeNotice): BuiltEmail {
   const code = notice.code.trim();
   const spaced = `${code.slice(0, 3)} ${code.slice(3)}`;
-  const subject = `${code} is your Grime Busters sign-in code`;
+  const subject = `${code} is your Solid Acre sign-in code`;
 
   const text = [
     `Your sign-in code is ${spaced}`,
     "",
     `It expires in ${notice.minutes} minutes and works once.`,
     "",
-    "If you didn't just sign in to the Grime Busters CRM, somebody has your password. Change it, and don't enter this code anywhere.",
+    "If you didn't just sign in to the Solid Acre CRM, somebody has your password. Change it, and don't enter this code anywhere.",
   ].join("\n");
 
   const html =
@@ -424,7 +424,7 @@ export function codeEmail(notice: CodeNotice): BuiltEmail {
     `<p style="margin:0 0 12px;color:#666">Your sign-in code</p>` +
     `<p style="margin:0 0 20px;font-size:34px;font-weight:700;letter-spacing:0.28em;font-family:ui-monospace,SFMono-Regular,Menlo,monospace">${escapeHtml(spaced)}</p>` +
     `<p style="margin:0 0 20px">It expires in ${escapeHtml(String(notice.minutes))} minutes and works once.</p>` +
-    `<p style="margin:0;color:#666;font-size:13px">If you didn't just sign in to the Grime Busters CRM, somebody has your password. Change it, and don't enter this code anywhere.</p>` +
+    `<p style="margin:0;color:#666;font-size:13px">If you didn't just sign in to the Solid Acre CRM, somebody has your password. Change it, and don't enter this code anywhere.</p>` +
     `</div>`;
 
   return { subject, text, html };
@@ -439,9 +439,9 @@ export function codeEmail(notice: CodeNotice): BuiltEmail {
  * should hear about it from the app before they hear about it any other way.
  */
 export function lockoutEmail(notice: { when: string }): BuiltEmail {
-  const subject = "Wrong sign-in codes entered for your Grime Busters account";
+  const subject = "Wrong sign-in codes entered for your Solid Acre account";
   const body =
-    "Somebody signed in to your Grime Busters CRM account with your password and then entered the wrong six-digit code five times, so the code was cancelled.";
+    "Somebody signed in to your Solid Acre CRM account with your password and then entered the wrong six-digit code five times, so the code was cancelled.";
   const advice =
     "If that was you, ask for a new code and check the email carefully. If it was not you, somebody has your password: change it now from the sign-in screen (\"Forgot password?\"), and sign out of any device you do not recognise.";
 
