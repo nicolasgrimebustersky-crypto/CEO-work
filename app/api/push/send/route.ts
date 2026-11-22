@@ -58,7 +58,7 @@ export async function POST(request: Request): Promise<Response> {
       title: text(payload.title, "title"),
       body: text(payload.body, "body", false),
       url,
-      tag: text(payload.tag, "tag", false) || "grime-busters",
+      tag: text(payload.tag, "tag", false) || "solid-acre",
     });
 
     await audit({

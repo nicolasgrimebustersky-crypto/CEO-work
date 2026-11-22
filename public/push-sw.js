@@ -43,7 +43,7 @@ function readPayload(event) {
     title: fields.title || FALLBACK.title,
     body: fields.body || "",
     url: fields.url || FALLBACK.url,
-    tag: fields.tag || "grime-busters",
+    tag: fields.tag || "solid-acre",
   };
 }
 
