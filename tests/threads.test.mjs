@@ -9,7 +9,9 @@
 import assert from "node:assert/strict";
 import { test, describe } from "node:test";
 
-const { buildThreads, needsReplyCount, previewOf, incomingFeed } = await import("../lib/threads.ts");
+const { buildThreads, needsReplyCount, previewOf, incomingFeed, lastInboundAt } = await import(
+  "../lib/threads.ts"
+);
 
 /** Firestore's Timestamp, reduced to the one method this code uses. */
 const at = (minutesAgo) => ({ toMillis: () => 1_700_000_000_000 - minutesAgo * 60_000 });
@@ -169,5 +171,93 @@ describe("the incoming list", () => {
     const notes = Array.from({ length: 5 }, (_, i) => note(`n${i}`, "sms_in", `m${i}`, i));
     const feed = incomingFeed([customer("c1", notes)], [], 2);
     assert.deepEqual(feed.map((item) => item.text), ["m0", "m1"]);
+  });
+});
+
+/**
+ * Whether any reply has ever arrived.
+ *
+ * This is the fact the Account screen was missing. "Receiving replies — on"
+ * was derived from whether TWILIO_AUTH_TOKEN is set, which is a real thing to
+ * check and is not what the owner is asking when he looks at that line. Twilio
+ * can accept every reply a customer sends, keep them in its own log and never
+ * call this app at all — a setting in its console, not a value in the
+ * environment — and that is not hypothetical, it is what had already happened
+ * here, and why there is an "Import old replies" button.
+ *
+ * Null is therefore the load-bearing return value: it is the difference
+ * between "working" and "looks identical to working".
+ */
+describe("the last inbound text", () => {
+  const unknown = (id, from, body, minutesAgo) => ({
+    id,
+    from,
+    body,
+    receivedAt: at(minutesAgo),
+  });
+
+  test("null when nothing has ever come in", () => {
+    // Outbound only, which is the state of a deployment that sends perfectly
+    // and has never been pointed at by Twilio.
+    assert.equal(
+      lastInboundAt([customer("c1", [note("n1", "sms_out", "On our way", 5)])], []),
+      null,
+    );
+    assert.equal(lastInboundAt([], []), null);
+  });
+
+  test("notes of other kinds are not replies", () => {
+    // A timeline full of status changes and quotes must not read as a reply.
+    assert.equal(
+      lastInboundAt(
+        [
+          customer("c1", [
+            note("n1", "note", "Gate code 4417", 5),
+            note("n2", "quote", "Quoted $450", 4),
+            note("n3", "status_change", "Now a customer", 3),
+          ]),
+        ],
+        [],
+      ),
+      null,
+    );
+  });
+
+  test("the newest reply wins, across customers and out of order", () => {
+    assert.equal(
+      lastInboundAt(
+        [
+          customer("c1", [
+            note("n1", "sms_in", "Saturday works", 30),
+            note("n2", "sms_in", "Actually Sunday", 10),
+          ]),
+          customer("c2", [note("n3", "sms_in", "How much?", 20)]),
+        ],
+        [],
+      ),
+      at(10).toMillis(),
+    );
+  });
+
+  test("a text from a number not on file counts too", () => {
+    // It proves the webhook is being called, which is the thing in doubt —
+    // and it is the only evidence there is when nobody on the books has
+    // written back yet.
+    assert.equal(
+      lastInboundAt([], [unknown("u1", "+15029990000", "Do you do gutters?", 15)]),
+      at(15).toMillis(),
+    );
+  });
+
+  test("whichever of the two is newer", () => {
+    const customers = [customer("c1", [note("n1", "sms_in", "Saturday works", 30)])];
+    assert.equal(
+      lastInboundAt(customers, [unknown("u1", "+15029990000", "Gutters?", 5)]),
+      at(5).toMillis(),
+    );
+    assert.equal(
+      lastInboundAt(customers, [unknown("u1", "+15029990000", "Gutters?", 90)]),
+      at(30).toMillis(),
+    );
   });
 });

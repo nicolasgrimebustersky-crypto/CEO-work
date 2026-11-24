@@ -1,8 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { useCustomers } from "@/components/providers/CustomersProvider";
 import { Button } from "@/components/ui/Button";
+import { subscribeUnmatched, type StoredUnmatched } from "@/lib/db/inboundSms";
+import { formatRelativeMs } from "@/lib/format";
+import { lastInboundAt } from "@/lib/threads";
 import {
   checkTexting,
   sendTestText,
@@ -26,6 +30,14 @@ import {
  *
  * An app holding only an API key sends perfectly and silently drops every
  * reply, which is the exact combination worth naming out loud.
+ *
+ * The replies line also says when the last reply actually arrived, because the
+ * credential being present is not the question anybody is asking this screen.
+ * Twilio will happily accept a customer's text, keep it in its own log and
+ * never call this app — that is a setting in its console, not a value in the
+ * environment, and it is what had already gone wrong here once. "On" with
+ * nothing ever received is the state worth seeing, and it used to look
+ * identical to working.
  */
 
 type Line = { label: string; ok: boolean; detail: string };
@@ -37,9 +49,15 @@ function sendingDetail(status: TwilioStatus): string {
     : "Using the account auth token.";
 }
 
-function repliesDetail(status: TwilioStatus): string {
+function repliesDetail(status: TwilioStatus, lastReplyMs: number | null): string {
   if (status.canVerify) {
-    return "Replies are checked against Twilio's signature and land on the customer's timeline.";
+    return lastReplyMs === null
+      ? "Checked against Twilio's signature — but nothing has ever arrived here. " +
+          "If a customer has replied, Twilio is not calling this app yet: point " +
+          "the number's \u201cA message comes in\u201d at /api/sms/inbound, and if the " +
+          "number is on a messaging service, point that service there too. " +
+          "Then tap Import old replies on the Messages screen to collect the ones it kept."
+      : `Checked against Twilio's signature and filed on the customer's timeline. The last one arrived ${formatRelativeMs(lastReplyMs)}.`;
   }
   // When nothing is configured at all, the sending line above already lists
   // everything to go and set. Naming one variable again here would be the less
@@ -48,18 +66,40 @@ function repliesDetail(status: TwilioStatus): string {
   return "TWILIO_AUTH_TOKEN is not set, so replies are refused rather than trusted. Sending still works.";
 }
 
-function linesFor(status: TwilioStatus): Line[] {
+function linesFor(status: TwilioStatus, lastReplyMs: number | null): Line[] {
   return [
     { label: "Sending texts", ok: status.canSend, detail: sendingDetail(status) },
-    { label: "Receiving replies", ok: status.canVerify, detail: repliesDetail(status) },
+    {
+      label: "Receiving replies",
+      // Green needs both halves now: the credential that lets a reply be
+      // trusted, and evidence that one has ever come through.
+      ok: status.canVerify && lastReplyMs !== null,
+      detail: repliesDetail(status, lastReplyMs),
+    },
   ];
 }
 
 export function TextingStatus() {
+  const { customers } = useCustomers();
+  const [unmatched, setUnmatched] = useState<StoredUnmatched[]>([]);
   const [status, setStatus] = useState<TwilioStatus | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [result, setResult] = useState<TestTextResult | null>(null);
   const [sending, setSending] = useState(false);
+
+  // Unhandled texts from numbers not on file. Either source proves the webhook
+  // is being called; an error here is deliberately ignored, because a failed
+  // subscription is not evidence that no reply ever arrived — the customers'
+  // own timelines still answer that, and claiming otherwise would put the
+  // alarming wording on the screen for the wrong reason.
+  useEffect(() => {
+    return subscribeUnmatched(setUnmatched, () => {});
+  }, []);
+
+  const lastReplyMs = useMemo(
+    () => lastInboundAt(customers, unmatched),
+    [customers, unmatched],
+  );
 
   useEffect(() => {
     let live = true;
@@ -117,7 +157,7 @@ export function TextingStatus() {
         ) : null}
 
         {status
-          ? linesFor(status).map((line) => (
+          ? linesFor(status, lastReplyMs).map((line) => (
               <div
                 key={line.label}
                 className="rounded-xl border border-line bg-surface-2 p-3"

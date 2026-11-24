@@ -34,13 +34,16 @@ import { UnmatchedInbox } from "./UnmatchedInbox";
  * with a clock on it. The rest is history and can wait for a tap.
  */
 export function MessagesScreen() {
-  const { customers, loading } = useCustomers();
+  const { customers, byId, loading } = useCustomers();
   const [view, setView] = useState<"needs_reply" | "all" | "incoming">("needs_reply");
   const onlyUnanswered = view === "needs_reply";
-  const [openThread, setOpenThread] = useState<{
-    thread: Thread;
-    customer: Customer;
-  } | null>(null);
+  // Only the customer's id is held here. The conversation itself is re-derived
+  // below on every render, so a reply that lands while the sheet is open shows
+  // up in it. Holding the thread object instead froze it at the moment of the
+  // tap: the list behind the sheet updated and the open conversation did not,
+  // which meant the one screen you are watching when you are waiting on an
+  // answer was the one screen that never showed it arriving.
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const threads = useMemo(() => buildThreads(customers), [customers]);
   const waiting = needsReplyCount(threads);
@@ -54,6 +57,25 @@ export function MessagesScreen() {
       customer: customers.find((c) => c.id === thread.customerId) ?? null,
     }))
     .filter((row): row is { thread: Thread; customer: Customer } => row.customer !== null);
+
+  /**
+   * The open conversation, looked up fresh from the live threads.
+   *
+   * Searched in `threads` rather than in `rows`, which matters and is not
+   * obvious: `rows` is filtered to the unanswered ones on the default tab, so
+   * answering somebody would drop their thread out of it and shut the sheet
+   * mid-conversation. `threads` holds every conversation whatever tab is on.
+   *
+   * Both halves can go missing — the customer can be deleted from the other
+   * phone while the sheet is open — and the sheet closing is the right answer
+   * to that, which is what returning null does.
+   */
+  const open = useMemo(() => {
+    if (!openId) return null;
+    const customer = byId.get(openId);
+    const thread = threads.find((t) => t.customerId === openId);
+    return customer && thread ? { thread, customer } : null;
+  }, [openId, byId, threads]);
 
   return (
     <div className="flex h-full flex-col">
@@ -78,7 +100,7 @@ export function MessagesScreen() {
           <IncomingList
             customers={customers}
             threads={threads}
-            onOpen={(thread, customer) => setOpenThread({ thread, customer })}
+            onOpen={setOpenId}
           />
         </div>
       ) : (
@@ -105,7 +127,7 @@ export function MessagesScreen() {
               <li key={thread.customerId}>
                 <button
                   type="button"
-                  onClick={() => setOpenThread({ thread, customer })}
+                  onClick={() => setOpenId(thread.customerId)}
                   className={`tap-target w-full rounded-xl border p-3 text-left ${
                     thread.needsReply
                       ? "border-accent/60 bg-surface-2"
@@ -143,11 +165,11 @@ export function MessagesScreen() {
       </div>
       )}
 
-      {openThread ? (
+      {open ? (
         <ThreadSheet
-          thread={openThread.thread}
-          customer={openThread.customer}
-          onClose={() => setOpenThread(null)}
+          thread={open.thread}
+          customer={open.customer}
+          onClose={() => setOpenId(null)}
         />
       ) : null}
     </div>
@@ -170,7 +192,7 @@ function IncomingList({
 }: {
   customers: Customer[];
   threads: Thread[];
-  onOpen: (thread: Thread, customer: Customer) => void;
+  onOpen: (customerId: string) => void;
 }) {
   const [unmatched, setUnmatched] = useState<StoredUnmatched[]>([]);
   const [error, setError] = useState("");
@@ -231,7 +253,7 @@ function IncomingList({
             {customer && thread ? (
               <button
                 type="button"
-                onClick={() => onOpen(thread, customer)}
+                onClick={() => onOpen(customer.id)}
                 className="tap-target w-full rounded-xl border border-line bg-surface-2 p-3 text-left"
               >
                 {body}

@@ -171,3 +171,45 @@ export function incomingFeed(
   }
   return feed.sort((a, b) => b.at.toMillis() - a.at.toMillis()).slice(0, limit);
 }
+
+/**
+ * When the most recent inbound text arrived, in milliseconds, or null if none
+ * ever has.
+ *
+ * Exists because "Receiving replies — on" on the Account screen was derived
+ * from exactly one fact: whether TWILIO_AUTH_TOKEN is set. That is worth
+ * knowing and it is not the question being asked. A deployment can hold a
+ * perfect auth token and receive nothing for a year, because the number in the
+ * Twilio console was never pointed at this app — which is not hypothetical,
+ * it is what had already happened here once, and it is why "Import old
+ * replies" exists at all. A green light that cannot tell those two apart tells
+ * the owner the feature works while he sits watching a screen that stays
+ * empty.
+ *
+ * Both sources count. A reply from a number on file lands on that customer's
+ * timeline; one from a number that is not lands in `inboundSms`. Either proves
+ * the webhook is being called, which is the thing actually in doubt.
+ *
+ * Milliseconds rather than the Timestamp, so the caller does not have to
+ * pretend a `{ toMillis }` is a full Firestore Timestamp to format it.
+ */
+export function lastInboundAt(
+  customers: readonly CustomerLike[],
+  unmatched: readonly UnmatchedLike[],
+): number | null {
+  let newest: number | null = null;
+
+  for (const customer of customers) {
+    for (const note of customer.notes) {
+      if (note.kind !== "sms_in") continue;
+      const ms = note.createdAt.toMillis();
+      if (newest === null || ms > newest) newest = ms;
+    }
+  }
+  for (const message of unmatched) {
+    const ms = message.receivedAt.toMillis();
+    if (newest === null || ms > newest) newest = ms;
+  }
+
+  return newest;
+}

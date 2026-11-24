@@ -66,6 +66,37 @@ export function phoneKey(raw: string): string {
   return digits.length === 10 ? digits : "";
 }
 
+/**
+ * What an inbound text says, counting the ones that say it with a picture.
+ *
+ * The webhook dropped any message whose `Body` was empty, which sounds
+ * harmless and is not: a picture message carries no body at all. Somebody
+ * photographing their driveway and sending it with no caption produced an
+ * empty body, an early 200 to Twilio, and then nothing anywhere — no note, no
+ * unknown-number row, not even a log line. For a pressure-washing business a
+ * photo of the thing to be cleaned is one of the likelier replies there is,
+ * and it was the one shape of reply guaranteed to vanish.
+ *
+ * Returns "" only when there is genuinely nothing — no words and no media —
+ * which is the one case the caller should still ignore.
+ *
+ * The media are not fetched. Twilio's media URLs need the account credentials
+ * to read, so pulling the images into the app is a separate piece of work;
+ * this is only the part that stops the message disappearing in the meantime,
+ * which is why the placeholder names a count rather than pretending to a
+ * thumbnail.
+ */
+export function inboundBody(body: string, mediaCount: number): string {
+  const text = String(body ?? "").trim();
+  const count =
+    Number.isFinite(mediaCount) && mediaCount > 0 ? Math.trunc(mediaCount) : 0;
+  if (count === 0) return text;
+  const label = count === 1 ? "[Photo]" : `[${count} photos]`;
+  // On its own line so it reads as a note about the message rather than as
+  // something the customer typed.
+  return text ? `${text}\n\n${label}` : label;
+}
+
 /** "(502) 555-0147", or the raw string back if it isn't a ten-digit number. */
 export function formatPhone(raw: string): string {
   const key = phoneKey(raw);
