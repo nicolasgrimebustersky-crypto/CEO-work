@@ -427,3 +427,83 @@ describe("telling 'they have not seen it' from 'they are ignoring me'", () => {
     assert.ok(!Object.keys(STATUS_LABEL).includes("opened"));
   });
 });
+
+/* ------------------------------------- a booking that no longer exists */
+
+describe("rescheduling an estimate whose job was deleted", () => {
+  /**
+   * Another source assertion on lib/db/documents.ts, for the same reason as
+   * the org one above: the file imports firebase, so node cannot load it.
+   *
+   * What broke: `scheduleAsJob` opened with
+   *
+   *     if (estimate.scheduledJobId) return estimate.scheduledJobId;
+   *
+   * which is the right instinct — a second tap a week later must not book the
+   * work twice — and the wrong rule. Deleting a job off the calendar leaves the
+   * estimate still stamped with its id, and DocumentScreen deliberately reads
+   * that as unscheduled: "A deleted one falls back to null, which puts the
+   * button back rather than offering a link to a job that is no longer on
+   * anybody's calendar." So the screen offered to book the work and this
+   * function handed back the id of the deleted job. The sheet accepted a date,
+   * closed with no error, and nothing appeared on the calendar — an estimate
+   * bricked for good, with nothing on any screen saying why.
+   *
+   * The two halves have to agree about what the stamp means, and this pins the
+   * side that was wrong.
+   */
+  const SOURCE = readFileSync(
+    new URL("../lib/db/documents.ts", import.meta.url),
+    "utf8",
+  );
+
+  function bodyOf(name) {
+    const start = SOURCE.indexOf(`export async function ${name}(`);
+    assert.ok(start > 0, `${name} not found`);
+    const next = SOURCE.indexOf("\nexport ", start + 1);
+    return SOURCE.slice(start, next === -1 ? undefined : next);
+  }
+
+  test("the bare early return is gone", () => {
+    assert.doesNotMatch(
+      bodyOf("scheduleAsJob"),
+      /if \(estimate\.scheduledJobId\) return estimate\.scheduledJobId;/,
+      "returning the stamped id without checking the job exists bricks an " +
+        "estimate whose job was deleted: the button comes back, the sheet " +
+        "closes, and no job is ever created",
+    );
+  });
+
+  test("the stamp is checked against the job actually existing", () => {
+    const body = bodyOf("scheduleAsJob");
+    assert.match(
+      body,
+      /estimate\.scheduledJobId && \(await jobStillExists\(estimate\.scheduledJobId\)\)/,
+      "the short-circuit must be conditional on the job still being there",
+    );
+  });
+
+  test("the existence check reads the jobs collection, and handles demo mode", () => {
+    // A helper that always returned true would satisfy the test above while
+    // changing nothing, and one that forgot demo mode would throw in it.
+    const start = SOURCE.indexOf("async function jobStillExists(");
+    assert.ok(start > 0, "jobStillExists not found");
+    const helper = SOURCE.slice(start, SOURCE.indexOf("\n}", start));
+    assert.match(helper, /COLLECTIONS\.jobs/, "it must look in the jobs collection");
+    assert.match(helper, /isDemoMode/, "demo mode has no Firestore to read");
+    assert.match(helper, /\.exists\(\)/, "a missing doc is the whole question");
+  });
+
+  test("a failed read is not treated as a missing job", () => {
+    // Falling through on a dropped connection would book the work twice, which
+    // is precisely what the guard exists to prevent — so there must be no
+    // catch swallowing the read into a false.
+    const start = SOURCE.indexOf("async function jobStillExists(");
+    const helper = SOURCE.slice(start, SOURCE.indexOf("\n}", start));
+    assert.doesNotMatch(
+      helper,
+      /catch/,
+      "a read failure must propagate, not read as 'the job is gone'",
+    );
+  });
+});

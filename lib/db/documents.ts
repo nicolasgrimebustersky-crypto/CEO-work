@@ -4,6 +4,7 @@ import {
   deleteDoc,
   deleteField,
   doc,
+  getDoc,
   getDocs,
   onSnapshot,
   orderBy,
@@ -721,6 +722,17 @@ export async function deleteDocuments(ids: readonly string[]): Promise<void> {
 }
 
 /**
+ * Whether a job id still points at something.
+ *
+ * A deleted job is not a booking: the calendar does not show it and neither
+ * does the estimate, so the estimate has to be free to be booked again.
+ */
+async function jobStillExists(jobId: string): Promise<boolean> {
+  if (isDemoMode) return demo.get(COLLECTIONS.jobs, jobId) !== null;
+  return (await getDoc(doc(getDb(), COLLECTIONS.jobs, jobId))).exists();
+}
+
+/**
  * Puts an accepted estimate on the calendar as a job.
  *
  * The estimate already knows the customer, the service and the price, so the
@@ -741,7 +753,25 @@ export async function scheduleAsJob(
   when: { start: Date; end: Date; assignedTo: string[] },
   author: Author,
 ): Promise<string> {
-  if (estimate.scheduledJobId) return estimate.scheduledJobId;
+  // The stamp is honoured only while the job it names still exists.
+  //
+  // Stopping a second tap a week later from producing a second job is the
+  // point of this guard and still is. What it also did was refuse forever.
+  // Deleting a job off the calendar leaves the estimate pointing at nothing,
+  // and DocumentScreen deliberately treats that as unscheduled — "A deleted
+  // one falls back to null, which puts the button back rather than offering a
+  // link to a job that is no longer on anybody's calendar". So the screen
+  // offered to book the work and this function answered with the id of the job
+  // that had been deleted: the sheet took a date, closed without an error, and
+  // nothing appeared on the calendar. Two halves of one feature disagreeing
+  // about what the stamp means, and the symptom is a button that does nothing.
+  //
+  // A failed read is deliberately left to throw rather than treated as "gone".
+  // Falling through on a dropped connection would book the work twice, which
+  // is the thing this guard exists to prevent.
+  if (estimate.scheduledJobId && (await jobStillExists(estimate.scheduledJobId))) {
+    return estimate.scheduledJobId;
+  }
 
   const jobPayload = {
     // Which business owns the job. Without it every "Schedule the job" was
