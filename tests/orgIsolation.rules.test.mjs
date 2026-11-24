@@ -95,7 +95,7 @@ before(async () => {
   alice = testEnv.authenticatedContext("alice", VERIFIED).firestore();
   erin = testEnv.authenticatedContext("erin", VERIFIED).firestore();
   admin = testEnv
-    .authenticatedContext("nicolas", { email: "nicolas.grimebustersky@gmail.com", ...VERIFIED })
+    .authenticatedContext("nicolas", { email: "solidacreexteriorsllc@gmail.com", ...VERIFIED })
     .firestore();
 });
 

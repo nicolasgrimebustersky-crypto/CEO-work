@@ -205,7 +205,7 @@ before(async () => {
   // token, which is what the rules check — not by uid, and not by anything
   // stored in the database.
   admin = testEnv
-    .authenticatedContext("nicolas", { email: "nicolas.grimebustersky@gmail.com", ...VERIFIED })
+    .authenticatedContext("nicolas", { email: "solidacreexteriorsllc@gmail.com", ...VERIFIED })
     .firestore();
   anon = testEnv.unauthenticatedContext().firestore();
 });
@@ -2036,14 +2036,14 @@ describe("only the admin hands out access", () => {
     // them — which reads as a broken app rather than a denied permission, and
     // is a genuinely horrible thing to debug from the outside.
     const shouty = testEnv
-      .authenticatedContext("nicolas-caps", { email: "Nicolas.Grimebustersky@Gmail.com", ...VERIFIED })
+      .authenticatedContext("nicolas-caps", { email: "Solidacreexteriorsllc@Gmail.com", ...VERIFIED })
       .firestore();
     await assertSucceeds(getDoc(doc(shouty, "apiKeys/hash-one")));
   });
 
   test("an impostor email does not make you admin", async () => {
     const nearly = testEnv
-      .authenticatedContext("impostor", { email: "nicolas.grimebustersky@evil.com" })
+      .authenticatedContext("impostor", { email: "solidacreexteriorsllc@evil.com" })
       .firestore();
     await assertFails(updateDoc(doc(nearly, "users/mallory"), { role: "crew" }));
   });
@@ -2437,7 +2437,7 @@ describe("the sign-in code", () => {
   });
 
   test("the admin owes a code too", async () => {
-    const adminFresh = fresh("nicolas", { email: "nicolas.grimebustersky@gmail.com" });
+    const adminFresh = fresh("nicolas", { email: "solidacreexteriorsllc@gmail.com" });
     await assertFails(getDoc(doc(adminFresh, "customers/c1")));
     await assertFails(updateDoc(doc(adminFresh, "users/newbie"), { role: "crew" }));
     await assertFails(getDoc(doc(adminFresh, "apiKeys/hash-one")));
@@ -2590,7 +2590,7 @@ describe("the audit log", () => {
 
   test("the admin without a code cannot read it either", async () => {
     const adminFresh = testEnv
-      .authenticatedContext("nicolas", { email: "nicolas.grimebustersky@gmail.com", auth_time: SIGNED_IN_AT + 9000 })
+      .authenticatedContext("nicolas", { email: "solidacreexteriorsllc@gmail.com", auth_time: SIGNED_IN_AT + 9000 })
       .firestore();
     await assertFails(getDoc(doc(adminFresh, "auditLog/e1")));
   });
@@ -2821,7 +2821,7 @@ describe("automations", () => {
     // let a password-only session switch on a sequence that texts customers.
     // The same gap #66 closed in inConversation().
     const ownerNoCode = testEnv
-      .authenticatedContext("nicolas", { email: "nicolas.grimebustersky@gmail.com" })
+      .authenticatedContext("nicolas", { email: "solidacreexteriorsllc@gmail.com" })
       .firestore();
     await assertFails(setDoc(doc(ownerNoCode, "automations/a8"), automationDoc()));
 

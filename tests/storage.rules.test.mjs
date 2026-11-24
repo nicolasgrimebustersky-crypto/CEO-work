@@ -147,12 +147,12 @@ describe("job photos", () => {
 
 test("the owner is crew here too, as in firestore.rules", async () => {
   const owner = testEnv
-    .authenticatedContext("nicolas", { email: "nicolas.grimebustersky@gmail.com", ...VERIFIED })
+    .authenticatedContext("nicolas", { email: "solidacreexteriorsllc@gmail.com", ...VERIFIED })
     .storage();
   await assertSucceeds(uploadBytes(ref(owner, "jobs/j9/before-1.jpg"), IMAGE_BYTES, IMAGE));
   // The email alone, without this sign-in's code, is not enough.
   const ownerNoCode = testEnv
-    .authenticatedContext("nicolas", { email: "nicolas.grimebustersky@gmail.com" })
+    .authenticatedContext("nicolas", { email: "solidacreexteriorsllc@gmail.com" })
     .storage();
   await assertFails(uploadBytes(ref(ownerNoCode, "jobs/j9/before-2.jpg"), IMAGE_BYTES, IMAGE));
 });
@@ -162,7 +162,7 @@ describe("expense receipts", () => {
   let owner;
   before(() => {
     owner = testEnv
-      .authenticatedContext("nicolas", { email: "nicolas.grimebustersky@gmail.com", ...VERIFIED })
+      .authenticatedContext("nicolas", { email: "solidacreexteriorsllc@gmail.com", ...VERIFIED })
       .storage();
   });
 
@@ -210,7 +210,7 @@ describe("expense receipts", () => {
 describe("W-9s", () => {
   test("only the owner uploads, opens or deletes one — not even the person it is for", async () => {
     const owner = testEnv
-      .authenticatedContext("nicolas", { email: "nicolas.grimebustersky@gmail.com", ...VERIFIED })
+      .authenticatedContext("nicolas", { email: "solidacreexteriorsllc@gmail.com", ...VERIFIED })
       .storage();
     const path = "w9/alice/w9-1.pdf";
     await assertFails(uploadBytes(ref(alice, path), IMAGE_BYTES, { contentType: "application/pdf" }));

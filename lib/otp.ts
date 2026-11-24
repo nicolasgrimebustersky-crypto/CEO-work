@@ -48,7 +48,7 @@ export function isCompleteCode(value: string): boolean {
 }
 
 /**
- * "nicolas.grimebustersky@gmail.com" → "ni•••••@gmail.com".
+ * "solidacreexteriorsllc@gmail.com" → "ni•••••@gmail.com".
  *
  * Enough for the person to recognise their own address on the screen, not
  * enough to be worth reading over a shoulder.

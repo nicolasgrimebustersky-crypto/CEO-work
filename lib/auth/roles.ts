@@ -29,10 +29,12 @@ export type Role = "crew" | "pending";
  * cannot be claimed by registering — and it is checked against the signed-in
  * token, not against anything a client can send.
  *
- * If this address ever changes in Firebase, change it here and in
- * firestore.rules together. `tests/roles.test.mjs` checks they agree.
+ * If this address ever changes in Firebase, change it here, in
+ * firestore.rules and in storage.rules together — three copies of one fact.
+ * `tests/roles.test.mjs` checks this file and firestore.rules agree; nothing
+ * checks storage.rules, so that is the one to remember by hand.
  */
-export const ADMIN_EMAIL = "nicolas.grimebustersky@gmail.com";
+export const ADMIN_EMAIL = "solidacreexteriorsllc@gmail.com";
 
 /**
  * Crew regardless of what is stored — the founding accounts.
