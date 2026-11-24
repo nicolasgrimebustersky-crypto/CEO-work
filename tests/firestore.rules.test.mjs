@@ -3126,3 +3126,90 @@ describe("scheduling an estimate that predates the money model", () => {
     );
   });
 });
+
+/* --------------- booking an estimate whose stored shape is invalid, not absent */
+
+/**
+ * The follow-up to the money-model tests above, and the case the first fix
+ * missed.
+ *
+ * validDocument() fails just as readily on a field that is PRESENT and wrong
+ * as on one that is missing: `serviceTypes: []` satisfies `is list` and fails
+ * `size() >= 1`, a serviceTypes carrying a retired service fails hasOnly, and
+ * a status outside the enum fails outright. Healing only the money left every
+ * one of those estimates still saying "Missing or insufficient permissions."
+ *
+ * toDocument normalises all of them on the way in, so the patch can write a
+ * valid shape back; these prove it has to.
+ */
+describe("scheduling an estimate whose stored shape is invalid", () => {
+  const BAD_SHAPES = {
+    "serviceTypes is present but empty": { serviceTypes: [] },
+    "serviceTypes names a service that no longer exists": { serviceTypes: ["gutters"] },
+    "serviceTypes has more than the three mains": {
+      serviceTypes: ["pressure_washing", "landscaping", "snow_removal", "gutters"],
+    },
+    "status is outside the enum": { status: "expired" },
+    "serviceType is outside the enum": { serviceType: "gutter_cleaning" },
+  };
+
+  /** Only the stamp and the money, as the first version of the fix sent. */
+  function moneyOnlyPatch(stored) {
+    return {
+      scheduledJobId: "j-new",
+      lineItems: stored.lineItems,
+      payments: [],
+      amountPaid: 0,
+      discount: stored.discount,
+      taxRatePct: stored.taxRatePct,
+      subtotal: stored.subtotal,
+      taxAmount: stored.taxAmount,
+      total: stored.total,
+      balanceDue: stored.total,
+      updatedAt: serverTimestamp(),
+      updatedBy: "alice",
+      updatedByName: "Alice",
+    };
+  }
+
+  /** The shape toDocument would hand back, written alongside the money. */
+  function fullPatch(stored) {
+    return {
+      ...moneyOnlyPatch(stored),
+      kind: "estimate",
+      serviceType: "pressure_washing",
+      serviceTypes: ["pressure_washing"],
+      subServices: [],
+      status: "accepted",
+    };
+  }
+
+  for (const [label, override] of Object.entries(BAD_SHAPES)) {
+    test(`${label}: money alone is refused, the full shape is not`, async () => {
+      const stored = businessDoc("alice", { status: "accepted", ...override });
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), "documents/bad"), stored);
+      });
+
+      // The bug: healing the money does not make an invalid shape valid.
+      await assertFails(updateDoc(doc(alice, "documents/bad"), moneyOnlyPatch(stored)));
+      // The fix.
+      await assertSucceeds(updateDoc(doc(alice, "documents/bad"), fullPatch(stored)));
+    });
+  }
+
+  test("a declined estimate keeps its status when it is booked", async () => {
+    // Scheduling a declined one is deliberate enough that rewriting the record
+    // of what happened would be the wrong call.
+    const stored = businessDoc("alice", { status: "declined" });
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "documents/declined"), stored);
+    });
+    await assertSucceeds(
+      updateDoc(doc(alice, "documents/declined"), {
+        ...fullPatch(stored),
+        status: "declined",
+      }),
+    );
+  });
+});
