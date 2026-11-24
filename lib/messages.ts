@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 import { renderTemplate, type TemplateVars } from "@/lib/automations";
+import { REPEAT_LABEL, type RepeatEvery } from "@/lib/recurrence";
 
 /**
  * Every outbound SMS template lives here so the wording stays consistent
@@ -32,6 +33,36 @@ function whenText(date: Date): string {
 
 export function jobConfirmationText(service: string, start: Date): string {
   return `${BUSINESS_NAME}: your ${service.toLowerCase()} is scheduled for ${whenText(start)}. Reply here if you need to change it.${OPT_OUT}`;
+}
+
+/**
+ * One text for a whole recurring booking, not one per visit.
+ *
+ * "Make recurring" can book up to MAX_REPEATS — 52 — visits in a single tap.
+ * Sending `jobConfirmationText` per visit would put 52 messages on one phone
+ * inside a second, which is the exact shape of the mistake lib/automations.ts
+ * exists to make unbuildable: a number that is reasonable to type and
+ * unreasonable to send. So the series gets summarised instead, and the crew
+ * still texts on the way to each visit as usual.
+ *
+ * The end date is deliberately left out. Saying the cadence, the count and the
+ * first visit keeps this inside one 160-character segment with the opt-out
+ * line attached, and a customer who knows it is every two weeks from May 4 can
+ * work out August without being charged a second segment for it. Only GSM-7
+ * characters here for the same reason: one em dash would force UCS-2 and cut
+ * the segment to 70.
+ *
+ * Assumes two or more visits. A single visit is an ordinary one-off booking
+ * and goes through `jobConfirmationText`, which reads better for it.
+ */
+export function recurringBookedText(
+  service: string,
+  every: RepeatEvery,
+  count: number,
+  firstStart: Date,
+): string {
+  const cadence = REPEAT_LABEL[every].toLowerCase();
+  return `${BUSINESS_NAME}: your ${service.toLowerCase()} is booked ${cadence}, ${count} visits starting ${whenText(firstStart)}. Reply here to change it.${OPT_OUT}`;
 }
 
 /**
@@ -82,6 +113,22 @@ export function documentText(
     return `${BUSINESS_NAME}: thanks for the payment. ${`$${balanceDue.toFixed(2)}`} is still outstanding on your ${service.toLowerCase()} invoice.${OPT_OUT}${tail}`;
   }
   return `${BUSINESS_NAME}: your invoice for ${service.toLowerCase()} is ${money}. Thanks for your business — reply here with any questions.${OPT_OUT}${tail}`;
+}
+
+/**
+ * A quote given on the spot, from the customer record rather than a document.
+ *
+ * Distinct from `documentText`'s estimate branch, which carries a link to a
+ * real estimate the customer can accept. This one is a number said out loud
+ * and written down — there is nothing to tap through to — so it asks for a
+ * reply instead of an acceptance.
+ *
+ * Money is formatted by the caller so lib/format.ts stays the one place that
+ * decides how dollars look; this module would eventually disagree with the
+ * invoices if it had its own opinion.
+ */
+export function quoteText(service: string, money: string): string {
+  return `${BUSINESS_NAME}: your quote for ${service.toLowerCase()} is ${money}. Reply here to book it in.${OPT_OUT}`;
 }
 
 /* ------------------------------------------------------------ on the job */

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chips";
 import { Sheet } from "@/components/ui/Sheet";
 import { createJob } from "@/lib/db/jobs";
+import { jobConfirmationText, recurringBookedText } from "@/lib/messages";
 import {
   MAX_REPEATS,
   REPEAT_EVERY,
@@ -17,6 +18,9 @@ import {
   type RepeatEvery,
 } from "@/lib/recurrence";
 import { routes } from "@/lib/routes";
+import { servicesLabel } from "@/lib/serviceText";
+import { trySendSms } from "@/lib/smsClient";
+import { visitPhrase } from "@/lib/visitTypes";
 import type { Job } from "@/lib/types";
 
 /**
@@ -98,9 +102,14 @@ function toLocalDate(date: Date): string {
  * schedule. Each copy is an ordinary job with the same customer, services,
  * price, crew and notes, so it can be moved or cancelled on its own.
  *
- * No text goes to the customer from here: a dozen "you're booked" messages at
- * once would be noise. Each visit's on-site row still sends its own texts on
- * the day.
+ * The customer gets exactly one text, whether that is one visit or fifty-two.
+ * This used to send none at all, on the reasoning that a dozen "you're booked"
+ * messages at once would be noise — true, and the right thing to avoid, but it
+ * left the single re-booking silent as well, and silence is not what somebody
+ * wants when a crew is coming back to their house. One text per *booking*
+ * rather than per visit keeps the noise away and still tells them.
+ *
+ * Each visit's on-site row still sends its own texts on the day.
  */
 function RepeatSheet({
   job,
@@ -125,6 +134,8 @@ function RepeatSheet({
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** The booking worked and the text did not. Shown beside the result, not instead of it. */
+  const [warning, setWarning] = useState<string | null>(null);
 
   const visits = useMemo(() => {
     if (mode === "once") {
@@ -140,6 +151,7 @@ function RepeatSheet({
   const close = () => {
     setResult(null);
     setError(null);
+    setWarning(null);
     onClose();
   };
 
@@ -147,6 +159,7 @@ function RepeatSheet({
     if (!author || saving || visits.length === 0) return;
     setSaving(true);
     setError(null);
+    setWarning(null);
     let booked = 0;
     try {
       for (const visit of visits) {
@@ -175,6 +188,29 @@ function RepeatSheet({
               "MMM d, yyyy",
             )}.`,
       );
+
+      // One text for the whole booking, sent after the visits are real.
+      //
+      // A run that dies partway through throws out of the loop above and never
+      // reaches this line, so nothing is promised to a customer whose visits
+      // only half exist — the owner gets "booked 2 of 8, check the calendar"
+      // and can decide what to tell them. By here `booked` and `visits.length`
+      // are therefore the same number; `booked` is used because it is the one
+      // that counts what was actually written.
+      //
+      // Last on purpose: the calendar entries are what matter, and a Twilio
+      // problem must not read as a failed booking. `trySendSms` returns its
+      // error rather than throwing, so this cannot reach the catch below and
+      // turn a successful booking into one.
+      const phrase = visitPhrase(job.visitType, servicesLabel(job));
+      const smsProblem = await trySendSms(
+        job.customerId,
+        booked === 1
+          ? jobConfirmationText(phrase, visits[0].start)
+          : recurringBookedText(phrase, every, booked, visits[0].start),
+        booked === 1 ? "job_confirmation" : "job_recurring_booked",
+      );
+      if (smsProblem) setWarning(`The customer wasn't texted: ${smsProblem}`);
     } catch {
       // Say how far it got: the visits already booked are real and should not
       // be booked a second time by pressing again.
@@ -215,9 +251,19 @@ function RepeatSheet({
       }
     >
       {result ? (
-        <p className="rounded-xl border border-money/60 bg-money/10 px-3 py-3 text-base font-semibold text-ink">
-          {result}
-        </p>
+        <div className="flex flex-col gap-3">
+          <p className="rounded-xl border border-money/60 bg-money/10 px-3 py-3 text-base font-semibold text-ink">
+            {result}
+          </p>
+          {/* Beside the result, never instead of it: the visits are on the
+              calendar either way, and somebody who reads only a red box walks
+              away thinking they are not. */}
+          {warning ? (
+            <p role="alert" className="rounded-xl border border-line bg-surface-2 px-3 py-2.5 text-base font-semibold text-muted">
+              {warning}
+            </p>
+          ) : null}
+        </div>
       ) : (
         <div className="flex flex-col gap-4">
           <p className="text-sm font-semibold text-muted">
