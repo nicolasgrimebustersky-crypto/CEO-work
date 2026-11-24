@@ -23,6 +23,7 @@ import { SHARE_TOKEN_BYTES } from "@/lib/shareLinks";
 import * as demo from "@/lib/demo/store";
 import {
   DEFAULT_TAX_RATE_PCT,
+  DOCUMENT_STATUSES,
   defaultInvoiceDueDate,
   nextNumber,
   statusAfterPayment,
@@ -851,6 +852,23 @@ export async function scheduleAsJob(
 
   const estimatePatch = (jobId: string) => ({
     scheduledJobId: jobId,
+    // The whole shape validDocument() checks, not only the money.
+    //
+    // The money alone was not enough, and the reason is worth keeping: a field
+    // can be PRESENT and invalid as easily as missing. `serviceTypes: []`
+    // satisfies `is list` and fails `size() >= 1`; a serviceTypes carrying a
+    // service that no longer exists fails hasOnly; a status outside the enum
+    // fails outright. toDocument already normalises every one of these on the
+    // way in — cleanSelection guarantees at least one real main service, kind
+    // falls back to 'estimate', serviceType to 'pressure_washing' — so the
+    // mapped estimate in hand is always valid even when the stored document is
+    // not. Writing it back is what makes the stored document valid too, and
+    // leaving these five out is why the first attempt at this fix still left
+    // the sheet saying "Missing or insufficient permissions."
+    kind: estimate.kind,
+    serviceType: estimate.serviceType,
+    serviceTypes: estimate.serviceTypes,
+    subServices: estimate.subServices,
     lineItems: estimate.lineItems,
     // No payments field means no payments were ever recorded, so an empty list
     // and a zero are the accurate values rather than invented ones.
@@ -866,9 +884,22 @@ export async function scheduleAsJob(
     // draft or sent estimate follows along. A declined or void one is left
     // alone: scheduling one of those is deliberate enough that overwriting the
     // record of what happened would be the wrong call.
-    ...(estimate.status === "draft" || estimate.status === "sent"
-      ? { status: "accepted" as const }
-      : {}),
+    // The one field toDocument does not make safe: it casts any string
+    // through, so a stored status outside the enum arrives here intact and
+    // would be written straight back out again.
+    //
+    // Booking the work says the customer agreed, so draft and sent become
+    // accepted as they always did, and anything unrecognised becomes accepted
+    // too — it is the only honest reading of "this is being scheduled". A
+    // declined or void estimate keeps its status: scheduling one of those is
+    // deliberate enough that overwriting the record of what happened would be
+    // the wrong call, which was the original reasoning here and still holds.
+    status:
+      estimate.status === "draft" || estimate.status === "sent"
+        ? ("accepted" as const)
+        : DOCUMENT_STATUSES.includes(estimate.status)
+          ? estimate.status
+          : ("accepted" as const),
     updatedAt: serverTimestamp(),
     updatedBy: author.uid,
     updatedByName: author.displayName,

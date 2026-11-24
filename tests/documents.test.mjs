@@ -535,6 +535,15 @@ describe("scheduling an estimate heals the money model", () => {
     // pinned by the update rule and the rest cannot go missing on a document
     // the app was able to read.
     for (const field of [
+      // The shape, not only the money. A field can be PRESENT and invalid as
+      // easily as missing — serviceTypes: [] passes `is list` and fails
+      // `size() >= 1` — and the first version of this fix wrote only the money
+      // back, so those estimates stayed denied.
+      "kind",
+      "serviceType",
+      "serviceTypes",
+      "subServices",
+      "status",
       "lineItems",
       "payments",
       "amountPaid",
