@@ -818,8 +818,50 @@ export async function scheduleAsJob(
     updatedByName: author.displayName,
   };
 
+  // The money model, written back alongside the stamp so the patched document
+  // can satisfy validDocument().
+  //
+  // firestore.rules evaluates validDocument() on the WHOLE resulting document,
+  // not on the patch, and it requires lineItems, payments, discount,
+  // taxRatePct, subtotal, total, amountPaid and balanceDue. An estimate saved
+  // before one of those existed has no such field, so the patch below was
+  // refused — and because the job create shares this batch, the booking died
+  // with it. The sheet said "Missing or insufficient permissions." and no job
+  // appeared, for those estimates only, which is what made it look
+  // intermittent. Editing such an estimate was refused for the same reason, so
+  // there was no way back from inside the app.
+  //
+  // Every value here comes off the mapped estimate, which toDocument has
+  // already normalised, so for a document that has the field this writes the
+  // same value straight back. The one judgement call is the totals: they are
+  // recomputed from the lines, exactly as updateDocument does on every edit —
+  // but only when there ARE lines to recompute from. An estimate whose
+  // lineItems were lost would otherwise have the agreed total it still carries
+  // rewritten to zero, and quietly restating a price a customer accepted is
+  // worse than refusing to book the job.
+  const totals =
+    estimate.lineItems.length > 0
+      ? storedTotals(estimate.lineItems, estimate.packages, estimate.discount, estimate.taxRatePct)
+      : {
+          discount: estimate.discount,
+          subtotal: estimate.subtotal,
+          taxAmount: estimate.taxAmount,
+          total: estimate.total,
+        };
+
   const estimatePatch = (jobId: string) => ({
     scheduledJobId: jobId,
+    lineItems: estimate.lineItems,
+    // No payments field means no payments were ever recorded, so an empty list
+    // and a zero are the accurate values rather than invented ones.
+    payments: estimate.payments,
+    amountPaid: estimate.amountPaid,
+    discount: totals.discount,
+    taxRatePct: estimate.taxRatePct,
+    subtotal: totals.subtotal,
+    taxAmount: totals.taxAmount,
+    total: totals.total,
+    balanceDue: Math.max(0, Number((totals.total - estimate.amountPaid).toFixed(2))),
     // Scheduling the work is a statement that the customer said yes, so a
     // draft or sent estimate follows along. A declined or void one is left
     // alone: scheduling one of those is deliberate enough that overwriting the

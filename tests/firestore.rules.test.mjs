@@ -3029,3 +3029,100 @@ describe("automations", () => {
     await assertFails(getDocs(collection(dana, "automationTouches")));
   });
 });
+
+/* ------------------------- booking an estimate saved before the money model */
+
+/**
+ * The write the app actually sends, for an estimate that predates a field.
+ *
+ * `allow update` on /documents runs validDocument() against the WHOLE
+ * resulting document, not against the patch. An estimate saved before
+ * `payments` or `amountPaid` existed therefore cannot be patched at all — and
+ * scheduleAsJob patches the estimate in the same writeBatch as the job create,
+ * so the booking went down with it: "Missing or insufficient permissions." and
+ * no job, for those estimates only, which made it look intermittent. Editing
+ * one was refused for the same reason, so there was no way back inside the app.
+ *
+ * The fixture here deliberately does NOT hard-code the missing fields. That is
+ * the blind spot the orgId regressions in this file were both invisible to: a
+ * rules test that writes a complete fixture proves the RULE works and never
+ * that the APP can satisfy it.
+ */
+describe("scheduling an estimate that predates the money model", () => {
+  /** An estimate as stored before `payments`/`amountPaid` existed. */
+  function legacyEstimate() {
+    const stored = businessDoc("alice", { status: "accepted" });
+    delete stored.payments;
+    delete stored.amountPaid;
+    delete stored.balanceDue;
+    return stored;
+  }
+
+  async function seedLegacy() {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "documents/legacy"), legacyEstimate());
+    });
+  }
+
+  test("the bare stamp-only patch is refused, which is the bug", async () => {
+    await seedLegacy();
+    await assertFails(
+      updateDoc(doc(alice, "documents/legacy"), {
+        scheduledJobId: "j-new",
+        updatedAt: serverTimestamp(),
+        updatedBy: "alice",
+        updatedByName: "Alice",
+      }),
+    );
+  });
+
+  test("the patch that carries the money model is accepted", async () => {
+    await seedLegacy();
+    const stored = legacyEstimate();
+    await assertSucceeds(
+      updateDoc(doc(alice, "documents/legacy"), {
+        scheduledJobId: "j-new",
+        lineItems: stored.lineItems,
+        payments: [],
+        amountPaid: 0,
+        discount: stored.discount,
+        taxRatePct: stored.taxRatePct,
+        subtotal: stored.subtotal,
+        taxAmount: stored.taxAmount,
+        total: stored.total,
+        balanceDue: stored.total,
+        updatedAt: serverTimestamp(),
+        updatedBy: "alice",
+        updatedByName: "Alice",
+      }),
+    );
+  });
+
+  test("healing the money does not let the pinned fields move", async () => {
+    // The point of writing the money back is to make the document valid, not to
+    // make it editable in ways the rule refuses on purpose: `number` and
+    // `customerId` are frozen once the document exists.
+    await seedLegacy();
+    const stored = legacyEstimate();
+    const healed = {
+      lineItems: stored.lineItems,
+      payments: [],
+      amountPaid: 0,
+      discount: stored.discount,
+      taxRatePct: stored.taxRatePct,
+      subtotal: stored.subtotal,
+      taxAmount: stored.taxAmount,
+      total: stored.total,
+      balanceDue: stored.total,
+      updatedAt: serverTimestamp(),
+      updatedBy: "alice",
+      updatedByName: "Alice",
+    };
+    await assertFails(
+      updateDoc(doc(alice, "documents/legacy"), { ...healed, number: "9999" }),
+    );
+    await assertFails(
+      updateDoc(doc(alice, "documents/legacy"), { ...healed, customerId: "someone-else" }),
+    );
+  });
+});

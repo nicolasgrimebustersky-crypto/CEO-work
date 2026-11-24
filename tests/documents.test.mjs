@@ -507,3 +507,63 @@ describe("rescheduling an estimate whose job was deleted", () => {
     );
   });
 });
+
+/* ------------------------- the money model travels with the booking patch */
+
+describe("scheduling an estimate heals the money model", () => {
+  /**
+   * The rules-suite test proves /documents will ACCEPT a patch carrying the
+   * money model. This proves the app SENDS one — the distinction that both
+   * orgId regressions in this same function turned on.
+   */
+  const SOURCE = readFileSync(
+    new URL("../lib/db/documents.ts", import.meta.url),
+    "utf8",
+  );
+
+  function bodyOf(name) {
+    const start = SOURCE.indexOf(`export async function ${name}(`);
+    assert.ok(start > 0, `${name} not found`);
+    const next = SOURCE.indexOf("\nexport ", start + 1);
+    return SOURCE.slice(start, next === -1 ? undefined : next);
+  }
+
+  test("the estimate patch carries every field validDocument() requires", () => {
+    const body = bodyOf("scheduleAsJob");
+    // Exactly the list in firestore.rules' validDocument(), minus `number`,
+    // `customerId`, `kind`, `status` and `serviceType`: the first two are
+    // pinned by the update rule and the rest cannot go missing on a document
+    // the app was able to read.
+    for (const field of [
+      "lineItems",
+      "payments",
+      "amountPaid",
+      "discount",
+      "taxRatePct",
+      "subtotal",
+      "taxAmount",
+      "total",
+      "balanceDue",
+    ]) {
+      assert.match(
+        body,
+        new RegExp(`\\n\\s*${field}:`),
+        `the estimate patch must write ${field}, or an estimate saved before ` +
+          `that field existed fails validDocument() and the whole batch — ` +
+          `including the job — is denied`,
+      );
+    }
+  });
+
+  test("totals are only recomputed when there are lines to recompute from", () => {
+    // Recomputing from an empty lineItems would rewrite an agreed total to
+    // zero. Quietly restating a price the customer accepted is worse than
+    // refusing to book the job.
+    const body = bodyOf("scheduleAsJob");
+    assert.match(
+      body,
+      /estimate\.lineItems\.length > 0\s*\n?\s*\?\s*storedTotals\(/,
+      "the recompute must be conditional on there being line items",
+    );
+  });
+});
