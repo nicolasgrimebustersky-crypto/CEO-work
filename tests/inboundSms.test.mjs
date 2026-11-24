@@ -10,9 +10,8 @@
 import assert from "node:assert/strict";
 import { test, describe } from "node:test";
 
-const { phoneKey, formatPhone, groupUnmatched, unmatchedCount, suggestName } = await import(
-  "../lib/inboundSms.ts"
-);
+const { phoneKey, formatPhone, groupUnmatched, unmatchedCount, suggestName, inboundBody } =
+  await import("../lib/inboundSms.ts");
 
 /** Firestore's Timestamp, as much of it as this code touches. */
 const at = (millis) => ({ toMillis: () => millis });
@@ -185,5 +184,61 @@ describe("guessing a name off the first text", () => {
 
   test("a lowercase word after the phrase is not a name", () => {
     assert.deepEqual(suggestName("i'm interested in a quote"), { firstName: "", lastName: "" });
+  });
+});
+
+/**
+ * A picture message is still a message.
+ *
+ * The webhook's guard was `if (!from || !body) return twiml();` against a body
+ * of `(params.Body ?? "").trim()`. A picture message carries no Body, so a
+ * customer photographing their driveway and sending it with no caption hit
+ * that line and was dropped: no note, no unknown-number row, no log line, and
+ * a 200 telling Twilio it had been dealt with. Of all the replies a
+ * pressure-washing business gets, a photo of the thing to be cleaned is one of
+ * the likeliest, and it was the only shape guaranteed to disappear.
+ *
+ * So the empty-body case is still skipped, but only when the message really is
+ * empty — and "empty" now has to account for the media count.
+ */
+describe("the body of an inbound text", () => {
+  test("plain words are passed through, trimmed", () => {
+    assert.equal(inboundBody("  Saturday works  ", 0), "Saturday works");
+  });
+
+  test("a photo with no caption is a message rather than nothing", () => {
+    // The whole point. Before this, the return value here was "" and the
+    // webhook returned 200 having stored nothing at all.
+    assert.equal(inboundBody("", 1), "[Photo]");
+    assert.notEqual(inboundBody("", 1), "");
+  });
+
+  test("several photos say how many, because that changes how much to look at", () => {
+    assert.equal(inboundBody("", 3), "[3 photos]");
+  });
+
+  test("a caption keeps its wording, with the photo noted separately", () => {
+    const text = inboundBody("Back patio, how much?", 2);
+    assert.match(text, /^Back patio, how much\?/);
+    assert.match(text, /\[2 photos\]/);
+    // On its own line, so it does not read as something the customer typed.
+    assert.ok(text.includes("\n\n[2 photos]"), text);
+  });
+
+  test("nothing at all is still nothing, so the webhook can still skip it", () => {
+    // The guard has to keep working: a request with neither words nor media is
+    // not a message, and filing a blank note for it would be its own mess.
+    assert.equal(inboundBody("", 0), "");
+    assert.equal(inboundBody("   ", 0), "");
+  });
+
+  test("a NumMedia that did not parse is treated as no media, never as one", () => {
+    // params.NumMedia is a string off a form body and goes through
+    // Number.parseInt, which yields NaN for anything unexpected. NaN must not
+    // become a phantom "[Photo]" on a text that had none.
+    for (const count of [Number.NaN, -1, undefined, null]) {
+      assert.equal(inboundBody("Just checking", count), "Just checking", String(count));
+      assert.equal(inboundBody("", count), "", String(count));
+    }
   });
 });

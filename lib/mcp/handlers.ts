@@ -11,6 +11,9 @@ import { ApiError } from "@/lib/server/auth";
 import { appendNote, getCustomer } from "@/lib/server/customerNotes";
 import { sendSmsToCustomer } from "@/lib/server/customerSms";
 import { isTwilioConfigured } from "@/lib/server/twilio";
+import { jobConfirmationText } from "@/lib/messages";
+import { SERVICE_LABEL } from "@/lib/status";
+import type { ServiceType } from "@/lib/types";
 import type { AuthorisedKey } from "@/lib/server/apiKeyAuth";
 import { findTool } from "./tools";
 
@@ -470,6 +473,14 @@ async function scheduleJobTool(args: Args, key: AuthorisedKey) {
   // The confirmation text is why this tool needs the send scope. Best effort:
   // the job is already booked, and a Twilio outage must not make a real
   // calendar entry look like it failed.
+  //
+  // The body comes from lib/messages.ts rather than being written here. It was
+  // written here once, and the copy drifted: it named the service by its raw
+  // enum with the underscores swapped for spaces, and it was missing the
+  // "Reply STOP to opt out." line that the A2P 10DLC campaign registration and
+  // the published SMS terms both promise is on every message. Nothing caught
+  // it, because tests/messages.test.mjs walks the templates in that module and
+  // this string was not one of them.
   let texted = false;
   let textProblem: string | null = null;
   if (isTwilioConfigured && customer.phone) {
@@ -482,7 +493,7 @@ async function scheduleJobTool(args: Args, key: AuthorisedKey) {
     });
     const result = await sendSmsToCustomer(
       customer,
-      `Grime Busters: your ${serviceType.replace(/_/g, " ")} is scheduled for ${when}. Reply here if you need to change it.`,
+      jobConfirmationText(SERVICE_LABEL[serviceType as ServiceType] ?? serviceType, start),
     );
     texted = result.ok;
     textProblem = result.ok ? null : (result.error ?? "Twilio refused the message.");

@@ -1,6 +1,6 @@
 import { replyNoteId } from "@/lib/replyImport";
 import { classifyReply, recordOptOut } from "@/lib/smsConsent";
-import { formatPhone } from "@/lib/inboundSms";
+import { formatPhone, inboundBody } from "@/lib/inboundSms";
 import { recordUnmatchedInbound } from "@/lib/server/inboundSms";
 import { notifyCrew } from "@/lib/server/notify";
 import { appendNote, findCustomerByPhone, setSmsOptOut } from "@/lib/server/customerNotes";
@@ -24,6 +24,13 @@ function twiml(): Response {
  * edge, so request.url arrives as http and the signature would never match
  * without this. TWILIO_WEBHOOK_URL overrides it if the deployment sits behind
  * something more unusual.
+ *
+ * The query string is part of what Twilio signs, so it is part of what gets
+ * rebuilt. Dropping it only matters once somebody configures the webhook with
+ * a parameter on the end, and then it matters completely: every single message
+ * fails the signature check and comes back 403, with the 403 branch below
+ * logging nothing at all. A silent total failure that depends on a character
+ * in a console field is worth one call to `url.search`.
  */
 function publicUrl(request: Request): string {
   const override = process.env.TWILIO_WEBHOOK_URL;
@@ -32,7 +39,7 @@ function publicUrl(request: Request): string {
   const url = new URL(request.url);
   const proto = request.headers.get("x-forwarded-proto") ?? url.protocol.replace(":", "");
   const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? url.host;
-  return `${proto}://${host}${url.pathname}`;
+  return `${proto}://${host}${url.pathname}${url.search}`;
 }
 
 /**
@@ -72,8 +79,13 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const from = params.From ?? "";
-    const body = (params.Body ?? "").trim();
+    // A picture message has no Body, so the body has to be worked out from the
+    // media count as well. See inboundBody: this used to be `(params.Body ??
+    // "").trim()`, and a photo with no caption was dropped on the next line.
+    const body = inboundBody(params.Body ?? "", Number.parseInt(params.NumMedia ?? "0", 10));
     const messageSid = params.MessageSid || params.SmsMessageSid || "";
+    // Nothing from nobody. Still 200, because there is no version of this
+    // Twilio could usefully send again.
     if (!from || !body) return twiml();
 
     const customer = await findCustomerByPhone(from);

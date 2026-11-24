@@ -55,8 +55,13 @@ export function formatDateOnly(value: Timestamp | null): string {
 }
 
 export function formatRelative(value: Timestamp | null): string {
-  if (!value) return "never";
-  return `${formatDistanceToNowStrict(value.toDate())} ago`;
+  return formatRelativeMs(value ? value.toMillis() : null);
+}
+
+/** The same wording for a time already reduced to milliseconds. */
+export function formatRelativeMs(ms: number | null): string {
+  if (ms === null) return "never";
+  return `${formatDistanceToNowStrict(new Date(ms))} ago`;
 }
 
 /** 5025550147 -> (502) 555-0147. Anything unexpected is passed through as-is. */

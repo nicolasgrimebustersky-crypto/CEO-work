@@ -47,11 +47,22 @@ export async function recordUnmatchedInbound(input: {
   // duplicate row, which matters most on the screen that exists to be short.
   const id = input.messageSid?.trim() || crypto.randomUUID();
 
-  await db
-    .collection(COLLECTION)
-    .doc(id)
-    .set(
-      {
+  // `create`, not `set(..., { merge: true })`. The merge was written to protect
+  // a message somebody had already dealt with and did the exact opposite: the
+  // payload names `handled`, `handledBy`, `handledAt` and `customerId`, so
+  // merging it over an existing row set `handled` back to false and threw away
+  // the link to the customer that had been created from it. A redelivery of
+  // the same SID — the case the comment was anticipating — resurrected
+  // dismissed spam at the top of the screen that exists to be short, and
+  // orphaned a converted lead.
+  //
+  // First write wins instead, which is what "a redelivery changes nothing"
+  // actually means, and matches importUnmatchedInbound below.
+  try {
+    await db
+      .collection(COLLECTION)
+      .doc(id)
+      .create({
         orgId: DEFAULT_ORG_ID,
         from: input.from,
         body: input.body,
@@ -60,12 +71,12 @@ export async function recordUnmatchedInbound(input: {
         handledBy: null,
         handledAt: null,
         customerId: null,
-      },
-      // Merge so a redelivery refreshes nothing that a person has since
-      // changed — in particular it must not un-handle a message somebody has
-      // already dealt with.
-      { merge: true },
-    );
+      });
+  } catch (error) {
+    // 6 = ALREADY_EXISTS: this SID is already on file, which is a no-op and
+    // not a failure. The id is still returned so the caller reads the same row.
+    if ((error as { code?: unknown })?.code !== 6) throw error;
+  }
 
   return id;
 }

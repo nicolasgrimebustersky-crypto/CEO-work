@@ -10,6 +10,7 @@ import { Sheet } from "@/components/ui/Sheet";
 import { addNote, advancePipeline } from "@/lib/db/customers";
 import { createQuote } from "@/lib/db/quotes";
 import { formatMoney } from "@/lib/format";
+import { quoteText } from "@/lib/messages";
 import { SERVICE_LABEL } from "@/lib/status";
 import { trySendSms } from "@/lib/smsClient";
 import { SERVICE_TYPES } from "@/lib/types";
@@ -76,7 +77,7 @@ export function QuoteSheet({
       if (alsoText && customer.phone) {
         smsProblem = await trySendSms(
           customer.id,
-          `Grime Busters: your quote for ${SERVICE_LABEL[serviceType].toLowerCase()} is ${formatMoney(value)}. Reply here to book it in.`,
+          quoteText(SERVICE_LABEL[serviceType], formatMoney(value)),
           "quote",
         );
       }
