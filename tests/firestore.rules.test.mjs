@@ -205,7 +205,7 @@ before(async () => {
   // token, which is what the rules check — not by uid, and not by anything
   // stored in the database.
   admin = testEnv
-    .authenticatedContext("nicolas", { email: "nicolas.grimebustersky@gmail.com", ...VERIFIED })
+    .authenticatedContext("nicolas", { email: "solidacreexteriorsllc@gmail.com", ...VERIFIED })
     .firestore();
   anon = testEnv.unauthenticatedContext().firestore();
 });
@@ -2036,14 +2036,14 @@ describe("only the admin hands out access", () => {
     // them — which reads as a broken app rather than a denied permission, and
     // is a genuinely horrible thing to debug from the outside.
     const shouty = testEnv
-      .authenticatedContext("nicolas-caps", { email: "Nicolas.Grimebustersky@Gmail.com", ...VERIFIED })
+      .authenticatedContext("nicolas-caps", { email: "Solidacreexteriorsllc@Gmail.com", ...VERIFIED })
       .firestore();
     await assertSucceeds(getDoc(doc(shouty, "apiKeys/hash-one")));
   });
 
   test("an impostor email does not make you admin", async () => {
     const nearly = testEnv
-      .authenticatedContext("impostor", { email: "nicolas.grimebustersky@evil.com" })
+      .authenticatedContext("impostor", { email: "solidacreexteriorsllc@evil.com" })
       .firestore();
     await assertFails(updateDoc(doc(nearly, "users/mallory"), { role: "crew" }));
   });
@@ -2437,7 +2437,7 @@ describe("the sign-in code", () => {
   });
 
   test("the admin owes a code too", async () => {
-    const adminFresh = fresh("nicolas", { email: "nicolas.grimebustersky@gmail.com" });
+    const adminFresh = fresh("nicolas", { email: "solidacreexteriorsllc@gmail.com" });
     await assertFails(getDoc(doc(adminFresh, "customers/c1")));
     await assertFails(updateDoc(doc(adminFresh, "users/newbie"), { role: "crew" }));
     await assertFails(getDoc(doc(adminFresh, "apiKeys/hash-one")));
@@ -2590,7 +2590,7 @@ describe("the audit log", () => {
 
   test("the admin without a code cannot read it either", async () => {
     const adminFresh = testEnv
-      .authenticatedContext("nicolas", { email: "nicolas.grimebustersky@gmail.com", auth_time: SIGNED_IN_AT + 9000 })
+      .authenticatedContext("nicolas", { email: "solidacreexteriorsllc@gmail.com", auth_time: SIGNED_IN_AT + 9000 })
       .firestore();
     await assertFails(getDoc(doc(adminFresh, "auditLog/e1")));
   });
@@ -2821,7 +2821,7 @@ describe("automations", () => {
     // let a password-only session switch on a sequence that texts customers.
     // The same gap #66 closed in inConversation().
     const ownerNoCode = testEnv
-      .authenticatedContext("nicolas", { email: "nicolas.grimebustersky@gmail.com" })
+      .authenticatedContext("nicolas", { email: "solidacreexteriorsllc@gmail.com" })
       .firestore();
     await assertFails(setDoc(doc(ownerNoCode, "automations/a8"), automationDoc()));
 
@@ -3027,5 +3027,102 @@ describe("automations", () => {
       setDoc(doc(admin, "automationTouches/x"), { orgId: "grime-busters", touches: 0 }),
     );
     await assertFails(getDocs(collection(dana, "automationTouches")));
+  });
+});
+
+/* ------------------------- booking an estimate saved before the money model */
+
+/**
+ * The write the app actually sends, for an estimate that predates a field.
+ *
+ * `allow update` on /documents runs validDocument() against the WHOLE
+ * resulting document, not against the patch. An estimate saved before
+ * `payments` or `amountPaid` existed therefore cannot be patched at all — and
+ * scheduleAsJob patches the estimate in the same writeBatch as the job create,
+ * so the booking went down with it: "Missing or insufficient permissions." and
+ * no job, for those estimates only, which made it look intermittent. Editing
+ * one was refused for the same reason, so there was no way back inside the app.
+ *
+ * The fixture here deliberately does NOT hard-code the missing fields. That is
+ * the blind spot the orgId regressions in this file were both invisible to: a
+ * rules test that writes a complete fixture proves the RULE works and never
+ * that the APP can satisfy it.
+ */
+describe("scheduling an estimate that predates the money model", () => {
+  /** An estimate as stored before `payments`/`amountPaid` existed. */
+  function legacyEstimate() {
+    const stored = businessDoc("alice", { status: "accepted" });
+    delete stored.payments;
+    delete stored.amountPaid;
+    delete stored.balanceDue;
+    return stored;
+  }
+
+  async function seedLegacy() {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "documents/legacy"), legacyEstimate());
+    });
+  }
+
+  test("the bare stamp-only patch is refused, which is the bug", async () => {
+    await seedLegacy();
+    await assertFails(
+      updateDoc(doc(alice, "documents/legacy"), {
+        scheduledJobId: "j-new",
+        updatedAt: serverTimestamp(),
+        updatedBy: "alice",
+        updatedByName: "Alice",
+      }),
+    );
+  });
+
+  test("the patch that carries the money model is accepted", async () => {
+    await seedLegacy();
+    const stored = legacyEstimate();
+    await assertSucceeds(
+      updateDoc(doc(alice, "documents/legacy"), {
+        scheduledJobId: "j-new",
+        lineItems: stored.lineItems,
+        payments: [],
+        amountPaid: 0,
+        discount: stored.discount,
+        taxRatePct: stored.taxRatePct,
+        subtotal: stored.subtotal,
+        taxAmount: stored.taxAmount,
+        total: stored.total,
+        balanceDue: stored.total,
+        updatedAt: serverTimestamp(),
+        updatedBy: "alice",
+        updatedByName: "Alice",
+      }),
+    );
+  });
+
+  test("healing the money does not let the pinned fields move", async () => {
+    // The point of writing the money back is to make the document valid, not to
+    // make it editable in ways the rule refuses on purpose: `number` and
+    // `customerId` are frozen once the document exists.
+    await seedLegacy();
+    const stored = legacyEstimate();
+    const healed = {
+      lineItems: stored.lineItems,
+      payments: [],
+      amountPaid: 0,
+      discount: stored.discount,
+      taxRatePct: stored.taxRatePct,
+      subtotal: stored.subtotal,
+      taxAmount: stored.taxAmount,
+      total: stored.total,
+      balanceDue: stored.total,
+      updatedAt: serverTimestamp(),
+      updatedBy: "alice",
+      updatedByName: "Alice",
+    };
+    await assertFails(
+      updateDoc(doc(alice, "documents/legacy"), { ...healed, number: "9999" }),
+    );
+    await assertFails(
+      updateDoc(doc(alice, "documents/legacy"), { ...healed, customerId: "someone-else" }),
+    );
   });
 });

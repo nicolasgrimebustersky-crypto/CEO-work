@@ -47,7 +47,7 @@ service cloud.firestore {
     function isAdmin() {
       return request.auth != null
         && request.auth.token.email is string
-        && request.auth.token.email.lower() == 'nicolas.grimebustersky@gmail.com';
+        && request.auth.token.email.lower() == 'solidacreexteriorsllc@gmail.com';
     }
 
     // Has THIS sign-in entered its emailed code?

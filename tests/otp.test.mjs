@@ -98,8 +98,8 @@ describe("the address on the screen", () => {
   test("keeps enough to recognise, hides the rest", () => {
     // Two characters kept, one dot per hidden character, the domain intact.
     assert.equal(
-      maskEmail("nicolas.grimebustersky@gmail.com"),
-      `ni${"•".repeat("nicolas.grimebustersky".length - 2)}@gmail.com`,
+      maskEmail("solidacreexteriorsllc@gmail.com"),
+      `so${"•".repeat("solidacreexteriorsllc".length - 2)}@gmail.com`,
     );
     assert.equal(maskEmail("al@x.io"), "al•••@x.io");
   });
